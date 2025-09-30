@@ -1240,7 +1240,7 @@ vpn_auto_reconnect_should_attempt() {
   fi
 
   # Only attempt reconnects when inside an explicitly configured window.
-  if ((force == 0)) && ! vpn_auto_reconnect_inside_allowed_window; then
+  if ((force == 0)) && vpn_auto_reconnect_inside_allowed_window; then
     vpn_auto_reconnect_write_status "waiting" "Outside allowed window"
     VPN_AUTO_STATE_CLASSIFICATION="idle"
     return 1
