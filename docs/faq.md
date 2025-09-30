@@ -2,10 +2,10 @@
 
 # Frequently asked questions
 
-Quick answers to common beginner questions about arrstack-mini.
+Quick answers to common beginner questions about arrbash.
 
 ## Do I need a Raspberry Pi 5?
-The stack targets Raspberry Pi 5 or any 64-bit Debian Bookworm host with similar resources (4 cores, 4 GB RAM). Slower hardware may work but downloads and transcoding will lag.
+Any 64-bit Debian Bookworm host with roughly 4 CPU cores and 4 GB RAM works. Raspberry Pi 5 is a popular option but not required.
 
 ## Which Proton plan should I buy?
 Use Proton VPN Plus or Unlimited. Those plans support port forwarding, which qBittorrent needs for good performance.
@@ -31,7 +31,7 @@ Use Caddy with strong basic auth if you need remote access. Avoid forwarding raw
 ## Is `home.arpa` required?
 It is the recommended LAN suffix because it never leaks to the public Internet. Change it only if another system already uses it.
 
-## See also
+## Related topics
 - [Configuration](configuration.md)
 - [Networking](networking.md)
 - [Operations](operations.md)

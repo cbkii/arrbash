@@ -2,7 +2,7 @@
 
 # Version management
 
-Track container tags safely so installs stay reproducible.
+Track container tags safely so arrbash installs stay reproducible.
 
 ## Why
 The stack pins each image to a tested tag. Registries occasionally remove old manifests; the helper scripts swap to `:latest` automatically for LinuxServer images when necessary.
@@ -22,8 +22,8 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
 ## Update workflow
 1. Back up your data:
    ```bash
-   cd "${ARR_STACK_DIR:-$PWD}/.."
-   tar -czf "arrstack-backup-$(date +%Y%m%d).tar.gz" arrstack docker-data
+   cd "${ARR_BASE:-$HOME/srv}"
+   tar -czf "arrbash-backup-$(date +%Y%m%d).tar.gz" "$(basename "${ARR_STACK_DIR:-arrstack}")" docker-data
    ```
 2. Edit `${ARR_BASE}/userr.conf` to change any `*_IMAGE` values.
 3. Apply changes:
@@ -60,8 +60,8 @@ List the images in use and confirm the expected tags appear:
 docker compose images
 ```
 
-## See also
-- [Configuration](configuration.md) for editing `*_IMAGE` overrides.
-- [Operations](operations.md) for rerun commands and helpers.
-- [Security](security.md) before exposing updated services.
-- [Troubleshooting](troubleshooting.md) if containers fail after a tag change.
+## Related topics
+- [Configuration](configuration.md) – edit `*_IMAGE` overrides.
+- [Operations](operations.md) – rerun commands and helpers.
+- [Security](security.md) – checks before exposing updated services.
+- [Troubleshooting](troubleshooting.md) – container recovery steps.

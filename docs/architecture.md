@@ -36,8 +36,8 @@ Generated files should not be edited manually; adjust `userr.conf` and rerun the
 
 Understanding this flow helps when troubleshooting: re-running the installer replays the entire pipeline and reconciles drift automatically.
 
-## See also
-- [Configuration](configuration.md) to adjust inputs.
-- [Networking](networking.md) for VPN, DNS, and HTTPS behaviour.
-- [Operations](operations.md) for command references.
-- [Troubleshooting](troubleshooting.md) to diagnose startup issues.
+## Related topics
+- [Configuration](configuration.md) – adjust installer inputs.
+- [Networking](networking.md) – understand VPN, DNS, and HTTPS behaviour.
+- [Operations](operations.md) – command references.
+- [Troubleshooting](troubleshooting.md) – diagnose startup issues.
