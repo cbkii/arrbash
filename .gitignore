@@ -3,8 +3,7 @@
 .aliasarr.configured
 */proton.auth
 *.auth
-*/userrconf.sh
-userrconf.sh
+*.conf
 arrconf/*txt
 arrconf/*md
 arrconf/*2.sh

@@ -7,10 +7,10 @@
 # --- Stack paths ---
 ARR_BASE="${HOME}/srv"                 # Root directory for generated stack files
 ARR_STACK_DIR="${ARR_BASE}/arrstack"  # Location for docker-compose.yml, scripts, and aliases
+# ARRCONF_DIR="${HOME}/.config/arrstack"  # Optional: relocate Proton creds outside the repo
+# ARR_USERCONF_PATH="${ARR_BASE}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
 ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
 ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
-# ARR_USERCONF_PATH="${ARR_BASE}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
-# ARRCONF_DIR="${HOME}/.config/arrstack"  # Optional: relocate Proton creds outside the repo
 
 # --- Logging and output ---
 ARR_LOG_DIR="${ARR_STACK_DIR}/logs"           # Directory for runtime/service logs (default: ${ARR_STACK_DIR}/logs)
@@ -23,7 +23,7 @@ ARR_PERMISSION_PROFILE="strict"        # strict keeps secrets 600/700, collab en
 # --- Downloads and media ---
 DOWNLOADS_DIR="${HOME}/Downloads"      # Active qBittorrent download folder
 COMPLETED_DIR="${DOWNLOADS_DIR}/completed"  # Destination for completed downloads
-MEDIA_DIR="/media/mediasmb"            # Root of the media library share
+MEDIA_DIR="/media/smb"            # Root of the media library share
 TV_DIR="${MEDIA_DIR}/Shows"            # Sonarr TV library path
 MOVIES_DIR="${MEDIA_DIR}/Movies"       # Radarr movie library path
 # SUBS_DIR="${MEDIA_DIR}/subs"         # Optional Bazarr subtitles directory
@@ -38,7 +38,7 @@ LAN_IP=""                              # Bind services to one LAN IP (set a DHCP
 LOCALHOST_IP="127.0.0.1"               # Loopback used by the Gluetun control API
 LAN_DOMAIN_SUFFIX="home.arpa"          # Suffix appended to service hostnames (default: home.arpa)
 CADDY_DOMAIN_SUFFIX="home.arpa"  # Override Caddy hostname suffix independently of LAN DNS (default: home.arpa)
-SERVER_COUNTRIES="Netherlands"              # ProtonVPN exit country list (default: Netherlands)
+SERVER_COUNTRIES="Netherlands,Switzerland"              # ProtonVPN exit country list (default: Netherlands)
 # SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) if PF stays at 0
 PVPN_ROTATE_COUNTRIES=""  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_CONTROL_PORT="8000"            # Host port that exposes the Gluetun control API (default: 8000)
@@ -97,7 +97,7 @@ VPN_ALLOWED_HOURS_START=""          # Optional rotation window start hour (defau
 VPN_ALLOWED_HOURS_END=""              # Optional rotation window end hour (default: none)
 VPN_COOLDOWN_MINUTES="60"                # Cooldown after successful reconnects (default: 60)
 VPN_MAX_RETRY_MINUTES="20"              # Retry budget before auto-disabling (default: 20)
-VPN_ROTATION_MAX_PER_DAY="6"            # Maximum automatic rotations per UTC day (0 = unlimited; default: 6)
+VPN_ROTATION_MAX_PER_DAY="3"            # Maximum automatic rotations per UTC day (0 = unlimited; default: 6)
 VPN_ROTATION_JITTER_SECONDS="0"         # Randomised restart delay window in seconds (default: 0)
 
 # --- Container images (advanced) ---
