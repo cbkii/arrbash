@@ -206,8 +206,7 @@ install_vuetorrent() {
     write_qbt_config
   fi
 
-  docker ps -a --filter "label=com.docker.compose.project=arrstack" --format "{{.ID}}" \
-    | xargs -r docker rm -f >/dev/null 2>&1 || true
+  # Removed aggressive container cleanup to avoid disrupting other services mid-run.
 }
 
 service_container_name() {

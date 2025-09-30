@@ -930,11 +930,14 @@ vpn_auto_reconnect_high_load_detected() {
   if ! load="$(awk '{print $1}' /proc/loadavg 2>/dev/null)"; then
     return 1
   fi
-  load=${load%%.*}
   if [[ -z "$load" ]]; then
     return 1
   fi
-  if ((load >= cores)); then
+  if [[ ! "$load" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    return 1
+  fi
+  # Compare float load vs integer core count without truncation
+  if awk -v l="$load" -v c="$cores" 'BEGIN { exit (l >= c) ? 0 : 1 }'; then
     return 0
   fi
   return 1
@@ -953,39 +956,18 @@ vpn_auto_reconnect_pick_country() {
   if [[ ! "$index" =~ ^[0-9]+$ ]]; then
     index=0
   fi
-  local history="${VPN_AUTO_STATE_FAILURE_HISTORY:-{}}"
-  local best_country=""
-  local best_index=-1
-  local best_fail_count=2147483647
-  local best_last=0
-  local i
-  for i in "${!countries[@]}"; do
-    local candidate="${countries[$i]}"
-    if vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
-      continue
+  local attempts=0
+  while ((attempts < max_index)); do
+    local candidate_index=$(((index + attempts) % max_index))
+    local candidate="${countries[$candidate_index]}"
+    # Skip countries that recently failed within the cooldown window
+    if ! vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
+      VPN_AUTO_STATE_ROTATION_INDEX="$candidate_index"
+      printf '%s\n' "$candidate"
+      return 0
     fi
-    local fail_count=0
-    local last_fail=0
-    if command -v jq >/dev/null 2>&1; then
-      fail_count="$(jq -r --arg country "$candidate" '.[$country].count // 0' <<<"$history" 2>/dev/null || printf '0')"
-      last_fail="$(jq -r --arg country "$candidate" '.[$country].last // 0' <<<"$history" 2>/dev/null || printf '0')"
-    fi
-    [[ "$fail_count" =~ ^[0-9]+$ ]] || fail_count=0
-    [[ "$last_fail" =~ ^[0-9]+$ ]] || last_fail=0
-    if [[ -z "$best_country" || "$fail_count" -lt "$best_fail_count" || ("$fail_count" -eq "$best_fail_count" && "$last_fail" -lt "$best_last") ]]; then
-      best_country="$candidate"
-      best_index="$i"
-      best_fail_count="$fail_count"
-      best_last="$last_fail"
-    fi
+    ((attempts++))
   done
-
-  if [[ -n "$best_country" ]]; then
-    VPN_AUTO_STATE_ROTATION_INDEX="$best_index"
-    printf '%s\n' "$best_country"
-    return 0
-  fi
-
   # All candidates are cooling down; fall back to sequential rotation.
   local fallback_index=$(((index + 1) % max_index))
   VPN_AUTO_STATE_ROTATION_INDEX="$fallback_index"
