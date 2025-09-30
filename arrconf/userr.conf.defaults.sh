@@ -61,7 +61,7 @@ LAN_IP="${LAN_IP:-}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
 SERVER_COUNTRIES="${SERVER_COUNTRIES:-Netherlands}"
 # SERVER_NAMES=""  # Optionally pin Proton server hostnames if PF keeps returning 0 (comma-separated list)
-PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES:-${SERVER_COUNTRIES}}"
+PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES:-}"
 
 # Domain suffix used by optional DNS/Caddy hostnames (default to RFC 8375 recommendation)
 LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX:-home.arpa}"
@@ -191,10 +191,12 @@ VPN_AUTO_RECONNECT_ENABLED="${VPN_AUTO_RECONNECT_ENABLED:-0}"
 VPN_SPEED_THRESHOLD_KBPS="${VPN_SPEED_THRESHOLD_KBPS:-12}"
 VPN_CHECK_INTERVAL_MINUTES="${VPN_CHECK_INTERVAL_MINUTES:-20}"
 VPN_CONSECUTIVE_CHECKS="${VPN_CONSECUTIVE_CHECKS:-3}"
-VPN_ALLOWED_HOURS_START="${VPN_ALLOWED_HOURS_START:-2}"
-VPN_ALLOWED_HOURS_END="${VPN_ALLOWED_HOURS_END:-8}"
+VPN_ALLOWED_HOURS_START="${VPN_ALLOWED_HOURS_START:-}"
+VPN_ALLOWED_HOURS_END="${VPN_ALLOWED_HOURS_END:-}"
 VPN_COOLDOWN_MINUTES="${VPN_COOLDOWN_MINUTES:-60}"
 VPN_MAX_RETRY_MINUTES="${VPN_MAX_RETRY_MINUTES:-20}"
+VPN_ROTATION_MAX_PER_DAY="${VPN_ROTATION_MAX_PER_DAY:-6}"
+VPN_ROTATION_JITTER_SECONDS="${VPN_ROTATION_JITTER_SECONDS:-0}"
 
 # Service ports
 QBT_HTTP_PORT_HOST="${QBT_HTTP_PORT_HOST:-8080}"
@@ -497,7 +499,7 @@ LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}"          # Suffix appended to service h
 CADDY_DOMAIN_SUFFIX="${CADDY_DOMAIN_SUFFIX}"  # Override Caddy hostname suffix independently of LAN DNS (default: ${CADDY_DOMAIN_SUFFIX})
 SERVER_COUNTRIES="${SERVER_COUNTRIES}"              # ProtonVPN exit country list (default: ${SERVER_COUNTRIES})
 # SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) if PF stays at 0
-PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES}"  # Optional rotation order for arr.vpn switch (default mirrors SERVER_COUNTRIES)
+PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES}"  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT}"            # Host port that exposes the Gluetun control API (default: ${GLUETUN_CONTROL_PORT})
 ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}"                   # Advanced: enable the optional dnsmasq container (0/1, default: ${ENABLE_LOCAL_DNS})
 ENABLE_CADDY="${ENABLE_CADDY}"                       # Optional Caddy reverse proxy (run ./arrstack.sh --enable-caddy or set 1 to add HTTPS hostnames)
@@ -550,8 +552,8 @@ VPN_AUTO_RECONNECT_ENABLED="${VPN_AUTO_RECONNECT_ENABLED}"    # 1 enables the ba
 VPN_SPEED_THRESHOLD_KBPS="${VPN_SPEED_THRESHOLD_KBPS}"        # Combined kbps threshold before reconnect attempts (default: ${VPN_SPEED_THRESHOLD_KBPS})
 VPN_CHECK_INTERVAL_MINUTES="${VPN_CHECK_INTERVAL_MINUTES}"    # Minutes between throughput samples (default: ${VPN_CHECK_INTERVAL_MINUTES})
 VPN_CONSECUTIVE_CHECKS="${VPN_CONSECUTIVE_CHECKS}"            # Consecutive low samples required before reconnecting (default: ${VPN_CONSECUTIVE_CHECKS})
-VPN_ALLOWED_HOURS_START="${VPN_ALLOWED_HOURS_START}"          # Optional rotation window start hour (default: ${VPN_ALLOWED_HOURS_START})
-VPN_ALLOWED_HOURS_END="${VPN_ALLOWED_HOURS_END}"              # Optional rotation window end hour (default: ${VPN_ALLOWED_HOURS_END})
+VPN_ALLOWED_HOURS_START="${VPN_ALLOWED_HOURS_START}"          # Optional rotation window start hour (default: none)
+VPN_ALLOWED_HOURS_END="${VPN_ALLOWED_HOURS_END}"              # Optional rotation window end hour (default: none)
 VPN_COOLDOWN_MINUTES="${VPN_COOLDOWN_MINUTES}"                # Cooldown after successful reconnects (default: ${VPN_COOLDOWN_MINUTES})
 VPN_MAX_RETRY_MINUTES="${VPN_MAX_RETRY_MINUTES}"              # Retry budget before auto-disabling (default: ${VPN_MAX_RETRY_MINUTES})
 

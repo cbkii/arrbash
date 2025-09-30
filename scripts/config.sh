@@ -92,6 +92,36 @@ show_configuration_preview() {
     vpn_mode_display="full-tunnel (all services through VPN)"
   fi
 
+  local vpn_auto_summary="disabled"
+  if [[ "${VPN_AUTO_RECONNECT_ENABLED:-0}" == "1" ]]; then
+    local threshold_display="${VPN_SPEED_THRESHOLD_KBPS:-12}"
+    local interval_display="${VPN_CHECK_INTERVAL_MINUTES:-20}"
+    local window_display="none"
+    if [[ -n "${VPN_ALLOWED_HOURS_START:-}" && -n "${VPN_ALLOWED_HOURS_END:-}" ]]; then
+      local start_fmt end_fmt
+      start_fmt=$(printf '%02d' "${VPN_ALLOWED_HOURS_START:-0}" 2>/dev/null || printf '%02d' 0)
+      end_fmt=$(printf '%02d' "${VPN_ALLOWED_HOURS_END:-0}" 2>/dev/null || printf '%02d' 0)
+      window_display="${start_fmt}–${end_fmt} UTC"
+    fi
+    local cap_display="${VPN_ROTATION_MAX_PER_DAY:-6}"
+    if [[ ! "$cap_display" =~ ^[0-9]+$ ]]; then
+      cap_display=6
+    fi
+    local cap_fragment="cap ${cap_display}/day"
+    if ((cap_display == 0)); then
+      cap_fragment="cap unlimited"
+    fi
+    local jitter_display="${VPN_ROTATION_JITTER_SECONDS:-0}"
+    if [[ ! "$jitter_display" =~ ^[0-9]+$ ]]; then
+      jitter_display=0
+    fi
+    local jitter_fragment=""
+    if ((jitter_display > 0)); then
+      jitter_fragment="; jitter 0-${jitter_display}s"
+    fi
+    vpn_auto_summary="enabled (threshold ${threshold_display} KB/s; interval ${interval_display}m; window ${window_display}; ${cap_fragment}${jitter_fragment})"
+  fi
+
   cat <<CONFIG
 ------------------------------------------------------------
 ARR Stack configuration preview
@@ -111,6 +141,7 @@ Network & system
   • Localhost IP override: ${LOCALHOST_IP}
   • VPN mode: ${vpn_mode_display}
   • Server countries: ${SERVER_COUNTRIES}
+  • VPN auto-reconnect: ${vpn_auto_summary}
   • User/Group IDs: ${PUID}/${PGID}
 
 Credentials & secrets

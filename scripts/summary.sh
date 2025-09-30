@@ -1,4 +1,14 @@
 # shellcheck shell=bash
+
+summary_format_epoch() {
+  local epoch="$1"
+  if [[ -z "$epoch" || ! "$epoch" =~ ^[0-9]+$ || "$epoch" -le 0 ]]; then
+    printf '(none)'
+    return 0
+  fi
+  date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf '%s' "$epoch"
+}
+
 show_summary() {
 
   msg "🎉 Setup complete!!"
@@ -219,6 +229,137 @@ WARNING
         msg "   Log file:   ${pf_log_file}"
         ;;
     esac
+  fi
+
+  local vpn_auto_status_file="${ARR_STACK_DIR%/}/.vpn-auto-reconnect-status.json"
+  local vpn_auto_state_base="${ARR_DOCKER_DIR:-}"
+  if [[ -z "$vpn_auto_state_base" ]]; then
+    if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+      vpn_auto_state_base="${ARR_STACK_DIR%/}/docker-data"
+    else
+      vpn_auto_state_base="${HOME:-.}/srv/docker-data"
+    fi
+  fi
+  local vpn_auto_state_file="${vpn_auto_state_base%/}/gluetun/auto-reconnect/state.json"
+
+  if [[ "${VPN_AUTO_RECONNECT_ENABLED:-0}" == "1" ]]; then
+    msg "VPN Auto-Reconnect:"
+    local auto_required="${VPN_CONSECUTIVE_CHECKS:-3}"
+    [[ "$auto_required" =~ ^[0-9]+$ ]] || auto_required=3
+    local auto_status="unknown"
+    local auto_detail=""
+    local auto_consecutive="0"
+    local auto_country=""
+    local auto_last_reconnect=""
+    local auto_cooldown="0"
+    local auto_retry_backoff="0"
+    local auto_retry_total="0"
+    local auto_next_decision="0"
+    local auto_last_low=""
+    local auto_classification="monitoring"
+    local auto_rotation_count="0"
+    local auto_rotation_cap="0"
+    local auto_next_possible=""
+    local auto_jitter="0"
+    if [[ -f "$vpn_auto_status_file" ]]; then
+      if command -v jq >/dev/null 2>&1; then
+        auto_status="$(jq -r '.status // "unknown"' "$vpn_auto_status_file" 2>/dev/null || printf 'unknown')"
+        auto_detail="$(jq -r '.detail // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_consecutive="$(jq -r '.consecutive_low // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_country="$(jq -r '.last_country // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_last_reconnect="$(jq -r '.last_reconnect // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_cooldown="$(jq -r '.cooldown_until // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_retry_backoff="$(jq -r '.retry_backoff // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_retry_total="$(jq -r '.retry_total // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_next_decision="$(jq -r '.next_decision_at // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_last_low="$(jq -r '.last_low // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_classification="$(jq -r '.classification // "monitoring"' "$vpn_auto_status_file" 2>/dev/null || printf 'monitoring')"
+        auto_rotation_count="$(jq -r '.rotation_count_day // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_rotation_cap="$(jq -r '.rotation_cap // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_next_possible="$(jq -r '.next_possible_action // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_jitter="$(jq -r '.jitter_applied // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+      else
+        auto_status="$(sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf 'unknown')"
+        auto_detail="$(sed -n 's/.*"detail"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_consecutive="$(sed -n 's/.*"consecutive_low"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_country="$(sed -n 's/.*"last_country"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_last_reconnect="$(sed -n 's/.*"last_reconnect"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_cooldown="$(sed -n 's/.*"cooldown_until"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_retry_backoff="$(sed -n 's/.*"retry_backoff"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_retry_total="$(sed -n 's/.*"retry_total"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_next_decision="$(sed -n 's/.*"next_decision_at"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_last_low="$(sed -n 's/.*"last_low"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_classification="$(sed -n 's/.*"classification"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf 'monitoring')"
+        auto_rotation_count="$(sed -n 's/.*"rotation_count_day"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_rotation_cap="$(sed -n 's/.*"rotation_cap"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_next_possible="$(sed -n 's/.*"next_possible_action"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_jitter="$(sed -n 's/.*"jitter_applied"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+      fi
+      [[ -n "$auto_status" ]] || auto_status="unknown"
+      [[ "$auto_consecutive" =~ ^[0-9]+$ ]] || auto_consecutive=0
+      [[ "$auto_retry_backoff" =~ ^[0-9]+$ ]] || auto_retry_backoff=0
+      [[ "$auto_retry_total" =~ ^[0-9]+$ ]] || auto_retry_total=0
+      [[ "$auto_cooldown" =~ ^[0-9]+$ ]] || auto_cooldown=0
+      [[ "$auto_next_decision" =~ ^[0-9]+$ ]] || auto_next_decision=0
+      [[ "$auto_rotation_count" =~ ^[0-9]+$ ]] || auto_rotation_count=0
+      [[ "$auto_rotation_cap" =~ ^[0-9]+$ ]] || auto_rotation_cap=0
+      [[ "$auto_jitter" =~ ^[0-9]+$ ]] || auto_jitter=0
+      if [[ "$auto_next_possible" == "null" ]]; then
+        auto_next_possible=""
+      fi
+      local status_line="  Status: ${auto_status}"
+      if [[ -n "$auto_detail" ]]; then
+        status_line+=" (${auto_detail})"
+      fi
+      status_line+=" (classification=${auto_classification}; consecutive_low=${auto_consecutive}/${auto_required})"
+      msg "$status_line"
+      if [[ -n "$auto_last_reconnect" ]]; then
+        local reconnect_line="  Last reconnect: ${auto_last_reconnect}"
+        if [[ -n "$auto_country" ]]; then
+          reconnect_line+=" (country: ${auto_country})"
+        fi
+        msg "$reconnect_line"
+      fi
+      if [[ -n "$auto_last_low" ]]; then
+        msg "  Last low sample: ${auto_last_low}"
+      fi
+      local now_epoch
+      now_epoch="$(date +%s)"
+      if ((auto_cooldown > now_epoch)); then
+        msg "  Cooldown until: $(summary_format_epoch "$auto_cooldown")"
+      fi
+      if ((auto_next_decision > 0)); then
+        msg "  Next decision: $(summary_format_epoch "$auto_next_decision")"
+      fi
+      if [[ -n "$auto_next_possible" ]]; then
+        msg "  Next possible action: ${auto_next_possible}"
+      fi
+      local rotation_line="  Rotation: ${auto_rotation_count}"
+      if ((auto_rotation_cap > 0)); then
+        rotation_line+="/${auto_rotation_cap} per day"
+      else
+        rotation_line+=" (uncapped)"
+      fi
+      msg "$rotation_line"
+      msg "  Retry budget: ${auto_retry_total}/${VPN_MAX_RETRY_MINUTES:-20}m (backoff=${auto_retry_backoff}m)"
+      if ((auto_jitter > 0)); then
+        msg "  Last jitter applied: ${auto_jitter}s"
+      fi
+    else
+      msg "  Status: (no status file yet)"
+    fi
+    local window_display="none"
+    if [[ -n "${VPN_ALLOWED_HOURS_START:-}" && -n "${VPN_ALLOWED_HOURS_END:-}" ]]; then
+      local start_fmt end_fmt
+      start_fmt=$(printf '%02d' "${VPN_ALLOWED_HOURS_START:-0}" 2>/dev/null || printf '%02d' 0)
+      end_fmt=$(printf '%02d' "${VPN_ALLOWED_HOURS_END:-0}" 2>/dev/null || printf '%02d' 0)
+      window_display="${start_fmt}–${end_fmt} UTC"
+    fi
+    msg "  Threshold: ${VPN_SPEED_THRESHOLD_KBPS:-12} KB/s; Interval: ${VPN_CHECK_INTERVAL_MINUTES:-20}m"
+    msg "  Allowed window: ${window_display}"
+    msg "  Use arr.vpn.auto.status / arr.vpn.auto.history for diagnostics."
+  elif [[ -f "$vpn_auto_status_file" || -f "$vpn_auto_state_file" ]]; then
+    msg "VPN Auto-Reconnect: disabled (present but disabled)"
   fi
 
   if [[ "${ARR_PERMISSION_PROFILE}" == "collab" && -n "${COLLAB_PERMISSION_WARNINGS:-}" ]]; then
