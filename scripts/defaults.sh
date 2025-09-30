@@ -95,7 +95,7 @@ arrstack_setup_defaults() {
   local requested_permission_profile="${ARR_PERMISSION_PROFILE:-}"
   local permission_profile="${requested_permission_profile:-strict}"
   SECRET_FILE_MODE=600
-  LOCK_FILE_MODE=644
+  LOCK_FILE_MODE=640
   NONSECRET_FILE_MODE=600
   DATA_DIR_MODE=700
   local collab_initial_umask="0007"

@@ -7,7 +7,7 @@
 : "${SECRET_FILE_MODE:=600}"
 : "${NONSECRET_FILE_MODE:=600}"
 : "${DATA_DIR_MODE:=700}"
-: "${LOCK_FILE_MODE:=600}"
+: "${LOCK_FILE_MODE:=640}"
 
 arrstack_resolve_color_output() {
   if [[ -n "${NO_COLOR:-}" ]]; then
@@ -356,6 +356,10 @@ arrstack_mktemp_dir() {
 }
 
 arrstack_escalate_privileges() {
+  if [[ "${ARRSTACK_ESCALATED:-0}" == "1" ]]; then
+    return 0
+  fi
+
   # POSIX-safe locals
   _euid="${EUID:-$(id -u)}"
   if [ "${_euid}" -eq 0 ]; then
@@ -380,13 +384,19 @@ arrstack_escalate_privileges() {
   if command -v sudo >/dev/null 2>&1; then
     if sudo -n true >/dev/null 2>&1; then
       # passwordless sudo available: re-exec with preserved env
+      export ARRSTACK_ESCALATED=1
+      # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
+      unset ARRSTACK_ESCALATED
       # unreachable
       return 0
     else
       # Interactive sudo available — notify user and re-exec (will prompt)
       printf '[%s] escalating privileges with sudo; you may be prompted for your password…\n' "$(basename "${_script_path}")" >&2
+      export ARRSTACK_ESCALATED=1
+      # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
+      unset ARRSTACK_ESCALATED
       # unreachable
       return 0
     fi
@@ -399,9 +409,15 @@ arrstack_escalate_privileges() {
     # pkexec requires the binary to be executable; using the interpreter ensures portability
     # Try to preserve PATH and a minimal env for the invocation
     if command -v bash >/dev/null 2>&1; then
+      export ARRSTACK_ESCALATED=1
+      # shellcheck disable=SC2093
       exec pkexec /bin/bash -c "exec \"${_script_path}\" \"\$@\"" -- "$@"
+      unset ARRSTACK_ESCALATED
     else
+      export ARRSTACK_ESCALATED=1
+      # shellcheck disable=SC2093
       exec pkexec /bin/sh -c "exec \"${_script_path}\" \"\$@\"" -- "$@"
+      unset ARRSTACK_ESCALATED
     fi
     return 0
   fi
@@ -426,7 +442,10 @@ arrstack_escalate_privileges() {
     done
 
     # Execute via su - root -c 'exec CMD'
+    export ARRSTACK_ESCALATED=1
+    # shellcheck disable=SC2093
     exec su - root -c "exec ${_cmd}"
+    unset ARRSTACK_ESCALATED
     # unreachable
     return 0
   fi
@@ -435,6 +454,7 @@ arrstack_escalate_privileges() {
   printf '[%s] ERROR: root privileges are required. Install sudo, pkexec (polkit) or su, or run this script as root.\n' "$(basename "${_script_path}")" >&2
   return 2
 }
+
 
 ss_port_bound() {
   local proto="$1"

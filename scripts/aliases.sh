@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 write_aliases_file() {
-  msg "📄 Generating helper aliases file"
+  msg "🛠️ Generating helper aliases file"
 
   local template_file="${REPO_ROOT}/.aliasarr"
   local aliases_file="${ARR_STACK_DIR}/.aliasarr"

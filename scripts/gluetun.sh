@@ -35,7 +35,7 @@ gluetun_version_requires_auth_config() {
   local tag="${image##*:}"
 
   # Extract semantic version components from a variety of tag formats
-  if [[ "$tag" =~ v?([0-9]+)\.([0-9]+) ]]; then
+  if [[ "$tag" =~ ^v?([0-9]+)\.([0-9]+) ]]; then
     local major="${BASH_REMATCH[1]}"
     local minor="${BASH_REMATCH[2]}"
 
@@ -47,7 +47,7 @@ gluetun_version_requires_auth_config() {
     fi
   fi
 
-  if [[ "$tag" == "latest" || "$image" == "qmcgaw/gluetun" ]]; then
+  if [[ "$tag" == "latest" || "$tag" == "edge" || "$tag" == "testing" || "$image" == "qmcgaw/gluetun" ]]; then
     return 0
   fi
 
@@ -389,7 +389,18 @@ pf_worker_pid_alive() {
   local pid
   pid="$(cat "$pid_file" 2>/dev/null || printf '')"
   if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
-    return 0
+    local cmdline=""
+    if declare -f read_proc_cmdline >/dev/null 2>&1; then
+      cmdline="$(read_proc_cmdline "$pid" 2>/dev/null || true)"
+    elif [[ -r "/proc/${pid}/cmdline" ]]; then
+      cmdline="$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null || true)"
+    fi
+    if [[ -z "$cmdline" ]] && declare -f read_proc_comm >/dev/null 2>&1; then
+      cmdline="$(read_proc_comm "$pid" 2>/dev/null || true)"
+    fi
+    if [[ "$cmdline" == *"async_port_forward_worker"* ]]; then
+      return 0
+    fi
   fi
   rm -f "$pid_file" 2>/dev/null || true
   return 1

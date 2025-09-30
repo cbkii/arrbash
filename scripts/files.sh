@@ -48,7 +48,7 @@ arrstack_report_collab_skip() {
 }
 
 mkdirs() {
-  msg "📁 Creating directories"
+  msg "📂 Creating directories"
   ensure_dir_mode "$ARR_STACK_DIR" 755
 
   ensure_dir_mode "$ARR_DOCKER_DIR" "$DATA_DIR_MODE"
@@ -144,6 +144,32 @@ mkdirs() {
   fi
 }
 
+safe_random_alnum() {
+  # Produce a shell-safe alphanumeric string of the requested length.
+  local len="${1:-64}"
+  if [[ ! "$len" =~ ^[0-9]+$ || "$len" -le 0 ]]; then
+    len=64
+  fi
+  local output=""
+  local chunk=""
+  local need=0
+  while ((${#output} < len)); do
+    need=$((len - ${#output}))
+    if command -v openssl >/dev/null 2>&1; then
+      chunk="$(openssl rand -base64 $((need * 2)) 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c "$need")"
+    elif [[ -r /dev/urandom ]]; then
+      chunk="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$need")"
+    else
+      chunk="$(printf '%s' "$RANDOM$RANDOM$RANDOM" | tr -dc 'A-Za-z0-9' | head -c "$need")"
+    fi
+    if [[ -z "$chunk" ]]; then
+      continue
+    fi
+    output+="$chunk"
+  done
+  printf '%s\n' "${output:0:len}"
+}
+
 generate_api_key() {
   msg "🔐 Generating API key"
 
@@ -158,7 +184,7 @@ generate_api_key() {
     fi
   fi
 
-  GLUETUN_API_KEY="$(openssl rand -base64 48 | tr -d '\n/')"
+  GLUETUN_API_KEY="$(safe_random_alnum 64)"
   msg "Generated new API key"
 
   if gluetun_version_requires_auth_config 2>/dev/null; then
@@ -224,7 +250,14 @@ write_env() {
     ENABLE_LOCAL_DNS=0
   fi
 
-  if [[ -z "${LAN_IP:-}" || "$LAN_IP" == "0.0.0.0" ]]; then
+  local user_supplied_lan_ip="${LAN_IP:-}"
+  if [[ -n "$user_supplied_lan_ip" ]]; then
+    if ! validate_ipv4 "$user_supplied_lan_ip"; then
+      die "Invalid LAN_IP provided (${user_supplied_lan_ip}). Fix ${userconf_path} or unset to auto-detect."
+    fi
+    LAN_IP="$user_supplied_lan_ip"
+    msg "Using configured LAN_IP: $LAN_IP"
+  else
     if detected_ip="$(detect_lan_ip 2>/dev/null)"; then
       LAN_IP="$detected_ip"
       msg "Auto-detected LAN_IP: $LAN_IP"
@@ -232,16 +265,25 @@ write_env() {
       LAN_IP="0.0.0.0"
       warn "LAN_IP could not be detected automatically; set it in ${userconf_path} so services bind to the correct interface."
     fi
-  else
-    msg "Using configured LAN_IP: $LAN_IP"
   fi
 
+  local -a lan_requirements=()
   if (( direct_ports_requested == 1 )); then
+    lan_requirements+=("EXPOSE_DIRECT_PORTS=1")
+  fi
+  if (( split_vpn == 1 )); then
+    lan_requirements+=("SPLIT_VPN=1")
+  fi
+  if ((${#lan_requirements[@]} > 0)); then
+    local requirement_msg="${lan_requirements[0]}"
+    if ((${#lan_requirements[@]} == 2)); then
+      requirement_msg="${lan_requirements[0]} and ${lan_requirements[1]}"
+    fi
     if [[ -z "${LAN_IP:-}" || "$LAN_IP" == "0.0.0.0" ]]; then
-      die "EXPOSE_DIRECT_PORTS=1 requires LAN_IP to be set to your host's private IPv4 address in ${userconf_path}."
+      die "${requirement_msg} requires LAN_IP to be set to your host's private IPv4 address in ${userconf_path}."
     fi
     if ! is_private_ipv4 "$LAN_IP"; then
-      die "LAN_IP='${LAN_IP}' is not a private IPv4 address. Set LAN_IP to your LAN host IP before exposing ports."
+      die "LAN_IP='${LAN_IP}' must be a private IPv4 address when ${requirement_msg} is enabled. Update ${userconf_path}."
     fi
   fi
 
@@ -1364,6 +1406,15 @@ esac
 QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
 PAYLOAD=$(printf 'json={"listen_port":%s,"random_port":false}' "$PORT_VALUE")
 
+COOKIE_FILE=""
+cleanup_cookie() {
+    if [ -n "$COOKIE_FILE" ]; then
+        rm -f "$COOKIE_FILE" 2>/dev/null || true
+        COOKIE_FILE=""
+    fi
+}
+trap cleanup_cookie EXIT
+
 attempt_update() {
     UPDATE_METHOD=""
 
@@ -1375,23 +1426,26 @@ attempt_update() {
     fi
 
     if [ -n "${QBT_USER:-}" ] && [ -n "${QBT_PASS:-}" ]; then
-        COOKIE="$(mktemp)"
-        if curl -fsS --max-time 5 -c "$COOKIE" \
+        COOKIE_FILE="$(mktemp "${TMPDIR:-/tmp}/update-qbt-cookie.XXXXXX")" || {
+            log "Failed to create temporary cookie file"
+            return 1
+        }
+        if curl -fsS --max-time 5 -c "$COOKIE_FILE" \
             --data-urlencode "username=${QBT_USER}" \
             --data-urlencode "password=${QBT_PASS}" \
             "${QBITTORRENT_ADDR%/}/api/v2/auth/login" >/dev/null 2>&1; then
-            if curl -fsS --max-time 8 -b "$COOKIE" \
+            if curl -fsS --max-time 8 -b "$COOKIE_FILE" \
                 --data "$PAYLOAD" \
                 "${QBITTORRENT_ADDR%/}/api/v2/app/setPreferences" >/dev/null 2>&1; then
                 UPDATE_METHOD="authenticated"
-                rm -f "$COOKIE"
+                cleanup_cookie
                 return 0
             fi
             log "Authenticated but failed to apply port update"
         else
             log "qBittorrent authentication failed"
         fi
-        rm -f "$COOKIE"
+        cleanup_cookie
     else
         if [ "${ATTEMPT:-0}" -eq 1 ]; then
             log "Skipping authenticated update: QBT_USER/QBT_PASS not provided"

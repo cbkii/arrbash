@@ -29,7 +29,7 @@ if [[ ! -d "${dest_dir}" ]]; then
 fi
 
 if cp "$CA_FILE" "$DEST_FILE" 2>/dev/null; then
-  chmod 600 "$DEST_FILE" 2>/dev/null || true
+  chmod 640 "$DEST_FILE" 2>/dev/null || true
   log_info "CA certificate exported to ${DEST_FILE}"
   log_info "Install this on LAN devices to trust HTTPS connections"
 else
