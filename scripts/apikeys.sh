@@ -125,12 +125,7 @@ arrstack_update_secret_line() {
     fi
   fi
 
-  local should_update=0
-  if (( placeholder == 1 )); then
-    should_update=1
-  elif (( force_update == 1 )); then
-    should_update=1
-  fi
+  local should_update=$(( placeholder == 1 || force_update == 1 ))
 
   if (( should_update == 0 )); then
     printf 'unchanged\n'
