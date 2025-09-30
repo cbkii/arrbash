@@ -218,7 +218,7 @@ main() {
 
   # shellcheck disable=SC2034 # values consumed by scripts/summary.sh
   if [[ "${FORCE_SYNC_API_KEYS:-0}" -eq 1 ]]; then
-    arrstack_sync_arr_api_keys || true
+    arrstack_sync_arr_api_keys 1 || true
   elif [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" -eq 1 ]]; then
     API_KEYS_SYNCED_STATUS="disabled"
     API_KEYS_SYNCED_MESSAGE="Configarr API key sync skipped (--no-auto-api-sync)."
@@ -226,7 +226,7 @@ main() {
       API_KEYS_SYNCED_PLACEHOLDERS=1
     fi
   else
-    arrstack_sync_arr_api_keys || true
+    arrstack_sync_arr_api_keys 0 || true
   fi
 
   if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 && "${ENABLE_CADDY:-0}" -eq 1 ]]; then

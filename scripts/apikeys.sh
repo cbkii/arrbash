@@ -51,6 +51,16 @@ arrstack_update_secret_line() {
   local secrets_file="$1"
   local secret_key="$2"
   local new_value="$3"
+  local force_input="${4:-}"
+
+  if [[ -z "$force_input" ]]; then
+    force_input="${FORCE_SYNC_API_KEYS:-0}"
+  fi
+
+  local force_update=0
+  if [[ "$force_input" == "1" ]]; then
+    force_update=1
+  fi
 
   if [[ -z "$secrets_file" || -z "$secret_key" || -z "$new_value" ]]; then
     return 1
@@ -115,7 +125,9 @@ arrstack_update_secret_line() {
     fi
   fi
 
-  if (( placeholder == 0 )); then
+  local should_update=$(( placeholder == 1 || force_update == 1 ))
+
+  if (( should_update == 0 )); then
     printf 'unchanged\n'
     return 0
   fi
@@ -129,6 +141,8 @@ arrstack_update_secret_line() {
 }
 
 arrstack_sync_arr_api_keys() {
+  local force_sync="${1:-${FORCE_SYNC_API_KEYS:-0}}"
+
   API_KEYS_SYNCED_STATUS=""
   API_KEYS_SYNCED_MESSAGE=""
   API_KEYS_SYNCED_DETAILS=""
@@ -196,7 +210,7 @@ arrstack_sync_arr_api_keys() {
     fi
 
     local result=""
-    if result="$(arrstack_update_secret_line "$secrets_file" "$secret_key" "$api_key" 2>/dev/null)"; then
+    if result="$(arrstack_update_secret_line "$secrets_file" "$secret_key" "$api_key" "$force_sync" 2>/dev/null)"; then
       case "$result" in
         updated|created|appended)
           status_map[$service]="updated"
