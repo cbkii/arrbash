@@ -1014,11 +1014,7 @@ vpn_auto_reconnect_apply_jitter_delay() {
     return 0
   fi
   local delay
-  if ((jitter == 0)); then
-    delay=0
-  else
-    delay=$((RANDOM % (jitter + 1)))
-  fi
+  delay=$((RANDOM % (jitter + 1)))
   VPN_AUTO_STATE_JITTER_APPLIED="$delay"
   if ((delay > 0)); then
     sleep "$delay"
