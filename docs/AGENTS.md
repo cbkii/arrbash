@@ -2,7 +2,7 @@
 
 ## Purpose / Role of Agent
 
-You are an AI coding agent for the `cbkii/arrstackmini` project. Your responsibilities include:
+You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilities include:
 
 - Editing, improving, and extending code, shell scripts, config files, and documentation.
 - Ensuring consistency between docs, examples, and code behavior.

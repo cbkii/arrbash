@@ -21,7 +21,7 @@ Key terms referenced throughout the documentation.
 
 If a term is unfamiliar, follow links in the other docs or run `man <term>` on Debian (for example, `man resolv.conf`).
 
-## See also
+## Related topics
 - [Networking](networking.md)
 - [Operations](operations.md)
 - [FAQ](faq.md)

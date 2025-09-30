@@ -120,7 +120,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   ```
   The script repeats DNS, port, and HTTPS checks using your generated configuration.
 
-## See also
-- [Networking](networking.md) for VPN, DNS, and HTTPS setup details.
-- [Operations](operations.md) for helper command summaries.
-- [Security](security.md) when reviewing exposure concerns.
+## Related topics
+- [Networking](networking.md) – VPN, DNS, and HTTPS setup details.
+- [Operations](operations.md) – helper command summaries.
+- [Security](security.md) – exposure considerations.

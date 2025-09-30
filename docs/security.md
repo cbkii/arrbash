@@ -32,8 +32,8 @@ Keep the deployment private to your LAN and rotate credentials regularly.
   git grep -nE '(yourname|@|home\\.local)'
   ```
 
-## See also
-- [Configuration](configuration.md) for permission profile details.
-- [Networking](networking.md) before enabling Caddy or local DNS.
-- [Operations](operations.md) for rotation commands.
-- [Troubleshooting](troubleshooting.md) for recovery steps.
+## Related topics
+- [Configuration](configuration.md) – permission profile details.
+- [Networking](networking.md) – Caddy, DNS, and VPN context.
+- [Operations](operations.md) – rotation commands.
+- [Troubleshooting](troubleshooting.md) – recovery steps.

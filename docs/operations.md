@@ -57,8 +57,8 @@ Run these from the repository root:
    ```
 4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `--rotate-caddy-auth`, `scripts/qbt-helper.sh reset`).
 
-## See also
-- [Configuration](configuration.md) for variable reference.
-- [Networking](networking.md) for VPN, DNS, and HTTPS guidance.
-- [Security](security.md) before exposing services beyond your LAN.
-- [Troubleshooting](troubleshooting.md) if checks fail.
+## Related topics
+- [Configuration](configuration.md) – variable reference.
+- [Networking](networking.md) – VPN, DNS, and HTTPS guidance.
+- [Security](security.md) – exposure checks before publishing services.
+- [Troubleshooting](troubleshooting.md) – follow-up when checks fail.

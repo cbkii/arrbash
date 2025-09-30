@@ -57,7 +57,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   grep -E '^QBT_(USER|PASS)=' .env
   ```
 
-## See also
-- [Operations](operations.md) for helper scripts and command-line flags.
-- [Networking](networking.md) before enabling split VPN, DNS, or HTTPS.
-- [Security](security.md) for exposure and credential hygiene guidance.
+## Related topics
+- [Operations](operations.md) – helper scripts and command-line flags.
+- [Networking](networking.md) – VPN, DNS, and HTTPS considerations.
+- [Security](security.md) – exposure and credential hygiene guidance.

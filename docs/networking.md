@@ -74,8 +74,8 @@ ss -ulpn | grep ':53 '
   ```
 - Runtime status lives in `${ARR_STACK_DIR}/.vpn-auto-reconnect-status.json`; detailed logs sit under `docker-data/gluetun/auto-reconnect/`.
 
-## See also
-- [Configuration](configuration.md) for the variables mentioned above.
-- [Operations](operations.md) for script details and command summaries.
-- [Security](security.md) for exposure and certificate handling guidance.
-- [Troubleshooting](troubleshooting.md) if DNS, HTTPS, or VPN tasks fail.
+## Related topics
+- [Configuration](configuration.md) – variables referenced above.
+- [Operations](operations.md) – script details and command summaries.
+- [Security](security.md) – exposure and certificate handling guidance.
+- [Troubleshooting](troubleshooting.md) – DNS, HTTPS, or VPN recovery steps.
