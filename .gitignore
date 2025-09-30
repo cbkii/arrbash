@@ -1,0 +1,42 @@
+# Environment and secrets
+.env
+.aliasarr.configured
+*/proton.auth
+*.auth
+*/userrconf.sh
+userrconf.sh
+arrconf/*txt
+arrconf/*md
+arrconf/*2.sh
+
+# Runtime data
+docker-data/*
+!docker-data/gluetun/
+docker-data/gluetun/*
+!docker-data/gluetun/auto-reconnect/
+docker-data/gluetun/auto-reconnect/*
+!docker-data/gluetun/auto-reconnect/state.json
+docker-data/configarr/
+docker-data/configarr/secrets.yml
+docker-data/configarr/cfs/
+downloads/
+completed/
+media/
+
+# Logs
+logs/
+*.log
+*.txt
+
+# Backups
+*.backup
+*.bak
+*.tgz
+
+# OS files
+.DS_Store
+
+# Editor files
+*.swp
+.vscode/
+*.patch

@@ -1,0 +1,5 @@
+# ProtonVPN OpenVPN credentials
+# Copy this file to proton.auth and fill in your credentials
+# The +pmp suffix for port forwarding will be added automatically
+PROTON_USER=your_protonvpn_username
+PROTON_PASS=your_protonvpn_password
