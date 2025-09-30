@@ -961,7 +961,7 @@ vpn_auto_reconnect_pick_country() {
   local i
   for i in "${!countries[@]}"; do
     local candidate="${countries[$i]}"
-    if ! vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
+    if vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
       continue
     fi
     local fail_count=0
