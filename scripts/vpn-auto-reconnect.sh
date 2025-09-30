@@ -393,7 +393,7 @@ vpn_auto_reconnect_update_next_decision() {
 
 vpn_auto_reconnect_set_next_action() {
   local epoch="${1:-0}"
-  if [[ "$epoch" =~ ^[0-9]+$ && epoch -gt 0 ]]; then
+  if [[ "$epoch" =~ ^[0-9]+$ && $epoch -gt 0 ]]; then
     VPN_AUTO_STATE_NEXT_ACTION="$epoch"
   else
     VPN_AUTO_STATE_NEXT_ACTION=0
