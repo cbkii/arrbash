@@ -40,6 +40,14 @@ have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
+arrstack_shell_escape_single_quotes() {
+  printf '%s' "${1-}" | sed "s/'/'\\''/g"
+}
+
+arrstack_shell_escape_double_quotes() {
+  printf '%s' "${1-}" | sed 's/[\\$`\"]/\\&/g'
+}
+
 read_proc_cmdline() {
   local pid="$1"
 
@@ -429,15 +437,18 @@ arrstack_escalate_privileges() {
     # Build a safely quoted command string to pass to su -c
     _cmd=""
     # prefer absolute script path if resolved above; otherwise pass original $0
+    local _cmd_source=""
     if [ -n "${_script_path}" ]; then
-      _cmd="$(printf '%s' "${_script_path}")"
+      _cmd_source="${_script_path}"
     else
-      _cmd="$(printf '%s' "$0")"
+      _cmd_source="${0:-}"
     fi
+    _cmd="$(arrstack_shell_escape_single_quotes "${_cmd_source}")"
+    _cmd="'${_cmd}'"
 
     for _arg in "$@"; do
       # escape single quotes by closing, inserting '\'' and re-opening
-      _escaped="$(printf '%s' "${_arg}" | sed "s/'/'\\\\''/g")"
+      _escaped="$(arrstack_shell_escape_single_quotes "${_arg}")"
       _cmd="${_cmd} '${_escaped}'"
     done
 

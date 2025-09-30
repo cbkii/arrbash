@@ -209,7 +209,10 @@ VPN_AUTO_ALIAS
 
 install_aliases() {
   local bashrc="${HOME}/.bashrc"
-  local alias_line="alias arrstack='cd ${REPO_ROOT} && ./arrstack.sh'"
+  local repo_escaped
+  repo_escaped="$(arrstack_shell_escape_double_quotes "${REPO_ROOT}")"
+  local alias_line
+  alias_line="alias arrstack=\"cd \\\"${repo_escaped}\\\" && ./arrstack.sh\""
   local source_line="# source ${ARR_STACK_DIR}/.aliasarr  # Optional helper functions"
 
   if [[ -w "$bashrc" ]]; then

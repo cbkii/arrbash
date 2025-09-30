@@ -9,7 +9,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 . "${REPO_ROOT}/scripts/common.sh"
 
 # Escalation insertion point: call this at top of scripts that need root
-arrstack_escalate_privileges "$@"
+arrstack_escalate_privileges "$@" || exit $?
 
 set -Eeuo pipefail
 
