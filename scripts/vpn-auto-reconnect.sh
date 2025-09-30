@@ -11,18 +11,6 @@
 #     • Daily cap enforced via VPN_ROTATION_MAX_PER_DAY with UTC day rollover.
 #     • Optional jitter (VPN_ROTATION_JITTER_SECONDS) randomises restart timing for multi-host deployments.
 #     • Backoff budget persists across attempts and surfaces retry metadata in status.json.
-#
-# PHASE 1 CHANGES:
-#   - Hardened configuration handling and sanitisation for SERVER_COUNTRIES.
-#   - Fixed allowed-hours semantics and Proton country rotation backoff.
-#   - Surfaced richer status/next decision metadata for observability.
-#   - Added graceful degradation when jq is unavailable.
-#
-# PHASE 2 CHANGES:
-#   - Added adaptive classification (idle/low/failure) with rotation restricted to failure candidates only.
-#   - Introduced Proton PF worker resynchronisation, rotation jitter, daily caps, and history logging.
-#   - Expanded status/state payloads with rotation counters, jitter visibility, and next-action tracking.
-#   - Extended helper aliases and wake controls for responsive manual overrides.
 
 VPN_AUTO_RECONNECT_STATE_VERSION=2
 VPN_AUTO_RECONNECT_CURL_WARNED=0
@@ -973,7 +961,7 @@ vpn_auto_reconnect_pick_country() {
   local i
   for i in "${!countries[@]}"; do
     local candidate="${countries[$i]}"
-    if vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
+    if ! vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
       continue
     fi
     local fail_count=0
