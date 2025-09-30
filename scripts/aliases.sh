@@ -54,6 +54,146 @@ write_aliases_file() {
     fi
   fi
 
+  if ! grep -Fq "arr.vpn.auto.status" "$aliases_file" 2>/dev/null; then
+    {
+      printf '\n# VPN auto-reconnect helpers\n'
+      cat <<'VPN_AUTO_ALIAS'
+arr_vpn_auto_status() {
+  local status_file
+  status_file="$(_arr_vpn_auto_status_file)"
+  if [ -f "$status_file" ]; then
+    cat "$status_file"
+  else
+    echo "[arr.vpn.auto.status] status file not found: $status_file" >&2
+    return 1
+  fi
+}
+
+arr_vpn_auto_force() {
+  local flag
+  flag="$(_arr_vpn_auto_override_path once)"
+  if touch "$flag"; then
+    echo "[arr.vpn.auto.force] override flag created: $flag"
+  else
+    echo "[arr.vpn.auto.force] failed to create $flag" >&2
+    return 1
+  fi
+}
+
+arr_vpn_auto_pause() {
+  local flag
+  flag="$(_arr_vpn_auto_override_path pause)"
+  if touch "$flag"; then
+    echo "[arr.vpn.auto.pause] pause flag created: $flag"
+  else
+    echo "[arr.vpn.auto.pause] failed to create $flag" >&2
+    return 1
+  fi
+}
+
+arr_vpn_auto_resume() {
+  local flag
+  flag="$(_arr_vpn_auto_override_path pause)"
+  if rm -f "$flag"; then
+    echo "[arr.vpn.auto.resume] pause flag removed (${flag})"
+  else
+    echo "[arr.vpn.auto.resume] failed to remove $flag" >&2
+    return 1
+  fi
+}
+
+arr_vpn_auto_history() {
+  local state_dir history
+  state_dir="$(_arr_vpn_auto_state_dir)"
+  history="${state_dir}/history.log"
+  if [ -f "$history" ]; then
+    tail -n 50 "$history"
+  else
+    echo "[arr.vpn.auto.history] history file not found: $history" >&2
+    return 1
+  fi
+}
+
+arr_vpn_auto_watch() {
+  local state_dir status_file files=()
+  state_dir="$(_arr_vpn_auto_state_dir)"
+  status_file="$(_arr_vpn_auto_status_file)"
+  if [ -f "$status_file" ]; then
+    files+=("$status_file")
+  fi
+  if [ -d "$state_dir" ]; then
+    local candidate
+    for candidate in "${state_dir}/daemon.log" "${state_dir}/state.json" "${state_dir}/history.log"; do
+      if [ -f "$candidate" ]; then
+        files+=("$candidate")
+      fi
+    done
+  fi
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "[arr.vpn.auto.watch] no log files found under ${state_dir}" >&2
+    return 1
+  fi
+  tail -f "${files[@]}"
+}
+
+arr_vpn_auto_wake() {
+  local flag
+  flag="$(_arr_vpn_auto_override_path wake)"
+  if touch "$flag"; then
+    echo "[arr.vpn.auto.wake] wake trigger created: $flag"
+  else
+    echo "[arr.vpn.auto.wake] failed to touch $flag" >&2
+    return 1
+  fi
+}
+
+arr_vpn_auto_enable() {
+  local result
+  if result="$(arr.env.set VPN_AUTO_RECONNECT_ENABLED 1 2>&1)"; then
+    echo "[arr.vpn.auto.enable] ${result}"
+    arr_vpn_auto_wake >/dev/null 2>&1 || true
+  else
+    echo "[arr.vpn.auto.enable] failed: ${result}" >&2
+    return 1
+  fi
+}
+
+arr_vpn_auto_disable() {
+  local result
+  if result="$(arr.env.set VPN_AUTO_RECONNECT_ENABLED 0 2>&1)"; then
+    echo "[arr.vpn.auto.disable] ${result}"
+    arr_vpn_auto_wake >/dev/null 2>&1 || true
+  else
+    echo "[arr.vpn.auto.disable] failed: ${result}" >&2
+    return 1
+  fi
+}
+
+arr_vpn_port_status() {
+  local file
+  file="$(_arr_pf_state_file)"
+  if [ -f "$file" ]; then
+    cat "$file"
+  else
+    echo "[arr.vpn.port.status] state file not found: $file" >&2
+    return 1
+  fi
+}
+
+alias arr.vpn.auto.status='arr_vpn_auto_status'
+alias arr.vpn.auto.force='arr_vpn_auto_force'
+alias arr.vpn.auto.pause='arr_vpn_auto_pause'
+alias arr.vpn.auto.resume='arr_vpn_auto_resume'
+alias arr.vpn.auto.history='arr_vpn_auto_history'
+alias arr.vpn.auto.watch='arr_vpn_auto_watch'
+alias arr.vpn.auto.enable='arr_vpn_auto_enable'
+alias arr.vpn.auto.disable='arr_vpn_auto_disable'
+alias arr.vpn.auto.wake='arr_vpn_auto_wake'
+alias arr.vpn.port.status='arr_vpn_port_status'
+VPN_AUTO_ALIAS
+    } >>"$aliases_file"
+  fi
+
   ensure_secret_file_mode "$aliases_file"
   cp "$aliases_file" "$configured_template"
   ensure_nonsecret_file_mode "$configured_template"

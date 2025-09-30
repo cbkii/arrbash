@@ -18,6 +18,12 @@ USAGE
 }
 
 run_once() {
+  local interval_once
+  interval_once="$(vpn_auto_reconnect_check_interval_seconds 2>/dev/null || printf '1200')"
+  if ! [[ "$interval_once" =~ ^[0-9]+$ ]]; then
+    interval_once=1200
+  fi
+  VPN_AUTO_RECONNECT_CURRENT_INTERVAL="$interval_once"
   if ! vpn_auto_reconnect_process_once; then
     log_warn "[vpn-auto] iteration reported errors"
     return 1
@@ -60,12 +66,41 @@ main() {
     if ((interval <= 0)); then
       interval=1200
     fi
+    VPN_AUTO_RECONNECT_CURRENT_INTERVAL="$interval"
 
     if ! run_once; then
       log_warn "[vpn-auto] iteration failed"
     fi
-
-    sleep "$interval"
+    local wake_window=60
+    if ((interval < wake_window)); then
+      wake_window="$interval"
+    fi
+    local slept=0
+    local wake_triggered=0
+    local wake_step=5
+    local wake_file
+    wake_file="$(vpn_auto_reconnect_wake_file 2>/dev/null || printf '')"
+    while ((slept < wake_window)); do
+      if [[ -n "$wake_file" && -f "$wake_file" ]]; then
+        vpn_auto_reconnect_consume_wake
+        wake_triggered=1
+        log_info "[vpn-auto] wake file detected; running early"
+        break
+      fi
+      local chunk=$wake_step
+      if ((wake_window - slept < wake_step)); then
+        chunk=$((wake_window - slept))
+      fi
+      sleep "$chunk"
+      slept=$((slept + chunk))
+    done
+    if ((wake_triggered)); then
+      continue
+    fi
+    local remaining=$((interval - wake_window))
+    if ((remaining > 0)); then
+      sleep "$remaining"
+    fi
   done
 }
 

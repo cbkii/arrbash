@@ -387,6 +387,20 @@ write_env() {
     write_env_kv "GLUETUN_FIREWALL_OUTBOUND_SUBNETS" "$gluetun_firewall_outbound"
     printf '\n'
 
+    printf '%s\n' '# VPN auto-reconnect'
+    write_env_kv "VPN_AUTO_RECONNECT_ENABLED" "$VPN_AUTO_RECONNECT_ENABLED"
+    write_env_kv "VPN_SPEED_THRESHOLD_KBPS" "$VPN_SPEED_THRESHOLD_KBPS"
+    write_env_kv "VPN_CHECK_INTERVAL_MINUTES" "$VPN_CHECK_INTERVAL_MINUTES"
+    write_env_kv "VPN_CONSECUTIVE_CHECKS" "$VPN_CONSECUTIVE_CHECKS"
+    write_env_kv "VPN_COOLDOWN_MINUTES" "$VPN_COOLDOWN_MINUTES"
+    write_env_kv "VPN_MAX_RETRY_MINUTES" "$VPN_MAX_RETRY_MINUTES"
+    write_env_kv "VPN_ROTATION_MAX_PER_DAY" "$VPN_ROTATION_MAX_PER_DAY"
+    write_env_kv "VPN_ROTATION_JITTER_SECONDS" "$VPN_ROTATION_JITTER_SECONDS"
+    write_env_kv "PVPN_ROTATE_COUNTRIES" "$PVPN_ROTATE_COUNTRIES"
+    write_env_kv "VPN_ALLOWED_HOURS_START" "$VPN_ALLOWED_HOURS_START"
+    write_env_kv "VPN_ALLOWED_HOURS_END" "$VPN_ALLOWED_HOURS_END"
+    printf '\n'
+
     printf '%s\n' '# Gluetun port-forwarding behavior (asynchronous worker)'
     printf '%s\n' '# GLUETUN_PF_STRICT=0  -> soft fail (stack continues even if PF never assigned)'
     printf '%s\n' '# GLUETUN_PF_STRICT=1  -> hard fail semantics (timeout recorded as hard status)'
