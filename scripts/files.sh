@@ -322,19 +322,23 @@ write_env() {
   gluetun_firewall_outbound="$(printf '%s\n' "${outbound_candidates[@]}" | sort -u | paste -sd, -)"
 
   local -a firewall_ports=()
-  if ((split_vpn == 0)) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    firewall_ports+=(80 443)
-  fi
+  # Add Caddy ports if not split VPN
+if (( split_vpn == 0 )) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+  for p in 80 443; do
+    [[ " ${firewall_ports[*]} " == *" $p "* ]] || firewall_ports+=("$p")
+  done
+fi
 
+# qBittorrent port handling
+if (( split_vpn == 1 )); then
   if [[ -n "${QBT_HTTP_PORT_HOST:-}" ]]; then
-    firewall_ports+=("${QBT_HTTP_PORT_HOST}")
+    [[ " ${firewall_ports[*]} " == *" ${QBT_HTTP_PORT_HOST} "* ]] || firewall_ports+=("${QBT_HTTP_PORT_HOST}")
   fi
-
-  if ((split_vpn == 1)); then
-    : # qBittorrent port already included above
-  elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    firewall_ports+=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
-  fi
+elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+  for p in "${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}"; do
+    [[ -n "$p" ]] && [[ " ${firewall_ports[*]} " == *" $p "* ]] || firewall_ports+=("$p")
+  done
+fi
 
   local -a upstream_dns_servers=()
   mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
