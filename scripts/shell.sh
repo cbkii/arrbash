@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# Detects current shell and whether oh-my-zsh is installed for reload hooks
 detect_shell_kind() {
   local kind="other"
   local omz=0
@@ -21,6 +22,7 @@ detect_shell_kind() {
   printf '%s %s\n' "$kind" "$omz"
 }
 
+# Reloads the appropriate shell rc file (or triggers omz reload) after alias updates
 reload_shell_rc() {
   local force=0
   if [ "${1:-}" = "--force" ]; then

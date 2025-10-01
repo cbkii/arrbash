@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 
+# Collects status notes for summary output when values are preserved
 arrstack_record_preserve_note() {
   local note="$1"
 
@@ -14,6 +15,7 @@ arrstack_record_preserve_note() {
   fi
 }
 
+# Pulls existing qBittorrent credentials from .env to avoid unintended resets
 hydrate_user_credentials_from_env_file() {
   if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
     return 0

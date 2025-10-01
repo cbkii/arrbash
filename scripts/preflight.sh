@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 
+# Verifies required tooling (docker/compose/curl/jq) and records versions for logs
 install_missing() {
   msg "🔧 Checking dependencies"
 
@@ -67,6 +68,7 @@ install_missing() {
   fi
 }
 
+# Builds list of host ports the stack expects based on current configuration
 collect_port_requirements() {
   local _requirements_name="$1"
   # shellcheck disable=SC2178
@@ -124,6 +126,7 @@ collect_port_requirements() {
   fi
 }
 
+# Checks port availability and returns raw listener details for diagnostics
 port_in_use_with_details() {
   local proto="$1"
   local port="$2"
@@ -206,6 +209,7 @@ port_in_use_with_details() {
   return 1
 }
 
+# Provides actionable suggestions when required ports are already bound
 port_conflict_guidance() {
   warn "    Resolve the conflicts by stopping or reconfiguring the services listed above."
   warn "    Common fixes include:"
@@ -217,6 +221,7 @@ port_conflict_guidance() {
 : "${ARRSTACK_PORT_CONFLICT_AUTO_FIX:=1}"
 _arrstack_port_conflict_quickfix_attempted=0
 
+# Tries stopping existing arrstack containers once to clear port conflicts
 attempt_port_conflict_quickfix() {
   if [[ "${ARRSTACK_PORT_CONFLICT_AUTO_FIX}" != "1" ]]; then
     return 1
@@ -240,6 +245,7 @@ attempt_port_conflict_quickfix() {
   return 0
 }
 
+# Ensures host ports required by the stack are free (or warns per mode)
 simple_port_check() {
   msg "  Checking required host ports"
 
@@ -350,6 +356,7 @@ simple_port_check() {
   done
 }
 
+# Validates that local DNS prerequisites are satisfied and upstream resolvers respond
 validate_dns_configuration() {
   if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 1 ]]; then
     return
@@ -401,6 +408,7 @@ validate_dns_configuration() {
   fi
 }
 
+# Runs installer preflight: locks, dependency validation, prompts, and previews
 preflight() {
   msg "🚀 Preflight checks"
 

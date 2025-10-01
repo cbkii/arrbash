@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 
+# Ensures Proton credentials are minimally viable (length/whitespace constraints)
 validate_proton_creds() {
   local user="$1"
   local pass="$2"
@@ -19,6 +20,7 @@ validate_proton_creds() {
   return 0
 }
 
+# Loads Proton auth file, coercing +pmp suffix required by docs
 load_proton_credentials() {
   local proton_file="${ARRCONF_DIR}/proton.auth"
 
@@ -46,6 +48,7 @@ load_proton_credentials() {
   : "$PROTON_USER_PMP_ADDED"
 }
 
+# Displays a human-readable summary of key settings with sensitive fields masked
 show_configuration_preview() {
   msg "🔎 Configuration preview"
 
@@ -122,6 +125,13 @@ show_configuration_preview() {
     vpn_auto_summary="enabled (threshold ${threshold_display} KB/s; interval ${interval_display}m; window ${window_display}; ${cap_fragment}${jitter_fragment})"
   fi
 
+  local qbt_whitelist_final="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
+  local lan_private_subnet
+  if lan_private_subnet="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$lan_private_subnet" ]]; then
+    qbt_whitelist_final+="${qbt_whitelist_final:+,}${lan_private_subnet}"
+  fi
+  qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_final")"
+
   cat <<CONFIG
 ------------------------------------------------------------
 ARR Stack configuration preview
@@ -151,8 +161,7 @@ Credentials & secrets
   • Gluetun API key: ${gluetun_api_key_display}
   • qBittorrent username: ${QBT_USER}
   • qBittorrent password: ${qbt_pass_display}
-  • qBittorrent auth whitelist (final): ${QBT_AUTH_WHITELIST}
-  • qBittorrent auth whitelist: ${QBT_AUTH_WHITELIST}
+  • qBittorrent auth whitelist: ${qbt_whitelist_final}
 
 Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
@@ -182,6 +191,7 @@ CONFIG
 }
 
 # Accepts explicit credentials but falls back to global PU/PW for backward compatibility.
+# Validates core configuration inputs and ports before rendering assets
 validate_config() {
   local _vu="${1:-${PU:-}}"
   local _vp="${2:-${PW:-}}"

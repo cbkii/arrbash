@@ -9,6 +9,7 @@
 : "${DATA_DIR_MODE:=700}"
 : "${LOCK_FILE_MODE:=640}"
 
+# Derives runtime color output preference respecting NO_COLOR/force overrides
 arrstack_resolve_color_output() {
   if [[ -n "${NO_COLOR:-}" ]]; then
     ARR_COLOR_OUTPUT=0
@@ -36,14 +37,12 @@ arrstack_resolve_color_output() {
 
 arrstack_resolve_color_output
 
+# Checks command availability without emitting output (used for optional deps)
 have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
-# Escapes for safe inclusion inside single quotes provided by the caller.
-# By default: preserves real newlines.
-# Pass a second argument "flat" (or set ARRSTACK_ESCAPE_FLATTEN=1) to serialize newlines
-# into literal backslash-n sequences (\n) for single-line uses (aliases, .env lines).
+# Escapes text for single-quoted shells; optional flatten mode serializes newlines
 arrstack_shell_escape_single_quotes() {
   local input="${1-}"
   local mode="${2-}"
@@ -58,9 +57,7 @@ arrstack_shell_escape_single_quotes() {
   fi
 }
 
-# Escapes for safe inclusion inside double quotes provided by the caller.
-# Escapes: \  $  `  " Preserves real newlines by default.
-# Pass "flat" as second arg (or set ARRSTACK_ESCAPE_FLATTEN=1) to serialize newlines.
+# Escapes text for double-quoted shells; optional flatten mode serializes newlines
 arrstack_shell_escape_double_quotes() {
   local input="${1-}"
   local mode="${2-}"
@@ -74,6 +71,7 @@ arrstack_shell_escape_double_quotes() {
   fi
 }
 
+# Returns a process command line (space delimited) for diagnostics; best-effort only
 read_proc_cmdline() {
   local pid="$1"
 
@@ -84,6 +82,7 @@ read_proc_cmdline() {
   tr '\0' ' ' <"/proc/${pid}/cmdline" | sed 's/[[:space:]]\+$//'
 }
 
+# Returns a process comm name for telemetry helpers; fails silently if unreadable
 read_proc_comm() {
   local pid="$1"
 
@@ -94,6 +93,7 @@ read_proc_comm() {
   tr -d '\n' <"/proc/${pid}/comm"
 }
 
+# Attempts graceful termination before SIGKILL while guarding against PID 1 accidents
 safe_kill() {
   local pid="$1"
   local label="${2:-process}";
@@ -135,6 +135,7 @@ safe_kill() {
   return 0
 }
 
+# Appends structured log lines to current install log sinks without failing the caller
 arrstack_json_log() {
   local json_line="$1"
 
@@ -155,6 +156,7 @@ arrstack_json_log() {
   fi
 }
 
+# Lists any commands absent from PATH, preserving order for user-facing prompts
 missing_commands() {
   local -a missing=()
   local cmd
@@ -172,6 +174,7 @@ missing_commands() {
   printf '%s\n' "${missing[@]}"
 }
 
+# Warns when optional commands are missing so installers can proceed with awareness
 check_dependencies() {
   local missing
   missing="$(missing_commands "$@" || true)"
@@ -186,6 +189,7 @@ check_dependencies() {
   return 1
 }
 
+# Aborts immediately if required commands are unavailable
 require_dependencies() {
   local missing
   missing="$(missing_commands "$@" || true)"
@@ -199,21 +203,18 @@ require_dependencies() {
   die "Missing required command(s): ${display}"
 }
 
+# Ensures a directory exists, optionally sudo-ing and fixing ownership for PUID/PGID
 ensure_dir() {
   local dir="$1"
-  # First attempt (non-privileged)
   if mkdir -p "$dir" 2>/dev/null; then
     return 0
   fi
 
   local rc=$?
-  # Optional privileged fallback (only if explicitly enabled)
   if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" -eq 1 ]]; then
     if [[ $EUID -ne 0 ]]; then
       if command -v sudo >/dev/null 2>&1; then
-        # Try non-interactive first, then allow prompt if needed
         if sudo mkdir -p "$dir" 2>/dev/null || sudo mkdir -p "$dir"; then
-          # Normalize ownership immediately so future runs without sudo work.
           if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
             sudo chown -R "${PUID}:${PGID}" "$dir" 2>/dev/null || true
           fi
@@ -221,13 +222,13 @@ ensure_dir() {
         fi
       fi
     elif [[ $EUID -eq 0 ]]; then
-      # Already root; if it failed as root the error is real (RO FS, etc.)
       return $rc
     fi
   fi
   return $rc
 }
 
+# Applies mode to directory with sudo fallback, warning when permissions drift
 ensure_dir_mode() {
   local dir="$1"
   local mode="$2"
@@ -242,12 +243,10 @@ ensure_dir_mode() {
     return 0
   fi
 
-  # Retry chmod with sudo if allowed
   if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" -eq 1 ]]; then
     if [[ $EUID -ne 0 ]]; then
       if command -v sudo >/dev/null 2>&1; then
         if sudo chmod "$mode" "$dir" 2>/dev/null; then
-          # Re-apply ownership if specified to avoid leaving root-owned dir.
           if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
             sudo chown "${PUID}:${PGID}" "$dir" 2>/dev/null || true
           fi
@@ -259,6 +258,7 @@ ensure_dir_mode() {
   warn "Could not apply mode ${mode} to ${dir}"
 }
 
+# Fetches numeric permission mode; returns non-zero if target missing
 arrstack_stat_mode() {
   local target="$1"
 
@@ -269,6 +269,7 @@ arrstack_stat_mode() {
   stat -c '%a' "$target" 2>/dev/null || return 1
 }
 
+# Detects unsafe group-write permissions so installer can warn collaborators
 arrstack_is_group_writable() {
   local target="$1"
 
@@ -293,6 +294,7 @@ arrstack_is_group_writable() {
   return 1
 }
 
+# De-duplicates collaboration warnings before appending to summary buffer
 arrstack_append_collab_warning() {
   local entry="$1"
 
@@ -314,6 +316,7 @@ arrstack_append_collab_warning() {
   fi
 }
 
+# Emits a collaboration warning only once even if triggered repeatedly
 arrstack_warn_collab_once() {
   local message="$1"
 
@@ -330,6 +333,7 @@ arrstack_warn_collab_once() {
   fi
 }
 
+# Applies file mode if target exists, tolerating chmod failures
 ensure_file_mode() {
   local file="$1"
   local mode="$2"
@@ -341,18 +345,22 @@ ensure_file_mode() {
   chmod "$mode" "$file" 2>/dev/null || warn "Could not apply mode ${mode} to ${file}"
 }
 
+# Convenience wrapper enforcing secret file permissions consistently
 ensure_secret_file_mode() {
   ensure_file_mode "$1" "$SECRET_FILE_MODE"
 }
 
+# Applies standard non-secret permissions via ensure_file_mode
 ensure_nonsecret_file_mode() {
   ensure_file_mode "$1" "$NONSECRET_FILE_MODE"
 }
 
+# Ensures data directories inherit hardened default mode
 ensure_data_dir_mode() {
   ensure_dir_mode "$1" "$DATA_DIR_MODE"
 }
 
+# Creates a temp file with optional template/mode, returning its path for atomic writes
 arrstack_mktemp_file() {
   local template="${1-}"
   local mode="${2:-600}"
@@ -371,6 +379,7 @@ arrstack_mktemp_file() {
   printf '%s\n' "$tmp"
 }
 
+# Creates a temp directory with hardened mode for transient assets
 arrstack_mktemp_dir() {
   local template="${1-}"
   local mode="${2:-700}"
@@ -389,59 +398,45 @@ arrstack_mktemp_dir() {
   printf '%s\n' "$tmp"
 }
 
+# Re-execs script with elevated privileges via sudo/pkexec/su, preserving argv when possible
 arrstack_escalate_privileges() {
   if [[ "${ARRSTACK_ESCALATED:-0}" == "1" ]]; then
     return 0
   fi
 
-  # POSIX-safe locals
   _euid="${EUID:-$(id -u)}"
   if [ "${_euid}" -eq 0 ]; then
-    # Already root: nothing to do
     return 0
   fi
 
-  # Save original argv for possible su fallback reconstruction
   _script_path="${0:-}"
-  # If script was invoked via relative path, attempt to get absolute path
   if [ -n "${_script_path}" ] && [ "${_script_path#./}" = "${_script_path}" ] && [ "${_script_path#/}" = "${_script_path}" ]; then
-    # not absolute, try to resolve
     if command -v realpath >/dev/null 2>&1; then
       _script_path="$(realpath "${_script_path}" 2>/dev/null || printf '%s' "${_script_path}")"
     else
-      # fallback: prefix cwd
       _script_path="$(pwd)/${_script_path}"
     fi
   fi
 
-  # Prefer sudo (preserve env with -E). First try non-interactive.
   if command -v sudo >/dev/null 2>&1; then
     if sudo -n true >/dev/null 2>&1; then
-      # passwordless sudo available: re-exec with preserved env
       export ARRSTACK_ESCALATED=1
       # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
       unset ARRSTACK_ESCALATED
-      # unreachable
       return 0
     else
-      # Interactive sudo available — notify user and re-exec (will prompt)
       printf '[%s] escalating privileges with sudo; you may be prompted for your password…\n' "$(basename "${_script_path}")" >&2
       export ARRSTACK_ESCALATED=1
       # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
       unset ARRSTACK_ESCALATED
-      # unreachable
       return 0
     fi
   fi
 
-  # If pkexec exists, attempt to use it (polkit). pkexec may not preserve env;
-  # still it's often available on desktop systems where sudo isn't.
   if command -v pkexec >/dev/null 2>&1; then
     printf '[%s] escalating privileges with pkexec; you may be prompted for authentication…\n' "$(basename "${_script_path}")" >&2
-    # pkexec requires the binary to be executable; using the interpreter ensures portability
-    # Try to preserve PATH and a minimal env for the invocation
     if command -v bash >/dev/null 2>&1; then
       export ARRSTACK_ESCALATED=1
       # shellcheck disable=SC2093
@@ -456,13 +451,10 @@ arrstack_escalate_privileges() {
     return 0
   fi
 
-  # Last resort: try su -c, reconstruct quoted command line
   if command -v su >/dev/null 2>&1; then
     printf '[%s] escalating privileges with su; you may be prompted for the root password…\n' "$(basename "${_script_path}")" >&2
 
-    # Build a safely quoted command string to pass to su -c
     _cmd=""
-    # prefer absolute script path if resolved above; otherwise pass original $0
     local _cmd_source=""
     if [ -n "${_script_path}" ]; then
       _cmd_source="${_script_path}"
@@ -473,26 +465,23 @@ arrstack_escalate_privileges() {
     _cmd="'${_cmd}'"
 
     for _arg in "$@"; do
-      # escape single quotes by closing, inserting '\'' and re-opening
       _escaped="$(arrstack_shell_escape_single_quotes "${_arg}")"
       _cmd="${_cmd} '${_escaped}'"
     done
 
-    # Execute via su - root -c 'exec CMD'
     export ARRSTACK_ESCALATED=1
     # shellcheck disable=SC2093
     exec su - root -c "exec ${_cmd}"
     unset ARRSTACK_ESCALATED
-    # unreachable
     return 0
   fi
 
-  # No escalation mechanism available
   printf '[%s] ERROR: root privileges are required. Install sudo, pkexec (polkit) or su, or run this script as root.\n' "$(basename "${_script_path}")" >&2
   return 2
 }
 
 
+# Checks if tcp/udp port has listeners using ss, returning 2 when ss unavailable
 ss_port_bound() {
   local proto="$1"
   local port="$2"
@@ -521,6 +510,7 @@ ss_port_bound() {
   return 1
 }
 
+# Checks port occupancy using lsof as a fallback when ss is unavailable
 lsof_port_bound() {
   local proto="$1"
   local port="$2"
@@ -549,6 +539,7 @@ lsof_port_bound() {
   return 1
 }
 
+# Answers whether any supported tool detects the port as bound
 port_bound_any() {
   local proto="$1"
   local port="$2"
@@ -564,6 +555,7 @@ port_bound_any() {
   return 1
 }
 
+# Normalizes bind targets to comparable forms (handles IPv6-v4 mapped addresses)
 normalize_bind_address() {
   local address="${1:-}"
 
@@ -582,6 +574,7 @@ normalize_bind_address() {
   printf '%s\n' "$address"
 }
 
+# Determines if desired bind address conflicts with an existing listener binding
 address_conflicts() {
   local desired_raw="$1"
   local actual_raw="$2"
@@ -608,6 +601,7 @@ address_conflicts() {
   return 1
 }
 
+# Wrapper for docker compose respecting ARR_STACK_DIR and cached command resolution
 compose() {
   if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
     die "Docker Compose command not detected; run preflight first"
@@ -629,6 +623,7 @@ compose() {
   fi
 }
 
+# Resolves whether colorized output should be emitted right now
 msg_color_supported() {
   arrstack_resolve_color_output
 
@@ -639,22 +634,27 @@ msg_color_supported() {
   return 0
 }
 
+# Provides consistent timestamp used across log_* helpers
 arrstack_timestamp() {
   date '+%H:%M:%S'
 }
 
+# Emits timestamped informational log to stdout
 log_info() {
   printf '[%s] %s\n' "$(arrstack_timestamp)" "$*"
 }
 
+# Emits timestamped warning log to stderr
 log_warn() {
   printf '[%s] WARNING: %s\n' "$(arrstack_timestamp)" "$*" >&2
 }
 
+# Emits timestamped error log to stderr
 log_error() {
   printf '[%s] ERROR: %s\n' "$(arrstack_timestamp)" "$*" >&2
 }
 
+# User-facing info message with optional color
 msg() {
   if msg_color_supported; then
     printf '%b%s%b\n' "$CYAN" "$*" "$RESET"
@@ -663,6 +663,7 @@ msg() {
   fi
 }
 
+# User-facing warning message with optional color
 warn() {
   if msg_color_supported; then
     printf '%bWARN: %s%b\n' "$YELLOW" "$*" "$RESET" >&2
@@ -671,11 +672,13 @@ warn() {
   fi
 }
 
+# Logs error then exits non-zero to halt the caller
 die() {
   log_error "$@"
   exit 1
 }
 
+# Sets up logging streams and symlinks before installer output begins
 init_logging() {
   local log_dir="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
   ensure_dir_mode "$log_dir" "$DATA_DIR_MODE"
@@ -714,6 +717,7 @@ init_logging() {
   fi
 }
 
+# Serializes installer runs via lockfile to avoid concurrent writes
 acquire_lock() {
   local lock_dir="${ARR_STACK_DIR:-/tmp}"
   local timeout=30
@@ -744,6 +748,7 @@ acquire_lock() {
   trap 'rm -f -- "$ARRSTACK_LOCKFILE"' EXIT INT TERM HUP QUIT
 }
 
+# Safely writes content to target by staging through a temp file with correct mode
 atomic_write() {
   local target="$1"
   local content="$2"
@@ -768,6 +773,7 @@ atomic_write() {
   fi
 }
 
+# Escapes ENV values for docker compose compatibility (newline/carriage/dollar aware)
 escape_env_value_for_compose() {
   local value="${1-}"
 
@@ -783,6 +789,7 @@ escape_env_value_for_compose() {
   printf '%s' "$value"
 }
 
+# Emits KEY=VALUE lines after compose-safe escaping; errors on newline-containing values
 write_env_kv() {
   local key="$1"
   local value="${2-}"
@@ -801,6 +808,7 @@ write_env_kv() {
   printf '%s=%s\n' "$key" "$escaped"
 }
 
+# Trims leading/trailing whitespace without touching inner spacing
 trim_string() {
   local value="${1-}"
   value="${value#"${value%%[![:space:]]*}"}"
@@ -808,6 +816,7 @@ trim_string() {
   printf '%s' "$value"
 }
 
+# Deduplicates and normalizes comma-separated lists while stripping whitespace
 normalize_csv() {
   local csv="${1-}"
   csv="${csv//$'\r'/}"
@@ -841,6 +850,7 @@ normalize_csv() {
   printf '%s' "$joined"
 }
 
+# Builds ordered upstream DNS list from env overrides or defaults
 collect_upstream_dns_servers() {
   local csv=""
 
@@ -881,6 +891,7 @@ collect_upstream_dns_servers() {
   done
 }
 
+# Tests whether a DNS resolver answers queries using whichever CLI is available
 probe_dns_resolver() {
   local server="$1"
   local domain="${2:-cloudflare.com}"
@@ -917,6 +928,7 @@ probe_dns_resolver() {
   return 2
 }
 
+# Flags nested ${...${...}} constructs that docker compose cannot interpolate
 verify_single_level_env_placeholders() {
   local file="$1"
 
@@ -939,6 +951,7 @@ verify_single_level_env_placeholders() {
   return 1
 }
 
+# Applies sed edits via temp file for portability across BSD/GNU variants
 portable_sed() {
   local expr="$1"
   local file="$2"
@@ -971,10 +984,12 @@ portable_sed() {
   fi
 }
 
+# Escapes replacement strings for safe use in sed substitution bodies
 escape_sed_replacement() {
   printf '%s' "$1" | sed -e 's/[&/]/\\&/g'
 }
 
+# Reverses docker compose escaping to recover raw env values (handles $$ expansion)
 unescape_env_value_from_compose() {
   local value="${1-}"
   local sentinel=$'\001__ARRSTACK_DOLLAR__\002'
@@ -995,6 +1010,7 @@ unescape_env_value_from_compose() {
   printf '%s' "$value"
 }
 
+# Reads a KEY=VALUE pair from an env file and returns the decoded value
 get_env_kv() {
   local key="${1:-}"
   local file="${2:-}"
@@ -1015,6 +1031,7 @@ get_env_kv() {
   printf '%s\n' "$value"
 }
 
+# Updates a qBittorrent INI key atomically, creating the file if missing
 set_qbt_conf_value() {
   local file="$1"
   local key="$2"
@@ -1044,6 +1061,7 @@ set_qbt_conf_value() {
   fi
 }
 
+# Persists installer-discovered env vars back into .env without introducing duplicates
 persist_env_var() {
   local key="$1"
   local value="$2"
@@ -1069,6 +1087,7 @@ persist_env_var() {
   fi
 }
 
+# Masks secrets for logs while leaving limited prefix/suffix context visible
 obfuscate_sensitive() {
   local value="${1-}"
   local visible_prefix="${2:-2}"
@@ -1104,6 +1123,7 @@ obfuscate_sensitive() {
   printf '%s%s%s' "$prefix" "$mask" "$suffix"
 }
 
+# Generates a random alphanumeric password using best available entropy source
 gen_safe_password() {
   local len="${1:-20}"
 
@@ -1127,6 +1147,7 @@ gen_safe_password() {
   printf '\n'
 }
 
+# Sanitizes usernames to a safe subset, defaulting to "user" when empty
 sanitize_user() {
   local input="${1:-user}"
   local sanitized
@@ -1137,6 +1158,7 @@ sanitize_user() {
   printf '%s' "$sanitized"
 }
 
+# Validates bcrypt hash formatting and cost bounds before accepting user input
 valid_bcrypt() {
   local candidate="${1-}"
 
@@ -1150,6 +1172,7 @@ valid_bcrypt() {
   return 1
 }
 
+# Checks if a compose-escaped value decodes to a valid bcrypt hash
 is_bcrypt_hash() {
   local candidate="${1-}"
 

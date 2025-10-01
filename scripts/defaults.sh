@@ -2,6 +2,7 @@
 
 if ! declare -f arrstack_var_is_readonly >/dev/null 2>&1; then
   arrstack_var_is_readonly() {
+# Determines if a shell variable is readonly to avoid clobbering host overrides
     local var="$1"
     local declaration=""
 
@@ -19,6 +20,7 @@ if ! declare -f arrstack_var_is_readonly >/dev/null 2>&1; then
   }
 fi
 
+# Seeds global defaults, handling collaborative profile toggles and legacy overrides
 arrstack_setup_defaults() {
   local previous_stack_dir="${ARR_STACK_DIR:-}"
   if [[ -z "${ARR_DOCKER_DIR}" && -d "${HOME}/srv/docker-data" ]]; then

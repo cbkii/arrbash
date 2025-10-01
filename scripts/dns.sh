@@ -5,6 +5,7 @@ if [[ -n "${SCRIPT_LIB_DIR:-}" && -f "${SCRIPT_LIB_DIR}/network.sh" ]]; then
   # shellcheck source=scripts/network.sh
   . "${SCRIPT_LIB_DIR}/network.sh"
 fi
+# Invokes LAN DNS helper when Caddy/local DNS are enabled and host prerequisites met
 configure_local_dns_entries() {
   if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
     msg "🧭 Skipping local DNS host entry helper (ENABLE_CADDY=0)"
@@ -58,6 +59,7 @@ configure_local_dns_entries() {
   msg "✅ Local DNS helper completed"
 }
 
+# Executes privileged host DNS takeover helper when explicitly requested
 run_host_dns_setup() {
   if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
     msg "Skipping host DNS setup (--setup-host-dns) because ENABLE_CADDY=0"

@@ -174,7 +174,7 @@ _arr_loopback() {
   printf '%s' "$host"
 }
 
-_arr_services=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr caddy port-sync)
+_arr_services=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr configarr caddy local_dns)
 
 _arr_compose() { (cd "$ARR_STACK_DIR" && docker compose "$@" ); }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Prints script usage for CA installation overrides
 usage() {
   cat <<USAGE
 Usage: ${0##*/} [--stack-dir PATH] [--data-dir PATH]
@@ -99,6 +100,7 @@ if [[ -f /etc/os-release ]]; then
   OS_LIKE="${ID_LIKE:-}"
 fi
 
+# Installs the Caddy CA into Debian-style trust store and updates certificates
 install_debian_ca() {
   if [[ $(id -u) -ne 0 ]]; then
     die "This operation requires root privileges. Re-run with sudo or as root."

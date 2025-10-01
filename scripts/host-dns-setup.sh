@@ -15,9 +15,10 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
 arrstack_escalate_privileges "$@" || exit $?
 
-# -E included to preserve ERR trap behavior in function/subshell contexts (Bash manual §"The ERR Trap").
+# -E included to preserve ERR trap behavior in function/subshell contexts.
 set -Eeuo pipefail
 
+# Resolve version of docker for command handling
 HOST_DNS_VERBOSE="${HOST_DNS_VERBOSE:-0}"
 
 resolve_docker_compose_cmd() {
@@ -57,6 +58,7 @@ resolve_docker_compose_cmd() {
   fi
 }
 
+# Normalizes comma-separated upstream list into unique entries
 parse_upstream_list() {
   local raw="$1"
   local -a parts=()

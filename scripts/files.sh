@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# Generates a bcrypt hash for Caddy credentials, preferring local openssl before docker fallback
 caddy_bcrypt() {
   local plaintext="${1-}"
 
@@ -23,6 +24,7 @@ caddy_bcrypt() {
   docker run --rm "${CADDY_IMAGE}" caddy hash-password --algorithm bcrypt --plaintext "$plaintext" 2>/dev/null
 }
 
+# Records newly created media directories for later collab warnings
 arrstack_track_created_media_dir() {
   local dir="$1"
 
@@ -41,12 +43,14 @@ arrstack_track_created_media_dir() {
   fi
 }
 
+# Emits a one-time warning when collab profile cannot grant group write
 arrstack_report_collab_skip() {
   if [[ -n "${COLLAB_GROUP_WRITE_DISABLED_REASON:-}" ]]; then
     arrstack_append_collab_warning "${COLLAB_GROUP_WRITE_DISABLED_REASON}"
   fi
 }
 
+# Creates stack/data/media directories and reconciles permissions per profile
 mkdirs() {
   msg "📂 Creating directories"
   ensure_dir_mode "$ARR_STACK_DIR" 755
@@ -144,8 +148,8 @@ mkdirs() {
   fi
 }
 
+# Produces an alphanumeric token using the strongest available entropy source
 safe_random_alnum() {
-  # Produce a shell-safe alphanumeric string of the requested length.
   local len="${1:-64}"
   if [[ ! "$len" =~ ^[0-9]+$ || "$len" -le 0 ]]; then
     len=64
@@ -170,6 +174,7 @@ safe_random_alnum() {
   printf '%s\n' "${output:0:len}"
 }
 
+# Ensures GLUETUN_API_KEY exists, rotating auth config when forced or missing
 generate_api_key() {
   msg "🔐 Generating API key"
 
@@ -196,6 +201,7 @@ generate_api_key() {
   fi
 }
 
+# Reloads persisted Caddy credentials so manual changes survive re-runs
 hydrate_caddy_auth_from_env_file() {
   if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
     return 0
@@ -220,6 +226,7 @@ hydrate_caddy_auth_from_env_file() {
   fi
 }
 
+# Renders .env with derived networking, VPN, and credential values; enforces prerequisites
 write_env() {
   msg "📝 Writing .env file"
 
@@ -500,6 +507,7 @@ write_env() {
 
 }
 
+# Generates docker-compose.yml tuned for split VPN (qBittorrent-only tunnel)
 write_compose_split_mode() {
     msg "🐳 Writing docker-compose.yml"
 
@@ -846,6 +854,7 @@ YAML
     msg "  Local DNS status: Local DNS disabled in split mode (SPLIT_VPN=1) (LOCAL_DNS_SERVICE_ENABLED=0)"
 }
 
+# Generates docker-compose.yml for default mode, gating optional services on runtime checks
 write_compose() {
     if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
       write_compose_split_mode
@@ -950,8 +959,7 @@ services:
     volumes:
       - ${ARR_DOCKER_DIR}/gluetun:/gluetun
     ports:
-      # Publish application ports here because all services share gluetun's
-      # network namespace and this keeps host exposure in one place.
+      # Centralize host exposure since all services share gluetun's namespace
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
 YAML
     } >"$tmp"
@@ -1310,6 +1318,7 @@ YAML
     msg "  Local DNS status: ${local_dns_state_message} (LOCAL_DNS_SERVICE_ENABLED=${LOCAL_DNS_SERVICE_ENABLED})"
 }
 
+# Writes Gluetun hook/auth assets so API key and port forwarding stay aligned
 write_gluetun_control_assets() {
   msg "[pf] Preparing Gluetun control assets"
 
@@ -1323,8 +1332,7 @@ write_gluetun_control_assets() {
   local auth_config="${auth_dir}/config.toml"
   ensure_dir_mode "$auth_dir" "$DATA_DIR_MODE"
 
-  # Only write the role-based auth config for Gluetun >=3.40. Earlier versions
-  # accept it but to avoid confusion we scope it to required versions.
+  # Only write role-based auth for Gluetun >=3.40 to avoid confusing older builds
   if gluetun_version_requires_auth_config 2>/dev/null && [[ -n "${GLUETUN_API_KEY:-}" ]]; then
     local sanitized_key
     sanitized_key=${GLUETUN_API_KEY//$'\r'/}
@@ -1484,6 +1492,7 @@ HOOK
   ensure_file_mode "${hooks_dir}/update-qbt-port.sh" 700
 }
 
+# Ensures Caddy basic auth credentials exist, regenerating bcrypt/hash artifacts as needed
 ensure_caddy_auth() {
   if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
     msg "🔐 Skipping Caddy Basic Auth setup (ENABLE_CADDY=0)"
@@ -1570,6 +1579,7 @@ ensure_caddy_auth() {
   fi
 }
 
+# Publishes Caddy's internal CA to a readable location for LAN distribution
 sync_caddy_ca_public_copy() {
   local wait_attempts=1
   local quiet=0
@@ -1624,6 +1634,7 @@ sync_caddy_ca_public_copy() {
   return 1
 }
 
+# Generates Caddyfile and copies CA assets when proxying is enabled
 write_caddy_assets() {
   if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
     msg "🌐 Skipping Caddy configuration (ENABLE_CADDY=0)"
@@ -1645,7 +1656,7 @@ write_caddy_assets() {
   chmod "$DATA_DIR_MODE" "$data_dir" 2>/dev/null || true
   chmod "$DATA_DIR_MODE" "$config_dir" 2>/dev/null || true
 
-  # Normalize LAN CIDRs (commas, tabs, multiple spaces, and newlines -> single spaces)
+  # Normalize LAN CIDRs into single-space separators
   local lan_cidrs
   lan_cidrs="$(printf '%s' "${CADDY_LAN_CIDRS}" | tr ',\t\r\n' '    ')"
   lan_cidrs="$(printf '%s\n' "$lan_cidrs" | xargs 2>/dev/null || printf '')"
@@ -1660,7 +1671,7 @@ write_caddy_assets() {
     warn "CADDY_BASIC_AUTH_HASH does not appear to be a valid bcrypt string; use --rotate-caddy-auth to regenerate."
   fi
 
-  # Prefer normalized suffix if set via .env; fall back to computed value
+  # Prefer normalized suffix from .env; fall back to computed value
   local domain_suffix="${ARR_DOMAIN_SUFFIX_CLEAN}"
 
   local -a services=(
@@ -1764,6 +1775,7 @@ write_caddy_assets() {
   fi
 }
 
+# Copies the shared Gluetun helper script into the stack workspace
 sync_gluetun_library() {
   msg "📚 Syncing Gluetun helper library"
 
@@ -1773,6 +1785,7 @@ sync_gluetun_library() {
   ensure_file_mode "$ARR_STACK_DIR/scripts/gluetun.sh" 644
 }
 
+# Syncs VPN auto-reconnect scripts with executable permissions into the stack
 sync_vpn_auto_reconnect_assets() {
   msg "📡 Syncing VPN auto-reconnect helpers"
 
@@ -1785,6 +1798,7 @@ sync_vpn_auto_reconnect_assets() {
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh" 755
 }
 
+# Installs qBittorrent helper shim into the stack scripts directory
 write_qbt_helper_script() {
   msg "🧰 Writing qBittorrent helper script"
 
@@ -1796,6 +1810,7 @@ write_qbt_helper_script() {
   msg "  qBittorrent helper: ${ARR_STACK_DIR}/scripts/qbt-helper.sh"
 }
 
+# Reconciles qBittorrent configuration defaults while preserving user customizations
 write_qbt_config() {
   msg "🧩 Writing qBittorrent config"
   local config_dir="${ARR_DOCKER_DIR}/qbittorrent"
@@ -1943,6 +1958,7 @@ EOF
   atomic_write "$conf_file" "$updated_content" "$SECRET_FILE_MODE"
 }
 
+# Materializes Configarr config/secrets with sanitized policy values when enabled
 write_configarr_assets() {
   if [[ "${ENABLE_CONFIGARR:-0}" -ne 1 ]]; then
     msg "🧾 Skipping Configarr assets (ENABLE_CONFIGARR=0)"
