@@ -40,15 +40,38 @@ have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Escapes for safe inclusion inside single quotes provided by the caller.
+# By default: preserves real newlines.
+# Pass a second argument "flat" (or set ARRSTACK_ESCAPE_FLATTEN=1) to serialize newlines
+# into literal backslash-n sequences (\n) for single-line uses (aliases, .env lines).
 arrstack_shell_escape_single_quotes() {
-  printf '%s' "${1-}" | sed "s/'/'\\''/g" | tr '\n' '\\n'
+  local input="${1-}"
+  local mode="${2-}"
+  local escaped
+  escaped="$(printf '%s' "$input" | sed "s/'/'\\\\''/g")"
+
+  if [ "$mode" = "flat" ] || [ "${ARRSTACK_ESCAPE_FLATTEN:-0}" = "1" ]; then
+    # Flatten: real newline -> literal \n (two characters). Only opt-in.
+    printf '%s' "$escaped" | tr '\n' '\\n'
+  else
+    printf '%s' "$escaped"
+  fi
 }
 
+# Escapes for safe inclusion inside double quotes provided by the caller.
+# Escapes: \  $  `  " Preserves real newlines by default.
+# Pass "flat" as second arg (or set ARRSTACK_ESCAPE_FLATTEN=1) to serialize newlines.
 arrstack_shell_escape_double_quotes() {
-  printf '%s' "${1-}" \
-    | sed -e ':a' -e 'N' -e '$!ba' \
-          -e 's/[\\$`\"]/\\&/g' \
-    | tr '\n' '\\n'
+  local input="${1-}"
+  local mode="${2-}"
+  local escaped
+  escaped="$(printf '%s' "$input" | sed -e 's/[\\$`\"]/\\&/g')"
+
+  if [ "$mode" = "flat" ] || [ "${ARRSTACK_ESCAPE_FLATTEN:-0}" = "1" ]; then
+    printf '%s' "$escaped" | tr '\n' '\\n'
+  else
+    printf '%s' "$escaped"
+  fi
 }
 
 read_proc_cmdline() {
