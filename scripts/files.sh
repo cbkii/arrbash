@@ -322,14 +322,23 @@ write_env() {
   gluetun_firewall_outbound="$(printf '%s\n' "${outbound_candidates[@]}" | sort -u | paste -sd, -)"
 
   local -a firewall_ports=()
-  if ((split_vpn == 0)) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    firewall_ports+=(80 443)
+  # Add Caddy ports if not split VPN
+if (( split_vpn == 0 )) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+  for p in 80 443; do
+    [[ " ${firewall_ports[*]} " == *" $p "* ]] || firewall_ports+=("$p")
+  done
+fi
+
+# qBittorrent port handling
+if (( split_vpn == 1 )); then
+  if [[ -n "${QBT_HTTP_PORT_HOST:-}" ]]; then
+    [[ " ${firewall_ports[*]} " == *" ${QBT_HTTP_PORT_HOST} "* ]] || firewall_ports+=("${QBT_HTTP_PORT_HOST}")
   fi
-  if ((split_vpn == 1)); then
-    firewall_ports+=("${QBT_HTTP_PORT_HOST}")
-  elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    firewall_ports+=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
-  fi
+elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+  for p in "${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}"; do
+    if [[ -n "$p" ]] && [[ " ${firewall_ports[*]} " != *" $p "* ]]; then firewall_ports+=("$p"); fi
+  done
+fi
 
   local -a upstream_dns_servers=()
   mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
@@ -1362,10 +1371,7 @@ routes = [
   "PUT /v1/openvpn/status",
 
   # Public IP information
-  "GET /v1/publicip/ip",
-
-  # Health checks
-  "GET /healthz"
+  "GET /v1/publicip/ip"
 ]
 EOF
     )
@@ -1835,8 +1841,14 @@ write_qbt_config() {
     msg "  Removing unused legacy config at ${legacy_conf}"
     rm -f "$legacy_conf"
   fi
+  local default_auth_whitelist="127.0.0.1/32,::1/128"
+  local qb_lan_whitelist=""
+  if qb_lan_whitelist="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
+    default_auth_whitelist+=,${qb_lan_whitelist}
+  fi
+
   local auth_whitelist
-  auth_whitelist="$(normalize_csv "${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}")"
+  auth_whitelist="$(normalize_csv "${QBT_AUTH_WHITELIST:-$default_auth_whitelist}")"
   QBT_AUTH_WHITELIST="$auth_whitelist"
   msg "  Stored WebUI auth whitelist entries: ${auth_whitelist}"
 
