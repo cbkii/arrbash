@@ -45,7 +45,10 @@ arrstack_shell_escape_single_quotes() {
 }
 
 arrstack_shell_escape_double_quotes() {
-  printf '%s' "${1-}" | sed 's/[\\$`\"]/\\&/g'
+  printf '%s' "${1-}" \
+    | sed -e ':a' -e 'N' -e '$!ba' \
+          -e 's/[\\$`\"]/\\&/g' \
+          -e 's/\n/\\n/g'
 }
 
 read_proc_cmdline() {
