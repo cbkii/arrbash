@@ -383,13 +383,14 @@ PY
     return
   fi
   # Comprehensive URL encoding fallback (POSIX shell)
-  local i c hex encoded=""
-  for ((i=0; i<${#value}; i++)); do
-    c="${value:i:1}"
+  local i=1 c hex encoded=""
+  while [ $i -le "$(printf '%s' "$value" | wc -c)" ]; do
+    c=$(printf '%s' "$value" | cut -c"$i")
     case "$c" in
-      [a-zA-Z0-9.~_-]) encoded+="$c" ;;
-      *) printf -v hex '%%%02X' "'$c"; encoded+="$hex" ;;
+      [a-zA-Z0-9.~_-]) encoded="$encoded$c" ;;
+      *) hex=$(printf '%%%02X' "'$c"); encoded="$encoded$hex" ;;
     esac
+    i=$((i + 1))
   done
   printf '%s' "$encoded"
 }
