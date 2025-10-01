@@ -50,7 +50,25 @@ write_aliases_file() {
     if ! grep -Fq "alias arr.config.sync" "$aliases_file" 2>/dev/null; then
       {
         printf '\n# Configarr helper\n'
-        printf "alias arr.config.sync='docker compose run --rm configarr'\n"
+        cat <<'CONFIGARR_HELPER'
+arr.config.sync() {
+  (
+    cd "${ARR_STACK_DIR}" || return
+    local -a compose_cmd=()
+    if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
+      compose_cmd=("${DOCKER_COMPOSE_CMD[@]}")
+    elif docker compose version >/dev/null 2>&1; then
+      compose_cmd=(docker compose)
+    elif command -v docker-compose >/dev/null 2>&1; then
+      compose_cmd=(docker-compose)
+    else
+      echo "[arr.config.sync] docker compose command not found" >&2
+      return 1
+    fi
+    "${compose_cmd[@]}" run --rm configarr
+  )
+}
+CONFIGARR_HELPER
       } >>"$aliases_file"
     fi
   fi
