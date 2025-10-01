@@ -336,7 +336,7 @@ if (( split_vpn == 1 )); then
   fi
 elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
   for p in "${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}"; do
-    [[ -n "$p" ]] && [[ " ${firewall_ports[*]} " == *" $p "* ]] || firewall_ports+=("$p")
+    if [[ -n "$p" ]] && [[ " ${firewall_ports[*]} " != *" $p "* ]]; then firewall_ports+=("$p"); fi
   done
 fi
 
