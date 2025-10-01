@@ -214,8 +214,13 @@ port_in_use_with_details() {
       while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         local candidate=""
-        local ip_port_pattern="[0-9A-Fa-f.\\[\\]:*]+:${port}"
-        candidate="$(printf '%s\n' "$line" | grep -oE "$ip_port_pattern" | head -n1 || true)"
+        # More precise patterns for IPv4 and IPv6 addresses followed by port
+        local ipv4_port_pattern="([0-9]{1,3}\.){3}[0-9]{1,3}:${port}"
+        local ipv6_port_pattern="(\[?[0-9A-Fa-f:]+\]?|::):${port}"
+        candidate="$(printf '%s\n' "$line" | grep -oE "$ipv4_port_pattern" | head -n1 || true)"
+        if [[ -z "$candidate" ]]; then
+          candidate="$(printf '%s\n' "$line" | grep -oE "$ipv6_port_pattern" | head -n1 || true)"
+        fi
         if [[ -z "$candidate" ]]; then
           continue
         fi
