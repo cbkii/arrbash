@@ -212,7 +212,7 @@ install_aliases() {
   local repo_escaped
   repo_escaped="$(arrstack_shell_escape_double_quotes "${REPO_ROOT}")"
   local alias_line
-  alias_line="alias arrstack=\"cd \\\"${repo_escaped}\\\" && ./arrstack.sh\""
+  alias_line=$(printf "alias arrstack='cd \"%s\" && ./arrstack.sh'" "${repo_escaped}")
   local source_line="# source ${ARR_STACK_DIR}/.aliasarr  # Optional helper functions"
 
   if [[ -w "$bashrc" ]]; then
