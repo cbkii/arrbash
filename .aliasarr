@@ -545,11 +545,10 @@ _arr_bazarr_call() {
     return 1
   fi
   local url="${base}${path}"
-  if [[ "$url" == *\?* ]]; then
-    url="${url}&apikey=${key}"
-  else
-    url="${url}?apikey=${key}"
-  fi
+  case "$url" in
+    *\?*) url="${url}&apikey=${key}" ;;
+    *)    url="${url}?apikey=${key}" ;;
+  esac
   local -a curl_cmd=(curl -fsS -X "$method")
   local -a resolve_flags
   mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
