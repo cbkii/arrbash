@@ -7,7 +7,7 @@ if [[ -n "${SCRIPT_LIB_DIR:-}" && -f "${SCRIPT_LIB_DIR}/network.sh" ]]; then
 fi
 # Invokes LAN DNS helper when Caddy/local DNS are enabled and host prerequisites met
 configure_local_dns_entries() {
-  if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
     msg "🧭 Skipping local DNS host entry helper (ENABLE_CADDY=0)"
     return 0
   fi
@@ -16,7 +16,7 @@ configure_local_dns_entries() {
 
   local helper_script="${REPO_ROOT}/scripts/setup-lan-dns.sh"
 
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 1 || ${LOCAL_DNS_SERVICE_ENABLED:-0} -ne 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" || "${LOCAL_DNS_SERVICE_ENABLED:-0}" != "1" ]]; then
     msg "  Local DNS container disabled; skipping host entries helper"
     return 0
   fi
@@ -61,12 +61,12 @@ configure_local_dns_entries() {
 
 # Executes privileged host DNS takeover helper when explicitly requested
 run_host_dns_setup() {
-  if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
     msg "Skipping host DNS setup (--setup-host-dns) because ENABLE_CADDY=0"
     return 0
   fi
 
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" ]]; then
     msg "Skipping host DNS setup (--setup-host-dns) because ENABLE_LOCAL_DNS=0"
     return 0
   fi

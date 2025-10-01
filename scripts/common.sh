@@ -211,7 +211,7 @@ ensure_dir() {
   fi
 
   local rc=$?
-  if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" -eq 1 ]]; then
+  if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
     if [[ $EUID -ne 0 ]]; then
       if command -v sudo >/dev/null 2>&1; then
         if sudo mkdir -p "$dir" 2>/dev/null || sudo mkdir -p "$dir"; then
@@ -243,7 +243,7 @@ ensure_dir_mode() {
     return 0
   fi
 
-  if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" -eq 1 ]]; then
+  if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
     if [[ $EUID -ne 0 ]]; then
       if command -v sudo >/dev/null 2>&1; then
         if sudo chmod "$mode" "$dir" 2>/dev/null; then

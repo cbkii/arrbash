@@ -59,17 +59,17 @@ mkdirs() {
 
   local service
   for service in "${ARR_DOCKER_SERVICES[@]}"; do
-    if [[ "$service" == "local_dns" && "${ENABLE_LOCAL_DNS:-0}" -ne 1 ]]; then
+    if [[ "$service" == "local_dns" && "${ENABLE_LOCAL_DNS:-0}" != "1" ]]; then
       continue
     fi
-    if [[ "$service" == "caddy" && "${ENABLE_CADDY:-0}" -ne 1 ]]; then
+    if [[ "$service" == "caddy" && "${ENABLE_CADDY:-0}" != "1" ]]; then
       continue
     fi
     ensure_dir_mode "${ARR_DOCKER_DIR}/${service}" "$DATA_DIR_MODE"
   done
 
   local collab_enabled=0
-  if [[ "${ARR_PERMISSION_PROFILE}" == "collab" && "${COLLAB_GROUP_WRITE_ENABLED:-0}" -eq 1 ]]; then
+  if [[ "${ARR_PERMISSION_PROFILE}" == "collab" && "${COLLAB_GROUP_WRITE_ENABLED:-0}" == "1" ]]; then
     collab_enabled=1
   elif [[ "${ARR_PERMISSION_PROFILE}" == "collab" ]]; then
     arrstack_report_collab_skip
@@ -178,7 +178,7 @@ safe_random_alnum() {
 generate_api_key() {
   msg "🔐 Generating API key"
 
-  if [[ -f "$ARR_ENV_FILE" ]] && [[ "$FORCE_ROTATE_API_KEY" != 1 ]]; then
+  if [[ -f "$ARR_ENV_FILE" ]] && [[ "$FORCE_ROTATE_API_KEY" != "1" ]]; then
     local existing
     existing="$(grep '^GLUETUN_API_KEY=' "$ARR_ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
     if [[ -n "$existing" ]]; then
@@ -322,12 +322,12 @@ write_env() {
   gluetun_firewall_outbound="$(printf '%s\n' "${outbound_candidates[@]}" | sort -u | paste -sd, -)"
 
   local -a firewall_ports=()
-  if (( split_vpn == 0 )) && [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if (( split_vpn == 0 )) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     firewall_ports+=(80 443)
   fi
   if (( split_vpn == 1 )); then
     firewall_ports+=("${QBT_HTTP_PORT_HOST}")
-  elif [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+  elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     firewall_ports+=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
   fi
 
@@ -357,10 +357,10 @@ write_env() {
   fi
 
   local -a compose_profiles=(ipdirect)
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     compose_profiles+=(proxy)
   fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
     compose_profiles+=(localdns)
   fi
 
@@ -630,7 +630,7 @@ YAML
       - arr_net
 YAML
 
-    if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_PORT}"
@@ -664,7 +664,7 @@ YAML
       - arr_net
 YAML
 
-    if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_PORT}"
@@ -698,7 +698,7 @@ YAML
       - arr_net
 YAML
 
-    if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_PORT}"
@@ -729,7 +729,7 @@ YAML
       - arr_net
 YAML
 
-    if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_PORT}"
@@ -771,7 +771,7 @@ YAML
       - arr_net
 YAML
 
-    if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${FLARESOLVERR_PORT}:${FLARESOLVERR_PORT}"
@@ -804,7 +804,7 @@ YAML
         max-file: "2"
 YAML
 
-    if [[ "${ENABLE_CONFIGARR:-0}" -eq 1 ]]; then
+    if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
   configarr:
     image: ${CONFIGARR_IMAGE}
@@ -875,11 +875,11 @@ write_compose() {
 
     mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
 
-    if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+    if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
       include_caddy=1
     fi
 
-    if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
+    if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
       include_local_dns=1
       local_dns_state_message="Local DNS container requested"
     fi
@@ -971,7 +971,7 @@ YAML
 YAML
     fi
 
-    if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:8080"
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_PORT}"
@@ -1233,7 +1233,7 @@ YAML
         max-file: "2"
 YAML
 
-    if [[ "${ENABLE_CONFIGARR:-0}" -eq 1 ]]; then
+    if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
   configarr:
     image: ${CONFIGARR_IMAGE}
@@ -1455,7 +1455,7 @@ attempt_update() {
         fi
         cleanup_cookie
     else
-        if [ "${ATTEMPT:-0}" -eq 1 ]; then
+        if [ "${ATTEMPT:-0}" = "1" ]; then
             log "Skipping authenticated update: QBT_USER/QBT_PASS not provided"
         fi
     fi
@@ -1494,7 +1494,7 @@ HOOK
 
 # Ensures Caddy basic auth credentials exist, regenerating bcrypt/hash artifacts as needed
 ensure_caddy_auth() {
-  if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
     msg "🔐 Skipping Caddy Basic Auth setup (ENABLE_CADDY=0)"
     return 0
   fi
@@ -1636,7 +1636,7 @@ sync_caddy_ca_public_copy() {
 
 # Generates Caddyfile and copies CA assets when proxying is enabled
 write_caddy_assets() {
-  if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
     msg "🌐 Skipping Caddy configuration (ENABLE_CADDY=0)"
     return 0
   fi
@@ -1960,7 +1960,7 @@ EOF
 
 # Materializes Configarr config/secrets with sanitized policy values when enabled
 write_configarr_assets() {
-  if [[ "${ENABLE_CONFIGARR:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_CONFIGARR:-0}" != "1" ]]; then
     msg "🧾 Skipping Configarr assets (ENABLE_CONFIGARR=0)"
     return 0
   fi

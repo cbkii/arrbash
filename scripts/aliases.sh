@@ -46,7 +46,7 @@ write_aliases_file() {
 
   mv "$tmp_file" "$aliases_file"
 
-  if [[ "${ENABLE_CONFIGARR:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     if ! grep -Fq "arr.config.sync" "$aliases_file" 2>/dev/null; then
       {
         printf '\n# Configarr helper\n'

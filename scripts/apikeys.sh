@@ -151,7 +151,7 @@ arrstack_sync_arr_api_keys() {
   API_KEYS_SYNCED_DETAILS=""
   API_KEYS_SYNCED_PLACEHOLDERS=0
 
-  if [[ "${ENABLE_CONFIGARR:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_CONFIGARR:-0}" != "1" ]]; then
     API_KEYS_SYNCED_STATUS="skipped"
     API_KEYS_SYNCED_MESSAGE="Configarr disabled; API key sync skipped."
     return 0

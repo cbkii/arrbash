@@ -80,7 +80,7 @@ QBT_INFO
     msg "$vt_summary_message"
   fi
 
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'DIRECT'
 Direct LAN URLs (ipdirect profile enabled):
 DIRECT
@@ -99,7 +99,7 @@ Access services from the host network (docker compose exec/port-forward) or add 
 DIRECT_DISABLED
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     local domain_suffix="${ARR_DOMAIN_SUFFIX_CLEAN}"
     cat <<CADDY_INFO
 
@@ -124,15 +124,15 @@ Access the services via the direct LAN URLs above.
 Set ENABLE_CADDY=1 in ${ARR_USERCONF_PATH} and rerun ./arrstack.sh to publish HTTPS hostnames signed by the internal CA.
 NO_CADDY
     fi
-    if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
+    if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
       cat <<'DNS_HTTP'
 Local DNS is enabled. Hostnames will resolve but continue serving plain HTTP until Caddy is enabled.
 DNS_HTTP
     fi
   fi
 
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
-    if [[ ${LOCAL_DNS_SERVICE_ENABLED:-0} -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
+    if [[ "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
       msg "Local DNS is enabled. Point DHCP Option 6 (or per-device DNS) at ${LAN_IP:-<unset>} so hostnames resolve."
     else
       warn "Local DNS requested but the container is disabled (port 53 conflict). Resolve the conflict and rerun."
@@ -375,7 +375,7 @@ WARNING
     done < <(printf '%s\n' "${COLLAB_PERMISSION_WARNINGS}")
   fi
 
-  if [[ "${ENABLE_CONFIGARR:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     local configarr_config="${ARR_DOCKER_DIR}/configarr/config.yml"
     local configarr_secrets="${ARR_DOCKER_DIR}/configarr/secrets.yml"
     cat <<CONFIGARR
@@ -414,7 +414,7 @@ POLICY
       secrets_have_placeholders=1
     fi
 
-    if [[ "${API_KEYS_SYNCED_PLACEHOLDERS:-0}" -eq 1 || secrets_have_placeholders -eq 1 ]]; then
+    if [[ "${API_KEYS_SYNCED_PLACEHOLDERS:-0}" == "1" || "${secrets_have_placeholders}" == "1" ]]; then
       warn "Configarr secrets still contain placeholder API keys. Run ./arrstack.sh --sync-api-keys after Sonarr/Radarr/Prowlarr finish initial setup."
     fi
   fi

@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 
 # Secure default file creation; allow opt-out for legacy setups
-if [[ "${ARRSTACK_DISABLE_UMASK:-0}" -ne 1 ]]; then
+if [[ "${ARRSTACK_DISABLE_UMASK:-0}" != "1" ]]; then
   umask 027
 fi
 
@@ -33,9 +33,9 @@ _expected_base="${ARR_BASE:-${HOME}/srv}"
 _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_expected_base}")"
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
 
-if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" -ne 1 ]]; then
+if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
-    if [[ "${ARR_USERCONF_STRICT:-0}" -eq 1 ]]; then
+    if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
       printf '[arrstack] user config path outside base (%s): %s (strict mode)\n' "${_canon_base}" "${_canon_userconf}" >&2
       exit 1
     else
@@ -52,12 +52,12 @@ fi
 ARR_USERCONF_PATH="${_canon_userconf}"
 unset _canon_userconf _canon_base _expected_base
 
-if [[ "${ARRSTACK_HARDEN_READONLY:-0}" -eq 1 ]]; then
+if [[ "${ARRSTACK_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly REPO_ROOT ARR_USERCONF_PATH
 fi
 
 SCRIPT_LIB_DIR="${REPO_ROOT}/scripts"
-if [[ "${ARRSTACK_HARDEN_READONLY:-0}" -eq 1 ]]; then
+if [[ "${ARRSTACK_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly SCRIPT_LIB_DIR
 fi
 modules=(
@@ -81,7 +81,7 @@ modules=(
 for module in "${modules[@]}"; do
   f="${SCRIPT_LIB_DIR}/${module}"
   if [[ ! -f "${f}" ]]; then
-    if [[ "${ARRSTACK_ALLOW_MISSING_MODULES:-0}" -eq 1 ]]; then
+    if [[ "${ARRSTACK_ALLOW_MISSING_MODULES:-0}" == "1" ]]; then
       printf '[arrstack] WARN: missing module (continuing due to ARRSTACK_ALLOW_MISSING_MODULES=1): %s\n' "${f}" >&2
       continue
     fi
@@ -170,7 +170,7 @@ main() {
     esac
   done
 
-  if [[ "${REFRESH_ALIASES:-0}" -eq 1 ]]; then
+  if [[ "${REFRESH_ALIASES:-0}" == "1" ]]; then
     refresh_aliases
     return 0
   fi
@@ -188,7 +188,7 @@ main() {
   preflight_compose_interpolation
   validate_compose_or_die
   write_gluetun_control_assets
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     ensure_caddy_auth
     write_caddy_assets
     validate_caddy_config
@@ -202,10 +202,10 @@ main() {
   if ! write_aliases_file; then
     warn "Helper aliases file could not be generated"
   fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
     configure_local_dns_entries
   fi
-  if [[ "${SETUP_HOST_DNS:-0}" -eq 1 ]]; then
+  if [[ "${SETUP_HOST_DNS:-0}" == "1" ]]; then
     run_host_dns_setup
   fi
   write_configarr_assets
@@ -218,9 +218,9 @@ main() {
   API_KEYS_SYNCED_PLACEHOLDERS=0
 
   # shellcheck disable=SC2034 # values consumed by scripts/summary.sh
-  if [[ "${FORCE_SYNC_API_KEYS:-0}" -eq 1 ]]; then
+  if [[ "${FORCE_SYNC_API_KEYS:-0}" == "1" ]]; then
     arrstack_sync_arr_api_keys 1 || true
-  elif [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" -eq 1 ]]; then
+  elif [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" == "1" ]]; then
     API_KEYS_SYNCED_STATUS="disabled"
     API_KEYS_SYNCED_MESSAGE="Configarr API key sync skipped (--no-auto-api-sync)."
     if [[ -f "${ARR_DOCKER_DIR}/configarr/secrets.yml" ]] && grep -Fq 'REPLACE_WITH_' "${ARR_DOCKER_DIR}/configarr/secrets.yml" 2>/dev/null; then
@@ -230,7 +230,7 @@ main() {
     arrstack_sync_arr_api_keys 0 || true
   fi
 
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 && "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
     local doctor_script="${REPO_ROOT}/scripts/doctor.sh"
     if [[ -x "${doctor_script}" ]]; then
       msg "🩺 Running LAN diagnostics"
@@ -248,7 +248,7 @@ main() {
     else
       warn "Doctor script missing or not executable at ${doctor_script}"
     fi
-  elif [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
+  elif [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
     msg "🩺 Skipping LAN diagnostics (ENABLE_CADDY=0)"
   fi
 
