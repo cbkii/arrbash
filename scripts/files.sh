@@ -1840,7 +1840,7 @@ write_qbt_config() {
   local default_auth_whitelist="127.0.0.1/32,::1/128"
   local qb_lan_whitelist=""
   if qb_lan_whitelist="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
-    default_auth_whitelist+="${default_auth_whitelist:+,}${qb_lan_whitelist}"
+    default_auth_whitelist+=,${qb_lan_whitelist}
   fi
 
   local auth_whitelist
