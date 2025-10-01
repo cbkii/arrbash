@@ -29,6 +29,7 @@ load_env() {
 
     key="${BASH_REMATCH[1]}"
     raw="${BASH_REMATCH[2]}"
+    # Trim leading whitespace
     raw="${raw#"${raw%%[![:space:]]*}"}"
     value="$(unescape_env_value_from_compose "$raw")"
     printf -v "$key" '%s' "$value"
