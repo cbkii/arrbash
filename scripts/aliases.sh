@@ -50,7 +50,7 @@ write_aliases_file() {
     if ! grep -Fq "alias arr.config.sync" "$aliases_file" 2>/dev/null; then
       {
         printf '\n# Configarr helper\n'
-        printf "alias arr.config.sync='docker compose run --rm configarr'\n"
+        printf "alias arr.config.sync='_arr_compose run --rm configarr'\n"
       } >>"$aliases_file"
     fi
   fi
