@@ -36,7 +36,7 @@ load_env() {
 
     if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       printf -v "$key" '%s' "$value"
-      export "${key?}"
+      export "$key"
     else
       echo "Warning: Invalid environment variable name '$key' in $ENV_FILE, skipping." >&2
     fi
