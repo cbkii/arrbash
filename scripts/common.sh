@@ -439,12 +439,12 @@ arrstack_escalate_privileges() {
     if command -v bash >/dev/null 2>&1; then
       export ARRSTACK_ESCALATED=1
       # shellcheck disable=SC2093
-      exec pkexec /bin/bash -c "exec \"${_script_path}\" \"\$@\"" -- "$@"
+      exec pkexec /bin/bash -c 'exec "$@"' bash "${_script_path}" "$@"
       unset ARRSTACK_ESCALATED
     else
       export ARRSTACK_ESCALATED=1
       # shellcheck disable=SC2093
-      exec pkexec /bin/sh -c "exec \"${_script_path}\" \"\$@\"" -- "$@"
+      exec pkexec /bin/sh -c 'exec "$@"' sh "${_script_path}" "$@"
       unset ARRSTACK_ESCALATED
     fi
     return 0
