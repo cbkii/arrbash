@@ -382,7 +382,15 @@ PY
     printf '%s' "$value" | jq -sRr @uri
     return
   fi
-  local encoded="${value// /%20}"
+  # Comprehensive URL encoding fallback (POSIX shell)
+  local i c hex encoded=""
+  for ((i=0; i<${#value}; i++)); do
+    c="${value:i:1}"
+    case "$c" in
+      [a-zA-Z0-9.~_-]) encoded+="$c" ;;
+      *) printf -v hex '%%%02X' "'$c"; encoded+="$hex" ;;
+    esac
+  done
   printf '%s' "$encoded"
 }
 
