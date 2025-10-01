@@ -122,6 +122,15 @@ show_configuration_preview() {
     vpn_auto_summary="enabled (threshold ${threshold_display} KB/s; interval ${interval_display}m; window ${window_display}; ${cap_fragment}${jitter_fragment})"
   fi
 
+  local qbt_whitelist_requested="${QBT_AUTH_WHITELIST:-}"
+  local qbt_whitelist_requested_display="${qbt_whitelist_requested:-'(unset; defaults will be applied)'}"
+  local qbt_whitelist_raw="${qbt_whitelist_requested:-127.0.0.1/32,::1/128}"
+  local lan_private_subnet
+  if lan_private_subnet="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$lan_private_subnet" ]]; then
+    qbt_whitelist_raw+="${qbt_whitelist_raw:+,}${lan_private_subnet}"
+  fi
+  local qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_raw")"
+
   cat <<CONFIG
 ------------------------------------------------------------
 ARR Stack configuration preview
@@ -151,8 +160,8 @@ Credentials & secrets
   • Gluetun API key: ${gluetun_api_key_display}
   • qBittorrent username: ${QBT_USER}
   • qBittorrent password: ${qbt_pass_display}
-  • qBittorrent auth whitelist (final): ${QBT_AUTH_WHITELIST}
-  • qBittorrent auth whitelist: ${QBT_AUTH_WHITELIST}
+  • qBittorrent auth whitelist (requested): ${qbt_whitelist_requested_display}
+  • qBittorrent auth whitelist (final): ${qbt_whitelist_final}
 
 Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
