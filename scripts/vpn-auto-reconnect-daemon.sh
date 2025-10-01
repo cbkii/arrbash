@@ -10,6 +10,7 @@ ARR_STACK_DIR="${ARR_STACK_DIR:-${REPO_ROOT}}"
 # shellcheck source=scripts/vpn-auto-reconnect.sh
 . "${REPO_ROOT}/scripts/vpn-auto-reconnect.sh"
 
+# Prints daemon usage/help text
 print_usage() {
   cat <<'USAGE'
 Usage: vpn-auto-reconnect-daemon.sh [--once]
@@ -17,6 +18,7 @@ Usage: vpn-auto-reconnect-daemon.sh [--once]
 USAGE
 }
 
+# Executes a single reconnect evaluation cycle using configured interval
 run_once() {
   local interval_once
   interval_once="$(vpn_auto_reconnect_check_interval_seconds 2>/dev/null || printf '1200')"
@@ -31,6 +33,7 @@ run_once() {
   return 0
 }
 
+# Event loop handling CLI flags, wake triggers, and periodic execution
 main() {
   local once=0
   while [[ $# -gt 0 ]]; do

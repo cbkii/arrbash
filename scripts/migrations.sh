@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# Applies idempotent migrations for auth config, env normalization, and collab perms
 run_one_time_migrations() {
   local gluetun_340_marker="${ARR_DOCKER_DIR}/.gluetun-340-migration"
   if [[ ! -f "$gluetun_340_marker" ]]; then
@@ -29,6 +30,7 @@ run_one_time_migrations() {
     local env_backup_created=0
     local env_backup_path=""
 
+    # Captures a single backup of the env file before mutating entries
     ensure_env_backup() {
       if ((env_backup_created == 0)); then
         env_backup_path="${ARR_ENV_FILE}.bak.$(date +%s)"

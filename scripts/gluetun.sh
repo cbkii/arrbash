@@ -25,6 +25,7 @@
 #   1 (default): Allow automatic OpenVPN cycle attempts while waiting on PF assignment.
 #   0:           Skip cycle attempts (useful for advanced diagnostics or to avoid re-connect storms).
 
+# Determines if the current Gluetun image version mandates role-based auth config
 gluetun_version_requires_auth_config() {
   local image="${GLUETUN_IMAGE:-}"
 
@@ -55,6 +56,7 @@ gluetun_version_requires_auth_config() {
   return 0
 }
 
+# Resolves the Gluetun data directory regardless of stack invocation context
 _pf_gluetun_root() {
   local base="${ARR_DOCKER_DIR:-}"
   if [[ -z "$base" ]]; then
@@ -67,24 +69,29 @@ _pf_gluetun_root() {
   printf '%s' "${base%/}/gluetun"
 }
 
+# Returns absolute path to the async port-forward state file
 pf_state_path() {
   local state_file="${PF_ASYNC_STATE_FILE:-pf-state.json}"
   printf '%s/%s' "$(_pf_gluetun_root)" "$state_file"
 }
 
+# Provides the lockfile path used to serialize state writes
 pf_state_lock_file() {
   printf '%s.lock' "$(pf_state_path)"
 }
 
+# Computes logfile destination for port-forward worker logging
 pf_log_path() {
   local log_file="${PF_ASYNC_LOG_FILE:-port-forwarding.log}"
   printf '%s/%s' "$(_pf_gluetun_root)" "$log_file"
 }
 
+# Tracks the async worker PID for lifecycle management
 pf_worker_pid_path() {
   printf '%s/%s' "$(_pf_gluetun_root)" "pf-worker.pid"
 }
 
+# Ensures parent directory exists with secure permissions before writing worker files
 _pf_ensure_parent_dir() {
   local target="$1"
   local dir
@@ -97,6 +104,7 @@ _pf_ensure_parent_dir() {
   fi
 }
 
+# Escapes text for JSON payloads without requiring jq
 _pf_escape_json_string() {
   local value="$1"
 
@@ -111,6 +119,7 @@ _pf_escape_json_string() {
   printf '%s' "$value"
 }
 
+# Normalizes numeric inputs to integers (fallback 0) for JSON/state storage
 _pf_normalize_int() {
   local value="$1"
   if [[ "$value" =~ ^-?[0-9]+$ ]]; then
@@ -120,6 +129,7 @@ _pf_normalize_int() {
   fi
 }
 
+# Appends timestamped log lines to the Gluetun PF log while enforcing permissions
 pf_log() {
   local message="$*"
   local timestamp
@@ -138,6 +148,7 @@ pf_log() {
   fi
 }
 
+# Persists the most recent forwarded port so other tools can read it
 pf_store_forwarded_port() {
   local port="$1"
   local sanitized
@@ -153,6 +164,7 @@ pf_store_forwarded_port() {
   fi
 }
 
+# Serializes port-forward worker state (attempts, status, timestamps) to disk
 write_pf_state() {
   local port
   port="$(_pf_normalize_int "${1:-0}")"
@@ -216,6 +228,7 @@ write_pf_state() {
   PF_ENSURE_STATUS_MESSAGE="$status${message:+ - ${message}}"
 }
 
+# Writes PF state under a simple lock to avoid clobbered concurrent updates
 pf_write_with_lock() {
   local lock_file
   lock_file="$(pf_state_lock_file)"
@@ -231,6 +244,7 @@ pf_write_with_lock() {
   exec {lock_fd}>&-
 }
 
+# Fetches forwarded port from Gluetun API while tolerating transient failures
 safe_fetch_port() {
   local raw
   raw="$(fetch_forwarded_port 2>/dev/null || printf '0')"
@@ -241,6 +255,7 @@ safe_fetch_port() {
   fi
 }
 
+# Removes worker pid/state artifacts when async worker exits
 pf_worker_cleanup() {
   local pid_file="${PF_ASYNC_WORKER_PID_FILE:-}"
   if [[ -n "$pid_file" && -f "$pid_file" ]]; then
@@ -252,6 +267,7 @@ pf_worker_cleanup() {
   fi
 }
 
+# Validates async worker timing knobs before use to prevent tight loops
 pf_async_validate_intervals() {
   local quick="${PF_ASYNC_INITIAL_QUICK_WAIT:-10}"
   local budget="${PF_ASYNC_TOTAL_BUDGET:-240}"
@@ -273,6 +289,7 @@ pf_async_validate_intervals() {
   printf '%s %s %s %s %s' "$quick" "$budget" "$poll" "$cycle" "$cycles"
 }
 
+# Long-running worker polling Gluetun for forwarded ports with optional cycling
 async_port_forward_worker() {
   local oneshot=0
   while [[ $# -gt 0 ]]; do
@@ -380,6 +397,7 @@ async_port_forward_worker() {
   return 0
 }
 
+# Detects whether a previously recorded worker PID is still active
 pf_worker_pid_alive() {
   local pid_file
   pid_file="$(pf_worker_pid_path)"
@@ -406,6 +424,7 @@ pf_worker_pid_alive() {
   return 1
 }
 
+# Launches the async port-forward worker when enabled, ensuring singleton behavior
 start_async_pf_if_enabled() {
   local -a worker_args=("$@")
   if [[ "${PF_ASYNC_ENABLE:-1}" != "1" ]]; then
@@ -438,6 +457,7 @@ start_async_pf_if_enabled() {
   pf_log "Worker launched in background (pid ${pid})"
 }
 
+# Builds base URL for Gluetun control API from LAN/localhost settings
 _gluetun_control_base() {
   local port host
   port="${GLUETUN_CONTROL_PORT:-8000}"
@@ -449,6 +469,7 @@ _gluetun_control_base() {
   fi
 }
 
+# Performs authenticated GET against Gluetun control API with jq-compatible output
 gluetun_control_get() {
   local path url
   path="$1"
@@ -472,6 +493,7 @@ gluetun_control_get() {
   curl "${curl_args[@]}" "$url" 2>/dev/null
 }
 
+# Extracts a string property from Gluetun JSON response using jq or fallback parser
 _gluetun_extract_json_string() {
   local payload="$1"
   local key="$2"
@@ -491,6 +513,7 @@ _gluetun_extract_json_string() {
   printf '%s' "$value"
 }
 
+# Extracts numeric property from Gluetun JSON response, handling jq absence
 _gluetun_extract_json_number() {
   local payload="$1"
   local key="$2"
@@ -510,6 +533,7 @@ _gluetun_extract_json_number() {
   printf '%s' "$value"
 }
 
+# Returns full JSON payload describing current public IP metadata
 gluetun_public_ip_details() {
   local payload="$1"
 
@@ -536,6 +560,7 @@ gluetun_public_ip_details() {
   [[ -n "$GLUETUN_PUBLIC_IP" ]]
 }
 
+# Formats public IP location/country summary for status output
 gluetun_public_ip_location() {
   local -a parts=()
 
@@ -561,6 +586,7 @@ gluetun_public_ip_location() {
   )
 }
 
+# Combines IP and location data into a concise status string
 gluetun_public_ip_summary() {
   local payload="$1"
 
@@ -601,6 +627,7 @@ gluetun_public_ip_summary() {
   printf '%s' "$summary"
 }
 
+# Fetches port-forward status payload for downstream summarizers
 gluetun_port_forward_details() {
   local payload="$1"
 
@@ -645,6 +672,7 @@ gluetun_port_forward_details() {
   return 1
 }
 
+# Summarizes port-forward status with warnings for placeholder or strict failures
 gluetun_port_forward_summary() {
   local payload="$1"
 
@@ -698,6 +726,7 @@ gluetun_port_forward_summary() {
   printf '%s' "$summary"
 }
 
+# Retrieves and caches the current forwarded port, updating state side effects
 fetch_forwarded_port() {
   local response
 
@@ -711,6 +740,7 @@ fetch_forwarded_port() {
   printf '0'
 }
 
+# Fetches current public IP string (without metadata) from Gluetun API
 fetch_public_ip() {
   local response
 
@@ -724,6 +754,7 @@ fetch_public_ip() {
   printf ''
 }
 
+# Sends OpenVPN status change requests to Gluetun control API
 gluetun_update_openvpn_status() {
   local desired="$1"
 
@@ -746,6 +777,7 @@ gluetun_update_openvpn_status() {
   curl "${curl_args[@]}" --data "{\"status\":\"${desired}\"}" "${api_base}/v1/openvpn/status" >/dev/null 2>&1
 }
 
+# Requests Gluetun to reconnect OpenVPN; used for PF recovery loops
 gluetun_cycle_openvpn() {
   if ! gluetun_update_openvpn_status "stopped"; then
     return 1
@@ -762,7 +794,7 @@ gluetun_cycle_openvpn() {
   return 0
 }
 
-# DEPRECATED: Retained for legacy synchronous tooling. Prefer async_port_forward_worker().
+# DEPRECATED: Legacy Proton PF ensure loop; prefer async_port_forward_worker()
 # shellcheck disable=SC2034  # exported for callers to read ensure results
 ensure_proton_port_forwarding_ready() {
   PF_ENSURED_PORT="0"

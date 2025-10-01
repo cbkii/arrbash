@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# Renders helper alias bundle and injects optional VPN/configarr helpers if templates permit
 write_aliases_file() {
   msg "🛠️ Generating helper aliases file"
 

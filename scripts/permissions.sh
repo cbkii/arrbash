@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 
+# Ensures target has desired mode, attempting corrective chmod and warning on failure
 check_and_fix_mode() {
   local target="$1"
   local desired="$2"
@@ -44,6 +45,7 @@ check_and_fix_mode() {
   return 0
 }
 
+# Audits key files/dirs for expected permissions, auto-correcting where safe
 verify_permissions() {
   local issues=0
   local collab_enabled=0

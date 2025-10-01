@@ -1,11 +1,13 @@
 # shellcheck shell=bash
 
+# Confirms manual VueTorrent install has required assets before activation
 vuetorrent_manual_is_complete() {
   local dir="$1"
 
   [[ -d "$dir" && -f "$dir/public/index.html" && -f "$dir/version.txt" ]]
 }
 
+# Reads installed VueTorrent version from version.txt when available
 vuetorrent_manual_version() {
   local dir="$1"
 
@@ -14,6 +16,7 @@ vuetorrent_manual_version() {
   fi
 }
 
+# Manages VueTorrent deployment, choosing LSIO mod or manual download as configured
 install_vuetorrent() {
   local manual_dir="${ARR_DOCKER_DIR}/qbittorrent/vuetorrent"
   local releases_url="https://api.github.com/repos/VueTorrent/VueTorrent/releases/latest"
@@ -206,9 +209,10 @@ install_vuetorrent() {
     write_qbt_config
   fi
 
-  # Removed aggressive container cleanup to avoid disrupting other services mid-run.
+  # Avoid aggressive cleanup so sibling services aren't interrupted mid-run
 }
 
+# Maps logical service names to compose container identifiers (handles overrides)
 service_container_name() {
   local service="$1"
   case "$service" in
@@ -221,6 +225,7 @@ service_container_name() {
   esac
 }
 
+# Stops existing stack containers and removes stale temp artifacts without nuking volumes
 safe_cleanup() {
   msg "🧹 Safely stopping existing services..."
 
@@ -246,6 +251,7 @@ safe_cleanup() {
     | xargs -r docker rm -f 2>/dev/null || true
 }
 
+# Runs docker compose config to detect unresolved env placeholders before deploy
 preflight_compose_interpolation() {
   local file="${COMPOSE_FILE:-${ARR_STACK_DIR}/docker-compose.yml}"
   local log_dir="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
@@ -269,6 +275,7 @@ preflight_compose_interpolation() {
   fi
 }
 
+# Validates docker-compose.yml syntax and surfaces context on failure
 validate_compose_or_die() {
   local file="${COMPOSE_FILE:-${ARR_STACK_DIR}/docker-compose.yml}"
   local log_dir="${ARR_STACK_DIR}/logs"
@@ -291,6 +298,7 @@ validate_compose_or_die() {
   rm -f "$errlog"
 }
 
+# Validates generated Caddyfile using docker image when proxying is enabled
 validate_caddy_config() {
   if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
     msg "🧪 Skipping Caddy validation (ENABLE_CADDY=0)"
@@ -328,6 +336,7 @@ validate_caddy_config() {
   rm -f "$logfile"
 }
 
+# Rewrites .env image variables when fallback tags are selected
 update_env_image_var() {
   local var_name="$1"
   local new_value="$2"
@@ -343,6 +352,7 @@ update_env_image_var() {
   fi
 }
 
+# Uses docker manifest inspect to verify image availability
 check_image_exists() {
   local image="$1"
 
@@ -365,6 +375,7 @@ check_image_exists() {
   return 1
 }
 
+# Ensures all service images exist, falling back to :latest for LSIO when needed
 validate_images() {
   msg "🔍 Validating Docker images..."
 
@@ -445,6 +456,7 @@ validate_images() {
   fi
 }
 
+# Starts individual compose service and prints any non-empty output
 compose_up_service() {
   local service="$1"
   local output=""
@@ -469,6 +481,7 @@ compose_up_service() {
   sleep 2
 }
 
+# Captures qBittorrent temporary password from logs and persists to .env
 sync_qbt_password_from_logs() {
   if [[ "${QBT_PASS}" != "adminadmin" ]]; then
     return
@@ -493,6 +506,7 @@ sync_qbt_password_from_logs() {
   warn "  Unable to automatically determine the qBittorrent password. Update QBT_PASS in .env manually."
 }
 
+# Polls Gluetun health and control API until VPN is ready or times out
 wait_for_vpn_connection() {
   local max_wait="${1:-180}"
   local elapsed=0
@@ -578,6 +592,7 @@ wait_for_vpn_connection() {
   return 1
 }
 
+# Launches VPN auto-reconnect daemon when configured and available
 start_vpn_auto_reconnect_if_enabled() {
   if ! declare -f vpn_auto_reconnect_is_enabled >/dev/null 2>&1; then
     return 0
@@ -628,6 +643,7 @@ start_vpn_auto_reconnect_if_enabled() {
   fi
 }
 
+# Prints container runtime status and port-forward summary for quick health glance
 show_service_status() {
   msg "Service status summary:"
   local -a services=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr)
@@ -658,6 +674,7 @@ show_service_status() {
   fi
 }
 
+# Disables Docker's userland proxy to let dnsmasq bind :53 reliably
 ensure_docker_userland_proxy_disabled() {
   if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 1 ]]; then
     return 0
@@ -730,6 +747,7 @@ ensure_docker_userland_proxy_disabled() {
   return 0
 }
 
+# Orchestrates service startup: cleanup, validation, image pulls, health waits, summaries
 start_stack() {
   msg "🚀 Starting services"
 

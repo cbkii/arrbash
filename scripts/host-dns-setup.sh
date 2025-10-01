@@ -18,6 +18,7 @@ arrstack_escalate_privileges "$@" || exit $?
 # -E included to preserve ERR trap behavior in function/subshell contexts (Bash manual §"The ERR Trap").
 set -Eeuo pipefail
 
+# Normalizes comma-separated upstream list into unique entries
 parse_upstream_list() {
   local raw="$1"
   local -a parts=()

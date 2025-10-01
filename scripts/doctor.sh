@@ -29,6 +29,7 @@ fi
 unset ARR_USERCONF_SOURCE
 
 
+# Uses ss to determine if a port is bound at a conflicting address
 port_in_use_with_ss() {
   local proto="$1"
   local bind_ip="$2"
@@ -68,6 +69,7 @@ port_in_use_with_ss() {
   return 1
 }
 
+# Uses lsof to detect port conflicts when ss is unavailable
 port_in_use_with_lsof() {
   local proto="$1"
   local bind_ip="$2"
@@ -117,6 +119,7 @@ elif have_command lsof; then
   PORT_TOOL="lsof"
 fi
 
+# Chooses the best available port checker for the current host
 port_in_use() {
   local proto="$1"
   local bind_ip="$2"
@@ -137,6 +140,7 @@ port_in_use() {
   esac
 }
 
+# Reports whether a specific service port is free/bound, noting missing tooling
 report_port() {
   local label="$1"
   local proto="$2"
@@ -155,6 +159,7 @@ report_port() {
   fi
 }
 
+# Lists normalized bind addresses for a port using ss or lsof output
 port_bind_addresses() {
   local proto="$1"
   local port="$2"
@@ -190,6 +195,7 @@ port_bind_addresses() {
   fi
 }
 
+# Audits exposed services versus expected LAN bindings and warns on unsafe listeners
 check_network_security() {
   echo "[doctor] Auditing bind addresses for safety"
 
@@ -285,6 +291,7 @@ check_network_security() {
   fi
 }
 
+# Probes LAN-facing HTTP endpoints through Caddy to validate local routing
 test_lan_connectivity() {
   echo "[doctor] Testing LAN accessibility..."
 
@@ -319,6 +326,7 @@ test_lan_connectivity() {
   done
 }
 
+# Verifies upstream DNS responders and surfaces missing tooling
 doctor_dns_health() {
   echo "[doctor] Checking upstream DNS reachability"
 
@@ -353,6 +361,7 @@ doctor_dns_health() {
   fi
 }
 
+# Compares Docker daemon DNS configuration with expected LAN/upstream chain
 check_docker_dns_configuration() {
   echo "[doctor] Inspecting Docker daemon DNS settings"
 
