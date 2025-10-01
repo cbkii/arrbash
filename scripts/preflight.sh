@@ -214,7 +214,7 @@ port_in_use_with_details() {
       while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         local candidate=""
-        local ip_port_pattern="[0-9A-Fa-f\\.\\[\\]:\\*]+:${port}"
+        local ip_port_pattern="[0-9A-Fa-f.\\[\\]:*]+:${port}"
         candidate="$(printf '%s\n' "$line" | grep -oE "$ip_port_pattern" | head -n1 || true)"
         if [[ -z "$candidate" ]]; then
           continue
