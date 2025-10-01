@@ -224,7 +224,7 @@ port_in_use_with_details() {
         if [[ -z "$candidate" ]]; then
           continue
         fi
-        candidate="${candidate%:$port}"
+        candidate="${candidate%:"$port"}"
         candidate="${candidate//[\[\]]/}"
         if [[ "$candidate" == "*" ]]; then
           if ((exp_is_ipv6)); then
