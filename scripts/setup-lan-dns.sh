@@ -98,6 +98,41 @@ rewrite_hosts_file() {
   trap - EXIT
 }
 
+json_encode_array() {
+  local -a values=("$@")
+
+  if ((${#values[@]} == 0)); then
+    printf '[]'
+    return 0
+  fi
+
+  if have_command jq; then
+    if ! printf '%s\0' "${values[@]}" | jq -Rs 'split("\u0000")[:-1]'; then
+      return 1
+    fi
+    return 0
+  fi
+
+  if have_command python3; then
+    if ! printf '%s\0' "${values[@]}" | python3 - <<'PYTHON'
+import json, sys
+data = sys.stdin.buffer.read()
+# Remove trailing null if present (like jq -Rs 'split("\u0000")[:-1]')
+items = data.split(b'\0')
+if items and items[-1] == b'':
+    items = items[:-1]
+# Decode bytes to str (assuming UTF-8, as bash does)
+print(json.dumps([x.decode('utf-8', 'replace') for x in items]))
+PYTHON
+    then
+      return 1
+    fi
+    return 0
+  fi
+
+  return 1
+}
+
 configure_docker_dns() {
   local lan_ip="$1"
   local daemon_json="/etc/docker/daemon.json"
@@ -135,20 +170,10 @@ configure_docker_dns() {
     fi
   done
 
-  local dns_json="[]"
-  if ((${#dns_chain[@]} > 0)); then
-    local first=1
-    dns_json="["
-    for resolver in "${dns_chain[@]}"; do
-      [[ -z "${resolver}" ]] && continue
-      if ((first)); then
-        dns_json+="\"${resolver}\""
-        first=0
-      else
-        dns_json+=", \"${resolver}\""
-      fi
-    done
-    dns_json+="]"
+  local dns_json
+  if ! dns_json="$(json_encode_array "${dns_chain[@]}")"; then
+    warn "Unable to encode DNS chain; skipping Docker DNS configuration."
+    return 1
   fi
 
   local rootless=0
