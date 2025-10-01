@@ -17,6 +17,7 @@ fi
 ENV_FILE="${ARR_ENV_FILE:-${STACK_DIR}/.env}"
 CONTAINER_NAME="qbittorrent"
 
+# Sources the stack .env so helper commands reflect deployed values
 load_env() {
   [[ -f "$ENV_FILE" ]] || return
 
@@ -41,6 +42,7 @@ load_env() {
   done <"$ENV_FILE"
 }
 
+# Determines docker-data directory from env overrides or common defaults
 resolve_docker_data() {
   local candidates=()
 
@@ -60,6 +62,7 @@ resolve_docker_data() {
   return 1
 }
 
+# Extracts qBittorrent's latest temporary password from container logs
 temporary_password() {
   docker logs "$CONTAINER_NAME" 2>&1 \
     | grep "temporary password" \
@@ -68,6 +71,7 @@ temporary_password() {
     | awk '{print $1}'
 }
 
+# Chooses appropriate host/IP for WebUI links (LAN_IP fallback to localhost)
 webui_host() {
   if [[ -n "${LAN_IP:-}" && "$LAN_IP" != "0.0.0.0" ]]; then
     printf '%s' "$LAN_IP"
@@ -76,28 +80,34 @@ webui_host() {
   fi
 }
 
+# Returns exposed qBittorrent WebUI host port
 webui_port() {
   printf '%s' "${QBT_HTTP_PORT_HOST:-8080}"
 }
 
+# Builds LAN domain used behind Caddy for qBittorrent
 webui_domain() {
   local suffix="${CADDY_DOMAIN_SUFFIX:-home.arpa}"
   suffix="${suffix#.}"
   printf 'qbittorrent.%s' "$suffix"
 }
 
+# Computes path to qBittorrent.conf within docker-data tree
 config_file_path() {
   printf '%s/qbittorrent/qBittorrent.conf' "$DOCKER_DATA"
 }
 
+# Stops qBittorrent container quietly before config edits
 stop_container() {
   docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
 }
 
+# Restarts qBittorrent container after config edits
 start_container() {
   docker start "$CONTAINER_NAME" >/dev/null 2>&1 || true
 }
 
+# Derives /24 whitelist subnet from LAN_IP when present
 derive_subnet() {
   if [[ -n "${LAN_IP:-}" && "$LAN_IP" != "0.0.0.0" ]]; then
     local IFS='.'
@@ -120,6 +130,7 @@ derive_subnet() {
   fi
 }
 
+# Prints human-friendly access details and current auth state
 show_info() {
   log_info "qBittorrent Access Information:"
   log_info "================================"
@@ -142,6 +153,7 @@ show_info() {
   log_info "Remote clients must authenticate through Caddy using user '${CADDY_BASIC_AUTH_USER:-user}' and the password hashed in ${ARR_DOCKER_DIR}/caddy/Caddyfile."
 }
 
+# Resets qBittorrent credentials and surfaces the new temporary password
 reset_auth() {
   log_info "Resetting qBittorrent authentication..."
   stop_container
@@ -171,6 +183,7 @@ reset_auth() {
   fi
 }
 
+# Enables LAN subnet whitelist for WebUI by patching qBittorrent.conf
 update_whitelist() {
   local subnet
   subnet=$(derive_subnet)
@@ -203,6 +216,7 @@ update_whitelist() {
   log_info "LAN whitelist enabled for: $subnet"
 }
 
+# Ensures specified config key is set to desired value (adding if missing)
 ensure_qbt_config_setting() {
   local key="$1"
   local value="$2"
@@ -253,6 +267,7 @@ ensure_qbt_config_setting() {
   ensure_secret_file_mode "$cfg"
 }
 
+# Reports detected drift in WebUI port/bind settings relative to stack defaults
 diagnose_config() {
   local cfg
   cfg="$(config_file_path)"
@@ -296,6 +311,7 @@ diagnose_config() {
   fi
 }
 
+# Forces WebUI port back to container default and restarts service
 fix_webui_port() {
   log_info "Restoring qBittorrent WebUI port to 8080"
   stop_container
@@ -312,6 +328,7 @@ fix_webui_port() {
   start_container
 }
 
+# Forces WebUI bind address back to 0.0.0.0 for LAN access
 fix_webui_address() {
   log_info "Restoring qBittorrent WebUI bind address to 0.0.0.0"
   stop_container
@@ -328,6 +345,7 @@ fix_webui_address() {
   start_container
 }
 
+# Prints helper usage menu
 usage() {
   cat <<'USAGE'
 Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr}
@@ -340,6 +358,7 @@ Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr}
 USAGE
 }
 
+# Dispatches qbt-helper commands after loading environment context
 main() {
   load_env
 

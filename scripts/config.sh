@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 
+# Ensures Proton credentials are minimally viable (length/whitespace constraints)
 validate_proton_creds() {
   local user="$1"
   local pass="$2"
@@ -19,6 +20,7 @@ validate_proton_creds() {
   return 0
 }
 
+# Loads Proton auth file, coercing +pmp suffix required by docs
 load_proton_credentials() {
   local proton_file="${ARRCONF_DIR}/proton.auth"
 
@@ -46,6 +48,7 @@ load_proton_credentials() {
   : "$PROTON_USER_PMP_ADDED"
 }
 
+# Displays a human-readable summary of key settings with sensitive fields masked
 show_configuration_preview() {
   msg "🔎 Configuration preview"
 
@@ -188,6 +191,7 @@ CONFIG
 }
 
 # Accepts explicit credentials but falls back to global PU/PW for backward compatibility.
+# Validates core configuration inputs and ports before rendering assets
 validate_config() {
   local _vu="${1:-${PU:-}}"
   local _vp="${2:-${PW:-}}"

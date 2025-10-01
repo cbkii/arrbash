@@ -8,6 +8,7 @@ if [[ "${ARRSTACK_DISABLE_UMASK:-0}" -ne 1 ]]; then
   umask 027
 fi
 
+# Reports failing location before exiting to speed triage of installer faults
 arrstack_err_trap() {
   local rc=$?
   trap - ERR
@@ -93,6 +94,7 @@ done
 
 arrstack_setup_defaults
 
+# Prints CLI contract; keep aligned with docs/operations.md flag list
 help() {
   cat <<'USAGE'
 Usage: ./arrstack.sh [options]
@@ -118,6 +120,7 @@ else
   warn "Gluetun helper library not found at ${GLUETUN_LIB}"
 fi
 
+# Drives the orchestrated install/update flow while honoring run flags and sidecars
 main() {
   local IFS=$'\n\t'
   while [[ $# -gt 0 ]]; do
@@ -172,11 +175,9 @@ main() {
     return 0
   fi
 
-  # Initialize logging first
   init_logging
 
   preflight
-  # Check network requirements without blocking
   check_network_requirements
   mkdirs
   run_one_time_migrations

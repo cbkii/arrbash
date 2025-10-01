@@ -22,6 +22,7 @@ VPN_AUTO_RECONNECT_PF_SUCCESS_GRACE=86400
 VPN_AUTO_RECONNECT_SEEDING_FLOOR_BYTES=4096
 VPN_AUTO_RECONNECT_SUPPRESS_RETRY=0
 
+# Resolves auto-reconnect working directory under docker-data
 vpn_auto_reconnect_state_dir() {
   local base="${ARR_DOCKER_DIR:-}";
   if [[ -z "$base" ]]; then
@@ -34,19 +35,23 @@ vpn_auto_reconnect_state_dir() {
   printf '%s/gluetun/auto-reconnect' "${base%/}"
 }
 
+# Returns path to persisted state.json for reconnect worker
 vpn_auto_reconnect_state_file() {
   printf '%s/state.json' "$(vpn_auto_reconnect_state_dir)"
 }
 
+# Path to human-readable status JSON stored alongside stack root
 vpn_auto_reconnect_status_file() {
   local stack_dir="${ARR_STACK_DIR:-${REPO_ROOT:-$(pwd)}}"
   printf '%s/.vpn-auto-reconnect-status.json' "${stack_dir%/}"
 }
 
+# Cookie jar used for qBittorrent API sessions
 vpn_auto_reconnect_cookie_file() {
   printf '%s/session.cookie' "$(vpn_auto_reconnect_state_dir)"
 }
 
+# History log tracking reconnect attempts and outcomes
 vpn_auto_reconnect_history_file() {
   printf '%s/history.log' "$(vpn_auto_reconnect_state_dir)"
 }
@@ -73,6 +78,7 @@ if ! declare -f pf_state_lock_file >/dev/null 2>&1; then
   }
 fi
 
+# Locates Gluetun port-forward worker state file, honoring overrides
 vpn_auto_reconnect_pf_state_file() {
   if declare -f pf_state_path >/dev/null 2>&1; then
     pf_state_path
@@ -118,6 +124,7 @@ if ! declare -f pf_write_with_lock >/dev/null 2>&1; then
   }
 fi
 
+# Removes cached PF state and triggers async worker restart after reconnect
 vpn_auto_reconnect_resync_pf() {
   local state_file
   state_file="$(vpn_auto_reconnect_pf_state_file 2>/dev/null || printf '')"
@@ -143,6 +150,7 @@ vpn_auto_reconnect_resync_pf() {
   fi
 }
 
+# Returns current PF status and last_success values for decision logic
 vpn_auto_reconnect_pf_status_snapshot() {
   local file
   file="$(vpn_auto_reconnect_pf_state_file 2>/dev/null || printf '')"
@@ -160,10 +168,12 @@ vpn_auto_reconnect_pf_status_snapshot() {
   printf '%s|%s' "$status" "$last_success"
 }
 
+# UTC now helper (seconds) for consistent scheduling math
 vpn_auto_reconnect_now_epoch() {
   date -u +%s
 }
 
+# Converts epoch seconds to ISO8601; returns failure on invalid input
 vpn_auto_reconnect_epoch_to_iso() {
   local epoch="$1"
   if [[ -z "$epoch" || ! "$epoch" =~ ^[0-9]+$ ]]; then
@@ -172,6 +182,7 @@ vpn_auto_reconnect_epoch_to_iso() {
   date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ'
 }
 
+# Parses ISO8601 string back to epoch seconds if valid
 vpn_auto_reconnect_iso_to_epoch() {
   local iso="$1"
   if [[ -z "$iso" ]]; then
@@ -180,6 +191,7 @@ vpn_auto_reconnect_iso_to_epoch() {
   date -u -d "$iso" '+%s' 2>/dev/null || return 1
 }
 
+# Splits comma-separated lists into trimmed lines for iteration
 vpn_auto_reconnect_split_csv() {
   local raw="$1"
   local IFS=','
@@ -192,6 +204,7 @@ vpn_auto_reconnect_split_csv() {
   done
 }
 
+# Builds candidate country list from rotation env vars with deduping
 vpn_auto_reconnect_parse_countries() {
   local combined=""
   if [[ -n "${PVPN_ROTATE_COUNTRIES:-}" ]]; then
@@ -221,6 +234,7 @@ vpn_auto_reconnect_parse_countries() {
   printf '%s\n' "${ordered[@]}"
 }
 
+# Validates/normalizes comma-separated country codes
 vpn_auto_reconnect_sanitize_country_csv() {
   local raw="${1:-}"
   [[ -n "$raw" ]] || return 1
@@ -247,6 +261,7 @@ vpn_auto_reconnect_sanitize_country_csv() {
   printf '%s\n' "$result"
 }
 
+# Initializes state structure before processing loop begins
 vpn_auto_reconnect_reset_state() {
   VPN_AUTO_STATE_CONSECUTIVE_LOW=0
   VPN_AUTO_STATE_ROTATION_INDEX=0
@@ -272,6 +287,7 @@ vpn_auto_reconnect_reset_state() {
 
 vpn_auto_reconnect_reset_state
 
+# Loads persisted state JSON (if present) into shell variables
 vpn_auto_reconnect_load_state() {
   vpn_auto_reconnect_reset_state
   local file
@@ -317,6 +333,7 @@ vpn_auto_reconnect_load_state() {
   VPN_AUTO_STATE_RESTART_FAILURES="$(jq -r '.restart_failures // 0' <<<"$json" 2>/dev/null || printf '0')"
 }
 
+# Persists current state to disk with basic validation
 vpn_auto_reconnect_write_state() {
   local file
   file="$(vpn_auto_reconnect_state_file)"
@@ -384,6 +401,7 @@ JSON
   ensure_secret_file_mode "$file"
 }
 
+# Updates the next scheduled decision timestamp in state tracking
 vpn_auto_reconnect_update_next_decision() {
   local interval="${VPN_AUTO_RECONNECT_CURRENT_INTERVAL:-0}"
   if [[ "$interval" =~ ^[0-9]+$ ]] && ((interval > 0)); then
@@ -391,6 +409,7 @@ vpn_auto_reconnect_update_next_decision() {
   fi
 }
 
+# Schedules next wake time for the worker loop
 vpn_auto_reconnect_set_next_action() {
   local epoch="${1:-0}"
   if [[ "$epoch" =~ ^[0-9]+$ && $epoch -gt 0 ]]; then
@@ -400,6 +419,7 @@ vpn_auto_reconnect_set_next_action() {
   fi
 }
 
+# Writes status JSON consumed by summary and alias helpers
 vpn_auto_reconnect_write_status() {
   local status_file
   status_file="$(vpn_auto_reconnect_status_file)"
@@ -477,10 +497,12 @@ JSON
   ensure_nonsecret_file_mode "$status_file"
 }
 
+# Reflects whether feature is enabled via env knob
 vpn_auto_reconnect_is_enabled() {
   [[ "${VPN_AUTO_RECONNECT_ENABLED:-0}" == "1" ]]
 }
 
+# Loads env defaults used by reconnect logic (thresholds, credentials)
 vpn_auto_reconnect_load_env() {
   local env_file="${ARR_ENV_FILE:-}";
   if [[ -z "$env_file" ]]; then
@@ -496,6 +518,7 @@ vpn_auto_reconnect_load_env() {
   fi
 }
 
+# Converts KB/s threshold into bytes per second for comparisons
 vpn_auto_reconnect_speed_threshold_bytes() {
   local kbps="${VPN_SPEED_THRESHOLD_KBPS:-12}"
   [[ "$kbps" =~ ^[0-9]+$ ]] || kbps=12
@@ -505,6 +528,7 @@ vpn_auto_reconnect_speed_threshold_bytes() {
   printf '%s' $((kbps * 125))
 }
 
+# Determines interval between throughput checks in seconds
 vpn_auto_reconnect_check_interval_seconds() {
   local minutes="${VPN_CHECK_INTERVAL_MINUTES:-20}"
   [[ "$minutes" =~ ^[0-9]+$ ]] || minutes=20
@@ -514,6 +538,7 @@ vpn_auto_reconnect_check_interval_seconds() {
   printf '%s' $((minutes * 60))
 }
 
+# Number of consecutive low samples required before considering action
 vpn_auto_reconnect_consecutive_required() {
   local count="${VPN_CONSECUTIVE_CHECKS:-3}"
   [[ "$count" =~ ^[0-9]+$ ]] || count=3
@@ -523,6 +548,7 @@ vpn_auto_reconnect_consecutive_required() {
   printf '%s' "$count"
 }
 
+# Returns cooldown duration between reconnects based on env
 vpn_auto_reconnect_cooldown_seconds() {
   local minutes="${VPN_COOLDOWN_MINUTES:-60}"
   [[ "$minutes" =~ ^[0-9]+$ ]] || minutes=60
@@ -532,6 +558,7 @@ vpn_auto_reconnect_cooldown_seconds() {
   printf '%s' $((minutes * 60))
 }
 
+# Total minutes the exponential backoff may accumulate before disabling
 vpn_auto_reconnect_max_retry_minutes() {
   local minutes="${VPN_MAX_RETRY_MINUTES:-20}"
   [[ "$minutes" =~ ^[0-9]+$ ]] || minutes=20
@@ -541,6 +568,7 @@ vpn_auto_reconnect_max_retry_minutes() {
   printf '%s' "$minutes"
 }
 
+# Daily rotation cap controlling how many reconnects can occur
 vpn_auto_reconnect_rotation_cap() {
   local cap="${VPN_ROTATION_MAX_PER_DAY:-6}"
   [[ "$cap" =~ ^[0-9]+$ ]] || cap=6
@@ -550,6 +578,7 @@ vpn_auto_reconnect_rotation_cap() {
   printf '%s' "$cap"
 }
 
+# Maximum jitter window to randomize reconnect attempts
 vpn_auto_reconnect_jitter_seconds() {
   local seconds="${VPN_ROTATION_JITTER_SECONDS:-0}"
   [[ "$seconds" =~ ^[0-9]+$ ]] || seconds=0
@@ -559,12 +588,14 @@ vpn_auto_reconnect_jitter_seconds() {
   printf '%s' "$seconds"
 }
 
+# Normalizes current day start (UTC) for rotation counting
 vpn_auto_reconnect_current_day_epoch() {
   local today
   today="$(date -u '+%Y-%m-%d')"
   date -u -d "${today}T00:00:00Z" '+%s' 2>/dev/null || printf '0'
 }
 
+# Resets daily rotation counters when date boundary crosses
 vpn_auto_reconnect_reset_rotation_window() {
   local today
   today="$(vpn_auto_reconnect_current_day_epoch)"
@@ -579,6 +610,7 @@ vpn_auto_reconnect_reset_rotation_window() {
   fi
 }
 
+# Checks if daily reconnect cap has already been reached
 vpn_auto_reconnect_daily_cap_exceeded() {
   local force="${1:-0}"
   local cap
@@ -598,6 +630,7 @@ vpn_auto_reconnect_daily_cap_exceeded() {
   return 1
 }
 
+# Records a successful reconnect against the daily cap and history
 vpn_auto_reconnect_register_rotation_success() {
   vpn_auto_reconnect_reset_rotation_window
   local today
@@ -614,6 +647,7 @@ vpn_auto_reconnect_register_rotation_success() {
   fi
 }
 
+# Evaluates whether current time falls within configured allowed hours
 vpn_auto_reconnect_inside_allowed_window() {
   local start_hour="${VPN_ALLOWED_HOURS_START:-}"
   local end_hour="${VPN_ALLOWED_HOURS_END:-}"
@@ -644,20 +678,24 @@ vpn_auto_reconnect_inside_allowed_window() {
   return 1
 }
 
+# Computes override flag path for manual pause/force triggers
 vpn_auto_reconnect_override_path() {
   printf '%s/.vpn-auto-reconnect-%s' "${ARR_STACK_DIR:-${REPO_ROOT:-$(pwd)}}" "$1"
 }
 
+# Wake flag path used to trigger immediate evaluation
 vpn_auto_reconnect_wake_file() {
   vpn_auto_reconnect_override_path 'wake'
 }
 
+# Indicates if wake flag exists requesting immediate processing
 vpn_auto_reconnect_wake_requested() {
   local file
   file="$(vpn_auto_reconnect_wake_file)"
   [[ -f "$file" ]]
 }
 
+# Removes wake flag after noticing it
 vpn_auto_reconnect_consume_wake() {
   local file
   file="$(vpn_auto_reconnect_wake_file)"
@@ -666,12 +704,14 @@ vpn_auto_reconnect_consume_wake() {
   fi
 }
 
+# Checks for pause override file that suspends reconnects
 vpn_auto_reconnect_manual_pause_active() {
   local file
   file="$(vpn_auto_reconnect_override_path pause)"
   [[ -f "$file" ]]
 }
 
+# Detects kill switch flag that halts reconnects for 24h
 vpn_auto_reconnect_kill_active() {
   local file
   file="$(vpn_auto_reconnect_override_path 'kill-24h')"
@@ -691,12 +731,14 @@ vpn_auto_reconnect_kill_active() {
   return 0
 }
 
+# Checks for one-shot override forcing a reconnect attempt
 vpn_auto_reconnect_force_once_requested() {
   local file
   file="$(vpn_auto_reconnect_override_path once)"
   [[ -f "$file" ]]
 }
 
+# Removes the force-once override after use
 vpn_auto_reconnect_consume_force_once_flag() {
   local file
   file="$(vpn_auto_reconnect_override_path once)"
@@ -705,16 +747,19 @@ vpn_auto_reconnect_consume_force_once_flag() {
   fi
 }
 
+# Records timestamp of observed torrent activity to avoid false failures
 vpn_auto_reconnect_record_activity() {
   local iso="$1"
   VPN_AUTO_STATE_LAST_ACTIVITY="$iso"
 }
 
+# Tracks when throughput dips below threshold for future evaluation
 vpn_auto_reconnect_record_low() {
   local iso="$1"
   VPN_AUTO_STATE_LAST_LOW="$iso"
 }
 
+# Appends structured attempt history for debugging and alias helpers
 vpn_auto_reconnect_append_history() {
   local action="$1"
   local country="$2"
@@ -766,6 +811,7 @@ vpn_auto_reconnect_append_history() {
   ensure_nonsecret_file_mode "$file"
 }
 
+# Updates failure history for a country to discourage rapid retries
 vpn_auto_reconnect_failure_history_update() {
   local country="$1"
   local timestamp="$2"
@@ -782,6 +828,7 @@ vpn_auto_reconnect_failure_history_update() {
   ' <<<"$current" 2>/dev/null || printf '{}')"
 }
 
+# Reduces failure penalty after a successful attempt for the country
 vpn_auto_reconnect_failure_history_clear() {
   local country="$1"
   if [[ -z "$country" ]]; then
@@ -800,6 +847,7 @@ vpn_auto_reconnect_failure_history_clear() {
   ' <<<"$current" 2>/dev/null || printf '{}')"
 }
 
+# Checks if a country failed recently within provided cutoff
 vpn_auto_reconnect_failure_recent() {
   local country="$1"
   local cutoff="$2"
@@ -822,6 +870,7 @@ vpn_auto_reconnect_failure_recent() {
   return 1
 }
 
+# Ensures qBittorrent session cookie is recent to avoid stale auth errors
 vpn_auto_reconnect_ensure_fresh_session() {
   local cookie
   cookie="$(vpn_auto_reconnect_cookie_file)"
@@ -848,6 +897,7 @@ vpn_auto_reconnect_ensure_fresh_session() {
   return 0
 }
 
+# Fetches current transfer metrics from qBittorrent API with auth retry logic
 vpn_auto_reconnect_fetch_transfer_info() {
   local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
   local url="${base%/}/api/v2/transfer/info"
@@ -869,6 +919,7 @@ vpn_auto_reconnect_fetch_transfer_info() {
   printf '%s' "$response"
 }
 
+# Logs into qBittorrent WebUI API storing session cookie for subsequent calls
 vpn_auto_reconnect_login_qbt() {
   local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
   local url="${base%/}/api/v2/auth/login"
@@ -883,6 +934,7 @@ vpn_auto_reconnect_login_qbt() {
   curl -fsS --max-time 10 -c "$cookie" --data-urlencode "username=${user}" --data-urlencode "password=${pass}" "$url" >/dev/null 2>&1
 }
 
+# Classifies torrent activity level to avoid reconnects during active transfers
 vpn_auto_reconnect_detect_activity() {
   local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
   local cookie
@@ -919,6 +971,7 @@ vpn_auto_reconnect_detect_activity() {
   return 1
 }
 
+# Determines if measured speeds exceed busy threshold
 vpn_auto_reconnect_high_load_detected() {
   if ! command -v nproc >/dev/null 2>&1; then
     return 1
@@ -943,6 +996,7 @@ vpn_auto_reconnect_high_load_detected() {
   return 1
 }
 
+# Chooses next ProtonVPN country based on rotation list and failure history
 vpn_auto_reconnect_pick_country() {
   local -a countries
   mapfile -t countries < <(vpn_auto_reconnect_parse_countries)
@@ -975,6 +1029,7 @@ vpn_auto_reconnect_pick_country() {
   return 0
 }
 
+# Sleeps for random jitter window to desynchronize multi-host rotations
 vpn_auto_reconnect_apply_jitter_delay() {
   local jitter
   jitter="$(vpn_auto_reconnect_jitter_seconds)"
@@ -992,6 +1047,7 @@ vpn_auto_reconnect_apply_jitter_delay() {
   return 0
 }
 
+# Issues OpenVPN cycle via Gluetun control API and records result
 vpn_auto_reconnect_restart_gluetun() {
   if ! command -v docker >/dev/null 2>&1; then
     log_warn "[vpn-auto] docker command missing; cannot restart Gluetun"
@@ -1008,6 +1064,7 @@ vpn_auto_reconnect_restart_gluetun() {
   return 0
 }
 
+# Waits for Gluetun health and public IP endpoints to report success
 vpn_auto_reconnect_wait_for_health() {
   local timeout=120
   local interval=5
@@ -1058,6 +1115,7 @@ vpn_auto_reconnect_wait_for_health() {
   return 1
 }
 
+# Applies selected VPN country via Gluetun API before reconnect attempt
 vpn_auto_reconnect_apply_country() {
   local country="$1"
   if [[ -z "$country" ]]; then
@@ -1075,6 +1133,7 @@ vpn_auto_reconnect_apply_country() {
   VPN_AUTO_STATE_LAST_COUNTRY="${sanitized%%,*}"
 }
 
+# Executes full reconnect flow including jitter, API calls, and state updates
 vpn_auto_reconnect_attempt() {
   local country="$1"
   local now
@@ -1141,6 +1200,7 @@ vpn_auto_reconnect_attempt() {
   return 0
 }
 
+# Implements exponential backoff and disables feature when retry budget exhausted
 vpn_auto_reconnect_handle_retry_failure() {
   local backoff="${VPN_AUTO_STATE_RETRY_BACKOFF:-5}"
   [[ "$backoff" =~ ^[0-9]+$ ]] || backoff=5
@@ -1168,6 +1228,7 @@ vpn_auto_reconnect_handle_retry_failure() {
   fi
 }
 
+# Evaluates all gating conditions to decide if reconnect should run now
 vpn_auto_reconnect_should_attempt() {
   local force="${1:-0}"
 
@@ -1221,6 +1282,7 @@ vpn_auto_reconnect_should_attempt() {
   return 0
 }
 
+# Single iteration of worker loop handling force flags, reconnect logic, and persistence
 vpn_auto_reconnect_process_once() {
   vpn_auto_reconnect_load_env
   vpn_auto_reconnect_reset_rotation_window

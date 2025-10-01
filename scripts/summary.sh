@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 
+# Formats epoch seconds into ISO8601 or '(none)' when unset
 summary_format_epoch() {
   local epoch="$1"
   if [[ -z "$epoch" || ! "$epoch" =~ ^[0-9]+$ || "$epoch" -le 0 ]]; then
@@ -9,6 +10,7 @@ summary_format_epoch() {
   date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf '%s' "$epoch"
 }
 
+# Presents post-install recap with access URLs, credentials, and PF status
 show_summary() {
 
   msg "🎉 Setup complete!!"

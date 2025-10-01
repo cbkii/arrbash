@@ -1,16 +1,19 @@
 # shellcheck shell=bash
 
+# Validates dotted-quad IPv4 per RFC ranges (0-255 per octet)
 validate_ipv4() {
   local ip="$1"
   local regex='^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
   [[ "$ip" =~ $regex ]]
 }
 
+# Ensures port is numeric and within 1-65535
 validate_port() {
   local port="$1"
   [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
 }
 
+# Detects RFC1918 IPv4 ranges after format validation
 is_private_ipv4() {
   local ip="$1"
 
@@ -38,6 +41,7 @@ is_private_ipv4() {
   return 1
 }
 
+# Produces /24 CIDR for provided LAN IP, rejecting non-private inputs
 lan_ipv4_subnet_cidr() {
   local ip="$1"
 
@@ -54,6 +58,7 @@ lan_ipv4_subnet_cidr() {
   printf '%s.%s.%s.0/24' "$oct1" "$oct2" "$oct3"
 }
 
+# Attempts to auto-detect host LAN IPv4 using default route heuristics
 detect_lan_ip() {
   if ! have_command ip; then
     return 1
@@ -101,6 +106,7 @@ detect_lan_ip() {
   return 1
 }
 
+# Checks whether the host currently owns the provided IPv4 address
 ip_assigned() {
   local target_ip="$1"
   if ! have_command ip; then
@@ -109,6 +115,7 @@ ip_assigned() {
   ip -4 addr show | grep -q "inet ${target_ip}/"
 }
 
+# Warns about missing Gluetun prerequisites before stack launch
 check_network_requirements() {
   msg "🔍 Checking Gluetun control prerequisites"
 

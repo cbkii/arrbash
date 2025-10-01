@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034
 
+# Extracts API key from an Arr config.xml, tolerating partially initialised files
 arrstack_detect_api_key_from_config() {
   local config_path="$1"
 
@@ -47,6 +48,7 @@ PY
   return 1
 }
 
+# Writes or refreshes a Configarr secret entry while respecting placeholders and force flag
 arrstack_update_secret_line() {
   local secrets_file="$1"
   local secret_key="$2"
@@ -140,6 +142,7 @@ arrstack_update_secret_line() {
   return 0
 }
 
+# Pulls Sonarr/Radarr/Prowlarr API keys into secrets.yml, tracking sync status for summary output
 arrstack_sync_arr_api_keys() {
   local force_sync="${1:-${FORCE_SYNC_API_KEYS:-0}}"
 
@@ -187,6 +190,7 @@ arrstack_sync_arr_api_keys() {
   local ready_count=0
 
   local service
+  # Walk each Arr app to reflect current API key into secrets.yml
   for service in sonarr radarr prowlarr; do
     local label="${service_labels[$service]}"
     local config_path="${config_paths[$service]}"
