@@ -33,9 +33,10 @@ load_env() {
     # Trim leading whitespace
     raw="${raw#"${raw%%[![:space:]]*}"}"
     value="$(unescape_env_value_from_compose "$raw")"
+
     if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       printf -v "$key" '%s' "$value"
-      export "$key"
+      export "${key?}"
     else
       echo "Warning: Invalid environment variable name '$key' in $ENV_FILE, skipping." >&2
     fi
