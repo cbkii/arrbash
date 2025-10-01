@@ -131,6 +131,7 @@ port_in_use_with_details() {
   local proto="$1"
   local port="$2"
   local _details_name="$3"
+  local expected_addr="${4:-*}"
   # shellcheck disable=SC2178
   local -n _details_ref="$_details_name"
 
@@ -147,6 +148,7 @@ port_in_use_with_details() {
     return 2
   fi
 
+  local output=""
   case "$tool" in
     ss)
       local -a args=()
@@ -155,7 +157,6 @@ port_in_use_with_details() {
         udp) args=(-H -lunp) ;;
         *) return 1 ;;
       esac
-      local output=""
       output="$(ss "${args[@]}" 2>/dev/null | awk -v port="$port" '
         {
           split($5, parts, ":")
@@ -165,13 +166,8 @@ port_in_use_with_details() {
           }
         }
       ')"
-      if [[ -n "$output" ]]; then
-        _details_ref="$output"
-        return 0
-      fi
       ;;
     lsof)
-      local output=""
       case "$proto" in
         tcp)
           output="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
@@ -183,13 +179,8 @@ port_in_use_with_details() {
           return 1
           ;;
       esac
-      if [[ -n "$output" ]]; then
-        _details_ref="$output"
-        return 0
-      fi
       ;;
     netstat)
-      local output=""
       output="$(netstat -tunlp 2>/dev/null | awk -v port="$port" '
         NR > 2 {
           split($4, parts, ":")
@@ -199,12 +190,78 @@ port_in_use_with_details() {
           }
         }
       ')"
-      if [[ -n "$output" ]]; then
-        _details_ref="$output"
-        return 0
-      fi
       ;;
   esac
+
+  if [[ -n "$output" ]]; then
+    local restore_extglob=0
+    if ! shopt -q extglob; then
+      shopt -s extglob
+      restore_extglob=1
+    fi
+    local wildcard_v4="0.0.0.0"
+    local wildcard_v6="::"
+    local conflict=0
+
+    local exp="${expected_addr//[\[\] ]/}"
+    if [[ -z "$exp" || "$exp" == "*" ]]; then
+      conflict=1
+    else
+      local exp_is_ipv6=0
+      if [[ "$exp" == *:* ]]; then
+        exp_is_ipv6=1
+      fi
+      while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local candidate=""
+        # More precise patterns for IPv4 and IPv6 addresses followed by port
+        local ipv4_port_pattern="([0-9]{1,3}\.){3}[0-9]{1,3}:${port}"
+        local ipv6_port_pattern="(\[?[0-9A-Fa-f:]+\]?|::):${port}"
+        candidate="$(printf '%s\n' "$line" | grep -oE "$ipv4_port_pattern" | head -n1 || true)"
+        if [[ -z "$candidate" ]]; then
+          candidate="$(printf '%s\n' "$line" | grep -oE "$ipv6_port_pattern" | head -n1 || true)"
+        fi
+        if [[ -z "$candidate" ]]; then
+          continue
+        fi
+        candidate="${candidate%:$port}"
+        candidate="${candidate//[\[\]]/}"
+        if [[ "$candidate" == "*" ]]; then
+          if ((exp_is_ipv6)); then
+            candidate="$wildcard_v6"
+          else
+            candidate="$wildcard_v4"
+          fi
+        fi
+
+        if [[ "$candidate" == "$exp" ]]; then
+          conflict=1
+          break
+        fi
+        if ((exp_is_ipv6)); then
+          if [[ "$candidate" == "$wildcard_v6" ]]; then
+            conflict=1
+            break
+          fi
+        else
+          if [[ "$candidate" == "$wildcard_v4" ]]; then
+            conflict=1
+            break
+          fi
+        fi
+      done <<< "$output"
+    fi
+
+    if ((restore_extglob)); then
+      shopt -u extglob
+    fi
+
+    if ((conflict)); then
+      _details_ref="$output"
+      return 0
+    fi
+    return 1
+  fi
 
   return 1
 }
@@ -288,7 +345,7 @@ simple_port_check() {
       IFS='|' read -r proto port label expected <<<"$requirement"
       local details=""
       rc=0
-      if ! port_in_use_with_details "$proto" "$port" details; then
+      if ! port_in_use_with_details "$proto" "$port" details "$expected"; then
         rc=$?
       fi
 
@@ -343,6 +400,7 @@ simple_port_check() {
     if ((quickfix_used == 0)) && attempt_port_conflict_quickfix; then
       quickfix_used=1
       msg "    Retrying port availability check after quick fix..."
+      sleep 3
       continue
     fi
 
