@@ -18,12 +18,27 @@ ENV_FILE="${ARR_ENV_FILE:-${STACK_DIR}/.env}"
 CONTAINER_NAME="qbittorrent"
 
 load_env() {
-  if [[ -f "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck source=/dev/null
-    source "$ENV_FILE"
-    set +a
-  fi
+  [[ -f "$ENV_FILE" ]] || return
+
+  local line key raw value
+  while IFS= read -r line || [[ -n $line ]]; do
+    line="${line//$'\r'/}"
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ $line =~ ^[[:space:]]*export[[:space:]]+(.+)$ ]] && line="${BASH_REMATCH[1]}"
+    [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$ ]] || continue
+
+    key="${BASH_REMATCH[1]}"
+    raw="${BASH_REMATCH[2]}"
+    # Trim leading whitespace
+    raw="${raw#"${raw%%[![:space:]]*}"}"
+    value="$(unescape_env_value_from_compose "$raw")"
+    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      printf -v "$key" '%s' "$value"
+      export "$key"
+    else
+      echo "Warning: Invalid environment variable name '$key' in $ENV_FILE, skipping." >&2
+    fi
+  done <"$ENV_FILE"
 }
 
 resolve_docker_data() {
