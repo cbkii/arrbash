@@ -199,6 +199,202 @@ _arr_domain_suffix() {
   printf '%s' "$suffix"
 }
 
+_arr_bool() {
+  case "$1" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_arr_service_port() {
+  local svc="$1" env_var default value
+  case "$svc" in
+    qbittorrent) env_var=QBT_HTTP_PORT_HOST; default=8080 ;;
+    sonarr)      env_var=SONARR_PORT;        default=8989 ;;
+    radarr)      env_var=RADARR_PORT;        default=7878 ;;
+    prowlarr)    env_var=PROWLARR_PORT;      default=9696 ;;
+    bazarr)      env_var=BAZARR_PORT;        default=6767 ;;
+    flaresolverr)env_var=FLARESOLVERR_PORT;  default=8191 ;;
+    caddy)       env_var=CADDY_PORT;         default=80   ;;
+    *)           return 1 ;;
+  esac
+  eval "value=\${$env_var:-}"
+  if [ -z "$value" ]; then
+    value="$(_arr_env_get "$env_var")"
+  fi
+  if [ -z "$value" ]; then
+    value="$default"
+  fi
+  printf '%s' "$value"
+}
+
+_arr_enable_caddy() {
+  local raw="${ENABLE_CADDY:-}"
+  if [ -z "$raw" ]; then
+    raw="$(_arr_env_get ENABLE_CADDY)"
+  fi
+  if _arr_bool "$raw"; then
+    printf '1'
+  else
+    printf '0'
+  fi
+}
+
+_arr_service_base() {
+  local svc="$1" enable_caddy="$(_arr_enable_caddy)"
+  if [ "$svc" = "caddy" ]; then
+    if [ "$enable_caddy" = "1" ]; then
+      printf 'http://health.%s' "$(_arr_domain_suffix)"
+    else
+      printf 'http://%s:%s' "$(_arr_host)" "$(_arr_service_port caddy)"
+    fi
+    return
+  fi
+
+  if [ "$enable_caddy" = "1" ]; then
+    case "$svc" in
+      qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr)
+        printf 'http://%s.%s' "$svc" "$(_arr_domain_suffix)"
+        return
+        ;;
+    esac
+  fi
+
+  case "$svc" in
+    qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr)
+      printf 'http://%s:%s' "$(_arr_host)" "$(_arr_service_port "$svc")"
+      return
+      ;;
+  esac
+}
+
+_arr_url_host() {
+  local url="$1"
+  url="${url#*://}"
+  url="${url%%/*}"
+  printf '%s' "$url"
+}
+
+_arr_is_ipv4() {
+  if [[ $1 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    return 0   # valid shape
+  else
+    return 1   # invalid
+  fi
+}
+
+_arr_curl_resolve_flags() {
+  local url="$1" host ip
+  host="$(_arr_url_host "$url")"
+  ip="$(_arr_host)"
+  if [ -z "$host" ] || [ -z "$ip" ]; then
+    return 0
+  fi
+  if _arr_is_ipv4 "$host"; then
+    return 0
+  fi
+  printf '%s\n' --resolve "${host}:80:${ip}" --resolve "${host}:443:${ip}"
+}
+
+_arr_has_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+_arr_pretty_json() {
+  if _arr_has_cmd jq; then
+    jq '.'
+  else
+    cat
+  fi
+}
+
+_arr_pretty_guess() {
+  local data
+  data="$(cat)"
+  if [ -z "$data" ]; then
+    return 0
+  fi
+  case "$data" in
+    \{*|\[* )
+      if _arr_has_cmd jq; then
+        printf '%s' "$data" | jq '.'
+      else
+        printf '%s\n' "$data"
+      fi
+      ;;
+    *)
+      printf '%s\n' "$data"
+      ;;
+  esac
+}
+
+_arr_indent() {
+  local prefix="${1:-  }"
+  sed "s/^/${prefix}/"
+}
+
+_arr_section_exec() {
+  local title="$1"
+  shift
+  local output
+  if output="$("$@" 2>&1)"; then
+    printf '== %s ==\n' "$title"
+    if [ -n "$output" ]; then
+      printf '%s\n' "$output" | _arr_indent
+    fi
+    return 0
+  else
+    local rc=$?
+    printf '== %s ==\n' "$title"
+    if [ -n "$output" ]; then
+      printf '%s\n' "$output" | _arr_indent
+    fi
+    printf '  (exit %d)\n' "$rc"
+    return $rc
+  fi
+}
+
+_arr_query_suffix_from_args() {
+  if [ "$#" -eq 0 ]; then
+    return 0
+  fi
+  local first=1 part
+  for part in "$@"; do
+    [ -n "$part" ] || continue
+    if [ $first -eq 1 ]; then
+      printf '?%s' "$part"
+      first=0
+    else
+      printf '&%s' "$part"
+    fi
+  done
+}
+
+_arr_urlencode() {
+  local value="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY' "$value"
+import sys
+from urllib.parse import quote
+print(quote(sys.argv[1]))
+PY
+    return
+  fi
+  if _arr_has_cmd jq; then
+    printf '%s' "$value" | jq -sRr @uri
+    return
+  fi
+  # Comprehensive URL encoding fallback (POSIX shell)
+  local i=1 c hex encoded=""
+  while [ $i -le "$(printf '%s' "$value" | wc -c)" ]; do
+    c=$(printf '%s' "$value" | cut -c"$i")
+    case "$c" in
+      [a-zA-Z0-9.~_-]) encoded="$encoded$c" ;;
+      *) hex=$(printf '%%%02X' "'$c"); encoded="$encoded$hex" ;;
+    esac
+    i=$((i + 1))
+  done
+  printf '%s' "$encoded"
+}
+
 _arr_gluetun_port() { printf '%s' "${GLUETUN_CONTROL_PORT:-$(_arr_env_get GLUETUN_CONTROL_PORT || echo 8000)}"; }
 
 _arr_gluetun_host() {
@@ -260,28 +456,32 @@ _arr_gluetun_api() {
   return 1
 }
 
-_arr_qbt_base() {
-  local suffix
-  suffix="$(_arr_domain_suffix)"
-  printf 'http://qbittorrent.%s' "$suffix"
-}
+_arr_qbt_base() { _arr_service_base qbittorrent; }
 
-_arr_qbt_auth() {
-  local user pass base host ip
-  user="$(_arr_env_get QBT_USER)"
-  pass="$(_arr_env_get QBT_PASS)"
-  if [ -n "$user" ] && [ -n "$pass" ]; then
-    base="$(_arr_qbt_base)"
-    host="${base#*://}"
-    host="${host%%/*}"
-    ip="$(_arr_host)"
-    local -a curl_cmd=(curl -fsS -c /tmp/.qbt_cookies.$$ -b /tmp/.qbt_cookies.$$ -d "username=${user}&password=${pass}")
-    if [ -n "$ip" ] && [ "$ip" != "0.0.0.0" ] && [ "$ip" != "*" ]; then
-      curl_cmd+=(--resolve "${host}:80:${ip}" --resolve "${host}:443:${ip}")
-    fi
-    curl_cmd+=("${base}/api/v2/auth/login")
-    "${curl_cmd[@]}" >/dev/null
+_arr_qbt_cookie_path() { printf '%s/.qbt_cookies.%s' "${TMPDIR:-/tmp}" "$$"; }
+
+_arr_qbt_login() {
+  local user pass base host
+  user="${QBT_USER:-$(_arr_env_get QBT_USER)}"
+  pass="${QBT_PASS:-$(_arr_env_get QBT_PASS)}"
+  if [ -z "$user" ] || [ -z "$pass" ]; then
+    echo "qBittorrent credentials missing (set QBT_USER/QBT_PASS)." >&2
+    return 1
   fi
+  base="$(_arr_qbt_base)"
+  host="$(_arr_url_host "$base")"
+  local cookie
+  cookie="$(_arr_qbt_cookie_path)"
+  local -a curl_cmd=(curl -fsS -c "$cookie" -b "$cookie" -d "username=${user}&password=${pass}" "$base/api/v2/auth/login")
+  local -a resolve_flags
+  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  if [ ${#resolve_flags[@]} -gt 0 ]; then
+    local -a new_cmd=("${curl_cmd[0]}")
+    new_cmd+=("${resolve_flags[@]}")
+    new_cmd+=("${curl_cmd[@]:1}")
+    curl_cmd=("${new_cmd[@]}")
+  fi
+  "${curl_cmd[@]}" >/dev/null
 }
 
 _arr_api_key() {
@@ -306,6 +506,92 @@ _arr_api_key() {
   [ -n "$key" ] || return 1
   printf '%s\n' "$key"
 }
+
+_arr_service_call() {
+  local svc="$1"; shift
+  local method="$1"; shift
+  local path="$1"; shift
+  local base="$(_arr_service_base "$svc")"
+  local key="$(_arr_api_key "$svc")"
+  if [ -z "$base" ]; then
+    echo "Unsupported service: $svc" >&2
+    return 1
+  fi
+  if [ -z "$key" ]; then
+    echo "Missing API key for $svc (check ${ARR_DOCKER_DIR}/$svc/config.xml)." >&2
+    return 1
+  fi
+  local -a curl_cmd=(curl -fsS -X "$method" -H "X-Api-Key: ${key}")
+  if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
+    curl_cmd+=(-H 'Content-Type: application/json')
+  fi
+  local -a resolve_flags
+  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  if [ ${#resolve_flags[@]} -gt 0 ]; then
+    curl_cmd+=("${resolve_flags[@]}")
+  fi
+  curl_cmd+=("$@")
+  curl_cmd+=("${base}${path}")
+  "${curl_cmd[@]}"
+}
+
+_arr_bazarr_call() {
+  local method="$1"; shift
+  local path="$1"; shift
+  local base="$(_arr_service_base bazarr)"
+  local key="$(_arr_api_key bazarr)"
+  if [ -z "$key" ]; then
+    echo "Missing Bazarr API key." >&2
+    return 1
+  fi
+  local url="${base}${path}"
+  case "$url" in
+    *\?*) url="${url}&apikey=${key}" ;;
+    *)    url="${url}?apikey=${key}" ;;
+  esac
+  local -a curl_cmd=(curl -fsS -X "$method")
+  local -a resolve_flags
+  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  if [ ${#resolve_flags[@]} -gt 0 ]; then
+    curl_cmd+=("${resolve_flags[@]}")
+  fi
+  curl_cmd+=("$@")
+  curl_cmd+=("$url")
+  "${curl_cmd[@]}"
+}
+
+_arr_gluetun_http() {
+  local method="$1"; shift
+  local endpoint="$1"; shift
+  local key="$(_arr_gluetun_key)"
+  local port="$(_arr_gluetun_port)"
+  local host="$(_arr_gluetun_host)"
+  if [ -z "$key" ]; then
+    echo "GLUETUN_API_KEY missing." >&2
+    return 1
+  fi
+  curl -fsS -X "$method" -H "X-Api-Key: ${key}" "$@" "http://${host}:${port}${endpoint}"
+}
+
+arr.gluetun.help() {
+  cat <<'EOF'
+Gluetun helpers:
+  arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
+  arr.gluetun.status         Inspect OpenVPN status (GET /v1/openvpn/status)
+  arr.gluetun.status.set '{}'  Update OpenVPN status payload (PUT /v1/openvpn/status)
+  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/openvpn/portforwarded)
+  arr.gluetun.health         Check Gluetun control health (GET /healthz)
+EOF
+}
+
+arr.gluetun.ip()          { _arr_gluetun_http GET /v1/publicip/ip        | _arr_pretty_guess; }
+arr.gluetun.status()      { _arr_gluetun_http GET /v1/openvpn/status     | _arr_pretty_guess; }
+arr.gluetun.status.set()  {
+  local payload="${1:-{}}"
+  _arr_gluetun_http PUT /v1/openvpn/status -H 'Content-Type: application/json' --data "$payload" | _arr_pretty_guess
+}
+arr.gluetun.portfwd()     { _arr_gluetun_http GET /v1/openvpn/portforwarded | _arr_pretty_guess; }
+arr.gluetun.health()      { _arr_gluetun_http GET /healthz              | _arr_pretty_guess; }
 
 arr.compose() { _arr_compose "$@"; }
 
@@ -520,6 +806,13 @@ Environment helpers:
   arr.env.set KEY VALUE        Update or append a key in ${ARR_ENV_FILE}
   arr.env.list                 List non-comment variables from ${ARR_ENV_FILE}
 
+Stack diagnostics:
+  arr.all.health               Hit health-ish endpoints across the stack
+  arr.all.status               Summarise version/status across services
+  arr.all.urls                 Show current base URLs (direct vs Caddy)
+  arr.check.ports              Quick HTTP reachability checks
+  arr.diag.env                 Dump derived environment context (without secrets)
+
 ProtonVPN & Gluetun (arr.vpn ...):
   arr.vpn status               Show the current exit IP and forwarded port
   arr.vpn switch [COUNTRY]     Rotate Proton servers. Without a country it advances through PVPN_ROTATE_COUNTRIES (a superset of SERVER_COUNTRIES)
@@ -544,26 +837,26 @@ ProtonVPN & Gluetun (arr.vpn ...):
   arr.vpn paths                Display credential/config paths for ProtonVPN assets
   arr.vpn creds                Open ${ARRCONF_DIR}/proton.auth in $EDITOR for quick edits
 
-qBittorrent helpers:
-  arr.qbt.url                  Print the qBittorrent base URL
-  arr.qbt.list                 List torrent names
-  arr.qbt.add.url URL          Add a torrent or magnet by URL
-  arr.qbt.port.get             Show the current qBittorrent listen port
-  arr.qbt.port.set PORT        Update the listen port via the Web API
-  arr.qbt.port.sync            Align the listen port with Gluetun's forwarded port
-  arr.qbt.pause.all            Pause every torrent
-  arr.qbt.resume.all           Resume every torrent
-  arr.qbt.reannounce           Reannounce all torrents to their trackers
-  arr.qbt.limit DL UL          Set download/upload limits in KiB/s
+ARR service surfaces:
+  arr.gluetun.help             Documented Gluetun control commands
+  arr.qbt.help                 qBittorrent Web API helpers
+  arr.son.help                 Sonarr v3 API helpers
+  arr.rad.help                 Radarr v3 API helpers
+  arr.prowl.help               Prowlarr v1 API helpers
+  arr.baz.help                 Bazarr API helpers
+  arr.fsolv.help               FlareSolverr helpers
+  arr.caddy.help               Caddy health endpoint helper
 
-Service utilities:
-  arr.sonarr.url|logs|restart|refresh|rss
-  arr.radarr.url|logs|restart|refresh|rss
-  arr.prowlarr.url|logs|restart
-  arr.bazarr.url|logs|restart
-  arr.flaresolverr.url|logs|restart
+Compatibility utilities:
+  arr.son.url|logs|restart|refresh|rss
+  arr.rad.url|logs|restart|refresh|rss
+  arr.prowl.url|logs|restart
+  arr.baz.url|logs|restart
+  arr.fsolv.url|logs|restart
 
-Run 'source ${ARR_STACK_DIR}/.arraliases' in your shell to load the aliases.
+Legacy prefixes (sonarr, radarr, bazarr, fsolver, flaresolverr, prowlarr) remain as wrappers.
+
+Tip: Run 'source ${ARR_STACK_DIR}/.arraliases' in your shell to load the legacy alias set.
 EOF
 }
 
@@ -921,20 +1214,179 @@ arr.vpn.auto.once() {
 _arr_qbt_call() {
   local method="$1"; shift
   local endpoint="$1"; shift
-  _arr_qbt_auth
   local base="$(_arr_qbt_base)"
-  local host="${base#*://}"
-  host="${host%%/*}"
-  local ip="$(_arr_host)"
-  local -a curl_cmd=(curl -fsS -X "$method")
-  if [ -n "$ip" ] && [ "$ip" != "0.0.0.0" ] && [ "$ip" != "*" ]; then
-    curl_cmd+=(--resolve "${host}:80:${ip}" --resolve "${host}:443:${ip}")
-  fi
-  curl_cmd+=("${base}${endpoint}")
-  "${curl_cmd[@]}" "$@"
+  local cookie
+  cookie="$(_arr_qbt_cookie_path)"
+  local -a resolve_flags
+  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  local attempt=0
+  while [ $attempt -lt 2 ]; do
+    if [ ! -s "$cookie" ]; then
+      _arr_qbt_login || return 1
+    fi
+    local tmp_body http_code
+    tmp_body="$(mktemp)" || return 1
+    local -a curl_cmd=(curl -sS -X "$method" -o "$tmp_body" -w '%{http_code}' -c "$cookie" -b "$cookie")
+    if [ ${#resolve_flags[@]} -gt 0 ]; then
+      curl_cmd+=("${resolve_flags[@]}")
+    fi
+    curl_cmd+=("$@")
+    curl_cmd+=("${base}${endpoint}")
+    http_code="$(${curl_cmd[@]})"
+    local rc=$?
+    if [ $rc -ne 0 ]; then
+      rm -f "$tmp_body"
+      return $rc
+    fi
+    if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+      : >"$cookie"
+      rm -f "$tmp_body"
+      attempt=$((attempt + 1))
+      _arr_qbt_login || return 1
+      continue
+    fi
+    cat "$tmp_body"
+    rm -f "$tmp_body"
+    case "$http_code" in
+      ''|000) return 1 ;;
+      2??|3??) return 0 ;;
+      *) return 1 ;;
+    esac
+  done
+  echo "qBittorrent request failed after reauthentication attempts." >&2
+  return 1
 }
 
-arr.qbt.url() { printf '%s\n' "$(_arr_qbt_base)"; }
+arr.qbt.help() {
+  cat <<'EOF'
+qBittorrent helpers:
+  arr.qbt.url                 Show resolved base URL
+  arr.qbt.version             Print app version (GET /api/v2/app/version)
+  arr.qbt.prefs               Dump preferences JSON (GET /api/v2/app/preferences)
+  arr.qbt.setprefs '{...}'    Update preferences JSON (POST /api/v2/app/setPreferences)
+  arr.qbt.transfer            Inspect transfer stats (GET /api/v2/transfer/info)
+  arr.qbt.torrents.info [q]   List torrents (GET /api/v2/torrents/info)
+  arr.qbt.torrents.properties <hash>
+  arr.qbt.torrents.files <hash>
+  arr.qbt.torrents.trackers <hash>
+  arr.qbt.torrents.add.url <url>
+  arr.qbt.torrents.add.file <path>
+  arr.qbt.torrents.pause [hashes]
+  arr.qbt.torrents.resume [hashes]
+  arr.qbt.torrents.reannounce [hashes]
+  arr.qbt.torrents.recheck [hashes]
+  arr.qbt.torrents.delete [hashes] [deleteFiles=false]
+  arr.qbt.torrents.setlocation <path> [hashes]
+  arr.qbt.torrents.setcategory <category> [hashes]
+  arr.qbt.categories          List categories (GET /api/v2/torrents/categories)
+  arr.qbt.port.get            Current listen port
+  arr.qbt.port.set <port>     Update listen port
+  arr.qbt.port.sync           Align listen port with Gluetun forwarded port
+  arr.qbt.list                Back-compatible torrent name listing
+  arr.qbt.pause.all           Pause all torrents
+  arr.qbt.resume.all          Resume all torrents
+  arr.qbt.reannounce          Reannounce all torrents
+  arr.qbt.limit DL UL         Set download/upload limits (KiB/s)
+EOF
+}
+
+arr.qbt.url()      { printf '%s\n' "$(_arr_qbt_base)"; }
+arr.qbt.version()  { _arr_qbt_call GET /api/v2/app/version; }
+arr.qbt.prefs()    { _arr_qbt_call GET /api/v2/app/preferences | _arr_pretty_json; }
+arr.qbt.setprefs() {
+  local json="${1:-}"
+  if [ -z "$json" ]; then
+    printf 'Usage: arr.qbt.setprefs <json>\n' >&2
+    return 1
+  fi
+  _arr_qbt_call POST /api/v2/app/setPreferences --data-urlencode "json=${json}"
+}
+arr.qbt.transfer() { _arr_qbt_call GET /api/v2/transfer/info | _arr_pretty_json; }
+
+arr.qbt.torrents.info() {
+  local suffix
+  suffix="$(_arr_query_suffix_from_args "$@")"
+  _arr_qbt_call GET "/api/v2/torrents/info${suffix}" | _arr_pretty_json
+}
+
+arr.qbt.torrents.properties() {
+  local hash="${1:-}"
+  if [ -z "$hash" ]; then
+    printf 'Usage: arr.qbt.torrents.properties <hash>\n' >&2
+    return 1
+  fi
+  _arr_qbt_call GET "/api/v2/torrents/properties$(_arr_query_suffix_from_args "hash=${hash}")" | _arr_pretty_json
+}
+
+arr.qbt.torrents.files() {
+  local hash="${1:-}"
+  if [ -z "$hash" ]; then
+    printf 'Usage: arr.qbt.torrents.files <hash>\n' >&2
+    return 1
+  fi
+  _arr_qbt_call GET "/api/v2/torrents/files$(_arr_query_suffix_from_args "hash=${hash}")" | _arr_pretty_json
+}
+
+arr.qbt.torrents.trackers() {
+  local hash="${1:-}"
+  if [ -z "$hash" ]; then
+    printf 'Usage: arr.qbt.torrents.trackers <hash>\n' >&2
+    return 1
+  fi
+  _arr_qbt_call GET "/api/v2/torrents/trackers$(_arr_query_suffix_from_args "hash=${hash}")" | _arr_pretty_json
+}
+
+arr.qbt.torrents.add.url() {
+  local url="${1:-}"
+  if [ -z "$url" ]; then
+    printf 'Usage: arr.qbt.torrents.add.url <torrent-or-magnet>\n' >&2
+    return 1
+  fi
+  _arr_qbt_call POST /api/v2/torrents/add --data-urlencode "urls=${url}"
+}
+
+arr.qbt.torrents.add.file() {
+  local file="${1:-}"
+  if [ -z "$file" ]; then
+    printf 'Usage: arr.qbt.torrents.add.file <path.torrent>\n' >&2
+    return 1
+  fi
+  _arr_qbt_call POST /api/v2/torrents/add -F "torrents=@${file}"
+}
+
+arr.qbt.torrents.pause()   { _arr_qbt_call POST /api/v2/torrents/pause --data-urlencode "hashes=${1:-all}"; }
+arr.qbt.torrents.resume()  { _arr_qbt_call POST /api/v2/torrents/resume --data-urlencode "hashes=${1:-all}"; }
+arr.qbt.torrents.reannounce() { _arr_qbt_call POST /api/v2/torrents/reannounce --data-urlencode "hashes=${1:-all}"; }
+arr.qbt.torrents.recheck() { _arr_qbt_call POST /api/v2/torrents/recheck --data-urlencode "hashes=${1:-all}"; }
+
+arr.qbt.torrents.delete() {
+  local hashes="${1:-all}"
+  local delete_flag="${2:-false}"
+  _arr_qbt_call POST /api/v2/torrents/delete --data-urlencode "hashes=${hashes}" --data "deleteFiles=${delete_flag}"
+}
+
+arr.qbt.torrents.setlocation() {
+  local location="${1:-}"
+  if [ -z "$location" ]; then
+    printf 'Usage: arr.qbt.torrents.setlocation <path> [hashes]\n' >&2
+    return 1
+  fi
+  local hashes="${2:-all}"
+  _arr_qbt_call POST /api/v2/torrents/setLocation --data-urlencode "location=${location}" --data-urlencode "hashes=${hashes}"
+}
+
+arr.qbt.torrents.setcategory() {
+  local category="${1:-}"
+  if [ -z "$category" ]; then
+    printf 'Usage: arr.qbt.torrents.setcategory <category> [hashes]\n' >&2
+    return 1
+  fi
+  local hashes="${2:-all}"
+  _arr_qbt_call POST /api/v2/torrents/setCategory --data-urlencode "hashes=${hashes}" --data-urlencode "category=${category}"
+}
+
+arr.qbt.categories() { _arr_qbt_call GET /api/v2/torrents/categories | _arr_pretty_json; }
+
 arr.qbt.port.get() {
   local json value
   json="$(_arr_qbt_call GET /api/v2/app/preferences 2>/dev/null)" || return 1
@@ -945,6 +1397,7 @@ arr.qbt.port.get() {
     echo "unknown"
   fi
 }
+
 arr.qbt.port.set() {
   if [ -z "$1" ]; then
     printf 'Usage: arr.qbt.port.set <port>\n' >&2
@@ -953,6 +1406,7 @@ arr.qbt.port.set() {
   _arr_qbt_call POST /api/v2/app/setPreferences --data "json={\"listen_port\":$1}"
   printf 'Requested port set to %s\n' "$1"
 }
+
 arr.qbt.port.sync() {
   local payload port=""
   payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"
@@ -971,25 +1425,21 @@ arr.qbt.port.sync() {
   fi
   arr.qbt.port.set "$port"
 }
+
 arr.qbt.list() {
-  local payload entries
-  payload="$(_arr_qbt_call GET /api/v2/torrents/info 2>/dev/null)" || return 1
-  entries=$(printf '%s' "$payload" | tr -d '\n' | grep -o '"name":"[^"]*"' 2>/dev/null || true)
-  if [ -z "$entries" ]; then
-    return 0
+  local output
+  output="$(arr.qbt.torrents.info "$@" 2>/dev/null)" || return 1
+  if _arr_has_cmd jq; then
+    printf '%s' "$output" | jq -r '.[].name'
+  else
+    printf '%s\n' "$output" | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
   fi
-  printf '%s\n' "$entries" | cut -d'"' -f4
 }
-arr.qbt.pause.all() { _arr_qbt_call POST /api/v2/torrents/pause --data 'hashes=all'; }
-arr.qbt.resume.all() { _arr_qbt_call POST /api/v2/torrents/resume --data 'hashes=all'; }
-arr.qbt.reannounce() { _arr_qbt_call POST /api/v2/torrents/reannounce --data 'hashes=all'; }
-arr.qbt.add.url() {
-  if [ -z "$1" ]; then
-    printf 'Usage: arr.qbt.add.url <torrent-or-magnet>\n' >&2
-    return 1
-  fi
-  _arr_qbt_call POST /api/v2/torrents/add --data-urlencode "urls=$1"
-}
+
+arr.qbt.pause.all() { arr.qbt.torrents.pause all; }
+arr.qbt.resume.all() { arr.qbt.torrents.resume all; }
+arr.qbt.reannounce() { arr.qbt.torrents.reannounce all; }
+
 arr.qbt.limit() {
   if [ $# -lt 2 ]; then
     printf 'Usage: arr.qbt.limit <down KiB/s> <up KiB/s>\n' >&2
@@ -1011,10 +1461,10 @@ _arr_service_helper() {
   esac
 }
 
-arr.sonarr.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get SONARR_PORT)"; }
-arr.sonarr.logs() { docker logs -f sonarr; }
-arr.sonarr.restart() { docker restart sonarr; }
-arr.sonarr.refresh() {
+arr.son.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get SONARR_PORT)"; }
+arr.son.logs() { docker logs -f sonarr; }
+arr.son.restart() { docker restart sonarr; }
+arr.son.refresh() {
   local key="$(_arr_api_key sonarr)"
   if [ -z "$key" ]; then echo 'Sonarr API key unavailable'; return 1; fi
   local host="$(_arr_host)"
@@ -1022,7 +1472,7 @@ arr.sonarr.refresh() {
   [ -n "$port" ] || port=8989
   curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
 }
-arr.sonarr.rss() {
+arr.son.rss() {
   local key="$(_arr_api_key sonarr)"
   if [ -z "$key" ]; then echo 'Sonarr API key unavailable'; return 1; fi
   local host="$(_arr_host)"
@@ -1031,10 +1481,79 @@ arr.sonarr.rss() {
   curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
 }
 
-arr.radarr.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get RADARR_PORT)"; }
-arr.radarr.logs() { docker logs -f radarr; }
-arr.radarr.restart() { docker restart radarr; }
-arr.radarr.refresh() {
+arr.son.help() {
+  cat <<'EOF'
+Sonarr helpers:
+  arr.son.status             GET /api/v3/system/status
+  arr.son.health             GET /api/v3/health
+  arr.son.disk               GET /api/v3/diskspace
+  arr.son.series.list        GET /api/v3/series
+  arr.son.series.get <id>
+  arr.son.series.add '{...}'
+  arr.son.series.upd <id> '{...}'
+  arr.son.series.del <id>
+  arr.son.lookup <term>     GET /api/v3/series/lookup
+  arr.son.episodes <seriesId>
+  arr.son.episode.get <id>
+  arr.son.episodefile.list <seriesId>
+  arr.son.episodefile.get <id>
+  arr.son.calendar <startISO> <endISO>
+  arr.son.queue              GET /api/v3/queue
+  arr.son.queue.details      GET /api/v3/queue/details
+  arr.son.blocklist          GET /api/v3/blocklist
+  arr.son.profile.list       GET /api/v3/profile
+  arr.son.qualitydef         GET /api/v3/qualitydefinition
+  arr.son.root.list          GET /api/v3/rootfolder
+  arr.son.remotepath.list    GET /api/v3/remotePathMapping
+  arr.son.tag.list           GET /api/v3/tag
+  arr.son.command '{...}'    POST /api/v3/command
+  arr.son.backups            GET /api/v3/system/backup
+EOF
+}
+
+arr.son.status()        { _arr_service_call sonarr GET /api/v3/system/status       | _arr_pretty_json; }
+arr.son.health()        { _arr_service_call sonarr GET /api/v3/health              | _arr_pretty_json; }
+arr.son.disk()          { _arr_service_call sonarr GET /api/v3/diskspace           | _arr_pretty_json; }
+arr.son.series.list()   { _arr_service_call sonarr GET /api/v3/series              | _arr_pretty_json; }
+arr.son.series.get()    { _arr_service_call sonarr GET "/api/v3/series/${1:?id}" | _arr_pretty_json; }
+arr.son.series.add()    { _arr_service_call sonarr POST /api/v3/series --data "${1:?JSON}" | _arr_pretty_json; }
+arr.son.series.upd()    { _arr_service_call sonarr PUT "/api/v3/series/${1:?id}" --data "${2:?JSON}" | _arr_pretty_json; }
+arr.son.series.del()    { _arr_service_call sonarr DELETE "/api/v3/series/${1:?id}"; }
+arr.son.lookup()        {
+  local term="$(_arr_urlencode "${1:-}")"
+  if [ -z "$term" ]; then
+    printf 'Usage: arr.son.lookup <term>\n' >&2
+    return 1
+  fi
+  _arr_service_call sonarr GET "/api/v3/series/lookup?term=${term}" | _arr_pretty_json
+}
+arr.son.episodes()      { _arr_service_call sonarr GET "/api/v3/episode?seriesId=${1:?seriesId}" | _arr_pretty_json; }
+arr.son.episode.get()   { _arr_service_call sonarr GET "/api/v3/episode/${1:?id}" | _arr_pretty_json; }
+arr.son.episodefile.list() { _arr_service_call sonarr GET "/api/v3/episodefile?seriesId=${1:?seriesId}" | _arr_pretty_json; }
+arr.son.episodefile.get()  { _arr_service_call sonarr GET "/api/v3/episodefile/${1:?id}" | _arr_pretty_json; }
+arr.son.calendar() {
+  local start="$(_arr_urlencode "${1:-}")" end="$(_arr_urlencode "${2:-}")"
+  if [ -z "$start" ] || [ -z "$end" ]; then
+    printf 'Usage: arr.son.calendar <startISO> <endISO>\n' >&2
+    return 1
+  fi
+  _arr_service_call sonarr GET "/api/v3/calendar?start=${start}&end=${end}" | _arr_pretty_json
+}
+arr.son.queue()         { _arr_service_call sonarr GET /api/v3/queue               | _arr_pretty_json; }
+arr.son.queue.details() { _arr_service_call sonarr GET /api/v3/queue/details        | _arr_pretty_json; }
+arr.son.blocklist()     { _arr_service_call sonarr GET /api/v3/blocklist           | _arr_pretty_json; }
+arr.son.profile.list()  { _arr_service_call sonarr GET /api/v3/profile             | _arr_pretty_json; }
+arr.son.qualitydef()    { _arr_service_call sonarr GET /api/v3/qualitydefinition   | _arr_pretty_json; }
+arr.son.root.list()     { _arr_service_call sonarr GET /api/v3/rootfolder          | _arr_pretty_json; }
+arr.son.remotepath.list(){ _arr_service_call sonarr GET /api/v3/remotePathMapping   | _arr_pretty_json; }
+arr.son.tag.list()      { _arr_service_call sonarr GET /api/v3/tag                 | _arr_pretty_json; }
+arr.son.command()       { _arr_service_call sonarr POST /api/v3/command --data "${1:?JSON}" | _arr_pretty_json; }
+arr.son.backups()       { _arr_service_call sonarr GET /api/v3/system/backup       | _arr_pretty_json; }
+
+arr.rad.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get RADARR_PORT)"; }
+arr.rad.logs() { docker logs -f radarr; }
+arr.rad.restart() { docker restart radarr; }
+arr.rad.refresh() {
   local key="$(_arr_api_key radarr)"
   if [ -z "$key" ]; then echo 'Radarr API key unavailable'; return 1; fi
   local host="$(_arr_host)"
@@ -1042,7 +1561,7 @@ arr.radarr.refresh() {
   [ -n "$port" ] || port=7878
   curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanMovie"}'
 }
-arr.radarr.rss() {
+arr.rad.rss() {
   local key="$(_arr_api_key radarr)"
   if [ -z "$key" ]; then echo 'Radarr API key unavailable'; return 1; fi
   local host="$(_arr_host)"
@@ -1051,14 +1570,337 @@ arr.radarr.rss() {
   curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
 }
 
-arr.prowlarr.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get PROWLARR_PORT)"; }
-arr.prowlarr.logs() { docker logs -f prowlarr; }
-arr.prowlarr.restart() { docker restart prowlarr; }
+arr.rad.help() {
+  cat <<'EOF'
+Radarr helpers:
+  arr.rad.status             GET /api/v3/system/status
+  arr.rad.health             GET /api/v3/health
+  arr.rad.disk               GET /api/v3/diskspace
+  arr.rad.movies             GET /api/v3/movie
+  arr.rad.movie.get <id>
+  arr.rad.movie.add '{...}'
+  arr.rad.movie.upd <id> '{...}'
+  arr.rad.movie.del <id>
+  arr.rad.lookup <term>     GET /api/v3/movie/lookup
+  arr.rad.moviefile.list    GET /api/v3/moviefile
+  arr.rad.moviefile.get <id>
+  arr.rad.queue              GET /api/v3/queue
+  arr.rad.history            GET /api/v3/history
+  arr.rad.blocklist          GET /api/v3/blocklist
+  arr.rad.indexers           GET /api/v3/indexer
+  arr.rad.downloadclients    GET /api/v3/downloadclient
+  arr.rad.profile.list       GET /api/v3/profile
+  arr.rad.qualitydef         GET /api/v3/qualitydefinition
+  arr.rad.remotepath.list    GET /api/v3/remotePathMapping
+  arr.rad.tag.list           GET /api/v3/tag
+  arr.rad.command '{...}'    POST /api/v3/command
+  arr.rad.backups            GET /api/v3/system/backup
+EOF
+}
 
-arr.bazarr.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get BAZARR_PORT)"; }
-arr.bazarr.logs() { docker logs -f bazarr; }
-arr.bazarr.restart() { docker restart bazarr; }
+arr.rad.status()        { _arr_service_call radarr GET /api/v3/system/status        | _arr_pretty_json; }
+arr.rad.health()        { _arr_service_call radarr GET /api/v3/health               | _arr_pretty_json; }
+arr.rad.disk()          { _arr_service_call radarr GET /api/v3/diskspace            | _arr_pretty_json; }
+arr.rad.movies()        { _arr_service_call radarr GET /api/v3/movie                | _arr_pretty_json; }
+arr.rad.movie.get()     { _arr_service_call radarr GET "/api/v3/movie/${1:?id}"    | _arr_pretty_json; }
+arr.rad.movie.add()     { _arr_service_call radarr POST /api/v3/movie --data "${1:?JSON}" | _arr_pretty_json; }
+arr.rad.movie.upd()     { _arr_service_call radarr PUT "/api/v3/movie/${1:?id}" --data "${2:?JSON}" | _arr_pretty_json; }
+arr.rad.movie.del()     { _arr_service_call radarr DELETE "/api/v3/movie/${1:?id}"; }
+arr.rad.lookup()        {
+  local term="$(_arr_urlencode "${1:-}")"
+  if [ -z "$term" ]; then
+    printf 'Usage: arr.rad.lookup <term>\n' >&2
+    return 1
+  fi
+  _arr_service_call radarr GET "/api/v3/movie/lookup?term=${term}" | _arr_pretty_json
+}
+arr.rad.moviefile.list(){
+  if [ -n "${1:-}" ]; then
+    _arr_service_call radarr GET "/api/v3/moviefile?movieId=${1}" | _arr_pretty_json
+  else
+    _arr_service_call radarr GET /api/v3/moviefile | _arr_pretty_json
+  fi
+}
+arr.rad.moviefile.get() { _arr_service_call radarr GET "/api/v3/moviefile/${1:?id}"| _arr_pretty_json; }
+arr.rad.queue()         { _arr_service_call radarr GET /api/v3/queue                | _arr_pretty_json; }
+arr.rad.history()       { _arr_service_call radarr GET /api/v3/history              | _arr_pretty_json; }
+arr.rad.blocklist()     { _arr_service_call radarr GET /api/v3/blocklist            | _arr_pretty_json; }
+arr.rad.indexers()      { _arr_service_call radarr GET /api/v3/indexer              | _arr_pretty_json; }
+arr.rad.downloadclients(){ _arr_service_call radarr GET /api/v3/downloadclient       | _arr_pretty_json; }
+arr.rad.profile.list()  { _arr_service_call radarr GET /api/v3/profile              | _arr_pretty_json; }
+arr.rad.qualitydef()    { _arr_service_call radarr GET /api/v3/qualitydefinition    | _arr_pretty_json; }
+arr.rad.remotepath.list(){ _arr_service_call radarr GET /api/v3/remotePathMapping    | _arr_pretty_json; }
+arr.rad.tag.list()      { _arr_service_call radarr GET /api/v3/tag                  | _arr_pretty_json; }
+arr.rad.command()       { _arr_service_call radarr POST /api/v3/command --data "${1:?JSON}" | _arr_pretty_json; }
+arr.rad.backups()       { _arr_service_call radarr GET /api/v3/system/backup        | _arr_pretty_json; }
 
-arr.flaresolverr.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get FLARESOLVERR_PORT)"; }
-arr.flaresolverr.logs() { docker logs -f flaresolverr; }
-arr.flaresolverr.restart() { docker restart flaresolverr; }
+arr.prowl.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get PROWLARR_PORT)"; }
+arr.prowl.logs() { docker logs -f prowlarr; }
+arr.prowl.restart() { docker restart prowlarr; }
+
+arr.prowl.help() {
+  cat <<'EOF'
+Prowlarr helpers:
+  arr.prowl.status             GET /api/v1/system/status
+  arr.prowl.health             GET /api/v1/health
+  arr.prowl.indexers           GET /api/v1/indexer
+  arr.prowl.index.get <id>
+  arr.prowl.index.add '{...}'
+  arr.prowl.index.upd <id> '{...}'
+  arr.prowl.index.del <id>
+  arr.prowl.index.schema       GET /api/v1/indexer/schema
+  arr.prowl.index.config <id>  GET /api/v1/indexer/<id>/config
+  arr.prowl.index.test '{...}' POST /api/v1/indexer/test
+  arr.prowl.command '{...}'    POST /api/v1/command
+  arr.prowl.log                GET /api/v1/log
+  arr.prowl.backups            GET /api/v1/backup
+EOF
+}
+
+arr.prowl.status()        { _arr_service_call prowlarr GET /api/v1/system/status | _arr_pretty_json; }
+arr.prowl.health()        { _arr_service_call prowlarr GET /api/v1/health        | _arr_pretty_json; }
+arr.prowl.indexers()      { _arr_service_call prowlarr GET /api/v1/indexer       | _arr_pretty_json; }
+arr.prowl.index.get()     { _arr_service_call prowlarr GET "/api/v1/indexer/${1:?id}" | _arr_pretty_json; }
+arr.prowl.index.add()     { _arr_service_call prowlarr POST /api/v1/indexer --data "${1:?JSON}" | _arr_pretty_json; }
+arr.prowl.index.upd()     { _arr_service_call prowlarr PUT "/api/v1/indexer/${1:?id}" --data "${2:?JSON}" | _arr_pretty_json; }
+arr.prowl.index.del()     { _arr_service_call prowlarr DELETE "/api/v1/indexer/${1:?id}"; }
+arr.prowl.index.schema()  { _arr_service_call prowlarr GET /api/v1/indexer/schema | _arr_pretty_json; }
+arr.prowl.index.config()  { _arr_service_call prowlarr GET "/api/v1/indexer/${1:?id}/config" | _arr_pretty_json; }
+arr.prowl.index.test()    { _arr_service_call prowlarr POST /api/v1/indexer/test --data "${1:?JSON}" | _arr_pretty_json; }
+arr.prowl.command()       { _arr_service_call prowlarr POST /api/v1/command --data "${1:?JSON}" | _arr_pretty_json; }
+arr.prowl.log()           { _arr_service_call prowlarr GET /api/v1/log            | _arr_pretty_json; }
+arr.prowl.backups()       { _arr_service_call prowlarr GET /api/v1/backup         | _arr_pretty_json; }
+
+arr.baz.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get BAZARR_PORT)"; }
+arr.baz.logs() { docker logs -f bazarr; }
+arr.baz.restart() { docker restart bazarr; }
+
+arr.baz.help() {
+  cat <<'EOF'
+Bazarr helpers:
+  arr.baz.info             GET /api/system/info
+  arr.baz.series.wanted    GET /api/series/wanted
+  arr.baz.series.history   GET /api/series/history
+  arr.baz.movies.wanted    GET /api/movies/wanted
+  arr.baz.movies.history   GET /api/movies/history
+EOF
+}
+
+arr.baz.info()           { _arr_bazarr_call GET /api/system/info      | _arr_pretty_json; }
+arr.baz.series.wanted()  { _arr_bazarr_call GET /api/series/wanted    | _arr_pretty_json; }
+arr.baz.series.history() { _arr_bazarr_call GET /api/series/history   | _arr_pretty_json; }
+arr.baz.movies.wanted()  { _arr_bazarr_call GET /api/movies/wanted    | _arr_pretty_json; }
+arr.baz.movies.history() { _arr_bazarr_call GET /api/movies/history   | _arr_pretty_json; }
+
+arr.fsolv.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get FLARESOLVERR_PORT)"; }
+arr.fsolv.logs() { docker logs -f flaresolverr; }
+arr.fsolv.restart() { docker restart flaresolverr; }
+
+arr.fsolv.help() {
+  cat <<'EOF'
+FlareSolverr helpers:
+  arr.fsolv.health          GET /health
+  arr.fsolv.solve '{...}'   POST /v1 (JSON payload)
+EOF
+}
+
+arr.fsolv.health() {
+  local base="$(_arr_service_base flaresolverr)"
+  local -a cmd=(curl -fsS)
+  local -a resolve
+  mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+  if [ ${#resolve[@]} -gt 0 ]; then
+    cmd+=("${resolve[@]}")
+  fi
+  cmd+=("${base}/health")
+  "${cmd[@]}" | _arr_pretty_guess
+}
+
+arr.fsolv.solve() {
+  local payload="${1:-}"
+  if [ -z "$payload" ]; then
+    printf 'Usage: arr.fsolv.solve <json>\n' >&2
+    return 1
+  fi
+  local base="$(_arr_service_base flaresolverr)"
+  local -a cmd=(curl -fsS -X POST -H 'Content-Type: application/json' --data "$payload")
+  local -a resolve
+  mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+  if [ ${#resolve[@]} -gt 0 ]; then
+    cmd+=("${resolve[@]}")
+  fi
+  cmd+=("${base}/v1")
+  "${cmd[@]}" | _arr_pretty_guess
+}
+
+arr.caddy.help() {
+  cat <<'EOF'
+Caddy helpers:
+  arr.caddy.health            GET /healthz
+EOF
+}
+
+arr.caddy.health() {
+  local base="$(_arr_service_base caddy)"
+  local -a cmd=(curl -fsS)
+  local -a resolve
+  mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+  if [ ${#resolve[@]} -gt 0 ]; then
+    cmd+=("${resolve[@]}")
+  fi
+  cmd+=("${base}/healthz")
+  "${cmd[@]}" | _arr_pretty_guess
+}
+
+_arr_clone_alias_group() {
+  local new_prefix="$1"
+  local legacy_prefix="$2"
+  shift 2 || true
+  local name
+  for name in "$@"; do
+    # Only allow valid function names: letters, numbers, underscores, dots
+    if [[ "$legacy_prefix" =~ ^[a-zA-Z0-9_.]+$ ]] && [[ "$new_prefix" =~ ^[a-zA-Z0-9_.]+$ ]] && [[ "$name" =~ ^[a-zA-Z0-9_.]+$ ]]; then
+      eval "arr.${legacy_prefix}.${name}(){ arr.${new_prefix}.${name} \"\$@\"; }"
+    else
+      printf 'Invalid function name or prefix: legacy_prefix="%s", new_prefix="%s", name="%s"\n' "$legacy_prefix" "$new_prefix" "$name" >&2
+    fi
+  done
+}
+
+_arr_clone_alias_group son sonarr \
+  url logs restart refresh rss help status health disk \
+  series.list series.get series.add series.upd series.del \
+  lookup episodes episode.get episodefile.list episodefile.get \
+  calendar queue queue.details blocklist profile.list qualitydef \
+  root.list remotepath.list tag.list command backups
+
+_arr_clone_alias_group rad radarr \
+  url logs restart refresh rss help status health disk movies \
+  movie.get movie.add movie.upd movie.del lookup moviefile.list \
+  moviefile.get queue history blocklist indexers downloadclients \
+  profile.list qualitydef remotepath.list tag.list command backups
+
+_arr_clone_alias_group baz bazarr \
+  url logs restart help info series.wanted series.history \
+  movies.wanted movies.history
+
+_arr_clone_alias_group fsolv fsolver \
+  help health solve
+
+_arr_clone_alias_group fsolv flaresolverr \
+  url logs restart
+
+_arr_clone_alias_group prowl prowlarr \
+  url logs restart
+
+arr.all.health() {
+  local rc=0
+  _arr_section_exec "Gluetun health" arr.gluetun.health || rc=1
+  _arr_section_exec "qBittorrent transfer" arr.qbt.transfer || rc=1
+  _arr_section_exec "Sonarr health" arr.son.health || rc=1
+  _arr_section_exec "Radarr health" arr.rad.health || rc=1
+  _arr_section_exec "Prowlarr health" arr.prowl.health || rc=1
+  _arr_section_exec "Bazarr info" arr.baz.info || rc=1
+  _arr_section_exec "FlareSolverr health" arr.fsolv.health || rc=1
+  _arr_section_exec "Caddy health" arr.caddy.health || rc=1
+  return $rc
+}
+
+arr.all.status() {
+  local rc=0
+  _arr_section_exec "Gluetun status" arr.gluetun.status || rc=1
+  _arr_section_exec "qBittorrent version" arr.qbt.version || rc=1
+  _arr_section_exec "Sonarr status" arr.son.status || rc=1
+  _arr_section_exec "Radarr status" arr.rad.status || rc=1
+  _arr_section_exec "Prowlarr status" arr.prowl.status || rc=1
+  _arr_section_exec "Bazarr info" arr.baz.info || rc=1
+  _arr_section_exec "FlareSolverr health" arr.fsolv.health || rc=1
+  _arr_section_exec "Caddy health" arr.caddy.health || rc=1
+  return $rc
+}
+
+arr.all.urls() {
+  local enable_caddy="$(_arr_enable_caddy)"
+  if [ "$enable_caddy" = "1" ]; then
+    printf 'Caddy URLs (http):\n'
+    local suffix="$(_arr_domain_suffix)"
+    local svc
+    for svc in qbittorrent sonarr radarr prowlarr bazarr flaresolverr; do
+      printf '  %-13s http://%s.%s\n' "$svc" "$svc" "$suffix"
+    done
+    printf '  %-13s %s\n' "caddy" "$(_arr_service_base caddy)/healthz"
+  else
+    printf 'Direct service endpoints:\n'
+    local svc
+    for svc in qbittorrent sonarr radarr prowlarr bazarr flaresolverr; do
+      printf '  %-13s %s\n' "$svc" "$(_arr_service_base "$svc")"
+    done
+    printf '  %-13s %s\n' "caddy" "$(_arr_service_base caddy)/healthz"
+  fi
+}
+
+arr.check.ports() {
+  local enable_caddy="$(_arr_enable_caddy)"
+  local expose="${EXPOSE_DIRECT_PORTS:-$(_arr_env_get EXPOSE_DIRECT_PORTS)}"
+  if [ "$enable_caddy" = "1" ]; then
+    printf 'Checking Caddy virtual hosts via HTTP...\n'
+  else
+    printf 'Checking direct service ports on %s...\n' "$(_arr_host)"
+    if [ -n "$expose" ] && ! _arr_bool "$expose"; then
+      printf '  Warning: EXPOSE_DIRECT_PORTS=%s (services may be unreachable externally)\n' "$expose"
+    fi
+  fi
+  local svc base http rc=0
+  for svc in qbittorrent sonarr radarr prowlarr bazarr flaresolverr; do
+    base="$(_arr_service_base "$svc")"
+    local -a cmd=(curl -sS -o /dev/null -w '%{http_code}' --max-time 5)
+    local -a resolve
+    mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+    if [ ${#resolve[@]} -gt 0 ]; then
+      cmd+=("${resolve[@]}")
+    fi
+    cmd+=("$base")
+    http="$(${cmd[@]} 2>/dev/null || printf '000')"
+    if [ "$http" = "000" ]; then
+      printf '  %-13s unavailable\n' "$svc"
+      rc=1
+    else
+      printf '  %-13s HTTP %s\n' "$svc" "$http"
+    fi
+  done
+  return $rc
+}
+
+arr.diag.env() {
+  local enable_caddy="$(_arr_enable_caddy)"
+  local expose="${EXPOSE_DIRECT_PORTS:-$(_arr_env_get EXPOSE_DIRECT_PORTS)}"
+  local split_vpn="${SPLIT_VPN:-$(_arr_env_get SPLIT_VPN)}"
+  printf 'ARR stack directory: %s\n' "$ARR_STACK_DIR"
+  printf 'Environment file:    %s\n' "$ARR_ENV_FILE"
+  printf 'Config directory:    %s\n' "$ARRCONF_DIR"
+  printf 'Docker data dir:     %s\n' "$ARR_DOCKER_DIR"
+  printf 'LAN host/IP:         %s\n' "$(_arr_host)"
+  printf 'Caddy enabled:       %s\n' "$enable_caddy"
+  printf 'Caddy domain suffix: %s\n' "$(_arr_domain_suffix)"
+  printf 'Direct ports exposed:%s\n' "${expose:-unset}"
+  printf 'SPLIT_VPN:           %s\n' "${split_vpn:-unset}"
+  printf 'Services:\n'
+  local svc
+  for svc in gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr caddy; do
+    case "$svc" in
+      gluetun)
+        printf '  %-13s host=%s port=%s key=%s\n' "$svc" "$(_arr_gluetun_host)" "$(_arr_gluetun_port)" "$( [ -n "$(_arr_gluetun_key)" ] && echo 'set' || echo 'missing')"
+        ;;
+      qbittorrent)
+        local user_state="unset"
+        if [ -n "${QBT_USER:-$(_arr_env_get QBT_USER)}" ] && [ -n "${QBT_PASS:-$(_arr_env_get QBT_PASS)}" ]; then
+          user_state="set"
+        fi
+        printf '  %-13s url=%s auth=%s\n' "$svc" "$(_arr_service_base qbittorrent)" "$user_state"
+        ;;
+      *)
+        printf '  %-13s url=%s\n' "$svc" "$(_arr_service_base "$svc")"
+        ;;
+    esac
+  done
+}
