@@ -903,7 +903,7 @@ start_stack() {
       fi
     fi
 
-    if [[ "$service" == "qbittorrent" && "$service_started" == "1" ]]; then
+    if [[ "$service" == "qbittorrent" ]] && (( service_started == 1 )); then
       qb_started=1
     fi
 
