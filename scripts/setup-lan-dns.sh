@@ -166,6 +166,15 @@ configure_docker_dns() {
   fi
 
   local tmp=""
+  local daemon_dir
+  daemon_dir="$(dirname "${daemon_json}")"
+
+  ensure_dir_mode "${daemon_dir}" 755
+  if [[ ! -d "${daemon_dir}" ]]; then
+    warn "Unable to prepare ${daemon_dir}; skipping Docker DNS configuration."
+    return 1
+  fi
+
   if ! tmp="$(arrstack_mktemp_file "${daemon_json}.XXXXXX" 644)"; then
     warn "Unable to create temporary file for ${daemon_json}; skipping Docker DNS configuration."
     return 1
