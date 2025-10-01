@@ -325,8 +325,13 @@ write_env() {
   if ((split_vpn == 0)) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     firewall_ports+=(80 443)
   fi
-  if ((split_vpn == 1)); then
+
+  if [[ -n "${QBT_HTTP_PORT_HOST:-}" ]]; then
     firewall_ports+=("${QBT_HTTP_PORT_HOST}")
+  fi
+
+  if ((split_vpn == 1)); then
+    : # qBittorrent port already included above
   elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     firewall_ports+=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
   fi
@@ -1362,10 +1367,7 @@ routes = [
   "PUT /v1/openvpn/status",
 
   # Public IP information
-  "GET /v1/publicip/ip",
-
-  # Health checks
-  "GET /healthz"
+  "GET /v1/publicip/ip"
 ]
 EOF
     )
@@ -1835,8 +1837,14 @@ write_qbt_config() {
     msg "  Removing unused legacy config at ${legacy_conf}"
     rm -f "$legacy_conf"
   fi
+  local default_auth_whitelist="127.0.0.1/32,::1/128"
+  local qb_lan_whitelist=""
+  if qb_lan_whitelist="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
+    default_auth_whitelist+="${default_auth_whitelist:+,}${qb_lan_whitelist}"
+  fi
+
   local auth_whitelist
-  auth_whitelist="$(normalize_csv "${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}")"
+  auth_whitelist="$(normalize_csv "${QBT_AUTH_WHITELIST:-$default_auth_whitelist}")"
   QBT_AUTH_WHITELIST="$auth_whitelist"
   msg "  Stored WebUI auth whitelist entries: ${auth_whitelist}"
 
