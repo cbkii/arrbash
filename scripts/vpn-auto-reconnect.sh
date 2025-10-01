@@ -24,7 +24,7 @@ VPN_AUTO_RECONNECT_SUPPRESS_RETRY=0
 
 # Resolves auto-reconnect working directory under docker-data
 vpn_auto_reconnect_state_dir() {
-  local base="${ARR_DOCKER_DIR:-}";
+  local base="${ARR_DOCKER_DIR:-}"
   if [[ -z "$base" ]]; then
     if [[ -n "${ARR_STACK_DIR:-}" ]]; then
       base="${ARR_STACK_DIR%/}/docker-data"
@@ -343,33 +343,35 @@ vpn_auto_reconnect_write_state() {
   vpn_auto_reconnect_update_next_decision
   local json
   if command -v jq >/dev/null 2>&1; then
-    json="$(jq -nc \
-      --argjson version "$VPN_AUTO_RECONNECT_STATE_VERSION" \
-      --argjson consecutive_low "${VPN_AUTO_STATE_CONSECUTIVE_LOW:-0}" \
-      --argjson rotation_index "${VPN_AUTO_STATE_ROTATION_INDEX:-0}" \
-      --arg last_country "${VPN_AUTO_STATE_LAST_COUNTRY:-}" \
-      --arg last_reconnect "${VPN_AUTO_STATE_LAST_RECONNECT:-}" \
-      --arg last_status "${VPN_AUTO_STATE_LAST_STATUS:-}" \
-      --arg last_activity "${VPN_AUTO_STATE_LAST_ACTIVITY:-}" \
-      --arg last_low "${VPN_AUTO_STATE_LAST_LOW:-}" \
-      --argjson cooldown_until "${VPN_AUTO_STATE_COOLDOWN_UNTIL:-0}" \
-      --argjson disabled_until "${VPN_AUTO_STATE_DISABLED_UNTIL:-0}" \
-      --argjson auto_disabled "${VPN_AUTO_STATE_AUTO_DISABLED:-0}" \
-      --argjson retry_backoff "${VPN_AUTO_STATE_RETRY_BACKOFF:-5}" \
-      --argjson retry_total "${VPN_AUTO_STATE_RETRY_TOTAL:-0}" \
-      --argjson next_decision_at "${VPN_AUTO_STATE_NEXT_DECISION:-0}" \
-      --argjson rotation_day_epoch "${VPN_AUTO_STATE_ROTATION_DAY_EPOCH:-0}" \
-      --argjson rotation_count_day "${VPN_AUTO_STATE_ROTATION_COUNT_DAY:-0}" \
-      --arg classification "${VPN_AUTO_STATE_CLASSIFICATION:-monitoring}" \
-      --argjson jitter_applied "${VPN_AUTO_STATE_JITTER_APPLIED:-0}" \
-      --argjson next_possible_action "${VPN_AUTO_STATE_NEXT_ACTION:-0}" \
-      --argjson restart_failures "${VPN_AUTO_STATE_RESTART_FAILURES:-0}" \
-      --argjson now "$(vpn_auto_reconnect_now_epoch)" \
-      --argjson failure_history "${VPN_AUTO_STATE_FAILURE_HISTORY:-{}}" \
-      '{version:$version,updated:$now,consecutive_low:$consecutive_low,rotation_index:$rotation_index,last_country:$last_country,last_reconnect:($last_reconnect==""?null:$last_reconnect),last_status:$last_status,last_activity:($last_activity==""?null:$last_activity),last_low:($last_low==""?null:$last_low),cooldown_until:$cooldown_until,disabled_until:$disabled_until,auto_disabled:$auto_disabled,retry_backoff:$retry_backoff,retry_total:$retry_total,next_decision_at:$next_decision_at,rotation_day_epoch:$rotation_day_epoch,rotation_count_day:$rotation_count_day,classification:$classification,jitter_applied:$jitter_applied,next_possible_action:$next_possible_action,restart_failures:$restart_failures,failure_history:$failure_history}'
+    json="$(
+      jq -nc \
+        --argjson version "$VPN_AUTO_RECONNECT_STATE_VERSION" \
+        --argjson consecutive_low "${VPN_AUTO_STATE_CONSECUTIVE_LOW:-0}" \
+        --argjson rotation_index "${VPN_AUTO_STATE_ROTATION_INDEX:-0}" \
+        --arg last_country "${VPN_AUTO_STATE_LAST_COUNTRY:-}" \
+        --arg last_reconnect "${VPN_AUTO_STATE_LAST_RECONNECT:-}" \
+        --arg last_status "${VPN_AUTO_STATE_LAST_STATUS:-}" \
+        --arg last_activity "${VPN_AUTO_STATE_LAST_ACTIVITY:-}" \
+        --arg last_low "${VPN_AUTO_STATE_LAST_LOW:-}" \
+        --argjson cooldown_until "${VPN_AUTO_STATE_COOLDOWN_UNTIL:-0}" \
+        --argjson disabled_until "${VPN_AUTO_STATE_DISABLED_UNTIL:-0}" \
+        --argjson auto_disabled "${VPN_AUTO_STATE_AUTO_DISABLED:-0}" \
+        --argjson retry_backoff "${VPN_AUTO_STATE_RETRY_BACKOFF:-5}" \
+        --argjson retry_total "${VPN_AUTO_STATE_RETRY_TOTAL:-0}" \
+        --argjson next_decision_at "${VPN_AUTO_STATE_NEXT_DECISION:-0}" \
+        --argjson rotation_day_epoch "${VPN_AUTO_STATE_ROTATION_DAY_EPOCH:-0}" \
+        --argjson rotation_count_day "${VPN_AUTO_STATE_ROTATION_COUNT_DAY:-0}" \
+        --arg classification "${VPN_AUTO_STATE_CLASSIFICATION:-monitoring}" \
+        --argjson jitter_applied "${VPN_AUTO_STATE_JITTER_APPLIED:-0}" \
+        --argjson next_possible_action "${VPN_AUTO_STATE_NEXT_ACTION:-0}" \
+        --argjson restart_failures "${VPN_AUTO_STATE_RESTART_FAILURES:-0}" \
+        --argjson now "$(vpn_auto_reconnect_now_epoch)" \
+        --argjson failure_history "${VPN_AUTO_STATE_FAILURE_HISTORY:-{}}" \
+        '{version:$version,updated:$now,consecutive_low:$consecutive_low,rotation_index:$rotation_index,last_country:$last_country,last_reconnect:($last_reconnect==""?null:$last_reconnect),last_status:$last_status,last_activity:($last_activity==""?null:$last_activity),last_low:($last_low==""?null:$last_low),cooldown_until:$cooldown_until,disabled_until:$disabled_until,auto_disabled:$auto_disabled,retry_backoff:$retry_backoff,retry_total:$retry_total,next_decision_at:$next_decision_at,rotation_day_epoch:$rotation_day_epoch,rotation_count_day:$rotation_count_day,classification:$classification,jitter_applied:$jitter_applied,next_possible_action:$next_possible_action,restart_failures:$restart_failures,failure_history:$failure_history}'
     )"
   else
-    json=$(cat <<JSON
+    json=$(
+      cat <<JSON
 {
   "version": ${VPN_AUTO_RECONNECT_STATE_VERSION},
   "updated": $(vpn_auto_reconnect_now_epoch),
@@ -395,7 +397,7 @@ vpn_auto_reconnect_write_state() {
   "failure_history": ${VPN_AUTO_STATE_FAILURE_HISTORY:-{}}
 }
 JSON
-)
+    )
   fi
   printf '%s\n' "$json" >"$file"
   ensure_secret_file_mode "$file"
@@ -405,7 +407,7 @@ JSON
 vpn_auto_reconnect_update_next_decision() {
   local interval="${VPN_AUTO_RECONNECT_CURRENT_INTERVAL:-0}"
   if [[ "$interval" =~ ^[0-9]+$ ]] && ((interval > 0)); then
-    VPN_AUTO_STATE_NEXT_DECISION=$(( $(vpn_auto_reconnect_now_epoch) + interval ))
+    VPN_AUTO_STATE_NEXT_DECISION=$(($(vpn_auto_reconnect_now_epoch) + interval))
   fi
 }
 
@@ -445,30 +447,32 @@ vpn_auto_reconnect_write_status() {
   fi
   local payload
   if command -v jq >/dev/null 2>&1; then
-    payload="$(jq -nc \
-      --arg timestamp "$now_iso" \
-      --arg status "$status_value" \
-      --arg detail "$detail_value" \
-      --argjson consecutive_low "${VPN_AUTO_STATE_CONSECUTIVE_LOW:-0}" \
-      --arg last_country "${VPN_AUTO_STATE_LAST_COUNTRY:-}" \
-      --arg last_reconnect "${VPN_AUTO_STATE_LAST_RECONNECT:-}" \
-      --arg last_activity "${VPN_AUTO_STATE_LAST_ACTIVITY:-}" \
-      --argjson cooldown_until "${VPN_AUTO_STATE_COOLDOWN_UNTIL:-0}" \
-      --argjson disabled_until "${VPN_AUTO_STATE_DISABLED_UNTIL:-0}" \
-      --argjson auto_disabled "${VPN_AUTO_STATE_AUTO_DISABLED:-0}" \
-      --arg last_low "${VPN_AUTO_STATE_LAST_LOW:-}" \
-      --argjson retry_backoff "${VPN_AUTO_STATE_RETRY_BACKOFF:-5}" \
-      --argjson retry_total "${VPN_AUTO_STATE_RETRY_TOTAL:-0}" \
-      --argjson next_decision_at "${VPN_AUTO_STATE_NEXT_DECISION:-0}" \
-      --argjson rotation_count_day "${VPN_AUTO_STATE_ROTATION_COUNT_DAY:-0}" \
-      --argjson rotation_cap "$rotation_cap" \
-      --arg classification "${VPN_AUTO_STATE_CLASSIFICATION:-monitoring}" \
-      --arg next_action "$next_action_iso" \
-      --argjson jitter_applied "${VPN_AUTO_STATE_JITTER_APPLIED:-0}" \
-      '{timestamp:$timestamp,status:$status,detail:$detail,consecutive_low:$consecutive_low,last_country:$last_country,last_reconnect:$last_reconnect,last_activity:$last_activity,last_low:$last_low,cooldown_until:$cooldown_until,disabled_until:$disabled_until,auto_disabled:$auto_disabled,retry_backoff:$retry_backoff,retry_total:$retry_total,next_decision_at:$next_decision_at,rotation_count_day:$rotation_count_day,rotation_cap:$rotation_cap,classification:$classification,next_possible_action:($next_action==""?null:$next_action),jitter_applied:$jitter_applied}'
+    payload="$(
+      jq -nc \
+        --arg timestamp "$now_iso" \
+        --arg status "$status_value" \
+        --arg detail "$detail_value" \
+        --argjson consecutive_low "${VPN_AUTO_STATE_CONSECUTIVE_LOW:-0}" \
+        --arg last_country "${VPN_AUTO_STATE_LAST_COUNTRY:-}" \
+        --arg last_reconnect "${VPN_AUTO_STATE_LAST_RECONNECT:-}" \
+        --arg last_activity "${VPN_AUTO_STATE_LAST_ACTIVITY:-}" \
+        --argjson cooldown_until "${VPN_AUTO_STATE_COOLDOWN_UNTIL:-0}" \
+        --argjson disabled_until "${VPN_AUTO_STATE_DISABLED_UNTIL:-0}" \
+        --argjson auto_disabled "${VPN_AUTO_STATE_AUTO_DISABLED:-0}" \
+        --arg last_low "${VPN_AUTO_STATE_LAST_LOW:-}" \
+        --argjson retry_backoff "${VPN_AUTO_STATE_RETRY_BACKOFF:-5}" \
+        --argjson retry_total "${VPN_AUTO_STATE_RETRY_TOTAL:-0}" \
+        --argjson next_decision_at "${VPN_AUTO_STATE_NEXT_DECISION:-0}" \
+        --argjson rotation_count_day "${VPN_AUTO_STATE_ROTATION_COUNT_DAY:-0}" \
+        --argjson rotation_cap "$rotation_cap" \
+        --arg classification "${VPN_AUTO_STATE_CLASSIFICATION:-monitoring}" \
+        --arg next_action "$next_action_iso" \
+        --argjson jitter_applied "${VPN_AUTO_STATE_JITTER_APPLIED:-0}" \
+        '{timestamp:$timestamp,status:$status,detail:$detail,consecutive_low:$consecutive_low,last_country:$last_country,last_reconnect:$last_reconnect,last_activity:$last_activity,last_low:$last_low,cooldown_until:$cooldown_until,disabled_until:$disabled_until,auto_disabled:$auto_disabled,retry_backoff:$retry_backoff,retry_total:$retry_total,next_decision_at:$next_decision_at,rotation_count_day:$rotation_count_day,rotation_cap:$rotation_cap,classification:$classification,next_possible_action:($next_action==""?null:$next_action),jitter_applied:$jitter_applied}'
     )"
   else
-    payload=$(cat <<JSON
+    payload=$(
+      cat <<JSON
 {
   "timestamp": "$now_iso",
   "status": "${status_value}",
@@ -491,7 +495,7 @@ vpn_auto_reconnect_write_status() {
   "jitter_applied": ${VPN_AUTO_STATE_JITTER_APPLIED:-0}
 }
 JSON
-)
+    )
   fi
   printf '%s\n' "$payload" >"$status_file"
   ensure_nonsecret_file_mode "$status_file"
@@ -504,7 +508,7 @@ vpn_auto_reconnect_is_enabled() {
 
 # Loads env defaults used by reconnect logic (thresholds, credentials)
 vpn_auto_reconnect_load_env() {
-  local env_file="${ARR_ENV_FILE:-}";
+  local env_file="${ARR_ENV_FILE:-}"
   if [[ -z "$env_file" ]]; then
     if [[ -n "${ARR_STACK_DIR:-}" ]]; then
       env_file="${ARR_STACK_DIR%/}/.env"
@@ -659,9 +663,9 @@ vpn_auto_reconnect_inside_allowed_window() {
   fi
   local now
   now="$(date +%H)"
-  ((now+=0)) || true
-  ((start_hour+=0)) || true
-  ((end_hour+=0)) || true
+  ((now += 0)) || true
+  ((start_hour += 0)) || true
+  ((end_hour += 0)) || true
   if ((start_hour == end_hour)); then
     return 0
   fi
@@ -763,7 +767,7 @@ vpn_auto_reconnect_record_low() {
 vpn_auto_reconnect_append_history() {
   local action="$1"
   local country="$2"
-  local success_flag="${3:-}"  # expect "true" or "false"
+  local success_flag="${3:-}" # expect "true" or "false"
   local reason="$4"
   local consecutive="${5:-0}"
   local retry_total="${6:-0}"
@@ -792,17 +796,18 @@ vpn_auto_reconnect_append_history() {
 
   local line
   if command -v jq >/dev/null 2>&1; then
-    line="$(jq -nc \
-      --arg ts "$ts" \
-      --arg action "$action" \
-      --arg country "$country" \
-      --arg reason "$reason" \
-      --arg classification "$classification_value" \
-      --argjson success "$success_json" \
-      --argjson consecutive "$consecutive" \
-      --argjson retry "$retry_total" \
-      --argjson jitter "$jitter_value" \
-      '{ts:$ts,action:$action,country:($country==""?null:$country),success:$success,reason:($reason==""?null:$reason),consecutive_low:$consecutive,retry_total:$retry,jitter:$jitter,classification:$classification}'
+    line="$(
+      jq -nc \
+        --arg ts "$ts" \
+        --arg action "$action" \
+        --arg country "$country" \
+        --arg reason "$reason" \
+        --arg classification "$classification_value" \
+        --argjson success "$success_json" \
+        --argjson consecutive "$consecutive" \
+        --argjson retry "$retry_total" \
+        --argjson jitter "$jitter_value" \
+        '{ts:$ts,action:$action,country:($country==""?null:$country),success:$success,reason:($reason==""?null:$reason),consecutive_low:$consecutive,retry_total:$retry,jitter:$jitter,classification:$classification}'
     )"
   else
     line="{\"ts\":\"$ts\",\"action\":\"$action\",\"country\":\"$country\",\"success\":$success_json,\"reason\":\"$reason\",\"consecutive_low\":$consecutive,\"retry_total\":$retry_total,\"jitter\":$jitter_value,\"classification\":\"$classification_value\"}"
@@ -1163,7 +1168,7 @@ vpn_auto_reconnect_attempt() {
   vpn_auto_reconnect_apply_jitter_delay
   if ! vpn_auto_reconnect_restart_gluetun; then
     vpn_auto_reconnect_failure_history_update "$country" "$now"
-    VPN_AUTO_STATE_RESTART_FAILURES=$(( ${VPN_AUTO_STATE_RESTART_FAILURES:-0} + 1 ))
+    VPN_AUTO_STATE_RESTART_FAILURES=$((${VPN_AUTO_STATE_RESTART_FAILURES:-0} + 1))
     vpn_auto_reconnect_write_status "error" "Gluetun restart failed"
     vpn_auto_reconnect_append_history "attempt" "$country" "false" "restart-failed" "$pre_attempt_low" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "${VPN_AUTO_STATE_CLASSIFICATION:-failure}"
     if ((VPN_AUTO_STATE_RESTART_FAILURES >= 3)); then
@@ -1211,7 +1216,7 @@ vpn_auto_reconnect_handle_retry_failure() {
   local max_minutes
   max_minutes="$(vpn_auto_reconnect_max_retry_minutes)"
   local next_seconds=$((backoff * 60))
-  vpn_auto_reconnect_set_next_action $(( $(vpn_auto_reconnect_now_epoch) + next_seconds ))
+  vpn_auto_reconnect_set_next_action $(($(vpn_auto_reconnect_now_epoch) + next_seconds))
   if ((backoff < max_minutes)); then
     local next=$((backoff * 2))
     if ((next > max_minutes)); then
@@ -1221,7 +1226,7 @@ vpn_auto_reconnect_handle_retry_failure() {
   fi
   if ((total >= max_minutes)); then
     VPN_AUTO_STATE_AUTO_DISABLED=1
-    VPN_AUTO_STATE_DISABLED_UNTIL=$(( $(vpn_auto_reconnect_now_epoch) + $(vpn_auto_reconnect_cooldown_seconds) ))
+    VPN_AUTO_STATE_DISABLED_UNTIL=$(($(vpn_auto_reconnect_now_epoch) + $(vpn_auto_reconnect_cooldown_seconds)))
     VPN_AUTO_STATE_LAST_STATUS="Auto-disabled after retry budget exhausted"
     vpn_auto_reconnect_write_status "disabled" "Retry budget exceeded; touch .vpn-auto-reconnect-once to override"
     vpn_auto_reconnect_set_next_action "$VPN_AUTO_STATE_DISABLED_UNTIL"
@@ -1483,7 +1488,7 @@ vpn_auto_reconnect_process_once() {
     local cap
     cap="$(vpn_auto_reconnect_rotation_cap)"
     vpn_auto_reconnect_reset_rotation_window
-    local next_day=$(( ${VPN_AUTO_STATE_ROTATION_DAY_EPOCH:-0} + 86400 ))
+    local next_day=$((${VPN_AUTO_STATE_ROTATION_DAY_EPOCH:-0} + 86400))
     vpn_auto_reconnect_set_next_action "$next_day"
     vpn_auto_reconnect_write_status "waiting" "Daily rotation cap reached (${VPN_AUTO_STATE_ROTATION_COUNT_DAY}/${cap})"
     vpn_auto_reconnect_append_history "skip" "" "false" "cap" "${VPN_AUTO_STATE_CONSECUTIVE_LOW}" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "$classification"

@@ -42,7 +42,7 @@ main() {
         once=1
         shift
         ;;
-      --help|-h)
+      --help | -h)
         print_usage
         return 0
         ;;

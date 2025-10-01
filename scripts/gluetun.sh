@@ -373,7 +373,7 @@ async_port_forward_worker() {
 
     pf_write_with_lock 0 "pending" "$attempts" "$cycles" "waiting for assignment" "$last_success"
 
-    if (( PF_ENABLE_CYCLE == 1 )) && ((current_time >= quick_deadline)) && ((cycle_interval > 0)) && ((cycles < max_cycles)) && ((current_time >= next_cycle_time)); then
+    if ((PF_ENABLE_CYCLE == 1)) && ((current_time >= quick_deadline)) && ((cycle_interval > 0)) && ((cycles < max_cycles)) && ((current_time >= next_cycle_time)); then
       cycles=$((cycles + 1))
       pf_log "Cycling OpenVPN (cycle ${cycles}/${max_cycles})"
       if ! gluetun_cycle_openvpn; then
@@ -387,7 +387,7 @@ async_port_forward_worker() {
   done
 
   local timeout_message="timeout after ${total_budget}s (attempts=${attempts} cycles=${cycles})"
-  if (( GLUETUN_PF_STRICT == 1 )); then
+  if ((GLUETUN_PF_STRICT == 1)); then
     pf_log "${timeout_message} (strict)"
     pf_write_with_lock 0 "timeout" "$attempts" "$cycles" "$timeout_message" "$last_success"
     return 1
@@ -830,11 +830,11 @@ ensure_proton_port_forwarding_ready() {
     cycle_after=30
   fi
 
-  if (( poll_interval <= 0 )); then
+  if ((poll_interval <= 0)); then
     poll_interval=1
   fi
 
-  if (( max_wait <= 0 )); then
+  if ((max_wait <= 0)); then
     PF_ENSURE_STATUS_MESSAGE="skipped (PF_MAX_TOTAL_WAIT=0)"
     warn "[pf] Skipping Proton port forwarding wait (PF_MAX_TOTAL_WAIT=0)"
     return 1
@@ -858,16 +858,16 @@ ensure_proton_port_forwarding_ready() {
 
     local now
     now=$(date +%s)
-    local elapsed=$(( now - start_time ))
+    local elapsed=$((now - start_time))
 
-    if (( elapsed >= max_wait )); then
+    if ((elapsed >= max_wait)); then
       PF_ENSURE_STATUS_MESSAGE="timed out after ${elapsed}s"
       PF_ENSURED_PORT="0"
       warn "[pf] Port forwarding not ready after ${elapsed}s"
       return 1
     fi
 
-    if (( cycle_after > 0 && cycled == 0 && elapsed >= cycle_after )); then
+    if ((cycle_after > 0 && cycled == 0 && elapsed >= cycle_after)); then
       msg "[pf] Cycling OpenVPN once to retry Proton port forwarding..."
       if ! gluetun_cycle_openvpn; then
         warn "[pf] Failed to cycle OpenVPN via Gluetun control API"
@@ -878,4 +878,3 @@ ensure_proton_port_forwarding_ready() {
     sleep "$poll_interval"
   done
 }
-

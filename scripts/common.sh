@@ -17,8 +17,7 @@ arrstack_resolve_color_output() {
   fi
 
   case "${FORCE_COLOR:-}" in
-    '' | 0 | false | FALSE | no | NO)
-      ;;
+    '' | 0 | false | FALSE | no | NO) ;;
     *)
       ARR_COLOR_OUTPUT=1
       return
@@ -96,7 +95,7 @@ read_proc_comm() {
 # Attempts graceful termination before SIGKILL while guarding against PID 1 accidents
 safe_kill() {
   local pid="$1"
-  local label="${2:-process}";
+  local label="${2:-process}"
   local timeout="${3:-10}"
 
   if [[ -z "$pid" || ! "$pid" =~ ^[0-9]+$ ]]; then
@@ -479,7 +478,6 @@ arrstack_escalate_privileges() {
   printf '[%s] ERROR: root privileges are required. Install sudo, pkexec (polkit) or su, or run this script as root.\n' "$(basename "${_script_path}")" >&2
   return 2
 }
-
 
 # Checks if tcp/udp port has listeners using ss, returning 2 when ss unavailable
 ss_port_bound() {

@@ -12,7 +12,8 @@ arrstack_detect_api_key_from_config() {
   local api_key=""
 
   if have_command python3; then
-    api_key="$(python3 <<'PY'
+    api_key="$(
+      python3 <<'PY'
 import sys
 import xml.etree.ElementTree as ET
 
@@ -30,7 +31,8 @@ for element in root.iter():
             sys.exit(0)
 sys.exit(1)
 PY
-"$config_path" 2>/dev/null || true)"
+      "$config_path" 2>/dev/null || true
+    )"
   fi
 
   if [[ -z "$api_key" ]]; then
@@ -127,9 +129,9 @@ arrstack_update_secret_line() {
     fi
   fi
 
-  local should_update=$(( placeholder == 1 || force_update == 1 ))
+  local should_update=$((placeholder == 1 || force_update == 1))
 
-  if (( should_update == 0 )); then
+  if ((should_update == 0)); then
     printf 'unchanged\n'
     return 0
   fi
@@ -216,7 +218,7 @@ arrstack_sync_arr_api_keys() {
     local result=""
     if result="$(arrstack_update_secret_line "$secrets_file" "$secret_key" "$api_key" "$force_sync" 2>/dev/null)"; then
       case "$result" in
-        updated|created|appended)
+        updated | created | appended)
           status_map[$service]="updated"
           updated_count=$((updated_count + 1))
           details+="${label}: synced API key from config.xml."$'\n'
@@ -251,9 +253,9 @@ arrstack_sync_arr_api_keys() {
   API_KEYS_SYNCED_MESSAGE="Configarr API key sync: ${parts[*]}"
   API_KEYS_SYNCED_DETAILS="${details%$'\n'}"
 
-  if (( updated_count > 0 )); then
+  if ((updated_count > 0)); then
     API_KEYS_SYNCED_STATUS="updated"
-  elif (( pending_count > 0 )); then
+  elif ((pending_count > 0)); then
     API_KEYS_SYNCED_STATUS="pending"
   else
     API_KEYS_SYNCED_STATUS="unchanged"

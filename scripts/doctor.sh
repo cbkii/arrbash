@@ -28,7 +28,6 @@ if [[ "${ARR_USERCONF_PATH}" == "${ARR_USERCONF_SOURCE}" ]]; then
 fi
 unset ARR_USERCONF_SOURCE
 
-
 # Uses ss to determine if a port is bound at a conflicting address
 port_in_use_with_ss() {
   local proto="$1"
@@ -173,9 +172,9 @@ port_bind_addresses() {
     ss -H -${flag} "sport = :${port}" 2>/dev/null \
       | awk '{print $4}' \
       | while IFS= read -r addr; do
-          [[ -z "$addr" ]] && continue
-          printf '%s\n' "$(normalize_bind_address "${addr%:*}")"
-        done
+        [[ -z "$addr" ]] && continue
+        printf '%s\n' "$(normalize_bind_address "${addr%:*}")"
+      done
   elif have_command lsof; then
     local -a spec
     if [[ "$proto" == "udp" ]]; then
@@ -187,11 +186,11 @@ port_bind_addresses() {
     lsof -nP "${spec[@]}" 2>/dev/null \
       | awk 'NR>1 {print $9}' \
       | while IFS= read -r name; do
-          [[ -z "$name" ]] && continue
-          name="${name%%->*}"
-          name="${name% (LISTEN)}"
-          printf '%s\n' "$(normalize_bind_address "${name%:*}")"
-        done
+        [[ -z "$name" ]] && continue
+        name="${name%%->*}"
+        name="${name% (LISTEN)}"
+        printf '%s\n' "$(normalize_bind_address "${name%:*}")"
+      done
   fi
 }
 
@@ -426,8 +425,6 @@ check_docker_dns_configuration() {
     fi
   fi
 }
-
-
 
 SUFFIX="${LAN_DOMAIN_SUFFIX:-}"
 LAN_IP="${LAN_IP:-}"

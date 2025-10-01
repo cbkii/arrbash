@@ -253,8 +253,7 @@ simple_port_check() {
   local mode="${mode_raw,,}"
 
   case "$mode" in
-    enforce|warn|skip)
-      ;;
+    enforce | warn | skip) ;;
     "")
       mode="enforce"
       ;;

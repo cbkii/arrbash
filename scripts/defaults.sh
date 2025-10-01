@@ -2,7 +2,7 @@
 
 if ! declare -f arrstack_var_is_readonly >/dev/null 2>&1; then
   arrstack_var_is_readonly() {
-# Determines if a shell variable is readonly to avoid clobbering host overrides
+    # Determines if a shell variable is readonly to avoid clobbering host overrides
     local var="$1"
     local declaration=""
 
@@ -103,7 +103,7 @@ arrstack_setup_defaults() {
   local collab_initial_umask="0007"
 
   case "${permission_profile}" in
-    collab|collaborative)
+    collab | collaborative)
       if [[ "${requested_permission_profile}" == "collaborative" ]]; then
         warn "ARR_PERMISSION_PROFILE='collaborative' is deprecated; use 'collab' instead"
         requested_permission_profile="collab"

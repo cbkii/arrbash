@@ -196,7 +196,7 @@ configure_docker_dns() {
         return 1
       fi
     elif command -v python3 >/dev/null 2>&1; then
-      if ! DNS_JSON="${dns_json}" python3 - "${daemon_json}" "${tmp}" <<'PYTHON'
+      if ! DNS_JSON="${dns_json}" python3 - "${daemon_json}" "${tmp}" <<'PYTHON'; then
 import json, os, sys
 source = sys.argv[1]
 target = sys.argv[2]
@@ -211,7 +211,6 @@ data["dns"] = dns
 with open(target, "w", encoding="utf-8") as fh:
     json.dump(data, fh, indent=2)
 PYTHON
-      then
         warn "Failed to update ${daemon_json} with python3; leaving existing configuration untouched."
         rm -f "${tmp}"
         return 1
