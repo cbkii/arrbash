@@ -19,10 +19,13 @@ show_summary() {
   # Always show qBittorrent access information prominently
   local qbt_pass_msg=""
   if [[ -f "$ARR_ENV_FILE" ]]; then
-    local configured_pass
-    configured_pass="$(grep "^QBT_PASS=" "$ARR_ENV_FILE" | cut -d= -f2- || true)"
-    if [[ -n "$configured_pass" && "$configured_pass" != "adminadmin" ]]; then
-      qbt_pass_msg="Password: ${configured_pass} (from .env)"
+    local configured_pass=""
+    if configured_pass="$(get_env_kv "QBT_PASS" "$ARR_ENV_FILE" 2>/dev/null)"; then
+      if [[ -n "$configured_pass" && "$configured_pass" != "adminadmin" ]]; then
+        qbt_pass_msg="Password: ${configured_pass} (from .env)"
+      else
+        qbt_pass_msg="Password: Check docker logs qbittorrent"
+      fi
     else
       qbt_pass_msg="Password: Check docker logs qbittorrent"
     fi
