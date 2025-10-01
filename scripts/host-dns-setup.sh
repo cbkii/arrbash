@@ -13,7 +13,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 # shellcheck source=scripts/common.sh
 . "${REPO_ROOT}/scripts/common.sh"
 
-arrstack_escalate_privileges "$@"
+arrstack_escalate_privileges "$@" || exit $?
 
 # -E included to preserve ERR trap behavior in function/subshell contexts (Bash manual §"The ERR Trap").
 set -Eeuo pipefail
