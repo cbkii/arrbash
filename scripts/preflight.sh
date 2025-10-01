@@ -83,7 +83,7 @@ collect_port_requirements() {
 
   _requirements_ref+=("tcp|${GLUETUN_CONTROL_PORT}|Gluetun control API|${LOCALHOST_IP:-127.0.0.1}")
 
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" -eq 1 ]]; then
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     if ((lan_ip_known == 0)); then
       die "EXPOSE_DIRECT_PORTS=1 requires LAN_IP to be set to your host's private IPv4 address before installation."
     fi
@@ -111,12 +111,12 @@ collect_port_requirements() {
     _requirements_ref+=("tcp|${QBT_HTTP_PORT_HOST}|qBittorrent WebUI|${LAN_IP}")
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]] && ((lan_ip_known)); then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]] && ((lan_ip_known)); then
     _requirements_ref+=("tcp|80|Caddy HTTP|${LAN_IP}")
     _requirements_ref+=("tcp|443|Caddy HTTPS|${LAN_IP}")
   fi
 
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
     local dns_expected="*"
     if ((lan_ip_known)); then
       dns_expected="$LAN_IP"
@@ -358,7 +358,7 @@ simple_port_check() {
 
 # Validates that local DNS prerequisites are satisfied and upstream resolvers respond
 validate_dns_configuration() {
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" ]]; then
     return
   fi
 
@@ -462,7 +462,7 @@ preflight() {
 
   show_configuration_preview
 
-  if [[ "${ASSUME_YES}" != 1 ]]; then
+  if [[ "${ASSUME_YES}" != "1" ]]; then
     local response=""
 
     warn "Continue with ProtonVPN OpenVPN setup? [y/N]: "

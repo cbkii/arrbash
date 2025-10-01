@@ -50,7 +50,7 @@ verify_permissions() {
   local issues=0
   local collab_enabled=0
 
-  if [[ "${ARR_PERMISSION_PROFILE}" == "collab" && "${COLLAB_GROUP_WRITE_ENABLED:-0}" -eq 1 ]]; then
+  if [[ "${ARR_PERMISSION_PROFILE}" == "collab" && "${COLLAB_GROUP_WRITE_ENABLED:-0}" == "1" ]]; then
     collab_enabled=1
   fi
 
@@ -92,7 +92,7 @@ verify_permissions() {
   local service
   for service in "${ARR_DOCKER_SERVICES[@]}"; do
     if [[ "$service" == "local_dns" ]]; then
-      if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 1 || ${LOCAL_DNS_SERVICE_ENABLED:-0} -ne 1 ]]; then
+      if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" || "${LOCAL_DNS_SERVICE_ENABLED:-0}" != "1" ]]; then
         continue
       fi
     fi

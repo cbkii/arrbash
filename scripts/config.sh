@@ -181,10 +181,10 @@ If anything looks incorrect, edit ${ARR_USERCONF_PATH} before continuing.
 CONFIG
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
-    if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+    if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
       warn "SPLIT_VPN=1: Caddy will be disabled automatically (unsupported in split mode)."
     fi
-    if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 ]]; then
+    if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
       warn "SPLIT_VPN=1: Local DNS will be disabled automatically (unsupported in split mode)."
     fi
   fi

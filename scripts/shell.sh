@@ -38,7 +38,7 @@ reload_shell_rc() {
   [ -n "$kind" ] || kind="other"
   [ -n "$omz" ] || omz=0
 
-  if [ "$kind" = "zsh" ] && [ -n "${ZSH_VERSION:-}" ] && [ "$omz" -eq 1 ] && have_command omz; then
+  if [ "$kind" = "zsh" ] && [ -n "${ZSH_VERSION:-}" ] && [ "$omz" = "1" ] && have_command omz; then
     if omz reload; then
       return 0
     fi
@@ -46,7 +46,7 @@ reload_shell_rc() {
 
   if [ "$kind" = "zsh" ] && [ -z "${ZSH_VERSION:-}" ]; then
     warn "Detected zsh login shell but running under bash; skipping automatic zsh reload"
-    if [ "$force" -eq 1 ]; then
+    if [ "$force" = "1" ]; then
       return 0
     fi
     return 1
@@ -71,7 +71,7 @@ reload_shell_rc() {
       ;;
   esac
 
-  if [ -z "$rc" ] && [ "$kind" = "zsh" ] && [ "$omz" -eq 1 ]; then
+  if [ -z "$rc" ] && [ "$kind" = "zsh" ] && [ "$omz" = "1" ]; then
     [ -r "$HOME/.zshrc" ] && rc="$HOME/.zshrc"
   fi
 
@@ -93,25 +93,25 @@ reload_shell_rc() {
     # shellcheck disable=SC1090
     if ! . "$rc"; then
       local status=$?
-      if [ "$had_nounset" -eq 1 ]; then
+      if [ "$had_nounset" = "1" ]; then
         set -u
       fi
-      if [ "$had_errexit" -eq 1 ]; then
+      if [ "$had_errexit" = "1" ]; then
         set -e
       fi
       return $status
     fi
 
-    if [ "$had_nounset" -eq 1 ]; then
+    if [ "$had_nounset" = "1" ]; then
       set -u
     fi
-    if [ "$had_errexit" -eq 1 ]; then
+    if [ "$had_errexit" = "1" ]; then
       set -e
     fi
     return 0
   fi
 
-  if [ "$force" -eq 1 ]; then
+  if [ "$force" = "1" ]; then
     return 0
   fi
 

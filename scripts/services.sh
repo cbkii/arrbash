@@ -300,7 +300,7 @@ validate_compose_or_die() {
 
 # Validates generated Caddyfile using docker image when proxying is enabled
 validate_caddy_config() {
-  if [[ "${ENABLE_CADDY:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
     msg "🧪 Skipping Caddy validation (ENABLE_CADDY=0)"
     return 0
   fi
@@ -389,11 +389,11 @@ validate_images() {
     FLARESOLVERR_IMAGE
   )
 
-  if [[ "${ENABLE_CONFIGARR:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     image_vars+=(CONFIGARR_IMAGE)
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     image_vars+=(CADDY_IMAGE)
   fi
 
@@ -647,10 +647,10 @@ start_vpn_auto_reconnect_if_enabled() {
 show_service_status() {
   msg "Service status summary:"
   local -a services=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr)
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     services+=(caddy)
   fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 && ${LOCAL_DNS_SERVICE_ENABLED:-0} -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
     services+=(local_dns)
   fi
 
@@ -676,7 +676,7 @@ show_service_status() {
 
 # Disables Docker's userland proxy to let dnsmasq bind :53 reliably
 ensure_docker_userland_proxy_disabled() {
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" ]]; then
     return 0
   fi
 
@@ -854,10 +854,10 @@ start_stack() {
   start_vpn_auto_reconnect_if_enabled
 
   local services=()
-  if [[ "${ENABLE_LOCAL_DNS:-0}" -eq 1 && ${LOCAL_DNS_SERVICE_ENABLED:-0} -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
     services+=(local_dns)
   fi
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     services+=(caddy)
   fi
   services+=(qbittorrent sonarr radarr prowlarr bazarr flaresolverr)
@@ -903,7 +903,7 @@ start_stack() {
       fi
     fi
 
-    if [[ "$service" == "qbittorrent" && $service_started -eq 1 ]]; then
+    if [[ "$service" == "qbittorrent" && "$service_started" == "1" ]]; then
       qb_started=1
     fi
 
@@ -929,7 +929,7 @@ start_stack() {
     done
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     if ! sync_caddy_ca_public_copy --wait; then
       warn "Caddy CA root certificate is not published yet; fetch http://ca.${ARR_DOMAIN_SUFFIX_CLEAN}/root.crt after Caddy issues it."
     fi

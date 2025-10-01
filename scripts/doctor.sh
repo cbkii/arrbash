@@ -209,7 +209,7 @@ check_network_security() {
 
   local -a direct_ports=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
 
-  if [[ "${EXPOSE_DIRECT_PORTS}" -eq 1 ]]; then
+  if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
     if [[ -z "${LAN_IP:-}" || "${LAN_IP}" == "0.0.0.0" ]]; then
       echo "[doctor][warn] Direct ports enabled but LAN_IP is not set; they would bind to 0.0.0.0."
     else
@@ -279,7 +279,7 @@ check_network_security() {
     echo "[doctor][warn] Gluetun control API is reachable on ${gluetun_bindings[*]}; restrict it to LOCALHOST_IP=${LOCALHOST_IP}."
   fi
 
-  if [[ "${ENABLE_CADDY}" -ne 1 ]]; then
+  if [[ "${ENABLE_CADDY}" != "1" ]]; then
     local port
     for port in 80 443; do
       local -a bindings=()
@@ -295,7 +295,7 @@ check_network_security() {
 test_lan_connectivity() {
   echo "[doctor] Testing LAN accessibility..."
 
-  if [[ "${ENABLE_CADDY}" -ne 1 ]]; then
+  if [[ "${ENABLE_CADDY}" != "1" ]]; then
     echo "[doctor][info] Skipping Caddy HTTP checks (ENABLE_CADDY=0)."
     return
   fi
@@ -446,7 +446,7 @@ PROWLARR_PORT="${PROWLARR_PORT:-9696}"
 BAZARR_PORT="${BAZARR_PORT:-6767}"
 FLARESOLVERR_PORT="${FLARESOLVERR_PORT:-8191}"
 
-if [[ "${ENABLE_LOCAL_DNS}" -eq 1 ]]; then
+if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
   echo "[doctor] Checking if port 53 is free (or already bound):"
   if have_command ss; then
     if [[ -n "$(ss -H -lnu 'sport = :53' 2>/dev/null)" ]] || [[ -n "$(ss -H -lnt 'sport = :53' 2>/dev/null)" ]]; then
@@ -471,7 +471,7 @@ else
   echo "[doctor][info] Skipping port 53 availability check (local DNS disabled)."
 fi
 
-if [[ "${ENABLE_CADDY}" -eq 1 ]]; then
+if [[ "${ENABLE_CADDY}" == "1" ]]; then
   printf '[doctor] LAN domain suffix: %s\n' "${SUFFIX:-<unset>}"
 else
   echo "[doctor][info] Skipping LAN domain suffix reporting (ENABLE_CADDY=0)."
@@ -483,8 +483,8 @@ check_docker_dns_configuration
 
 printf '[doctor] DNS distribution mode: %s\n' "${DNS_DISTRIBUTION_MODE}"
 
-if [[ "${ENABLE_LOCAL_DNS}" -eq 1 ]]; then
-  if [[ "${LOCAL_DNS_SERVICE_ENABLED}" -eq 1 ]]; then
+if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
+  if [[ "${LOCAL_DNS_SERVICE_ENABLED}" == "1" ]]; then
     echo "[doctor] Local DNS container: enabled"
   else
     echo "[doctor][warn] Local DNS requested but the container is disabled."
@@ -509,7 +509,7 @@ fi
 if [[ -z "${LAN_IP}" || "${LAN_IP}" == "0.0.0.0" ]]; then
   echo "[doctor][warn] Skipping LAN port checks because LAN_IP is not set to a specific address."
 else
-  if [[ "${EXPOSE_DIRECT_PORTS}" -eq 1 ]]; then
+  if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
     report_port "qBittorrent UI" tcp "${LAN_IP}" "${QBT_HTTP_PORT_HOST}"
     report_port "Sonarr UI" tcp "${LAN_IP}" "${SONARR_PORT}"
     report_port "Radarr UI" tcp "${LAN_IP}" "${RADARR_PORT}"
@@ -520,14 +520,14 @@ else
     echo "[doctor][info] Direct LAN ports are disabled (EXPOSE_DIRECT_PORTS=0)."
   fi
 
-  if [[ "${ENABLE_CADDY}" -eq 1 ]]; then
+  if [[ "${ENABLE_CADDY}" == "1" ]]; then
     report_port "Caddy HTTP" tcp "${LAN_IP}" 80
     report_port "Caddy HTTPS" tcp "${LAN_IP}" 443
   else
     echo "[doctor][info] Skipping Caddy port checks (ENABLE_CADDY=0)."
   fi
 
-  if [[ "${ENABLE_LOCAL_DNS}" -eq 1 && "${LOCAL_DNS_SERVICE_ENABLED}" -eq 1 ]]; then
+  if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED}" == "1" ]]; then
     report_port "Local DNS" udp "${LAN_IP}" 53
     report_port "Local DNS" tcp "${LAN_IP}" 53
   else
@@ -541,8 +541,8 @@ if [[ -n "${LOCALHOST_IP}" ]]; then
   report_port "Gluetun control" tcp "${LOCALHOST_IP}" "${GLUETUN_CONTROL_PORT}"
 fi
 
-if [[ "${ENABLE_LOCAL_DNS}" -eq 1 && "${LOCAL_DNS_SERVICE_ENABLED}" -eq 1 ]]; then
-  if [[ "${ENABLE_CADDY}" -ne 1 ]]; then
+if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED}" == "1" ]]; then
+  if [[ "${ENABLE_CADDY}" != "1" ]]; then
     echo "[doctor][info] Skipping LAN hostname resolution checks (ENABLE_CADDY=0)."
   else
     echo "[doctor] Testing DNS resolution of qbittorrent.${SUFFIX} via local resolver"
@@ -568,7 +568,7 @@ else
   echo "[doctor][info] DNS checks skipped: local DNS is disabled."
 fi
 
-if [[ "${ENABLE_CADDY}" -eq 1 ]]; then
+if [[ "${ENABLE_CADDY}" == "1" ]]; then
   echo "[doctor] Testing CA fetch over HTTP (bootstrap)"
   if have_command curl && have_command openssl; then
     if cert_output="$(curl -fsS "http://ca.${SUFFIX}/root.crt" 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null)"; then
@@ -600,7 +600,7 @@ fi
 
 test_lan_connectivity
 
-if [[ "${ENABLE_LOCAL_DNS}" -eq 1 ]]; then
+if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
   case "${DNS_DISTRIBUTION_MODE}" in
     router)
       echo "[doctor][info] DNS distribution mode 'router': set DHCP Option 6 (DNS server) on your router to ${LAN_IP}."
@@ -618,24 +618,24 @@ fi
 
 lan_target="${LAN_IP:-<unset>}"
 echo "[doctor] From another LAN device you can try:"
-if [[ "${EXPOSE_DIRECT_PORTS}" -eq 1 ]]; then
+if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
   echo "  curl -I http://${lan_target}:${QBT_HTTP_PORT_HOST}"
   echo "  curl -I http://${lan_target}:${SONARR_PORT}"
 else
   echo "  (Direct ports disabled; set EXPOSE_DIRECT_PORTS=1 to enable IP:PORT access.)"
 fi
 
-if [[ "${ENABLE_LOCAL_DNS}" -eq 1 && "${ENABLE_CADDY}" -eq 1 ]]; then
+if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${ENABLE_CADDY}" == "1" ]]; then
   echo "  nslookup qbittorrent.${SUFFIX} ${lan_target}"
   echo "[doctor][note] If DNS queries fail:"
   echo "  - Ensure the client and ${lan_target} are on the same VLAN/subnet;"
   echo "  - Some routers block DNS to LAN hosts; allow UDP/TCP 53 to ${lan_target};"
   echo "  - Temporarily set the client DNS to ${lan_target} and retry."
-elif [[ "${ENABLE_LOCAL_DNS}" -eq 1 ]]; then
+elif [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
   echo "  (DNS hostname troubleshooting tips skipped; ENABLE_CADDY=0.)"
 fi
 
-if [[ "${ENABLE_CADDY}" -eq 1 ]]; then
+if [[ "${ENABLE_CADDY}" == "1" ]]; then
   echo "  curl -k https://qbittorrent.${SUFFIX}/ --resolve qbittorrent.${SUFFIX}:443:${lan_target}"
 fi
 
