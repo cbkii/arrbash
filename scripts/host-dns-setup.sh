@@ -15,8 +15,48 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
 arrstack_escalate_privileges "$@" || exit $?
 
-# -E included to preserve ERR trap behavior in function/subshell contexts (Bash manual §"The ERR Trap").
+# -E included to preserve ERR trap behavior in function/subshell contexts.
 set -Eeuo pipefail
+
+# Resolve version of docker for command handling
+HOST_DNS_VERBOSE="${HOST_DNS_VERBOSE:-0}"
+
+resolve_docker_compose_cmd() {
+  local -a candidate=()
+  local version=""
+  local major=""
+
+  if docker compose version >/dev/null 2>&1; then
+    candidate=(docker compose)
+    version="$(docker compose version --short 2>/dev/null || true)"
+    version="${version#v}"
+    major="${version%%.*}"
+    if [[ -n "$version" && ! "$major" =~ ^[0-9]+$ ]]; then
+      version=""
+    fi
+  fi
+
+  if ((${#candidate[@]} == 0)) && command -v docker-compose >/dev/null 2>&1; then
+    version="$(docker-compose version --short 2>/dev/null || true)"
+    version="${version#v}"
+    major="${version%%.*}"
+    if [[ "$major" =~ ^[0-9]+$ ]] && ((major >= 2)); then
+      candidate=(docker-compose)
+    else
+      version=""
+    fi
+  fi
+
+  if ((${#candidate[@]} == 0)); then
+    die "Docker Compose v2+ is required but not found"
+  fi
+
+  DOCKER_COMPOSE_CMD=("${candidate[@]}")
+
+  if [[ "$HOST_DNS_VERBOSE" == "1" ]]; then
+    msg "Resolved Docker Compose command: ${DOCKER_COMPOSE_CMD[*]}${version:+ (version ${version})}"
+  fi
+}
 
 # Normalizes comma-separated upstream list into unique entries
 parse_upstream_list() {
@@ -58,6 +98,8 @@ if ((${#FALLBACKS[@]} == 0)); then
 fi
 
 MODE="${DNS_DISTRIBUTION_MODE:-router}"
+
+DOCKER_COMPOSE_CMD=()
 
 # ---- Paths & backups ----
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -201,7 +243,8 @@ cat "${RESOLV}"
 
 # ---- Start/Restart local_dns (dnsmasq) container ----
 msg "Starting local_dns container"
-docker compose up -d local_dns
+resolve_docker_compose_cmd
+"${DOCKER_COMPOSE_CMD[@]}" up -d local_dns
 
 msg "Verifying port 53 is bound by dnsmasq"
 if command -v ss >/dev/null 2>&1; then
