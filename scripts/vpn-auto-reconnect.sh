@@ -385,6 +385,7 @@ vpn_auto_reconnect_load_state() {
         | reduce ($fh | to_entries[]) as $item ({}; .[$item.key] = normalise($item.value))
       ' <<<"$json" 2>/dev/null || printf '{}')"
     fi
+  else
     VPN_AUTO_STATE_CONSECUTIVE_LOW="$(jq -r '.consecutive_low // 0' <<<"$json" 2>/dev/null || printf '0')"
     VPN_AUTO_STATE_ROTATION_INDEX="$(jq -r '.rotation_index // 0' <<<"$json" 2>/dev/null || printf '0')"
     VPN_AUTO_STATE_LAST_COUNTRY="$(jq -r '.last_country // ""' <<<"$json" 2>/dev/null || printf '')"
