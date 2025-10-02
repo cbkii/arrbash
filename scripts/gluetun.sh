@@ -190,7 +190,9 @@ write_pf_state() {
   local last_success_json=""
   local invalid_last_success=0
   if [[ -n "$last_success_input" ]]; then
-    if [[ "$last_success_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+    strict_re='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+    extended_re='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})?$'
+    if [[ $last_success_input =~ $strict_re || $last_success_input =~ $extended_re ]]; then
       last_success_json="$last_success_input"
     else
       invalid_last_success=1
