@@ -64,7 +64,7 @@ arrstack_resolve_compose_cmd() {
     version="${version#v}"
     major="${version%%.*}"
     if [[ -n "$major" && "$major" =~ ^[0-9]+$ ]]; then
-      :
+      : # major version is valid, do nothing
     else
       version=""
     fi
