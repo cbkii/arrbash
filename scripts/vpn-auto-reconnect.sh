@@ -15,6 +15,7 @@
 VPN_AUTO_RECONNECT_STATE_VERSION=2
 VPN_AUTO_RECONNECT_CURL_WARNED=0
 VPN_AUTO_RECONNECT_JQ_WARNED=0
+VPN_AUTO_RECONNECT_JQ_AVAILABLE=-1
 VPN_AUTO_RECONNECT_CURRENT_INTERVAL=0
 VPN_AUTO_RECONNECT_IDLE_GRACE_SECONDS=1800
 VPN_AUTO_RECONNECT_ACTIVITY_GRACE_SECONDS=1800
@@ -22,8 +23,13 @@ VPN_AUTO_RECONNECT_PF_SUCCESS_GRACE=86400
 VPN_AUTO_RECONNECT_SEEDING_FLOOR_BYTES=4096
 VPN_AUTO_RECONNECT_SUPPRESS_RETRY=0
 
-# Resolves auto-reconnect working directory under docker-data
-vpn_auto_reconnect_state_dir() {
+# Resolves Gluetun root directory via shared helpers when available
+vpn_auto_gluetun_root() {
+  if declare -f arrstack_gluetun_dir >/dev/null 2>&1; then
+    arrstack_gluetun_dir
+    return
+  fi
+
   local base="${ARR_DOCKER_DIR:-}"
   if [[ -z "$base" ]]; then
     if [[ -n "${ARR_STACK_DIR:-}" ]]; then
@@ -32,7 +38,30 @@ vpn_auto_reconnect_state_dir() {
       base="${HOME:-.}/srv/docker-data"
     fi
   fi
-  printf '%s/gluetun/auto-reconnect' "${base%/}"
+  printf '%s/gluetun' "${base%/}"
+}
+
+# Caches jq availability checks to avoid repeated command lookups
+vpn_auto_has_jq() {
+  if ((VPN_AUTO_RECONNECT_JQ_AVAILABLE == -1)); then
+    if command -v jq >/dev/null 2>&1; then
+      VPN_AUTO_RECONNECT_JQ_AVAILABLE=1
+    else
+      VPN_AUTO_RECONNECT_JQ_AVAILABLE=0
+    fi
+  fi
+
+  ((VPN_AUTO_RECONNECT_JQ_AVAILABLE == 1))
+}
+
+# Resolves auto-reconnect working directory under docker-data
+vpn_auto_reconnect_state_dir() {
+  if declare -f arrstack_gluetun_auto_reconnect_dir >/dev/null 2>&1; then
+    arrstack_gluetun_auto_reconnect_dir
+    return
+  fi
+
+  printf '%s/auto-reconnect' "$(vpn_auto_gluetun_root)"
 }
 
 # Returns path to persisted state.json for reconnect worker
@@ -62,16 +91,8 @@ if ! declare -f pf_state_lock_file >/dev/null 2>&1; then
     if declare -f pf_state_path >/dev/null 2>&1; then
       state_file="$(pf_state_path)"
     else
-      local base="${ARR_DOCKER_DIR:-}"
-      if [[ -z "$base" ]]; then
-        if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-          base="${ARR_STACK_DIR%/}/docker-data"
-        else
-          base="${HOME:-.}/srv/docker-data"
-        fi
-      fi
       local pf_file="${PF_ASYNC_STATE_FILE:-pf-state.json}"
-      state_file="${base%/}/gluetun/${pf_file}"
+      state_file="$(vpn_auto_gluetun_root)/${pf_file}"
     fi
 
     printf '%s.lock' "$state_file"
@@ -84,16 +105,8 @@ vpn_auto_reconnect_pf_state_file() {
     pf_state_path
     return
   fi
-  local base="${ARR_DOCKER_DIR:-}"
-  if [[ -z "$base" ]]; then
-    if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-      base="${ARR_STACK_DIR%/}/docker-data"
-    else
-      base="${HOME:-.}/srv/docker-data"
-    fi
-  fi
   local pf_file="${PF_ASYNC_STATE_FILE:-pf-state.json}"
-  printf '%s/gluetun/%s' "${base%/}" "$pf_file"
+  printf '%s/%s' "$(vpn_auto_gluetun_root)" "$pf_file"
 }
 
 if ! declare -f pf_write_with_lock >/dev/null 2>&1; then
@@ -134,15 +147,7 @@ vpn_auto_reconnect_resync_pf() {
     rm -f "$state_file" 2>/dev/null || true
   fi
   if [[ -z "$base_dir" ]]; then
-    local base="${ARR_DOCKER_DIR:-}"
-    if [[ -z "$base" ]]; then
-      if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-        base="${ARR_STACK_DIR%/}/docker-data"
-      else
-        base="${HOME:-.}/srv/docker-data"
-      fi
-    fi
-    base_dir="${base%/}/gluetun"
+    base_dir="$(vpn_auto_gluetun_root)"
   fi
   rm -f "$base_dir/forwarded_port" "$base_dir/forwarded_port.json" 2>/dev/null || true
   if declare -f start_async_pf_if_enabled >/dev/null 2>&1; then
@@ -157,7 +162,7 @@ vpn_auto_reconnect_pf_status_snapshot() {
   local status=""
   local last_success=""
   if [[ -n "$file" && -f "$file" ]]; then
-    if command -v jq >/dev/null 2>&1; then
+    if vpn_auto_has_jq; then
       status="$(jq -r '.status // ""' "$file" 2>/dev/null || printf '')"
       last_success="$(jq -r '.last_success // ""' "$file" 2>/dev/null || printf '')"
     else
@@ -293,7 +298,7 @@ vpn_auto_reconnect_load_state() {
   local file
   file="$(vpn_auto_reconnect_state_file)"
   [[ -f "$file" ]] || return 0
-  if ! command -v jq >/dev/null 2>&1; then
+  if ! vpn_auto_has_jq; then
     return 0
   fi
   local json
@@ -429,7 +434,7 @@ vpn_auto_reconnect_write_state() {
   ensure_dir_mode "$dir" "$DATA_DIR_MODE"
   vpn_auto_reconnect_update_next_decision
   local json
-  if command -v jq >/dev/null 2>&1; then
+  if vpn_auto_has_jq; then
     json="$(
       jq -nc \
         --argjson version "$VPN_AUTO_RECONNECT_STATE_VERSION" \
@@ -533,7 +538,7 @@ vpn_auto_reconnect_write_status() {
     next_action_iso="$(vpn_auto_reconnect_epoch_to_iso "$VPN_AUTO_STATE_NEXT_ACTION" || printf '')"
   fi
   local payload
-  if command -v jq >/dev/null 2>&1; then
+  if vpn_auto_has_jq; then
     payload="$(
       jq -nc \
         --arg timestamp "$now_iso" \
@@ -882,7 +887,7 @@ vpn_auto_reconnect_append_history() {
   [[ "$jitter_value" =~ ^[0-9]+$ ]] || jitter_value=0
 
   local line
-  if command -v jq >/dev/null 2>&1; then
+  if vpn_auto_has_jq; then
     line="$(
       jq -nc \
         --arg ts "$ts" \
@@ -907,7 +912,7 @@ vpn_auto_reconnect_append_history() {
 vpn_auto_reconnect_failure_history_update() {
   local country="$1"
   local timestamp="$2"
-  if ! command -v jq >/dev/null 2>&1; then
+  if ! vpn_auto_has_jq; then
     VPN_AUTO_STATE_FAILURE_HISTORY="{}"
     return
   fi
@@ -926,7 +931,7 @@ vpn_auto_reconnect_failure_history_clear() {
   if [[ -z "$country" ]]; then
     return
   fi
-  if ! command -v jq >/dev/null 2>&1; then
+  if ! vpn_auto_has_jq; then
     VPN_AUTO_STATE_FAILURE_HISTORY="{}"
     return
   fi
@@ -943,7 +948,7 @@ vpn_auto_reconnect_failure_history_clear() {
 vpn_auto_reconnect_failure_recent() {
   local country="$1"
   local cutoff="$2"
-  if ! command -v jq >/dev/null 2>&1; then
+  if ! vpn_auto_has_jq; then
     return 1
   fi
   local current
@@ -1040,7 +1045,7 @@ vpn_auto_reconnect_detect_activity() {
       response="$("${curl_cmd[@]}" 2>/dev/null || printf '')"
     fi
   fi
-  if [[ -z "$response" ]] || ! command -v jq >/dev/null 2>&1; then
+  if [[ -z "$response" ]] || ! vpn_auto_has_jq; then
     return 1
   fi
   local thirty=$((30 * 60))
@@ -1406,7 +1411,7 @@ vpn_auto_reconnect_process_once() {
     return 1
   fi
 
-  if ! command -v jq >/dev/null 2>&1; then
+  if ! vpn_auto_has_jq; then
     VPN_AUTO_STATE_CONSECUTIVE_LOW=0
     VPN_AUTO_STATE_CLASSIFICATION="monitoring"
     if ((VPN_AUTO_RECONNECT_JQ_WARNED == 0)); then
