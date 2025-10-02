@@ -111,8 +111,15 @@ _pf_escape_json_string() {
   # Escape characters that would break JSON string encoding while staying
   # dependency-free. The explicit quoting keeps shellcheck aware that we're
   # intentionally working with literal backslashes.
+  local backspace
+  backspace=$(printf '\010')
+  local formfeed
+  formfeed=$(printf '\014')
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
+  value="${value//${backspace}/\\b}"
+  value="${value//$'\t'/\\t}"
+  value="${value//${formfeed}/\\f}"
   value="${value//$'\n'/\\n}"
   value="${value//$'\r'/\\r}"
 
@@ -180,15 +187,25 @@ write_pf_state() {
   local state_file
   state_file="$(pf_state_path)"
 
-  local last_success_json
+  local last_success_json=""
+  local invalid_last_success=0
   if [[ -n "$last_success_input" ]]; then
-    last_success_json="$last_success_input"
-  else
-    last_success_json=""
+    if [[ "$last_success_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+      last_success_json="$last_success_input"
+    else
+      invalid_last_success=1
+    fi
+  fi
+
+  if ((invalid_last_success)) && [[ -z "${PF_INVALID_LAST_SUCCESS_LOGGED:-}" ]]; then
+    # Guarded warning ensures we only log once per run when timestamps are invalid.
+    pf_log "Ignoring invalid last_success timestamp input"
+    PF_INVALID_LAST_SUCCESS_LOGGED=1
   fi
 
   local json=""
   if command -v jq >/dev/null 2>&1; then
+    # _pf_normalize_int guarantees numeric --argjson values remain digit strings.
     json="$(
       jq -nc \
         --argjson port "$port" \
@@ -198,11 +215,21 @@ write_pf_state() {
         --arg message "$message" \
         --arg last_checked "$last_checked" \
         --arg last_success "$last_success_json" \
-        '{"port":$port,"status":$status,"attempts":$attempts,"cycles":$cycles,"last_checked":$last_checked,"last_success":($last_success == "" ? null : $last_success),"message":$message}'
-    )" || true
+        '{"port":$port,"status":$status,"attempts":$attempts,"cycles":$cycles,"last_checked":$last_checked,"last_success":(if $last_success == "" then null else $last_success end),"message":$message}'
+    )"
+    local jq_status=$?
+    if ((jq_status != 0)); then
+      json=""
+      if [[ -z "${PF_JQ_SERIALIZE_FAILURE_LOGGED:-}" ]]; then
+        # Log once so operators can discover jq issues without flooding logs.
+        pf_log "Failed to serialize PF state with jq; using fallback encoder"
+        PF_JQ_SERIALIZE_FAILURE_LOGGED=1
+      fi
+    fi
   fi
 
   if [[ -z "$json" ]]; then
+    # Fallback builder avoids complex JSON; intended for simple string/number fields only.
     local escaped_status escaped_message escaped_last_checked escaped_last_success
     escaped_status="$(_pf_escape_json_string "$status")"
     escaped_message="$(_pf_escape_json_string "$message")"
@@ -217,8 +244,8 @@ write_pf_state() {
   fi
 
   _pf_ensure_parent_dir "$state_file"
-  printf '%s\n' "$json" >"$state_file" 2>/dev/null || true
-  chmod 600 "$state_file" 2>/dev/null || true
+  printf '%s\n' "$json" >"$state_file" 2>/dev/null || true # ignore failures: non-fatal state persistence
+  chmod 600 "$state_file" 2>/dev/null || true # ignore failures: best-effort permission fix
 
   if [[ "$port" -gt 0 ]]; then
     PF_ENSURED_PORT="$port"
@@ -507,7 +534,13 @@ _gluetun_extract_json_string() {
   fi
 
   if [[ -z "$value" ]]; then
-    value="$(printf '%s\n' "$payload" | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\\([^\"\\]*\\)\".*/\\1/p" | head -n1)"
+    if [[ "$payload" == *'\\"'* ]]; then
+      # Fallback parser cannot safely handle escaped quotes; return empty string.
+      value=""
+    else
+      # sed fallback is a best-effort extraction for flat JSON structures only.
+      value="$(printf '%s\n' "$payload" | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\\([^\"\\]*\\)\".*/\\1/p" | head -n1)"
+    fi
   fi
 
   printf '%s' "$value"
@@ -527,7 +560,13 @@ _gluetun_extract_json_number() {
   fi
 
   if [[ -z "$value" ]]; then
-    value="$(printf '%s\n' "$payload" | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\\1/p" | head -n1)"
+    if [[ "$payload" == *'\\"'* ]]; then
+      # Fallback parser cannot safely handle escaped quotes; return empty result.
+      value=""
+    else
+      # sed fallback is a best-effort extraction for flat JSON structures only.
+      value="$(printf '%s\n' "$payload" | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\\1/p" | head -n1)"
+    fi
   fi
 
   printf '%s' "$value"
