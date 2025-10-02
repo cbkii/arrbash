@@ -10,36 +10,9 @@ install_missing() {
     die "Docker daemon is not running or not accessible"
   fi
 
-  local compose_version_raw=""
-  local compose_version_clean=""
-  local compose_major=""
-
   DOCKER_COMPOSE_CMD=()
-
-  if docker compose version >/dev/null 2>&1; then
-    compose_version_raw="$(docker compose version --short 2>/dev/null || true)"
-    compose_version_clean="${compose_version_raw#v}"
-    compose_major="${compose_version_clean%%.*}"
-    if [[ "$compose_major" =~ ^[0-9]+$ ]] && ((compose_major >= 2)); then
-      DOCKER_COMPOSE_CMD=(docker compose)
-    else
-      compose_version_raw=""
-      compose_version_clean=""
-    fi
-  fi
-
-  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)) && command -v docker-compose >/dev/null 2>&1; then
-    compose_version_raw="$(docker-compose version --short 2>/dev/null || true)"
-    compose_version_clean="${compose_version_raw#v}"
-    compose_major="${compose_version_clean%%.*}"
-    if [[ "$compose_major" =~ ^[0-9]+$ ]] && ((compose_major >= 2)); then
-      DOCKER_COMPOSE_CMD=(docker-compose)
-    else
-      compose_version_raw=""
-      compose_version_clean=""
-    fi
-  fi
-
+  ARRSTACK_COMPOSE_VERSION=""
+  arrstack_resolve_compose_cmd
   if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
     die "Docker Compose v2+ is required but not found"
   fi
@@ -60,7 +33,7 @@ install_missing() {
 
   msg "  Docker: $(docker version --format '{{.Server.Version}}')"
   local compose_cmd_display="${DOCKER_COMPOSE_CMD[*]}"
-  local compose_version_display="${compose_version_raw:-${compose_version_clean:-unknown}}"
+  local compose_version_display="${ARRSTACK_COMPOSE_VERSION:-unknown}"
   if [[ -n "$compose_version_display" && "$compose_version_display" != "unknown" ]]; then
     msg "  Compose: ${compose_cmd_display} ${compose_version_display}"
   else

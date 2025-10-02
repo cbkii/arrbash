@@ -58,6 +58,11 @@ gluetun_version_requires_auth_config() {
 
 # Resolves the Gluetun data directory regardless of stack invocation context
 _pf_gluetun_root() {
+  if declare -f arrstack_gluetun_dir >/dev/null 2>&1; then
+    arrstack_gluetun_dir
+    return
+  fi
+
   local base="${ARR_DOCKER_DIR:-}"
   if [[ -z "$base" ]]; then
     if [[ -n "${ARR_STACK_DIR:-}" ]]; then
@@ -66,7 +71,7 @@ _pf_gluetun_root() {
       base="${HOME:-.}/srv/docker-data"
     fi
   fi
-  printf '%s' "${base%/}/gluetun"
+  printf '%s/gluetun' "${base%/}"
 }
 
 # Returns absolute path to the async port-forward state file

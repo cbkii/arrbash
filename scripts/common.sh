@@ -4,6 +4,7 @@
 : "${YELLOW:=}"
 : "${RESET:=}"
 : "${ARR_COLOR_OUTPUT:=1}"
+: "${ARRSTACK_COMPOSE_VERSION:=}"
 : "${SECRET_FILE_MODE:=600}"
 : "${NONSECRET_FILE_MODE:=600}"
 : "${DATA_DIR_MODE:=700}"
@@ -39,6 +40,90 @@ arrstack_resolve_color_output
 # Checks command availability without emitting output (used for optional deps)
 have_command() {
   command -v "$1" >/dev/null 2>&1
+}
+
+# Detects docker compose command once per shell and memoizes result for callers
+arrstack_resolve_compose_cmd() {
+  local verbose="${1:-0}"
+
+  if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
+    if [[ "$verbose" == "1" ]]; then
+      local version_display="${ARRSTACK_COMPOSE_VERSION:-}"
+      msg "Using cached Docker Compose command: ${DOCKER_COMPOSE_CMD[*]}${version_display:+ (version ${version_display})}"
+    fi
+    return 0
+  fi
+
+  local -a candidate=()
+  local version=""
+  local major=""
+
+  if docker compose version >/dev/null 2>&1; then
+    candidate=(docker compose)
+    version="$(docker compose version --short 2>/dev/null || true)"
+    version="${version#v}"
+    major="${version%%.*}"
+    if [[ -n "$major" && "$major" =~ ^[0-9]+$ ]]; then
+      : # major version is valid, do nothing
+    else
+      version=""
+    fi
+  fi
+
+  if ((${#candidate[@]} == 0)) && have_command docker-compose; then
+    version="$(docker-compose version --short 2>/dev/null || true)"
+    version="${version#v}"
+    major="${version%%.*}"
+    if [[ "$major" =~ ^[0-9]+$ ]] && ((major >= 2)); then
+      candidate=(docker-compose)
+    else
+      version=""
+    fi
+  fi
+
+  if ((${#candidate[@]} == 0)); then
+    die "Docker Compose v2+ is required but not found"
+  fi
+
+  DOCKER_COMPOSE_CMD=("${candidate[@]}")
+  ARRSTACK_COMPOSE_VERSION="$version"
+
+  if [[ "$verbose" == "1" ]]; then
+    msg "Resolved Docker Compose command: ${DOCKER_COMPOSE_CMD[*]}${version:+ (version ${version})}"
+  fi
+}
+
+# Provides canonical docker-data root resolution with consistent fallbacks
+arrstack_docker_data_root() {
+  local base="${ARR_DOCKER_DIR:-}"
+
+  if [[ -n "$base" ]]; then
+    printf '%s' "${base%/}"
+    return
+  fi
+
+  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+    printf '%s' "${ARR_STACK_DIR%/}/docker-data"
+    return
+  fi
+
+  local home_dir="${HOME:-}"
+  if [[ -n "$home_dir" ]]; then
+    printf '%s' "${home_dir%/}/srv/docker-data"
+    return
+  fi
+
+  printf '%s' "./srv/docker-data"
+}
+
+# Resolves the Gluetun data directory under the docker-data root
+arrstack_gluetun_dir() {
+  printf '%s/gluetun' "$(arrstack_docker_data_root)"
+}
+
+# Resolves the VPN auto-reconnect working directory under Gluetun assets
+arrstack_gluetun_auto_reconnect_dir() {
+  printf '%s/auto-reconnect' "$(arrstack_gluetun_dir)"
 }
 
 # Escapes text for single-quoted shells; optional flatten mode serializes newlines

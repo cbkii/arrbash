@@ -8,6 +8,9 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 # shellcheck source=scripts/common.sh
 . "${REPO_ROOT}/scripts/common.sh"
 
+# shellcheck source=scripts/network.sh
+. "${REPO_ROOT}/scripts/network.sh"
+
 # Escalation insertion point: call this at top of scripts that need root
 arrstack_escalate_privileges "$@" || exit $?
 
@@ -38,21 +41,6 @@ is_debian_like() {
   fi
 
   return 1
-}
-
-validate_ipv4() {
-  local ip="$1"
-  if [[ ! "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    die "Invalid IPv4 address: ${ip}"
-  fi
-
-  local segment
-  IFS='.' read -r -a segment <<<"${ip}"
-  for part in "${segment[@]}"; do
-    if ((part < 0 || part > 255)); then
-      die "Invalid IPv4 segment in ${ip}"
-    fi
-  done
 }
 
 fuzzy_remove_entries() {
@@ -306,7 +294,9 @@ main() {
     exit 0
   fi
 
-  validate_ipv4 "${lan_ip}"
+  if ! validate_ipv4 "${lan_ip}"; then
+    die "Invalid IPv4 address: ${lan_ip}"
+  fi
 
   local hosts_file="/etc/hosts"
   if [[ ! -w "${hosts_file}" ]]; then
