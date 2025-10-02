@@ -340,29 +340,51 @@ vpn_auto_reconnect_load_state() {
     ' <<<"$json" 2>/dev/null
   )" && [[ -n "$jq_output" ]]; then
     local failure_history_json=""
-    IFS=$'\t' read -r \
-      VPN_AUTO_STATE_CONSECUTIVE_LOW \
-      VPN_AUTO_STATE_ROTATION_INDEX \
-      VPN_AUTO_STATE_LAST_COUNTRY \
-      VPN_AUTO_STATE_LAST_RECONNECT \
-      VPN_AUTO_STATE_LAST_STATUS \
-      VPN_AUTO_STATE_LAST_ACTIVITY \
-      VPN_AUTO_STATE_LAST_LOW \
-      VPN_AUTO_STATE_COOLDOWN_UNTIL \
-      VPN_AUTO_STATE_DISABLED_UNTIL \
-      VPN_AUTO_STATE_AUTO_DISABLED \
-      VPN_AUTO_STATE_RETRY_BACKOFF \
-      VPN_AUTO_STATE_RETRY_TOTAL \
-      VPN_AUTO_STATE_NEXT_DECISION \
-      VPN_AUTO_STATE_ROTATION_DAY_EPOCH \
-      VPN_AUTO_STATE_ROTATION_COUNT_DAY \
-      VPN_AUTO_STATE_CLASSIFICATION \
-      VPN_AUTO_STATE_JITTER_APPLIED \
-      VPN_AUTO_STATE_NEXT_ACTION \
-      VPN_AUTO_STATE_RESTART_FAILURES \
-      failure_history_json <<<"$jq_output"
-    VPN_AUTO_STATE_FAILURE_HISTORY="${failure_history_json:-{}}"
-  else
+    # Read jq_output into array and validate field count
+    IFS=$'\t' read -r -a vpn_auto_state_fields <<<"$jq_output"
+    if [[ ${#vpn_auto_state_fields[@]} -eq 20 ]]; then
+      VPN_AUTO_STATE_CONSECUTIVE_LOW="${vpn_auto_state_fields[0]}"
+      VPN_AUTO_STATE_ROTATION_INDEX="${vpn_auto_state_fields[1]}"
+      VPN_AUTO_STATE_LAST_COUNTRY="${vpn_auto_state_fields[2]}"
+      VPN_AUTO_STATE_LAST_RECONNECT="${vpn_auto_state_fields[3]}"
+      VPN_AUTO_STATE_LAST_STATUS="${vpn_auto_state_fields[4]}"
+      VPN_AUTO_STATE_LAST_ACTIVITY="${vpn_auto_state_fields[5]}"
+      VPN_AUTO_STATE_LAST_LOW="${vpn_auto_state_fields[6]}"
+      VPN_AUTO_STATE_COOLDOWN_UNTIL="${vpn_auto_state_fields[7]}"
+      VPN_AUTO_STATE_DISABLED_UNTIL="${vpn_auto_state_fields[8]}"
+      VPN_AUTO_STATE_AUTO_DISABLED="${vpn_auto_state_fields[9]}"
+      VPN_AUTO_STATE_RETRY_BACKOFF="${vpn_auto_state_fields[10]}"
+      VPN_AUTO_STATE_RETRY_TOTAL="${vpn_auto_state_fields[11]}"
+      VPN_AUTO_STATE_NEXT_DECISION="${vpn_auto_state_fields[12]}"
+      VPN_AUTO_STATE_ROTATION_DAY_EPOCH="${vpn_auto_state_fields[13]}"
+      VPN_AUTO_STATE_ROTATION_COUNT_DAY="${vpn_auto_state_fields[14]}"
+      VPN_AUTO_STATE_CLASSIFICATION="${vpn_auto_state_fields[15]}"
+      VPN_AUTO_STATE_JITTER_APPLIED="${vpn_auto_state_fields[16]}"
+      VPN_AUTO_STATE_NEXT_ACTION="${vpn_auto_state_fields[17]}"
+      VPN_AUTO_STATE_RESTART_FAILURES="${vpn_auto_state_fields[18]}"
+      VPN_AUTO_STATE_FAILURE_HISTORY="${vpn_auto_state_fields[19]:-{}}"
+    else
+      # Fallback to per-field extraction if field count is wrong
+      VPN_AUTO_STATE_CONSECUTIVE_LOW="$(jq -r '.consecutive_low // 0' <<<"$json" 2>/dev/null || printf '0')"
+      VPN_AUTO_STATE_ROTATION_INDEX="$(jq -r '.rotation_index // 0' <<<"$json" 2>/dev/null || printf '0')"
+      VPN_AUTO_STATE_LAST_COUNTRY="$(jq -r '.last_country // ""' <<<"$json" 2>/dev/null || printf '')"
+      VPN_AUTO_STATE_LAST_RECONNECT="$(jq -r '.last_reconnect // ""' <<<"$json" 2>/dev/null || printf '')"
+      VPN_AUTO_STATE_LAST_STATUS="$(jq -r '.last_status // ""' <<<"$json" 2>/dev/null || printf '')"
+      VPN_AUTO_STATE_LAST_ACTIVITY="$(jq -r '.last_activity // ""' <<<"$json" 2>/dev/null || printf '')"
+      VPN_AUTO_STATE_LAST_LOW="$(jq -r '.last_low // ""' <<<"$json" 2>/dev/null || printf '')"
+      VPN_AUTO_STATE_FAILURE_HISTORY="$(jq -c '
+        def normalise(entry):
+          if (entry | type) == "object" then
+            {last: (entry.last // 0), count: (entry.count // 0)}
+          elif (entry | type) == "number" then
+            {last: entry, count: 1}
+          else
+            {last: 0, count: 0}
+          end;
+        ( .failure_history // {} ) as $fh
+        | reduce ($fh | to_entries[]) as $item ({}; .[$item.key] = normalise($item.value))
+      ' <<<"$json" 2>/dev/null || printf '{}')"
+    fi
     VPN_AUTO_STATE_CONSECUTIVE_LOW="$(jq -r '.consecutive_low // 0' <<<"$json" 2>/dev/null || printf '0')"
     VPN_AUTO_STATE_ROTATION_INDEX="$(jq -r '.rotation_index // 0' <<<"$json" 2>/dev/null || printf '0')"
     VPN_AUTO_STATE_LAST_COUNTRY="$(jq -r '.last_country // ""' <<<"$json" 2>/dev/null || printf '')"
