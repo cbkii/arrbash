@@ -7,10 +7,10 @@
 # --- Stack paths ---
 ARR_BASE="${HOME}/srv"                 # Root directory for generated stack files
 ARR_STACK_DIR="${ARR_BASE}/arrstack"  # Location for docker-compose.yml, scripts, and aliases
+ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
+ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
 # ARRCONF_DIR="${HOME}/.config/arrstack"  # Optional: relocate Proton creds outside the repo
 # ARR_USERCONF_PATH="${ARR_BASE}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
-ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
-ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
 
 # --- Logging and output ---
 ARR_LOG_DIR="${ARR_STACK_DIR}/logs"           # Directory for runtime/service logs (default: ${ARR_STACK_DIR}/logs)

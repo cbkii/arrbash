@@ -28,12 +28,12 @@ fi
 # Base paths
 ARR_BASE="${ARR_BASE:-${HOME}/srv}"
 ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_BASE}/arrstack}"
+ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_BASE}/docker-data}"
 ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
+ARRCONF_DIR="${ARRCONF_DIR:-${REPO_ROOT:-${PWD}}/arrconf}"
+ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE}/userr.conf}"
 ARR_LOG_DIR="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
 ARR_INSTALL_LOG="${ARR_INSTALL_LOG:-${ARR_LOG_DIR}/arrstack-install.log}"
-ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_BASE}/docker-data}"
-ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE}/userr.conf}"
-ARRCONF_DIR="${ARRCONF_DIR:-${REPO_ROOT:-${PWD}}/arrconf}"
 ARR_COLOR_OUTPUT="${ARR_COLOR_OUTPUT:-1}"
 
 # File/dir permissions (strict keeps secrets 600/700, collab enables group read/write 660/770)
