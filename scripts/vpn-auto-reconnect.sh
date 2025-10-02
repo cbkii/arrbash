@@ -362,7 +362,7 @@ vpn_auto_reconnect_load_state() {
       VPN_AUTO_STATE_JITTER_APPLIED="${vpn_auto_state_fields[16]}"
       VPN_AUTO_STATE_NEXT_ACTION="${vpn_auto_state_fields[17]}"
       VPN_AUTO_STATE_RESTART_FAILURES="${vpn_auto_state_fields[18]}"
-      VPN_AUTO_STATE_FAILURE_HISTORY="${vpn_auto_state_fields[19]:-{}}"
+      VPN_AUTO_STATE_FAILURE_HISTORY="${vpn_auto_state_fields[19]:-$(printf '{}')}"
     else
       # Fallback to per-field extraction if field count is wrong
       VPN_AUTO_STATE_CONSECUTIVE_LOW="$(jq -r '.consecutive_low // 0' <<<"$json" 2>/dev/null || printf '0')"
