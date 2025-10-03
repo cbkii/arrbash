@@ -12,10 +12,10 @@ logic that keeps your API key and configuration safe across reruns.
 | Split-VPN direct | `0` | `arr_net` | Optional host mapping | Matches downloader connectivity expected by Sonarr/Radarr while qBittorrent remains tunneled. |
 | VPN (opt-in) | `1` | Gluetun (`network_mode: "service:gluetun"`) | No host ports (shares Gluetun stack) | Use only when SAB must egress via the VPN. |
 
-qBittorrent now defaults to WebUI port **8082** which frees 8080 for SABnzbd when
-both containers share Gluetun. If you intentionally keep SAB in VPN mode, keep
-its listen port at 8080 (the new qBittorrent default avoids the historical
-collision).
+qBittorrent defaults to WebUI port **8082**, leaving port 8080 available for
+SABnzbd when both containers share Gluetun. If you intentionally keep SAB in
+VPN mode, keep its listen port at 8080 (qBittorrent continues to use 8082
+inside Gluetun).
 
 ## API Key Preservation
 

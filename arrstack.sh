@@ -195,13 +195,8 @@ main() {
 
   if [[ "${MIGRATE_QBT_WEBUI_PORT:-0}" == "1" ]]; then
     local migrate_target_port="8082"
-    local current_host_port="${ARRSTACK_QBT_HOST_PORT_ENV:-${QBT_HTTP_PORT_HOST:-$migrate_target_port}}"
-    local current_container_port="${ARRSTACK_QBT_WEBUI_PORT_CONFIG:-${QBT_WEBUI_PORT:-$migrate_target_port}}"
-
-    if [[ "$current_host_port" == "8080" || "$current_container_port" == "8080" ]]; then
-      QBT_HTTP_PORT_HOST="$migrate_target_port"
-      QBT_WEBUI_PORT="$migrate_target_port"
-    fi
+    QBT_HTTP_PORT_HOST="${migrate_target_port}"
+    QBT_WEBUI_PORT="${migrate_target_port}"
   fi
 
   preflight

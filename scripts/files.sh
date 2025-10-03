@@ -391,27 +391,24 @@ write_env() {
 
   local migration_requested="${MIGRATE_QBT_WEBUI_PORT:-0}"
   if [[ "$migration_requested" == "1" ]]; then
-    local host_is_legacy=0
-    local webui_is_legacy=0
-    [[ "$qbt_host_port" == "8080" ]] && host_is_legacy=1
-    [[ "$qbt_webui_port" == "8080" ]] && webui_is_legacy=1
+    local host_before="$qbt_host_port"
+    local webui_before="$qbt_webui_port"
 
-    if ((host_is_legacy == 1 || webui_is_legacy == 1)); then
-      if [[ "$qbt_webui_port" != "$qbt_webui_default" ]]; then
+    if [[ "$webui_before" == "$qbt_webui_default" && "$host_before" == "$qbt_host_default" ]]; then
+      arrstack_record_preserve_note "qBittorrent ports already using ${qbt_webui_default}; migration not required"
+      qbt_webui_status="default"
+      qbt_host_status="default"
+    else
+      if [[ "$webui_before" != "$qbt_webui_default" ]]; then
         arrstack_record_preserve_note "Migrated qBittorrent WebUI port to ${qbt_webui_default}"
+      fi
+      if [[ "$host_before" != "$qbt_host_default" ]]; then
+        arrstack_record_preserve_note "Migrated qBittorrent host port to ${qbt_host_default}"
       fi
       qbt_webui_port="$qbt_webui_default"
       qbt_webui_status="migrated"
-      if [[ "$qbt_host_port" != "$qbt_host_default" ]]; then
-        arrstack_record_preserve_note "Migrated qBittorrent host port to ${qbt_host_default}"
-      fi
       qbt_host_port="$qbt_host_default"
       qbt_host_status="migrated"
-    elif [[ "$qbt_webui_port" == "$qbt_webui_default" && "$qbt_host_port" == "$qbt_host_default" ]]; then
-      arrstack_record_preserve_note "qBittorrent WebUI already using ${qbt_webui_default}; migration not required"
-    else
-      warn "qBittorrent port migration skipped: custom port(s) detected (WebUI ${qbt_webui_port}, host ${qbt_host_port})."
-      arrstack_record_preserve_note "Retained custom qBittorrent ports ${qbt_webui_port}/${qbt_host_port} (migration skipped)"
     fi
   else
     if [[ "$qbt_webui_status" == "preserved" && "$qbt_webui_port" != "$qbt_webui_default" ]]; then
@@ -432,11 +429,6 @@ write_env() {
   QBT_HTTP_PORT_HOST="$qbt_host_port"
   ARRSTACK_QBT_WEBUI_PORT_STATUS="$qbt_webui_status"
   ARRSTACK_QBT_HOST_PORT_STATUS="$qbt_host_status"
-
-  ARRSTACK_QBT_PORT_LEGACY=0
-  if [[ "$QBT_WEBUI_PORT" == "8080" || "$QBT_HTTP_PORT_HOST" == "8080" ]]; then
-    ARRSTACK_QBT_PORT_LEGACY=1
-  fi
 
   local sab_api_state="empty"
   local sab_api_value="${SABNZBD_API_KEY:-}"
@@ -462,13 +454,6 @@ write_env() {
       ARRSTACK_SAB_API_KEY_SOURCE="empty"
       ;;
   esac
-
-  if ((sab_enabled)) && [[ "$SABNZBD_USE_VPN" == "1" ]] && [[ "$QBT_WEBUI_PORT" == "8080" ]]; then
-    warn "SABnzbd and qBittorrent share Gluetun but qBittorrent still listens on 8080; run --migrate-qbt-webui-port to avoid conflicts."
-    ARRSTACK_QBT_SAB_PORT_CONFLICT=1
-  else
-    ARRSTACK_QBT_SAB_PORT_CONFLICT=0
-  fi
 
   load_proton_credentials
 
@@ -1993,24 +1978,28 @@ write_caddy_assets() {
   # Prefer normalized suffix from .env; fall back to computed value
   local domain_suffix="${ARR_DOMAIN_SUFFIX_CLEAN}"
 
+  local default_upstream_host="${LOCALHOST_IP:-localhost}"
+  if [[ -z "$default_upstream_host" || "$default_upstream_host" == "0.0.0.0" ]]; then
+    default_upstream_host="localhost"
+  fi
+
   local -a services=(
-    "qbittorrent ${QBT_WEBUI_PORT}"
-    "sonarr ${SONARR_PORT}"
-    "radarr ${RADARR_PORT}"
-    "prowlarr ${PROWLARR_PORT}"
-    "bazarr ${BAZARR_PORT}"
-    "flaresolverr ${FLARESOLVERR_PORT}"
+    "qbittorrent|${QBT_WEBUI_PORT}|${default_upstream_host}"
+    "sonarr|${SONARR_PORT}|${default_upstream_host}"
+    "radarr|${RADARR_PORT}|${default_upstream_host}"
+    "prowlarr|${PROWLARR_PORT}|${default_upstream_host}"
+    "bazarr|${BAZARR_PORT}|${default_upstream_host}"
+    "flaresolverr|${FLARESOLVERR_PORT}|${default_upstream_host}"
   )
 
-  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
-    local sab_proxy_port=""
-    if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
-      sab_proxy_port="8080"
-    else
-      sab_proxy_port="${SABNZBD_PORT}"
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+    local sab_proxy_port="${SABNZBD_PORT}"
+    local sab_upstream_host="${SABNZBD_HOST:-$default_upstream_host}"
+    if [[ -z "$sab_upstream_host" || "$sab_upstream_host" == "0.0.0.0" ]]; then
+      sab_upstream_host="$default_upstream_host"
     fi
     if [[ -n "$sab_proxy_port" && "$sab_proxy_port" =~ ^[0-9]+$ ]]; then
-      services+=("sabnzbd ${sab_proxy_port}")
+      services+=("sabnzbd|${sab_proxy_port}|${sab_upstream_host}")
     fi
   fi
 
@@ -2036,23 +2025,24 @@ write_caddy_assets() {
     printf '    }\n'
     printf '}\n\n'
 
-    local caddy_upstream_host="${LOCALHOST_IP:-localhost}"
-    local entry name port host
+    local entry name port upstream_host host
     for entry in "${services[@]}"; do
-      name="${entry%% *}"
-      port="${entry##* }"
+      IFS='|' read -r name port upstream_host <<<"$entry"
+      if [[ -z "$upstream_host" ]]; then
+        upstream_host="$default_upstream_host"
+      fi
       host="${name}.${domain_suffix}"
       printf '%s {\n' "$host"
       printf '    tls internal\n'
       printf '    @lan remote_ip %s\n' "$lan_cidrs"
       printf '    handle @lan {\n'
-      printf '        reverse_proxy %s:%s\n' "$caddy_upstream_host" "$port"
+      printf '        reverse_proxy %s:%s\n' "$upstream_host" "$port"
       printf '    }\n'
       printf '    handle {\n'
       printf '        basic_auth * {\n'
       printf '            %s %s\n' "$CADDY_BASIC_AUTH_USER" "$caddy_auth_hash"
       printf '        }\n'
-      printf '        reverse_proxy %s:%s\n' "$caddy_upstream_host" "$port"
+      printf '        reverse_proxy %s:%s\n' "$upstream_host" "$port"
       printf '    }\n'
       printf '}\n\n'
     done
@@ -2066,10 +2056,12 @@ write_caddy_assets() {
     printf '\n'
     printf '    handle @lan {\n'
     for entry in "${services[@]}"; do
-      name="${entry%% *}"
-      port="${entry##* }"
+      IFS='|' read -r name port upstream_host <<<"$entry"
+      if [[ -z "$upstream_host" ]]; then
+        upstream_host="$default_upstream_host"
+      fi
       printf '        handle_path /apps/%s/* {\n' "$name"
-      printf '            reverse_proxy http://%s:%s\n' "$caddy_upstream_host" "$port"
+      printf '            reverse_proxy http://%s:%s\n' "$upstream_host" "$port"
       printf '        }\n'
     done
     printf '        respond "ARR Stack Running" 200\n'
@@ -2080,10 +2072,12 @@ write_caddy_assets() {
     printf '            %s %s\n' "$CADDY_BASIC_AUTH_USER" "$caddy_auth_hash"
     printf '        }\n'
     for entry in "${services[@]}"; do
-      name="${entry%% *}"
-      port="${entry##* }"
+      IFS='|' read -r name port upstream_host <<<"$entry"
+      if [[ -z "$upstream_host" ]]; then
+        upstream_host="$default_upstream_host"
+      fi
       printf '        handle_path /apps/%s/* {\n' "$name"
-      printf '            reverse_proxy http://%s:%s\n' "$caddy_upstream_host" "$port"
+      printf '            reverse_proxy http://%s:%s\n' "$upstream_host" "$port"
       printf '        }\n'
     done
     printf '        respond "ARR Stack Running" 200\n'

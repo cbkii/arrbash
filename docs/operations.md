@@ -15,7 +15,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ./arrstack.sh --sync-api-keys       # resync Sonarr/Radarr/Prowlarr keys into Configarr
   ./arrstack.sh --no-auto-api-sync    # skip automatic Configarr sync for one run
   ./arrstack.sh --enable-sabnzbd      # one-off SABnzbd enablement without editing userr.conf
-  ./arrstack.sh --migrate-qbt-webui-port  # switch qBittorrent WebUI to the new 8082 default
+  ./arrstack.sh --migrate-qbt-webui-port  # reset qBittorrent WebUI to the canonical 8082 default
   ./arrstack.sh --setup-host-dns      # run the host DNS takeover helper during install
   ./arrstack.sh --refresh-aliases     # rebuild .aliasarr
   ```

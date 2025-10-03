@@ -95,7 +95,7 @@ hydrate_qbt_host_port_from_env_file() {
 }
 
 # Reads qBittorrent's configured WebUI port so compose generation honors
-# existing deployments that still listen on 8080.
+# existing deployments that override the default port.
 hydrate_qbt_webui_port_from_config() {
   local config_dir="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/docker-data}/qbittorrent"
   local primary_conf="${config_dir}/qBittorrent.conf"

@@ -53,7 +53,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 - Common runtime toggles:
   ```bash
   ./arrstack.sh --enable-sabnzbd           # one-off enable without editing userr.conf
-  ./arrstack.sh --migrate-qbt-webui-port   # adopt the 8082 WebUI port if you came from 8080
+  ./arrstack.sh --migrate-qbt-webui-port   # reset qBittorrent WebUI port to the canonical 8082 default
   ```
 
 ## Next steps

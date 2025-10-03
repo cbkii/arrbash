@@ -73,12 +73,6 @@ QBT_INFO
   esac
   msg "qBittorrent ports: container ${QBT_WEBUI_PORT} ${container_suffix}, host ${QBT_HTTP_PORT_HOST} ${host_suffix}"
 
-  if [[ "${ARRSTACK_QBT_SAB_PORT_CONFLICT:-0}" == "1" ]]; then
-    warn "SABnzbd shares Gluetun but qBittorrent still listens on 8080 — rerun with --migrate-qbt-webui-port to avoid conflicts."
-  elif [[ "${ARRSTACK_QBT_PORT_LEGACY:-0}" == "1" ]]; then
-    warn "qBittorrent WebUI still uses legacy port 8080; consider --migrate-qbt-webui-port to adopt 8082."
-  fi
-
   if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
     warn "Stack configuration has duplicate host port assignments:"
     if [[ -n "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
@@ -457,19 +451,27 @@ POLICY
       sab_helper_path="${SCRIPT_LIB_DIR}/sab-helper.sh"
     fi
     msg "---- SABnzbd ----"
+    local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
+    local sab_helper_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
+    if [[ -z "$sab_helper_host" || "$sab_helper_host" == "0.0.0.0" ]]; then
+      sab_helper_host="${LOCALHOST_IP:-localhost}"
+    fi
     if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
-      msg "VPN Routed: yes (internal port 8080 via Gluetun)"
+      msg "VPN Routed: yes"
     else
       msg "VPN Routed: no"
+    fi
+    msg "Host: ${sab_helper_host}"
+    if [[ "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
       msg "Host Port: ${SABNZBD_PORT}"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" != "1" ]]; then
         msg "LAN Exposure: disabled (EXPOSE_DIRECT_PORTS=0)"
+      elif [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
+        warn "SABnzbd exposed directly on the LAN without Caddy (ENABLE_CADDY=0)."
       fi
     fi
-    local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
-    local sab_helper_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
     local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
-    msg "Helper URL: ${sab_helper_url}"
+    msg "Helper Endpoint: ${sab_helper_url}"
     if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${ARR_DOMAIN_SUFFIX_CLEAN:-}" ]]; then
       local sab_domain="sabnzbd.${ARR_DOMAIN_SUFFIX_CLEAN}"
       msg "Caddy Route: https://${sab_domain}"
@@ -479,6 +481,20 @@ POLICY
     else
       msg "Default Category Override: (none)"
     fi
+
+    local sab_version_display="(unknown)"
+    if [[ -x "$sab_helper_path" ]]; then
+      if sab_version_display="$($sab_helper_path version 2>/dev/null)"; then
+        if [[ -z "$sab_version_display" ]]; then
+          sab_version_display="(unknown)"
+        fi
+      else
+        sab_version_display="(unknown)"
+      fi
+    else
+      sab_version_display="(helper unavailable)"
+    fi
+    msg "Version: ${sab_version_display}"
 
     local sab_api_state="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
     case "$sab_api_state" in
