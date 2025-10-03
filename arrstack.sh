@@ -247,6 +247,8 @@ main() {
     local doctor_script="${REPO_ROOT}/scripts/doctor.sh"
     if [[ -x "${doctor_script}" ]]; then
       msg "🩺 Running LAN diagnostics"
+      export ARRSTACK_INTERNAL_PORT_CONFLICTS="${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}"
+      export ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL="${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}"
       if ! LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}" \
         LAN_IP="${LAN_IP}" \
         ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}" \

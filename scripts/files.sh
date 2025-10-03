@@ -388,17 +388,30 @@ write_env() {
     qbt_host_status="default"
   fi
 
-  if [[ "${MIGRATE_QBT_WEBUI_PORT:-0}" == "1" ]]; then
-    if [[ "$qbt_webui_port" != "$qbt_webui_default" ]]; then
-      arrstack_record_preserve_note "Migrated qBittorrent WebUI port to ${qbt_webui_default}"
+  local migration_requested="${MIGRATE_QBT_WEBUI_PORT:-0}"
+  if [[ "$migration_requested" == "1" ]]; then
+    local host_is_legacy=0
+    local webui_is_legacy=0
+    [[ "$qbt_host_port" == "8080" ]] && host_is_legacy=1
+    [[ "$qbt_webui_port" == "8080" ]] && webui_is_legacy=1
+
+    if ((host_is_legacy == 1 || webui_is_legacy == 1)); then
+      if [[ "$qbt_webui_port" != "$qbt_webui_default" ]]; then
+        arrstack_record_preserve_note "Migrated qBittorrent WebUI port to ${qbt_webui_default}"
+      fi
+      qbt_webui_port="$qbt_webui_default"
+      qbt_webui_status="migrated"
+      if [[ "$qbt_host_port" != "$qbt_host_default" ]]; then
+        arrstack_record_preserve_note "Migrated qBittorrent host port to ${qbt_host_default}"
+      fi
+      qbt_host_port="$qbt_host_default"
+      qbt_host_status="migrated"
+    elif [[ "$qbt_webui_port" == "$qbt_webui_default" && "$qbt_host_port" == "$qbt_host_default" ]]; then
+      arrstack_record_preserve_note "qBittorrent WebUI already using ${qbt_webui_default}; migration not required"
+    else
+      warn "qBittorrent port migration skipped: custom port(s) detected (WebUI ${qbt_webui_port}, host ${qbt_host_port})."
+      arrstack_record_preserve_note "Retained custom qBittorrent ports ${qbt_webui_port}/${qbt_host_port} (migration skipped)"
     fi
-    qbt_webui_port="$qbt_webui_default"
-    qbt_webui_status="migrated"
-    if [[ "$qbt_host_port" != "$qbt_host_default" ]]; then
-      arrstack_record_preserve_note "Migrated qBittorrent host port to ${qbt_host_default}"
-    fi
-    qbt_host_port="$qbt_host_default"
-    qbt_host_status="migrated"
   else
     if [[ "$qbt_webui_status" == "preserved" && "$qbt_webui_port" != "$qbt_webui_default" ]]; then
       arrstack_record_preserve_note "Preserved qBittorrent WebUI port ${qbt_webui_port}"
@@ -420,9 +433,34 @@ write_env() {
   ARRSTACK_QBT_HOST_PORT_STATUS="$qbt_host_status"
 
   ARRSTACK_QBT_PORT_LEGACY=0
-  if [[ "$QBT_WEBUI_PORT" == "8080" ]]; then
+  if [[ "$QBT_WEBUI_PORT" == "8080" || "$QBT_HTTP_PORT_HOST" == "8080" ]]; then
     ARRSTACK_QBT_PORT_LEGACY=1
   fi
+
+  local sab_api_state="empty"
+  local sab_api_value="${SABNZBD_API_KEY:-}"
+  if [[ -n "$sab_api_value" ]]; then
+    local sab_api_upper="${sab_api_value^^}"
+    if [[ "$sab_api_upper" == REPLACE_WITH_* ]]; then
+      sab_api_state="placeholder"
+    else
+      sab_api_state="set"
+    fi
+  fi
+  ARRSTACK_SAB_API_KEY_STATE="$sab_api_state"
+  case "$sab_api_state" in
+    set)
+      if [[ -z "${ARRSTACK_SAB_API_KEY_SOURCE:-}" ]]; then
+        ARRSTACK_SAB_API_KEY_SOURCE="provided"
+      fi
+      ;;
+    placeholder)
+      ARRSTACK_SAB_API_KEY_SOURCE="placeholder"
+      ;;
+    empty)
+      ARRSTACK_SAB_API_KEY_SOURCE="empty"
+      ;;
+  esac
 
   if ((sab_enabled)) && [[ "$SABNZBD_USE_VPN" == "1" ]] && [[ "$QBT_WEBUI_PORT" == "8080" ]]; then
     warn "SABnzbd and qBittorrent share Gluetun but qBittorrent still listens on 8080; run --migrate-qbt-webui-port to avoid conflicts."
@@ -2793,12 +2831,32 @@ EOF_CFG
 SONARR_API_KEY: "REPLACE_WITH_SONARR_API_KEY"
 RADARR_API_KEY: "REPLACE_WITH_RADARR_API_KEY"
 PROWLARR_API_KEY: "REPLACE_WITH_PROWLARR_API_KEY"
+SABNZBD_API_KEY: "REPLACE_WITH_SABNZBD_API_KEY"
 EOF
     )
     atomic_write "$runtime_secrets" "$secrets_stub" "$SECRET_FILE_MODE"
     msg "  Stubbed secrets file: ${runtime_secrets}"
   else
     ensure_secret_file_mode "$runtime_secrets"
+  fi
+
+  if [[ -f "$runtime_secrets" ]]; then
+    if ! grep -q '^SABNZBD_API_KEY:' "$runtime_secrets" 2>/dev/null; then
+      printf 'SABNZBD_API_KEY: "REPLACE_WITH_SABNZBD_API_KEY"\n' >>"$runtime_secrets"
+      ensure_secret_file_mode "$runtime_secrets"
+      msg "  Added SABnzbd placeholder to Configarr secrets"
+    fi
+
+    if [[ "${ARRSTACK_SAB_API_KEY_STATE:-}" == "set" ]]; then
+      local sab_secret_result=""
+      if sab_secret_result="$(arrstack_update_secret_line "$runtime_secrets" "SABNZBD_API_KEY" "$SABNZBD_API_KEY" 0 2>/dev/null)"; then
+        case "$sab_secret_result" in
+          updated | created | appended)
+            msg "  Configarr secrets: synced SABnzbd API key"
+            ;;
+        esac
+      fi
+    fi
   fi
 
   local resolution_display="${sanitized_video_min_res}–${sanitized_video_max_res}"

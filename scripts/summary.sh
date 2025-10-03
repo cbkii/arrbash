@@ -79,6 +79,16 @@ QBT_INFO
     warn "qBittorrent WebUI still uses legacy port 8080; consider --migrate-qbt-webui-port to adopt 8082."
   fi
 
+  if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
+    warn "Stack configuration has duplicate host port assignments:"
+    if [[ -n "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
+      while IFS= read -r conflict_line; do
+        [[ -z "$conflict_line" ]] && continue
+        warn "  - ${conflict_line}"
+      done < <(printf '%s\n' "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL}")
+    fi
+  fi
+
   if [[ -n "${ARRSTACK_PRESERVE_NOTES:-}" ]]; then
     msg "Credential preservation decisions:"
     while IFS= read -r preserve_note; do
@@ -452,10 +462,52 @@ POLICY
     else
       msg "VPN Routed: no"
       msg "Host Port: ${SABNZBD_PORT}"
+      if [[ "${EXPOSE_DIRECT_PORTS:-0}" != "1" ]]; then
+        msg "LAN Exposure: disabled (EXPOSE_DIRECT_PORTS=0)"
+      fi
     fi
     msg "Helper URL: ${SABNZBD_URL}"
+    if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${ARR_DOMAIN_SUFFIX_CLEAN:-}" ]]; then
+      local sab_domain="sabnzbd.${ARR_DOMAIN_SUFFIX_CLEAN}"
+      msg "Caddy Route: https://${sab_domain}"
+    fi
+    if [[ -n "${SABNZBD_CATEGORY:-}" ]]; then
+      msg "Default Category Override: ${SABNZBD_CATEGORY}"
+    else
+      msg "Default Category Override: (none)"
+    fi
+
+    local sab_api_state="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
+    case "$sab_api_state" in
+      set)
+        case "${ARRSTACK_SAB_API_KEY_SOURCE:-}" in
+          hydrated)
+            msg "API Key: set (preserved from sabnzbd.ini)"
+            ;;
+          provided)
+            msg "API Key: set (configured via environment)"
+            ;;
+          *)
+            msg "API Key: set"
+            ;;
+        esac
+        ;;
+      placeholder)
+        warn "SABnzbd API key still placeholder; finish setup in Settings → General."
+        ;;
+      empty)
+        warn "SABnzbd API key not detected; set it in SABnzbd to enable helper uploads."
+        ;;
+    esac
+
     if [[ -x "$sab_helper_path" ]]; then
-      if ! "$sab_helper_path" status 2>/dev/null; then
+      local sab_status_output=""
+      if sab_status_output=$("$sab_helper_path" status 2>/dev/null); then
+        while IFS= read -r sab_line; do
+          [[ -z "$sab_line" ]] && continue
+          msg "$sab_line"
+        done <<<"$sab_status_output"
+      else
         msg "Status: unavailable"
       fi
     else

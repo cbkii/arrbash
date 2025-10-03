@@ -29,6 +29,11 @@ When `api_key = ...` is present and `.env` still contains the
 3. Writes the hydrated value back to `.env`, matching the qBittorrent credential
    behaviour.
 
+When Configarr is enabled, the installer also ensures the `configarr/secrets.yml`
+file contains a `SABNZBD_API_KEY` entry. Hydrated keys replace the
+`REPLACE_WITH_SABNZBD_API_KEY` placeholder automatically; existing non-placeholder
+values are left untouched.
+
 If you manually rotate the API key, rerun `./arrstack.sh --yes` after SAB has
 written the change; the installer will detect and capture the new value.
 
@@ -51,7 +56,7 @@ Relevant environment variables:
 
 - `SABNZBD_ENABLED` — enable/disable the service.
 - `SABNZBD_USE_VPN` — route SABnzbd through Gluetun (`0` keeps it on arr_net).
-- `SABNZBD_PORT` — host port when SAB runs directly on the LAN.
+- `SABNZBD_PORT` — host port when SAB runs directly on the LAN (default `8780`).
 - `SABNZBD_URL` — helper target URL (default `http://localhost:8780`).
 - `SABNZBD_TIMEOUT` — helper timeout *and* minimum healthcheck start period.
 - `SABNZBD_CATEGORY` — optional category applied by `sab-helper.sh add-*` commands.
@@ -92,6 +97,8 @@ After `./arrstack.sh --refresh-aliases`, the shell also exposes `sab-logs`,
 
 If SAB is disabled the helper prints a warning and exits gracefully. Ensure
 `SABNZBD_URL` and `SABNZBD_API_KEY` are correct before using upload commands.
+The helper will still report the SAB version even when the API key is not yet
+configured, aligning with the new compose healthcheck.
 
 ## Deferred Features
 

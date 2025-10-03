@@ -24,6 +24,11 @@ hydrate_sab_api_key_from_config() {
   local config_dir="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/docker-data}/sab/config"
   local ini_path="${config_dir}/sabnzbd.ini"
 
+  if [[ -d "$config_dir" && "${ARRSTACK_SAB_CONFIG_PRESERVED:-0}" != "1" ]]; then
+    ARRSTACK_SAB_CONFIG_PRESERVED=1
+    arrstack_record_preserve_note "Preserved existing SABnzbd config at ${config_dir}" || true
+  fi
+
   if [[ ! -f "$ini_path" ]]; then
     return 0
   fi
@@ -65,6 +70,7 @@ hydrate_sab_api_key_from_config() {
   if ((placeholder)) && [[ "$current_value" != "$api_key_value" ]]; then
     SABNZBD_API_KEY="$api_key_value"
     arrstack_record_preserve_note "Hydrated SABnzbd API key from sabnzbd.ini"
+    ARRSTACK_SAB_API_KEY_SOURCE="hydrated"
   fi
 
   return 0

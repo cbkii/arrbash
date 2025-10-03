@@ -108,6 +108,7 @@ sab_check_env() {
   SABNZBD_TIMEOUT="$timeout"
   SABNZBD_PORT="${SABNZBD_PORT:-8780}"
 
+  SAB_HELPER_ENV_READY=1
   return 0
 }
 
@@ -150,10 +151,24 @@ sab_api() {
 }
 
 sab_version() {
-  local output
-  if ! output="$(sab_api 'mode=version&output=json')"; then
-    return 1
+  if [[ "${SAB_HELPER_ENV_READY:-0}" != "1" ]]; then
+    sab_check_env || return 1
   fi
+
+  local timeout="${SABNZBD_TIMEOUT:-15}"
+  local base="$(sab_base_url)"
+  local output=""
+
+  if ! output=$(curl -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
+    if [[ -n "${SABNZBD_API_KEY:-}" ]]; then
+      if ! output="$(sab_api 'mode=version&output=json')"; then
+        return 1
+      fi
+    else
+      return 1
+    fi
+  fi
+
   local version=""
   if command -v jq >/dev/null 2>&1; then
     version="$(jq -r '.version // empty' <<<"$output" 2>/dev/null || printf '')"
