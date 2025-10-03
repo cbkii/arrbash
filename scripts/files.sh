@@ -715,10 +715,7 @@ fi
 append_sabnzbd_service_body() {
   local target="$1"
   local include_direct_port="${2:-0}"
-  local internal_port="$3"
-  if [[ -z "$internal_port" ]]; then
-    internal_port="${SABNZBD_INTERNAL_PORT:-8080}"
-  fi
+  local internal_port="${3:-${SABNZBD_INTERNAL_PORT:-8080}}"
   local via_vpn="${4:-0}"
   # shellcheck disable=SC2034  # reserved for future per-network tweaks
 
