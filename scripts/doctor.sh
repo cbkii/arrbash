@@ -224,7 +224,7 @@ check_network_security() {
 
   local -a direct_ports=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
-    direct_ports+=("${SABNZBD_PORT:-8780}")
+    direct_ports+=("${SABNZBD_PORT:-8080}")
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then

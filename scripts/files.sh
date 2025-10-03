@@ -352,10 +352,10 @@ write_env() {
   fi
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
-  local sab_port_raw="${SABNZBD_PORT:-8780}"
+  local sab_port_raw="${SABNZBD_PORT:-8080}"
   if [[ ! "$sab_port_raw" =~ ^[0-9]+$ ]]; then
-    warn "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to 8780."
-    sab_port_raw=8780
+    warn "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to 8080."
+    sab_port_raw=8080
   fi
   SABNZBD_PORT="$sab_port_raw"
 

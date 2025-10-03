@@ -106,14 +106,14 @@ sab_check_env() {
     timeout=15
   fi
   SABNZBD_TIMEOUT="$timeout"
-  SABNZBD_PORT="${SABNZBD_PORT:-8780}"
+  SABNZBD_PORT="${SABNZBD_PORT:-8080}"
 
   SAB_HELPER_ENV_READY=1
   return 0
 }
 
 sab_base_url() {
-  printf '%s' "${SABNZBD_URL:-http://localhost:8780}" | sed 's#[[:space:]]##g' | sed 's#/*$##'
+  printf '%s' "${SABNZBD_URL:-http://localhost:8080}" | sed 's#[[:space:]]##g' | sed 's#/*$##'
 }
 
 sab_api() {

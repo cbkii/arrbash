@@ -56,8 +56,8 @@ Relevant environment variables:
 
 - `SABNZBD_ENABLED` — enable/disable the service.
 - `SABNZBD_USE_VPN` — route SABnzbd through Gluetun (`0` keeps it on arr_net).
-- `SABNZBD_PORT` — host port when SAB runs directly on the LAN (default `8780`).
-- `SABNZBD_URL` — helper target URL (default `http://localhost:8780`).
+- `SABNZBD_PORT` — host port when SAB runs directly on the LAN (default `8080`).
+- `SABNZBD_URL` — helper target URL (default `http://localhost:8080`).
 - `SABNZBD_TIMEOUT` — helper timeout *and* minimum healthcheck start period.
 - `SABNZBD_CATEGORY` — optional category applied by `sab-helper.sh add-*` commands.
 - `SABNZBD_IMAGE` — override the container image tag.

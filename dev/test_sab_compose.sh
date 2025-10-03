@@ -42,7 +42,7 @@ run_case() {
     write_env
     write_compose
     printf '%s\n' "$LAN_IP" >"${tmp}/lan_ip"
-    printf '%s\n' "${SABNZBD_PORT:-8780}" >"${tmp}/sab_port"
+    printf '%s\n' "${SABNZBD_PORT:-8080}" >"${tmp}/sab_port"
   ) || status=$?
 
   local compose_file="${stack_dir}/docker-compose.yml"
