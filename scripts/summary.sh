@@ -57,6 +57,30 @@ ${qbt_pass_msg}
 
 QBT_INFO
 
+  local qbt_container_status="${ARRSTACK_QBT_WEBUI_PORT_STATUS:-default}"
+  local qbt_host_status="${ARRSTACK_QBT_HOST_PORT_STATUS:-default}"
+  local container_suffix=""
+  local host_suffix=""
+  case "$qbt_container_status" in
+    preserved) container_suffix="(preserved)" ;;
+    *) container_suffix="(default)" ;;
+  esac
+  case "$qbt_host_status" in
+    preserved) host_suffix="(preserved)" ;;
+    *) host_suffix="(default)" ;;
+  esac
+  msg "qBittorrent ports: container ${QBT_WEBUI_PORT} ${container_suffix}, host ${QBT_HTTP_PORT_HOST} ${host_suffix}"
+
+  if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
+    warn "Stack configuration has duplicate host port assignments:"
+    if [[ -n "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
+      while IFS= read -r conflict_line; do
+        [[ -z "$conflict_line" ]] && continue
+        warn "  - ${conflict_line}"
+      done < <(printf '%s\n' "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL}")
+    fi
+  fi
+
   if [[ -n "${ARRSTACK_PRESERVE_NOTES:-}" ]]; then
     msg "Credential preservation decisions:"
     while IFS= read -r preserve_note; do
@@ -425,13 +449,95 @@ POLICY
       sab_helper_path="${SCRIPT_LIB_DIR}/sab-helper.sh"
     fi
     msg "---- SABnzbd ----"
+    local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
+    local sab_helper_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
+    if [[ -z "$sab_helper_host" || "$sab_helper_host" == "0.0.0.0" ]]; then
+      sab_helper_host="${LOCALHOST_IP:-localhost}"
+    fi
+    local sab_host_auto="${ARRSTACK_SAB_HOST_AUTO:-0}"
     if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
       msg "VPN Routed: yes"
     else
       msg "VPN Routed: no"
     fi
+    if [[ "$sab_host_auto" == "1" ]]; then
+      msg "Host: ${sab_helper_host} (auto for VPN mode)"
+    else
+      msg "Host: ${sab_helper_host}"
+      if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
+        local sab_host_lower="${sab_helper_host,,}"
+        local sab_default_lower="${LOCALHOST_IP:-localhost}"
+        sab_default_lower="${sab_default_lower,,}"
+        if [[ "$sab_host_lower" == "$sab_default_lower" || "$sab_host_lower" == "127.0.0.1" || "$sab_host_lower" == "localhost" ]]; then
+          warn "SABnzbd is routed through the VPN but SABNZBD_HOST=${sab_helper_host}; set SABNZBD_HOST to sabnzbd or another reachable host."
+        fi
+      fi
+    fi
+    if [[ "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+      msg "Host Port: ${SABNZBD_PORT}"
+      if [[ "${EXPOSE_DIRECT_PORTS:-0}" != "1" ]]; then
+        msg "LAN Exposure: disabled (EXPOSE_DIRECT_PORTS=0)"
+      elif [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
+        warn "SABnzbd exposed directly on the LAN without Caddy (ENABLE_CADDY=0)."
+      fi
+    fi
+    local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
+    msg "Helper Endpoint: ${sab_helper_url}"
+    if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${ARR_DOMAIN_SUFFIX_CLEAN:-}" ]]; then
+      local sab_domain="sabnzbd.${ARR_DOMAIN_SUFFIX_CLEAN}"
+      msg "Caddy Route: https://${sab_domain}"
+    fi
+    if [[ -n "${SABNZBD_CATEGORY:-}" ]]; then
+      msg "Default Category Override: ${SABNZBD_CATEGORY}"
+    else
+      msg "Default Category Override: (none)"
+    fi
+
+    local sab_version_display="(unknown)"
     if [[ -x "$sab_helper_path" ]]; then
-      if ! "$sab_helper_path" status 2>/dev/null; then
+      if sab_version_display="$($sab_helper_path version 2>/dev/null)"; then
+        if [[ -z "$sab_version_display" ]]; then
+          sab_version_display="(unknown)"
+        fi
+      else
+        sab_version_display="(unknown)"
+      fi
+    else
+      sab_version_display="(helper unavailable)"
+    fi
+    msg "Version: ${sab_version_display}"
+
+    local sab_api_state="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
+    case "$sab_api_state" in
+      set)
+        case "${ARRSTACK_SAB_API_KEY_SOURCE:-}" in
+          hydrated)
+            msg "API Key: set (preserved from sabnzbd.ini)"
+            ;;
+          provided)
+            msg "API Key: set (configured via environment)"
+            ;;
+          *)
+            msg "API Key: set"
+            ;;
+        esac
+        ;;
+      placeholder)
+        warn "SABnzbd API key still placeholder; finish setup in Settings → General."
+        ;;
+      empty)
+        warn "SABnzbd API key not detected; set it in SABnzbd to enable helper uploads."
+        ;;
+    esac
+
+    if [[ -x "$sab_helper_path" ]]; then
+      local sab_status_output=""
+      if sab_status_output=$("$sab_helper_path" status 2>/dev/null); then
+        while IFS= read -r sab_line; do
+          [[ -z "$sab_line" ]] && continue
+          msg "$sab_line"
+        done <<<"$sab_status_output"
+      else
         msg "Status: unavailable"
       fi
     else

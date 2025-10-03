@@ -67,16 +67,17 @@ CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password
 
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="0"             # 1 enables SABnzbd container/helper integration (default: 0)
-SABNZBD_USE_VPN="0"             # 1 routes SABnzbd through Gluetun, 0 keeps direct TLS (default: 0)
-SABNZBD_URL="http://localhost:8780"                 # API endpoint for SAB helper interactions (default: http://localhost:8780)
-SABNZBD_API_KEY=""             # Populate with SAB API key once generated (blank to skip helper auth)
+SABNZBD_USE_VPN="0"             # 1 routes SABnzbd through Gluetun (default: 0)
+SABNZBD_HOST="${LOCALHOST_IP}"                       # Host sab-helper uses (default: LOCALHOST_IP value)
+SABNZBD_API_KEY="REPLACE_WITH_SABNZBD_API_KEY"             # Populated automatically from sabnzbd.ini when available
 SABNZBD_CATEGORY="arrbash"           # Category applied to helper-submitted jobs (default: arrbash)
 SABNZBD_TIMEOUT="15"             # Helper API timeout in seconds (default: 15)
-SABNZBD_PORT="8780"                 # Host port for SAB WebUI when direct (default: 8780)
+SABNZBD_PORT="8080"                 # Host port for SAB WebUI when direct (default: 8080)
 ARRBASH_USENET_CLIENT="sabnzbd" # Active Usenet client label (future abstraction)
 
 # --- Service ports ---
-QBT_HTTP_PORT_HOST="8080"              # qBittorrent WebUI port exposed on the LAN (default: 8080)
+QBT_WEBUI_PORT="8082"                  # qBittorrent WebUI port inside the container (default: 8082)
+QBT_HTTP_PORT_HOST="8082"              # qBittorrent WebUI port exposed on the LAN (default: 8082)
 SONARR_PORT="8989"                     # Sonarr WebUI port exposed on the LAN (default: 8989)
 RADARR_PORT="7878"                     # Radarr WebUI port exposed on the LAN (default: 7878)
 PROWLARR_PORT="9696"                   # Prowlarr WebUI port exposed on the LAN (default: 9696)

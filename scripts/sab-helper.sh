@@ -87,11 +87,6 @@ sab_check_env() {
     return 1
   fi
 
-  if [[ -z "${SABNZBD_URL:-}" ]]; then
-    log_error "[sab] SABNZBD_URL is not configured"
-    return 1
-  fi
-
   if ! command -v curl >/dev/null 2>&1; then
     log_error "[sab] curl is required"
     return 1
@@ -106,13 +101,35 @@ sab_check_env() {
     timeout=15
   fi
   SABNZBD_TIMEOUT="$timeout"
-  SABNZBD_PORT="${SABNZBD_PORT:-8780}"
 
+  local sab_port="${SABNZBD_PORT:-8080}"
+  if [[ ! "$sab_port" =~ ^[0-9]+$ ]]; then
+    sab_port=8080
+  fi
+  SABNZBD_PORT="$sab_port"
+
+  local sab_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
+  if [[ -z "$sab_host" ]]; then
+    sab_host="${LOCALHOST_IP:-localhost}"
+  fi
+  SABNZBD_HOST="$sab_host"
+
+  local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
+  if [[ -z "$sab_helper_scheme" ]]; then
+    sab_helper_scheme="http"
+  fi
+  SABNZBD_HELPER_SCHEME="$sab_helper_scheme"
+
+  SAB_HELPER_ENV_READY=1
   return 0
 }
 
 sab_base_url() {
-  printf '%s' "${SABNZBD_URL:-http://localhost:8780}" | sed 's#[[:space:]]##g' | sed 's#/*$##'
+  sab_check_env || return 1
+  local scheme="${SABNZBD_HELPER_SCHEME:-http}"
+  local host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
+  local port="${SABNZBD_PORT:-8080}"
+  printf '%s://%s:%s' "$scheme" "$host" "$port" | sed 's#[[:space:]]##g' | sed 's#/*$##'
 }
 
 sab_api() {
@@ -150,10 +167,24 @@ sab_api() {
 }
 
 sab_version() {
-  local output
-  if ! output="$(sab_api 'mode=version&output=json')"; then
-    return 1
+  if [[ "${SAB_HELPER_ENV_READY:-0}" != "1" ]]; then
+    sab_check_env || return 1
   fi
+
+  local timeout="${SABNZBD_TIMEOUT:-15}"
+  local base="$(sab_base_url)"
+  local output=""
+
+  if ! output=$(curl -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
+    if [[ -n "${SABNZBD_API_KEY:-}" ]]; then
+      if ! output="$(sab_api 'mode=version&output=json')"; then
+        return 1
+      fi
+    else
+      return 1
+    fi
+  fi
+
   local version=""
   if command -v jq >/dev/null 2>&1; then
     version="$(jq -r '.version // empty' <<<"$output" 2>/dev/null || printf '')"

@@ -35,7 +35,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    ./arrstack.sh --yes         # omit --yes for interactive mode
    ```
    The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`.
-5. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8080` for qBittorrent).
+5. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration
 - `userr.conf` lives at `${ARR_BASE:-$HOME/srv}/userr.conf`; keep it outside version control.
@@ -50,7 +50,6 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
   ```bash
   ./arrstack.sh --help
   ```
-
 ## Next steps
 - Read [Configuration](./docs/configuration.md) for variable precedence and permission profiles.
 - Follow [Networking](./docs/networking.md) before enabling split VPN, local DNS, or HTTPS.
@@ -66,15 +65,19 @@ Enable in your user config (for example `${ARR_BASE}/userr.conf`):
 
 ```bash
 SABNZBD_ENABLED=1
-SABNZBD_API_KEY=YOUR_KEY
-# Optional overrides
-SABNZBD_PORT=8780          # Host port for the WebUI (8080 used by qBittorrent)
-SABNZBD_URL="http://localhost:8780"  # Helper/API endpoint
+# Optional overrides (see docs/sabnzbd.md for the full matrix)
+SABNZBD_PORT=8080          # Host port for the WebUI (qBittorrent now defaults to 8082)
+SABNZBD_HOST="${LOCALHOST_IP}"  # Host sab-helper uses (defaults to LOCALHOST_IP)
 SABNZBD_CATEGORY="arrbash" # Category assigned to helper-submitted jobs
-SABNZBD_TIMEOUT=15         # Helper API timeout in seconds
-# Set SABNZBD_USE_VPN=1 to route via Gluetun (falls back to direct if VPN disabled)
+SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
 # Set SABNZBD_IMAGE=lscr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
 ```
+
+After your first SABnzbd login, paste the API key into the WebUI once; reruns will hydrate
+`SABNZBD_API_KEY` from `sabnzbd.ini` automatically.
+
+Refer to [docs/sabnzbd.md](docs/sabnzbd.md) for networking scenarios, API key preservation,
+and helper usage tips.
 
 Run:
 
