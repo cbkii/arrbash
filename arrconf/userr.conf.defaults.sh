@@ -547,9 +547,10 @@ CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password
 
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="${SABNZBD_ENABLED}"             # 1 enables SABnzbd container/helper integration (default: ${SABNZBD_ENABLED})
-SABNZBD_USE_VPN="${SABNZBD_USE_VPN}"             # 1 routes SABnzbd through Gluetun, 0 keeps direct TLS (default: ${SABNZBD_USE_VPN})
+SABNZBD_USE_VPN="${SABNZBD_USE_VPN}"             # 1 routes SABnzbd through Gluetun; forced off unless FORCE_SAB_VPN=1 (default: ${SABNZBD_USE_VPN})
+FORCE_SAB_VPN="${FORCE_SAB_VPN:-0}"               # Opt-in gate to allow SABnzbd inside Gluetun (default: 0)
 SABNZBD_URL="${SABNZBD_URL}"                 # API endpoint for SAB helper interactions (default: ${SABNZBD_URL})
-SABNZBD_API_KEY="${SABNZBD_API_KEY}"             # Populate with SAB API key once generated (blank to skip helper auth)
+SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"             # Hydrated automatically from sabnzbd.ini when available
 SABNZBD_CATEGORY="${SABNZBD_CATEGORY}"           # Category applied to helper-submitted jobs (default: ${SABNZBD_CATEGORY})
 SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT}"             # Helper API timeout in seconds (default: ${SABNZBD_TIMEOUT})
 SABNZBD_PORT="${SABNZBD_PORT}"                 # Host port for SAB WebUI when direct (default: ${SABNZBD_PORT})

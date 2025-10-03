@@ -255,7 +255,7 @@ service_health_sabnzbd() {
   if version="$($helper version 2>/dev/null)"; then
     msg "[sabnzbd] API reachable (${version})"
   else
-    warn "[sabnzbd] Health check failed (verify SABNZBD_URL/API key)"
+    warn "[sabnzbd] Health check failed (verify SABNZBD_URL or container status)"
   fi
 }
 

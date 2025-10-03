@@ -15,6 +15,61 @@ arrstack_record_preserve_note() {
   fi
 }
 
+# Hydrates SABNZBD_API_KEY from sabnzbd.ini when available so reruns keep API access
+hydrate_sab_api_key_from_config() {
+  if [[ "${SABNZBD_ENABLED:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  local config_dir="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/docker-data}/sab/config"
+  local ini_path="${config_dir}/sabnzbd.ini"
+
+  if [[ ! -f "$ini_path" ]]; then
+    return 0
+  fi
+
+  if [[ -z "${ARRSTACK_SAB_INI_BACKUP:-}" ]]; then
+    local timestamp backup_path
+    timestamp="$(date +%Y%m%d-%H%M%S)"
+    backup_path="${ini_path}.bak.${timestamp}"
+    if cp -a "$ini_path" "$backup_path" 2>/dev/null; then
+      ARRSTACK_SAB_INI_BACKUP="$backup_path"
+      arrstack_record_preserve_note "Backed up sabnzbd.ini to ${backup_path##*/}"
+    fi
+  fi
+
+  local api_key_line api_key_value
+  api_key_line="$(grep -i '^[[:space:]]*api_key[[:space:]]*=' "$ini_path" | tail -n1 || printf '')"
+  if [[ -z "$api_key_line" ]]; then
+    return 0
+  fi
+
+  api_key_value="${api_key_line#*=}"
+  api_key_value="${api_key_value#${api_key_value%%[![:space:]]*}}"
+  api_key_value="${api_key_value%${api_key_value##*[![:space:]]}}"
+
+  if [[ -z "$api_key_value" ]]; then
+    return 0
+  fi
+
+  local current_value="${SABNZBD_API_KEY:-}" placeholder=0
+  if [[ -z "$current_value" ]]; then
+    placeholder=1
+  else
+    local upper="${current_value^^}"
+    if [[ "$upper" == REPLACE_WITH_* ]]; then
+      placeholder=1
+    fi
+  fi
+
+  if ((placeholder)) && [[ "$current_value" != "$api_key_value" ]]; then
+    SABNZBD_API_KEY="$api_key_value"
+    arrstack_record_preserve_note "Hydrated SABnzbd API key from sabnzbd.ini"
+  fi
+
+  return 0
+}
+
 # Pulls existing qBittorrent credentials from .env to avoid unintended resets
 hydrate_user_credentials_from_env_file() {
   if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then

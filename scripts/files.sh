@@ -235,6 +235,7 @@ write_env() {
 
   hydrate_caddy_auth_from_env_file
   hydrate_user_credentials_from_env_file
+  hydrate_sab_api_key_from_config
 
   CADDY_BASIC_AUTH_USER="$(sanitize_user "$CADDY_BASIC_AUTH_USER")"
 
@@ -303,6 +304,14 @@ write_env() {
   fi
   SABNZBD_ENABLED="$sab_enabled"
 
+  local force_sab_vpn_raw="${FORCE_SAB_VPN:-0}"
+  local force_sab_vpn="$force_sab_vpn_raw"
+  if [[ "$force_sab_vpn" != "0" && "$force_sab_vpn" != "1" ]]; then
+    warn "Invalid FORCE_SAB_VPN=${force_sab_vpn_raw}; defaulting to 0."
+    force_sab_vpn=0
+  fi
+  FORCE_SAB_VPN="$force_sab_vpn"
+
   local sab_use_vpn_raw="${SABNZBD_USE_VPN:-0}"
   local sab_use_vpn="$sab_use_vpn_raw"
   if [[ "$sab_use_vpn" != "0" && "$sab_use_vpn" != "1" ]]; then
@@ -335,9 +344,14 @@ write_env() {
     esac
   fi
 
-  if ((sab_enabled)) && ((sab_use_vpn == 1)) && ((gluetun_available == 0)); then
-    warn "SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
-    sab_use_vpn=0
+  if ((sab_enabled)) && ((sab_use_vpn == 1)); then
+    if ((force_sab_vpn != 1)); then
+      warn "FORCE_SAB_VPN=1 required to run SABnzbd inside Gluetun; forcing SABNZBD_USE_VPN=0"
+      sab_use_vpn=0
+    elif ((gluetun_available == 0)); then
+      warn "SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
+      sab_use_vpn=0
+    fi
   fi
 
   SABNZBD_USE_VPN="$sab_use_vpn"
@@ -559,6 +573,7 @@ fi
     printf '%s\n' '# SABnzbd'
     write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
     write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
+    write_env_kv "FORCE_SAB_VPN" "$FORCE_SAB_VPN"
     write_env_kv "SABNZBD_URL" "$SABNZBD_URL"
     write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
     write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
@@ -608,13 +623,24 @@ fi
 append_sabnzbd_service_body() {
   local target="$1"
   local include_direct_port="${2:-0}"
+  local internal_port="${3:-8080}"
+  local via_vpn="${4:-0}"
+  # shellcheck disable=SC2034  # reserved for future per-network tweaks
+
+  local sab_timeout_for_health="${SABNZBD_TIMEOUT:-60}"
+  if [[ ! "$sab_timeout_for_health" =~ ^[0-9]+$ ]]; then
+    sab_timeout_for_health=60
+  fi
+  local health_start_period_seconds=60
+  if ((sab_timeout_for_health > health_start_period_seconds)); then
+    health_start_period_seconds="$sab_timeout_for_health"
+  fi
 
   cat <<'YAML' >>"$target"
     environment:
       PUID: ${PUID}
       PGID: ${PGID}
       TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
     volumes:
       - ${ARR_DOCKER_DIR}/sab/config:/config
       - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
@@ -622,19 +648,18 @@ append_sabnzbd_service_body() {
 YAML
 
   if [[ "$include_direct_port" == "1" ]]; then
-    cat <<'YAML' >>"$target"
-    ports:
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
+    printf '    ports:\n      - "${LAN_IP}:${SABNZBD_PORT}:%s"\n' "$internal_port" >>"$target"
   fi
 
+  {
+    printf '    healthcheck:\n'
+    printf '      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:%s/api?mode=version&output=json"]\n' "$internal_port"
+    printf '      interval: 30s\n      timeout: 5s\n      retries: 5\n      start_period: %ss\n' "$health_start_period_seconds"
+  } >>"$target"
+
   cat <<'YAML' >>"$target"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
+    # NOTE: Future hardening opportunity — consider CPU/memory limits and a read_only filesystem once defaults are vetted.
     logging:
       driver: json-file
       options:
@@ -649,14 +674,7 @@ write_compose_split_mode() {
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
-
-  local gluetun_arr_net_alias_block=""
-
-  if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" == "1" ]]; then
-    # Allow Sonarr/Radarr (arr_net) containers to reach SABnzbd when it shares
-    # Gluetun's network namespace.
-    gluetun_arr_net_alias_block=$'    networks:\n      arr_net:\n        aliases:\n          - sabnzbd\n'
-  fi
+  local sab_internal_port="8080"
 
   LOCAL_DNS_SERVICE_ENABLED=0
 
@@ -678,10 +696,6 @@ services:
     profiles:
       - ipdirect
 YAML
-
-    if [[ -n "$gluetun_arr_net_alias_block" ]]; then
-      printf '%s' "$gluetun_arr_net_alias_block"
-    fi
 
     cat <<'YAML'
     cap_add:
@@ -721,11 +735,6 @@ YAML
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:8080"
 YAML
-  if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" == "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
-  fi
   cat <<'YAML' >>"$tmp"
     healthcheck:
       test: /gluetun-entrypoint healthcheck
@@ -963,6 +972,7 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
+    local sab_internal_port="8080"
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
@@ -977,7 +987,7 @@ YAML
       gluetun:
         condition: service_healthy
 YAML
-      append_sabnzbd_service_body "$tmp"
+      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
     else
       cat <<'YAML' >>"$tmp"
     networks:
@@ -987,7 +997,7 @@ YAML
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
         expose_direct_port="1"
       fi
-      append_sabnzbd_service_body "$tmp" "$expose_direct_port"
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port" "0"
     fi
   fi
 
@@ -1167,11 +1177,6 @@ YAML
       - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_PORT}"
       - "${LAN_IP}:${FLARESOLVERR_PORT}:${FLARESOLVERR_PORT}"
 YAML
-    if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" == "1" ]]; then
-      cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
-    fi
   fi
 
   cat <<'YAML' >>"$tmp"
@@ -1426,6 +1431,7 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
+    local sab_internal_port="8080"
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
@@ -1440,13 +1446,13 @@ YAML
       gluetun:
         condition: service_healthy
 YAML
-      append_sabnzbd_service_body "$tmp"
+      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
     else
       local expose_direct_port="0"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
         expose_direct_port="1"
       fi
-      append_sabnzbd_service_body "$tmp" "$expose_direct_port"
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port" "0"
     fi
   fi
 

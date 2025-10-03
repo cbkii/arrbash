@@ -66,15 +66,20 @@ Enable in your user config (for example `${ARR_BASE}/userr.conf`):
 
 ```bash
 SABNZBD_ENABLED=1
-SABNZBD_API_KEY=YOUR_KEY
-# Optional overrides
-SABNZBD_PORT=8780          # Host port for the WebUI (8080 used by qBittorrent)
-SABNZBD_URL="http://localhost:8780"  # Helper/API endpoint
+# Optional overrides (see docs/sabnzbd.md for the full matrix)
+SABNZBD_PORT=8780          # Host port for the WebUI (8080 reserved by qBittorrent)
+SABNZBD_URL="http://localhost:8780"  # Helper/API endpoint (hydrated into .env)
 SABNZBD_CATEGORY="arrbash" # Category assigned to helper-submitted jobs
-SABNZBD_TIMEOUT=15         # Helper API timeout in seconds
-# Set SABNZBD_USE_VPN=1 to route via Gluetun (falls back to direct if VPN disabled)
+SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
+# Set FORCE_SAB_VPN=1 alongside SABNZBD_USE_VPN=1 to opt back into Gluetun networking
 # Set SABNZBD_IMAGE=lscr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
 ```
+
+After your first SABnzbd login, paste the API key into the WebUI once; reruns will hydrate
+`SABNZBD_API_KEY` from `sabnzbd.ini` automatically.
+
+Refer to [docs/sabnzbd.md](docs/sabnzbd.md) for networking scenarios, API key preservation,
+and helper usage tips.
 
 Run:
 
