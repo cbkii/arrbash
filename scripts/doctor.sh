@@ -467,7 +467,7 @@ doctor_check_sabnzbd() {
   fi
 
   local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
-  local sab_helper_host="${SABNZBD_HELPER_HOST:-${LOCALHOST_IP:-localhost}}"
+  local sab_helper_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
   local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
 
   local sab_status=0

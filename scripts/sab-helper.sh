@@ -108,11 +108,11 @@ sab_check_env() {
   fi
   SABNZBD_PORT="$sab_port"
 
-  local sab_helper_host="${SABNZBD_HELPER_HOST:-${LOCALHOST_IP:-localhost}}"
-  if [[ -z "$sab_helper_host" ]]; then
-    sab_helper_host="${LOCALHOST_IP:-localhost}"
+  local sab_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
+  if [[ -z "$sab_host" ]]; then
+    sab_host="${LOCALHOST_IP:-localhost}"
   fi
-  SABNZBD_HELPER_HOST="$sab_helper_host"
+  SABNZBD_HOST="$sab_host"
 
   local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
   if [[ -z "$sab_helper_scheme" ]]; then
@@ -127,7 +127,7 @@ sab_check_env() {
 sab_base_url() {
   sab_check_env || return 1
   local scheme="${SABNZBD_HELPER_SCHEME:-http}"
-  local host="${SABNZBD_HELPER_HOST:-${LOCALHOST_IP:-localhost}}"
+  local host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
   local port="${SABNZBD_PORT:-8080}"
   printf '%s://%s:%s' "$scheme" "$host" "$port" | sed 's#[[:space:]]##g' | sed 's#/*$##'
 }

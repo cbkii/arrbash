@@ -467,7 +467,7 @@ POLICY
       fi
     fi
     local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
-    local sab_helper_host="${SABNZBD_HELPER_HOST:-${LOCALHOST_IP:-localhost}}"
+    local sab_helper_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
     local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
     msg "Helper URL: ${sab_helper_url}"
     if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${ARR_DOMAIN_SUFFIX_CLEAN:-}" ]]; then

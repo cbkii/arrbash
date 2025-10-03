@@ -57,7 +57,7 @@ Relevant environment variables:
 - `SABNZBD_ENABLED` — enable/disable the service.
 - `SABNZBD_USE_VPN` — route SABnzbd through Gluetun (`0` keeps it on arr_net).
 - `SABNZBD_PORT` — host port when SAB runs directly on the LAN (default `8080`).
-- `SABNZBD_HELPER_HOST` — hostname sab-helper targets (default `${LOCALHOST_IP}`).
+- `SABNZBD_HOST` — hostname sab-helper targets (default `${LOCALHOST_IP}`).
 - `SABNZBD_TIMEOUT` — helper timeout *and* minimum healthcheck start period.
 - `SABNZBD_CATEGORY` — optional category applied by `sab-helper.sh add-*` commands.
 - `SABNZBD_IMAGE` — override the container image tag.
@@ -68,7 +68,7 @@ Example snippet for a VPN opt-in lab environment:
 SABNZBD_ENABLED=1
 SABNZBD_USE_VPN=1
 EXPOSE_DIRECT_PORTS=0
-SABNZBD_HELPER_HOST="sabnzbd"   # qBittorrent now listens on 8082 inside Gluetun
+SABNZBD_HOST="sabnzbd"     # qBittorrent now listens on 8082 inside Gluetun
 ```
 
 > **Tip:** When forcing SAB through Gluetun, keep its listen port at 8080 or pick
@@ -96,7 +96,7 @@ After `./arrstack.sh --refresh-aliases`, the shell also exposes `sab-logs`,
 `sab-shell`, and `open-sab` convenience aliases.
 
 If SAB is disabled the helper prints a warning and exits gracefully. Ensure
-`SABNZBD_HELPER_HOST`, `SABNZBD_PORT`, and `SABNZBD_API_KEY` are correct before using upload commands.
+`SABNZBD_HOST`, `SABNZBD_PORT`, and `SABNZBD_API_KEY` are correct before using upload commands.
 The helper will still report the SAB version even when the API key is not yet
 configured, aligning with the new compose healthcheck.
 

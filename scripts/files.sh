@@ -359,9 +359,9 @@ write_env() {
   fi
   SABNZBD_PORT="$sab_port_raw"
 
-  local sab_helper_host_default="${LOCALHOST_IP:-localhost}"
-  if [[ -z "${SABNZBD_HELPER_HOST:-}" ]]; then
-    SABNZBD_HELPER_HOST="$sab_helper_host_default"
+  local sab_host_default="${LOCALHOST_IP:-localhost}"
+  if [[ -z "${SABNZBD_HOST:-}" ]]; then
+    SABNZBD_HOST="$sab_host_default"
   fi
 
   local qbt_webui_default=8082
@@ -670,7 +670,7 @@ fi
     printf '%s\n' '# SABnzbd'
     write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
     write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
-    write_env_kv "SABNZBD_HELPER_HOST" "$SABNZBD_HELPER_HOST"
+    write_env_kv "SABNZBD_HOST" "$SABNZBD_HOST"
     write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
     write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
     write_env_kv "SABNZBD_TIMEOUT" "$SABNZBD_TIMEOUT"

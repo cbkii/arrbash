@@ -211,7 +211,7 @@ SABNZBD_PORT="${SABNZBD_PORT:-8080}"
 # SABnzbd integration
 SABNZBD_ENABLED="${SABNZBD_ENABLED:-0}"
 SABNZBD_USE_VPN="${SABNZBD_USE_VPN:-0}"
-SABNZBD_HELPER_HOST="${SABNZBD_HELPER_HOST:-${LOCALHOST_IP}}"
+SABNZBD_HOST="${SABNZBD_HOST:-${LOCALHOST_IP}}"
 SABNZBD_API_KEY="${SABNZBD_API_KEY:-}"
 SABNZBD_CATEGORY="${SABNZBD_CATEGORY:-arrbash}"
 SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT:-15}"
@@ -312,7 +312,7 @@ ARRSTACK_USERCONF_TEMPLATE_VARS=(
   SABNZBD_PORT
   SABNZBD_ENABLED
   SABNZBD_USE_VPN
-  SABNZBD_HELPER_HOST
+  SABNZBD_HOST
   SABNZBD_API_KEY
   SABNZBD_CATEGORY
   SABNZBD_TIMEOUT
@@ -549,7 +549,7 @@ CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="${SABNZBD_ENABLED}"             # 1 enables SABnzbd container/helper integration (default: ${SABNZBD_ENABLED})
 SABNZBD_USE_VPN="${SABNZBD_USE_VPN}"             # 1 routes SABnzbd through Gluetun (default: ${SABNZBD_USE_VPN})
-SABNZBD_HELPER_HOST="${SABNZBD_HELPER_HOST}"     # Host used by sab-helper (default: ${SABNZBD_HELPER_HOST})
+SABNZBD_HOST="${SABNZBD_HOST}"           # Host used by sab-helper (default: ${SABNZBD_HOST})
 SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"             # Hydrated automatically from sabnzbd.ini when available
 SABNZBD_CATEGORY="${SABNZBD_CATEGORY}"           # Category applied to helper-submitted jobs (default: ${SABNZBD_CATEGORY})
 SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT}"             # Helper API timeout in seconds (default: ${SABNZBD_TIMEOUT})

@@ -68,7 +68,7 @@ CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="0"             # 1 enables SABnzbd container/helper integration (default: 0)
 SABNZBD_USE_VPN="0"             # 1 routes SABnzbd through Gluetun (default: 0)
-SABNZBD_HELPER_HOST="${LOCALHOST_IP}"                 # Host sab-helper uses (default: LOCALHOST_IP value)
+SABNZBD_HOST="${LOCALHOST_IP}"                       # Host sab-helper uses (default: LOCALHOST_IP value)
 SABNZBD_API_KEY="REPLACE_WITH_SABNZBD_API_KEY"             # Populated automatically from sabnzbd.ini when available
 SABNZBD_CATEGORY="arrbash"           # Category applied to helper-submitted jobs (default: arrbash)
 SABNZBD_TIMEOUT="15"             # Helper API timeout in seconds (default: 15)

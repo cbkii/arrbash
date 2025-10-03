@@ -218,7 +218,7 @@ _arr_service_port() {
     prowlarr)    env_var=PROWLARR_PORT;      default=9696 ;;
     bazarr)      env_var=BAZARR_PORT;        default=6767 ;;
     flaresolverr)env_var=FLARESOLVERR_PORT;  default=8191 ;;
-    sabnzbd)     env_var=SABNZBD_PORT;       default=8780 ;;
+    sabnzbd)     env_var=SABNZBD_PORT;       default=8080 ;;
     caddy)       env_var=CADDY_PORT;         default=80   ;;
     *)           return 1 ;;
   esac
@@ -245,7 +245,7 @@ _arr_enable_caddy() {
 }
 
 _arr_service_base() {
-  local svc="$1" enable_caddy="$(_arr_enable_caddy)"
+  local svc="$1" enable_caddy="$(_arr_enable_caddy)" host
   if [ "$svc" = "caddy" ]; then
     if [ "$enable_caddy" = "1" ]; then
       printf 'http://health.%s' "$(_arr_domain_suffix)"
@@ -266,7 +266,15 @@ _arr_service_base() {
 
   case "$svc" in
     qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr|sabnzbd)
-      printf 'http://%s:%s' "$(_arr_host)" "$(_arr_service_port "$svc")"
+      if [ "$svc" = "sabnzbd" ]; then
+        host="${SABNZBD_HOST:-$(_arr_env_get SABNZBD_HOST)}"
+        if [ -z "$host" ] || [ "$host" = "0.0.0.0" ]; then
+          host="$(_arr_host)"
+        fi
+      else
+        host="$(_arr_host)"
+      fi
+      printf 'http://%s:%s' "$host" "$(_arr_service_port "$svc")"
       return
       ;;
   esac
