@@ -176,13 +176,7 @@ sab_version() {
   local output=""
 
   if ! output=$(curl -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
-    if [[ -n "${SABNZBD_API_KEY:-}" ]]; then
-      if ! output="$(sab_api 'mode=version&output=json')"; then
-        return 1
-      fi
-    else
-      return 1
-    fi
+    return 1
   fi
 
   local version=""

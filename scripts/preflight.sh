@@ -354,7 +354,7 @@ simple_port_check() {
     if ((${#internal_conflicts[@]} > 0)); then
       ARRSTACK_INTERNAL_PORT_CONFLICTS=1
       local -a detail_lines=()
-      warn "    Stack configuration port conflicts detected:"
+      local -a summary_tokens=()
       local conflict_entry=""
       for conflict_entry in "${internal_conflicts[@]}"; do
         IFS='|' read -r key labels <<<"$conflict_entry"
@@ -362,14 +362,25 @@ simple_port_check() {
         local port="${key##*|}"
         local label_list
         label_list="$(printf '%s\n' "$labels" | paste -sd', ' -)"
-        warn "      - ${proto^^} ${port}: ${label_list}"
         detail_lines+=("${proto^^} ${port}: ${label_list}")
+        summary_tokens+=("${proto^^} ${port} (${label_list})")
       done
-      warn "    Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
       ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL="$(printf '%s\n' "${detail_lines[@]}")"
+
       if [[ "$mode" == "warn" ]]; then
-        warn "    Continuing despite internal conflicts (ARRSTACK_PORT_CHECK_MODE=warn)."
+        local summary_joined="${summary_tokens[*]}"
+        if ((${#summary_tokens[@]} > 0)); then
+          summary_joined="$(printf '%s; ' "${summary_tokens[@]}")"
+          summary_joined="${summary_joined%; }"
+        fi
+        warn "    Port conflicts detected (ARRSTACK_PORT_CHECK_MODE=warn): ${summary_joined}; adjust ${ARR_USERCONF_PATH:-userr.conf} to assign unique host ports."
       else
+        warn "    Stack configuration port conflicts detected:"
+        local detail_line=""
+        for detail_line in "${detail_lines[@]}"; do
+          warn "      - ${detail_line}"
+        done
+        warn "    Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
         die "Resolve internal stack port conflicts (duplicate host bindings) and rerun ./arrstack.sh"
       fi
     fi

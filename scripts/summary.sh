@@ -480,12 +480,18 @@ POLICY
       elif [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
         warn "SABnzbd exposed directly on the LAN without Caddy (ENABLE_CADDY=0)."
       fi
+    else
+      msg "Host Port: (not exposed – VPN mode)"
     fi
     local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
     msg "Helper Endpoint: ${sab_helper_url}"
     if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${ARR_DOMAIN_SUFFIX_CLEAN:-}" ]]; then
-      local sab_domain="sabnzbd.${ARR_DOMAIN_SUFFIX_CLEAN}"
-      msg "Caddy Route: https://${sab_domain}"
+      if [[ "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+        local sab_domain="sabnzbd.${ARR_DOMAIN_SUFFIX_CLEAN}"
+        msg "Caddy Route: https://${sab_domain}"
+      else
+        msg "Caddy Route: not published (VPN mode)"
+      fi
     fi
     if [[ -n "${SABNZBD_CATEGORY:-}" ]]; then
       msg "Default Category Override: ${SABNZBD_CATEGORY}"

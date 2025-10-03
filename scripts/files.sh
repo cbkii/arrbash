@@ -352,6 +352,13 @@ write_env() {
   fi
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
+  local sab_internal_port_raw="${SABNZBD_INTERNAL_PORT:-8080}"
+  if [[ ! "$sab_internal_port_raw" =~ ^[0-9]+$ ]]; then
+    warn "Invalid SABNZBD_INTERNAL_PORT=${SABNZBD_INTERNAL_PORT:-}; defaulting to 8080."
+    sab_internal_port_raw=8080
+  fi
+  SABNZBD_INTERNAL_PORT="$sab_internal_port_raw"
+
   local sab_port_raw="${SABNZBD_PORT:-8080}"
   if [[ ! "$sab_port_raw" =~ ^[0-9]+$ ]]; then
     warn "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to 8080."
@@ -444,6 +451,7 @@ write_env() {
     fi
   fi
   ARRSTACK_SAB_API_KEY_STATE="$sab_api_state"
+  export ARRSTACK_SAB_API_KEY_STATE
   case "$sab_api_state" in
     set)
       if [[ -z "${ARRSTACK_SAB_API_KEY_SOURCE:-}" ]]; then
@@ -707,7 +715,7 @@ fi
 append_sabnzbd_service_body() {
   local target="$1"
   local include_direct_port="${2:-0}"
-  local internal_port="${3:-8080}"
+  local internal_port="${3:-${SABNZBD_INTERNAL_PORT:-8080}}"
   local via_vpn="${4:-0}"
   # shellcheck disable=SC2034  # reserved for future per-network tweaks
 
@@ -758,7 +766,10 @@ write_compose_split_mode() {
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
-  local sab_internal_port="8080"
+  local sab_internal_port="${SABNZBD_INTERNAL_PORT:-8080}"
+  if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
+    sab_internal_port="8080"
+  fi
 
   LOCAL_DNS_SERVICE_ENABLED=0
 
@@ -1056,7 +1067,10 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    local sab_internal_port="8080"
+    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-8080}"
+    if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
+      sab_internal_port="8080"
+    fi
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
@@ -1515,7 +1529,10 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    local sab_internal_port="8080"
+    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-8080}"
+    if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
+      sab_internal_port="8080"
+    fi
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}

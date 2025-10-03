@@ -10,6 +10,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ```bash
   ./arrstack.sh --yes                 # non-interactive mode
   ./arrstack.sh --enable-caddy        # temporary toggle for ENABLE_CADDY=1
+  ./arrstack.sh --enable-sab          # temporary toggle for SABNZBD_ENABLED=1
   ./arrstack.sh --rotate-api-key      # issue a new Gluetun API key
   ./arrstack.sh --rotate-caddy-auth   # generate new Caddy basic auth credentials
   ./arrstack.sh --sync-api-keys       # resync Sonarr/Radarr/Prowlarr keys into Configarr
