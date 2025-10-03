@@ -71,6 +71,13 @@ collect_port_requirements() {
     _requirements_ref+=("tcp|${PROWLARR_PORT}|Prowlarr WebUI|${expected}")
     _requirements_ref+=("tcp|${BAZARR_PORT}|Bazarr WebUI|${expected}")
     _requirements_ref+=("tcp|${FLARESOLVERR_PORT}|FlareSolverr API|${expected}")
+    if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+      local sab_port_check="${SABNZBD_PORT:-8080}"
+      if [[ ! "$sab_port_check" =~ ^[0-9]+$ ]]; then
+        sab_port_check="8080"
+      fi
+      _requirements_ref+=("tcp|${sab_port_check}|SABnzbd WebUI|${expected}")
+    fi
   fi
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
@@ -97,6 +104,37 @@ collect_port_requirements() {
     _requirements_ref+=("tcp|53|Local DNS (TCP)|${dns_expected}")
     _requirements_ref+=("udp|53|Local DNS (UDP)|${dns_expected}")
   fi
+}
+
+detect_internal_port_conflicts() {
+  local _requirements_name="$1"
+  local _collisions_name="$2"
+  # shellcheck disable=SC2178
+  local -n _requirements_ref="$_requirements_name"
+  # shellcheck disable=SC2178
+  local -n _collisions_ref="$_collisions_name"
+
+  _collisions_ref=()
+
+  declare -A _label_map=()
+
+  local entry=""
+  for entry in "${_requirements_ref[@]}"; do
+    IFS='|' read -r proto port label _expected <<<"$entry"
+    local key="${proto}|${port}"
+    if [[ -z "${_label_map[$key]:-}" ]]; then
+      _label_map[$key]="$label"
+    else
+      _label_map[$key]+=$'\n'"$label"
+    fi
+  done
+
+  local key=""
+  for key in "${!_label_map[@]}"; do
+    if [[ "${_label_map[$key]}" == *$'\n'* ]]; then
+      _collisions_ref+=("${key}|${_label_map[$key]}")
+    fi
+  done
 }
 
 # Checks port availability and returns raw listener details for diagnostics
@@ -299,6 +337,8 @@ simple_port_check() {
   fi
 
   local quickfix_used=0
+  ARRSTACK_INTERNAL_PORT_CONFLICTS=0
+  ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL=""
 
   while :; do
     local -a requirements=()
@@ -307,6 +347,31 @@ simple_port_check() {
     if ((${#requirements[@]} == 0)); then
       msg "    No host port reservations required for the selected configuration."
       return
+    fi
+
+    local -a internal_conflicts=()
+    detect_internal_port_conflicts requirements internal_conflicts
+    if ((${#internal_conflicts[@]} > 0)); then
+      ARRSTACK_INTERNAL_PORT_CONFLICTS=1
+      local -a detail_lines=()
+      warn "    Stack configuration port conflicts detected:"
+      local conflict_entry=""
+      for conflict_entry in "${internal_conflicts[@]}"; do
+        IFS='|' read -r key labels <<<"$conflict_entry"
+        local proto="${key%%|*}"
+        local port="${key##*|}"
+        local label_list
+        label_list="$(printf '%s\n' "$labels" | paste -sd', ' -)"
+        warn "      - ${proto^^} ${port}: ${label_list}"
+        detail_lines+=("${proto^^} ${port}: ${label_list}")
+      done
+      warn "    Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
+      ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL="$(printf '%s\n' "${detail_lines[@]}")"
+      if [[ "$mode" == "warn" ]]; then
+        warn "    Continuing despite internal conflicts (ARRSTACK_PORT_CHECK_MODE=warn)."
+      else
+        die "Resolve internal stack port conflicts (duplicate host bindings) and rerun ./arrstack.sh"
+      fi
     fi
 
     local -a conflicts=()

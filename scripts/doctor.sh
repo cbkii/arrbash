@@ -224,7 +224,7 @@ check_network_security() {
 
   local -a direct_ports=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
-    direct_ports+=("${SABNZBD_PORT:-8780}")
+    direct_ports+=("${SABNZBD_PORT:-8080}")
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
@@ -276,7 +276,7 @@ check_network_security() {
     if [[ -f "$qbt_conf" ]]; then
       local ui_port
       ui_port="$(grep '^WebUI\\Port=' "$qbt_conf" 2>/dev/null | cut -d= -f2- | tr -d '\r' || true)"
-      local host_port="${QBT_HTTP_PORT_HOST:-8080}"
+      local host_port="${QBT_HTTP_PORT_HOST:-8082}"
       if [[ -n "$ui_port" && "$ui_port" != "$host_port" ]]; then
         echo "[doctor][warn] qBittorrent WebUI internal port is ${ui_port} but host mapping expects ${host_port}"
       fi
@@ -466,12 +466,30 @@ doctor_check_sabnzbd() {
     return 0
   fi
 
+  local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
+  local sab_helper_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
+  local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
+
   local sab_status=0
   if "$helper" version >/dev/null 2>&1; then
     doctor_ok "SABnzbd API reachable"
   else
     sab_status=1
-    doctor_fail "SABnzbd unreachable at ${SABNZBD_URL}"
+    doctor_fail "SABnzbd unreachable at ${sab_helper_url}"
+  fi
+
+  local sab_api_state="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
+  case "$sab_api_state" in
+    placeholder)
+      doctor_warn "SABnzbd API key still placeholder; update Settings → General"
+      ;;
+    empty)
+      doctor_warn "SABnzbd API key not configured; helper uploads will fail"
+      ;;
+  esac
+
+  if [[ "${SABNZBD_USE_VPN:-0}" != "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" && "${ENABLE_CADDY:-0}" != "1" ]]; then
+    doctor_warn "SABnzbd exposed on LAN without Caddy (ENABLE_CADDY=0, EXPOSE_DIRECT_PORTS=1)"
   fi
 
   if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
@@ -508,12 +526,22 @@ EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-0}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
 DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-router}"
-QBT_HTTP_PORT_HOST="${QBT_HTTP_PORT_HOST:-8080}"
+QBT_HTTP_PORT_HOST="${QBT_HTTP_PORT_HOST:-8082}"
 SONARR_PORT="${SONARR_PORT:-8989}"
 RADARR_PORT="${RADARR_PORT:-7878}"
 PROWLARR_PORT="${PROWLARR_PORT:-9696}"
 BAZARR_PORT="${BAZARR_PORT:-6767}"
 FLARESOLVERR_PORT="${FLARESOLVERR_PORT:-8191}"
+
+if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
+  echo "[doctor][warn] Duplicate host port assignments detected in configuration:"
+  if [[ -n "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
+    while IFS= read -r conflict_line; do
+      [[ -z "$conflict_line" ]] && continue
+      echo "  • ${conflict_line}"
+    done < <(printf '%s\n' "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL}")
+  fi
+fi
 
 if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
   echo "[doctor] Checking if port 53 is free (or already bound):"

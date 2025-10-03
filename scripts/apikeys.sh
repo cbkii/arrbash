@@ -96,6 +96,7 @@ arrstack_update_secret_line() {
 
   local line_no="${existing_line%%:*}"
   local raw_value="${existing_line#*:}"
+  raw_value="${raw_value#${secret_key}:}"
 
   raw_value="${raw_value#"${raw_value%%[![:space:]]*}"}"
   raw_value="${raw_value%%#*}"

@@ -235,6 +235,9 @@ write_env() {
 
   hydrate_caddy_auth_from_env_file
   hydrate_user_credentials_from_env_file
+  hydrate_sab_api_key_from_config
+  hydrate_qbt_host_port_from_env_file
+  hydrate_qbt_webui_port_from_config
 
   CADDY_BASIC_AUTH_USER="$(sanitize_user "$CADDY_BASIC_AUTH_USER")"
 
@@ -349,16 +352,111 @@ write_env() {
   fi
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
-  local sab_port_raw="${SABNZBD_PORT:-8780}"
+  local sab_port_raw="${SABNZBD_PORT:-8080}"
   if [[ ! "$sab_port_raw" =~ ^[0-9]+$ ]]; then
-    warn "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to 8780."
-    sab_port_raw=8780
+    warn "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to 8080."
+    sab_port_raw=8080
   fi
   SABNZBD_PORT="$sab_port_raw"
 
-  if [[ -z "${SABNZBD_URL:-}" ]]; then
-    SABNZBD_URL="http://localhost:${SABNZBD_PORT}"
+  local sab_host_default="${LOCALHOST_IP:-localhost}"
+  local sab_host_value="${SABNZBD_HOST:-}"
+  if [[ -z "$sab_host_value" ]]; then
+    sab_host_value="$sab_host_default"
   fi
+
+  local sab_host_auto=0
+  if ((sab_enabled)) && ((sab_use_vpn == 1)); then
+    local sab_host_lower="${sab_host_value,,}"
+    local sab_default_lower="${sab_host_default,,}"
+    case "$sab_host_lower" in
+      "$sab_default_lower"|"127.0.0.1"|"localhost")
+        sab_host_value="sabnzbd"
+        sab_host_auto=1
+        ;;
+    esac
+
+    if ((sab_host_auto == 0)); then
+      case "$sab_host_lower" in
+        sabnzbd|gluetun)
+          ;;
+        *)
+          warn "SABnzbd is routed through the VPN; ensure SABNZBD_HOST='${sab_host_value}' is reachable (sabnzbd is recommended)."
+          ;;
+      esac
+    fi
+  fi
+
+  SABNZBD_HOST="$sab_host_value"
+  ARRSTACK_SAB_HOST_AUTO="$sab_host_auto"
+
+  local qbt_webui_default=8082
+  local qbt_host_default=8082
+  local qbt_webui_port="$qbt_webui_default"
+  local qbt_host_port="$qbt_host_default"
+  local qbt_webui_status="default"
+  local qbt_host_status="default"
+
+  if [[ -n "${ARRSTACK_QBT_WEBUI_PORT_CONFIG:-}" ]]; then
+    qbt_webui_port="${ARRSTACK_QBT_WEBUI_PORT_CONFIG}"
+    qbt_webui_status="preserved"
+  fi
+
+  if [[ -n "${ARRSTACK_QBT_HOST_PORT_ENV:-}" ]]; then
+    qbt_host_port="${ARRSTACK_QBT_HOST_PORT_ENV}"
+    qbt_host_status="preserved"
+  elif [[ -n "${QBT_HTTP_PORT_HOST:-}" ]]; then
+    qbt_host_port="${QBT_HTTP_PORT_HOST}"
+  fi
+
+  if [[ ! "$qbt_host_port" =~ ^[0-9]+$ ]]; then
+    warn "Invalid QBT_HTTP_PORT_HOST=${qbt_host_port}; defaulting to ${qbt_host_default}."
+    qbt_host_port="$qbt_host_default"
+    qbt_host_status="default"
+  fi
+
+  if [[ "$qbt_webui_status" == "preserved" && "$qbt_webui_port" != "$qbt_webui_default" ]]; then
+    arrstack_record_preserve_note "Preserved qBittorrent WebUI port ${qbt_webui_port}"
+  fi
+  if [[ "$qbt_host_status" == "preserved" && "$qbt_host_port" != "$qbt_host_default" ]]; then
+    arrstack_record_preserve_note "Preserved qBittorrent host port ${qbt_host_port}"
+  fi
+
+  if [[ ! "$qbt_webui_port" =~ ^[0-9]+$ ]]; then
+    warn "Invalid qBittorrent WebUI port ${qbt_webui_port}; using ${qbt_webui_default}."
+    qbt_webui_port="$qbt_webui_default"
+    qbt_webui_status="default"
+  fi
+
+  QBT_WEBUI_PORT="$qbt_webui_port"
+  QBT_HTTP_PORT_HOST="$qbt_host_port"
+  ARRSTACK_QBT_WEBUI_PORT_STATUS="$qbt_webui_status"
+  ARRSTACK_QBT_HOST_PORT_STATUS="$qbt_host_status"
+
+  local sab_api_state="empty"
+  local sab_api_value="${SABNZBD_API_KEY:-}"
+  if [[ -n "$sab_api_value" ]]; then
+    local sab_api_upper="${sab_api_value^^}"
+    if [[ "$sab_api_upper" == REPLACE_WITH_* ]]; then
+      sab_api_state="placeholder"
+    else
+      sab_api_state="set"
+    fi
+  fi
+  ARRSTACK_SAB_API_KEY_STATE="$sab_api_state"
+  case "$sab_api_state" in
+    set)
+      if [[ -z "${ARRSTACK_SAB_API_KEY_SOURCE:-}" ]]; then
+        ARRSTACK_SAB_API_KEY_SOURCE="provided"
+      fi
+      ;;
+    placeholder)
+      ARRSTACK_SAB_API_KEY_SOURCE="placeholder"
+      ;;
+    empty)
+      ARRSTACK_SAB_API_KEY_SOURCE="empty"
+      ;;
+  esac
 
   load_proton_credentials
 
@@ -541,6 +639,7 @@ fi
     printf '\n'
 
     printf '%s\n' '# Service ports'
+    write_env_kv "QBT_WEBUI_PORT" "$QBT_WEBUI_PORT"
     write_env_kv "QBT_HTTP_PORT_HOST" "$QBT_HTTP_PORT_HOST"
     write_env_kv "SONARR_PORT" "$SONARR_PORT"
     write_env_kv "RADARR_PORT" "$RADARR_PORT"
@@ -559,7 +658,7 @@ fi
     printf '%s\n' '# SABnzbd'
     write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
     write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
-    write_env_kv "SABNZBD_URL" "$SABNZBD_URL"
+    write_env_kv "SABNZBD_HOST" "$SABNZBD_HOST"
     write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
     write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
     write_env_kv "SABNZBD_TIMEOUT" "$SABNZBD_TIMEOUT"
@@ -602,19 +701,71 @@ fi
 
 }
 
+# Appends the shared SABnzbd service definition to the provided compose fragment.
+# The caller handles network configuration and passes 1 as the second argument
+# when direct-mode ports should be exposed on the LAN.
+append_sabnzbd_service_body() {
+  local target="$1"
+  local include_direct_port="${2:-0}"
+  local internal_port="${3:-8080}"
+  local via_vpn="${4:-0}"
+  # shellcheck disable=SC2034  # reserved for future per-network tweaks
+
+  local sab_timeout_for_health="${SABNZBD_TIMEOUT:-60}"
+  if [[ ! "$sab_timeout_for_health" =~ ^[0-9]+$ ]]; then
+    sab_timeout_for_health=60
+  fi
+  local health_start_period_seconds=60
+  if ((sab_timeout_for_health > health_start_period_seconds)); then
+    health_start_period_seconds="$sab_timeout_for_health"
+  fi
+
+  cat <<'YAML' >>"$target"
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TIMEZONE}
+    volumes:
+      - ${ARR_DOCKER_DIR}/sab/config:/config
+      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
+      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
+YAML
+
+  if [[ "$include_direct_port" == "1" ]]; then
+    printf '    ports:\n      - "${LAN_IP}:${SABNZBD_PORT}:%s"\n' "$internal_port" >>"$target"
+  fi
+
+  {
+    printf '    healthcheck:\n'
+    printf '      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:%s/api?mode=version&output=json"]\n' "$internal_port"
+    printf '      interval: 30s\n      timeout: 5s\n      retries: 5\n      start_period: %ss\n' "$health_start_period_seconds"
+  } >>"$target"
+
+  cat <<'YAML' >>"$target"
+    restart: unless-stopped
+    # NOTE: Future hardening opportunity — consider CPU/memory limits and a read_only filesystem once defaults are vetted.
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+}
+
 # Generates docker-compose.yml tuned for split VPN (qBittorrent-only tunnel)
 write_compose_split_mode() {
   msg "🐳 Writing docker-compose.yml"
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
+  local sab_internal_port="8080"
 
   LOCAL_DNS_SERVICE_ENABLED=0
 
   tmp="$(arrstack_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
 
-  {
+  { 
     cat <<'YAML'
 # -----------------------------------------------------------------------------
 # docker-compose.yml is auto-generated by arrstack.sh. Do not edit manually.
@@ -628,6 +779,9 @@ services:
     container_name: gluetun
     profiles:
       - ipdirect
+YAML
+
+    cat <<'YAML'
     cap_add:
       - NET_ADMIN
     devices:
@@ -647,7 +801,7 @@ services:
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
       QBT_USER: ${QBT_USER}
       QBT_PASS: ${QBT_PASS}
-      QBITTORRENT_ADDR: "http://127.0.0.1:8080"
+      QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
@@ -663,13 +817,8 @@ services:
       - ${ARR_DOCKER_DIR}/gluetun:/gluetun
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:8080"
+      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:${QBT_WEBUI_PORT}"
 YAML
-  if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" == "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
-  fi
   cat <<'YAML' >>"$tmp"
     healthcheck:
       test: /gluetun-entrypoint healthcheck
@@ -712,7 +861,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/v2/app/version"]
+      test: ["CMD", "curl", "-f", "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}/api/v2/app/version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -888,9 +1037,9 @@ YAML
         - "CMD-SHELL"
         - >
           if command -v curl >/dev/null 2>&1; then
-            curl -fsS --max-time 10 http://127.0.0.1:8191/health >/dev/null 2>&1;
+            curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           elif command -v wget >/dev/null 2>&1; then
-            wget -qO- http://127.0.0.1:8191/health >/dev/null 2>&1;
+            wget -qO- http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           else
             exit 1;
           fi
@@ -907,76 +1056,32 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
-      cat <<'YAML' >>"$tmp"
+    local sab_internal_port="8080"
+    cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
     container_name: sabnzbd
     profiles:
       - ipdirect
+YAML
+    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
         condition: service_healthy
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
 YAML
+      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
     else
       cat <<'YAML' >>"$tmp"
-  sabnzbd:
-    image: ${SABNZBD_IMAGE}
-    container_name: sabnzbd
-    profiles:
-      - ipdirect
     networks:
       - arr_net
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
 YAML
+      local expose_direct_port="0"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-        cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
+        expose_direct_port="1"
       fi
-      cat <<'YAML' >>"$tmp"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
-YAML
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port" "0"
     fi
   fi
 
@@ -1120,7 +1225,7 @@ services:
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
       QBT_USER: ${QBT_USER}
       QBT_PASS: ${QBT_PASS}
-      QBITTORRENT_ADDR: "http://127.0.0.1:8080"
+      QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
@@ -1149,18 +1254,13 @@ YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:8080"
+      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:${QBT_WEBUI_PORT}"
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_PORT}"
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_PORT}"
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_PORT}"
       - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_PORT}"
       - "${LAN_IP}:${FLARESOLVERR_PORT}:${FLARESOLVERR_PORT}"
 YAML
-    if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" == "1" ]]; then
-      cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
-    fi
   fi
 
   cat <<'YAML' >>"$tmp"
@@ -1259,7 +1359,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/v2/app/version"]
+      test: ["CMD", "curl", "-f", "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}/api/v2/app/version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1396,9 +1496,9 @@ YAML
         - "CMD-SHELL"
         - >
           if command -v curl >/dev/null 2>&1; then
-            curl -fsS --max-time 10 http://127.0.0.1:8191/health >/dev/null 2>&1;
+            curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           elif command -v wget >/dev/null 2>&1; then
-            wget -qO- http://127.0.0.1:8191/health >/dev/null 2>&1;
+            wget -qO- http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           else
             exit 1;
           fi
@@ -1415,74 +1515,28 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
-      cat <<'YAML' >>"$tmp"
+    local sab_internal_port="8080"
+    cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
     container_name: sabnzbd
     profiles:
       - ipdirect
+YAML
+    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
         condition: service_healthy
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
 YAML
+      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
     else
-      cat <<'YAML' >>"$tmp"
-  sabnzbd:
-    image: ${SABNZBD_IMAGE}
-    container_name: sabnzbd
-    profiles:
-      - ipdirect
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
-YAML
+      local expose_direct_port="0"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-        cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
+        expose_direct_port="1"
       fi
-      cat <<'YAML' >>"$tmp"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
-YAML
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port" "0"
     fi
   fi
 
@@ -1546,7 +1600,7 @@ YAML
       test:
         - "CMD-SHELL"
         - >-
-          curl -fsS --max-time 3 http://127.0.0.1/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://127.0.0.1/healthz >/dev/null 2>&1
+          curl -fsS --max-time 3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1
       interval: 10s
       timeout: 5s
       retries: 6
@@ -1662,7 +1716,7 @@ case "$PORT_VALUE" in
         ;;
 esac
 
-QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
+QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://${LOCALHOST_IP:-localhost}:${QBT_WEBUI_PORT:-8082}}"
 PAYLOAD=$(printf 'json={"listen_port":%s,"random_port":false}' "$PORT_VALUE")
 
 COOKIE_FILE=""
@@ -1925,14 +1979,30 @@ write_caddy_assets() {
   # Prefer normalized suffix from .env; fall back to computed value
   local domain_suffix="${ARR_DOMAIN_SUFFIX_CLEAN}"
 
+  local default_upstream_host="${LOCALHOST_IP:-localhost}"
+  if [[ -z "$default_upstream_host" || "$default_upstream_host" == "0.0.0.0" ]]; then
+    default_upstream_host="localhost"
+  fi
+
   local -a services=(
-    "qbittorrent 8080"
-    "sonarr ${SONARR_PORT}"
-    "radarr ${RADARR_PORT}"
-    "prowlarr ${PROWLARR_PORT}"
-    "bazarr ${BAZARR_PORT}"
-    "flaresolverr ${FLARESOLVERR_PORT}"
+    "qbittorrent|${QBT_WEBUI_PORT}|${default_upstream_host}"
+    "sonarr|${SONARR_PORT}|${default_upstream_host}"
+    "radarr|${RADARR_PORT}|${default_upstream_host}"
+    "prowlarr|${PROWLARR_PORT}|${default_upstream_host}"
+    "bazarr|${BAZARR_PORT}|${default_upstream_host}"
+    "flaresolverr|${FLARESOLVERR_PORT}|${default_upstream_host}"
   )
+
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+    local sab_proxy_port="${SABNZBD_PORT}"
+    local sab_upstream_host="${SABNZBD_HOST:-$default_upstream_host}"
+    if [[ -z "$sab_upstream_host" || "$sab_upstream_host" == "0.0.0.0" ]]; then
+      sab_upstream_host="$default_upstream_host"
+    fi
+    if [[ -n "$sab_proxy_port" && "$sab_proxy_port" =~ ^[0-9]+$ ]]; then
+      services+=("sabnzbd|${sab_proxy_port}|${sab_upstream_host}")
+    fi
+  fi
 
   local caddyfile_content
   caddyfile_content="$({
@@ -1956,22 +2026,24 @@ write_caddy_assets() {
     printf '    }\n'
     printf '}\n\n'
 
-    local entry name port host
+    local entry name port upstream_host host
     for entry in "${services[@]}"; do
-      name="${entry%% *}"
-      port="${entry##* }"
+      IFS='|' read -r name port upstream_host <<<"$entry"
+      if [[ -z "$upstream_host" ]]; then
+        upstream_host="$default_upstream_host"
+      fi
       host="${name}.${domain_suffix}"
       printf '%s {\n' "$host"
       printf '    tls internal\n'
       printf '    @lan remote_ip %s\n' "$lan_cidrs"
       printf '    handle @lan {\n'
-      printf '        reverse_proxy 127.0.0.1:%s\n' "$port"
+      printf '        reverse_proxy %s:%s\n' "$upstream_host" "$port"
       printf '    }\n'
       printf '    handle {\n'
       printf '        basic_auth * {\n'
       printf '            %s %s\n' "$CADDY_BASIC_AUTH_USER" "$caddy_auth_hash"
       printf '        }\n'
-      printf '        reverse_proxy 127.0.0.1:%s\n' "$port"
+      printf '        reverse_proxy %s:%s\n' "$upstream_host" "$port"
       printf '    }\n'
       printf '}\n\n'
     done
@@ -1985,10 +2057,12 @@ write_caddy_assets() {
     printf '\n'
     printf '    handle @lan {\n'
     for entry in "${services[@]}"; do
-      name="${entry%% *}"
-      port="${entry##* }"
+      IFS='|' read -r name port upstream_host <<<"$entry"
+      if [[ -z "$upstream_host" ]]; then
+        upstream_host="$default_upstream_host"
+      fi
       printf '        handle_path /apps/%s/* {\n' "$name"
-      printf '            reverse_proxy http://127.0.0.1:%s\n' "$port"
+      printf '            reverse_proxy http://%s:%s\n' "$upstream_host" "$port"
       printf '        }\n'
     done
     printf '        respond "ARR Stack Running" 200\n'
@@ -1999,10 +2073,12 @@ write_caddy_assets() {
     printf '            %s %s\n' "$CADDY_BASIC_AUTH_USER" "$caddy_auth_hash"
     printf '        }\n'
     for entry in "${services[@]}"; do
-      name="${entry%% *}"
-      port="${entry##* }"
+      IFS='|' read -r name port upstream_host <<<"$entry"
+      if [[ -z "$upstream_host" ]]; then
+        upstream_host="$default_upstream_host"
+      fi
       printf '        handle_path /apps/%s/* {\n' "$name"
-      printf '            reverse_proxy http://127.0.0.1:%s\n' "$port"
+      printf '            reverse_proxy http://%s:%s\n' "$upstream_host" "$port"
       printf '        }\n'
     done
     printf '        respond "ARR Stack Running" 200\n'
@@ -2140,7 +2216,7 @@ Downloads\TempPathEnabled=true
 WebUI\Address=0.0.0.0
 WebUI\AlternativeUIEnabled=${vt_alt_value}
 WebUI\RootFolder=${vt_root}
-WebUI\Port=8080
+WebUI\Port=${QBT_WEBUI_PORT}
 WebUI\Username=${QBT_USER}
 WebUI\LocalHostAuth=true
 WebUI\AuthSubnetWhitelistEnabled=true
@@ -2161,7 +2237,7 @@ EOF
   local managed_spec
   local -a managed_lines=(
     "WebUI\\Address=0.0.0.0"
-    "WebUI\\Port=8080"
+    "WebUI\\Port=${QBT_WEBUI_PORT}"
     "WebUI\\AlternativeUIEnabled=${vt_alt_value}"
     "WebUI\\RootFolder=${vt_root}"
     "WebUI\\ServerDomains=*"
@@ -2725,7 +2801,7 @@ localConfigTemplatesPath: /app/cfs
 sonarr:
   main:
     define: true
-    host: http://127.0.0.1:8989
+    host: http://${LOCALHOST_IP}:${SONARR_PORT}
     apiKey: !secret SONARR_API_KEY
     include:
 ${sonarr_include_yaml}    custom_formats: []
@@ -2733,7 +2809,7 @@ ${sonarr_include_yaml}    custom_formats: []
 radarr:
   main:
     define: true
-    host: http://127.0.0.1:7878
+    host: http://${LOCALHOST_IP}:${RADARR_PORT}
     apiKey: !secret RADARR_API_KEY
     include:
 ${radarr_include_yaml}    custom_formats: []
@@ -2754,12 +2830,32 @@ EOF_CFG
 SONARR_API_KEY: "REPLACE_WITH_SONARR_API_KEY"
 RADARR_API_KEY: "REPLACE_WITH_RADARR_API_KEY"
 PROWLARR_API_KEY: "REPLACE_WITH_PROWLARR_API_KEY"
+SABNZBD_API_KEY: "REPLACE_WITH_SABNZBD_API_KEY"
 EOF
     )
     atomic_write "$runtime_secrets" "$secrets_stub" "$SECRET_FILE_MODE"
     msg "  Stubbed secrets file: ${runtime_secrets}"
   else
     ensure_secret_file_mode "$runtime_secrets"
+  fi
+
+  if [[ -f "$runtime_secrets" ]]; then
+    if ! grep -q '^SABNZBD_API_KEY:' "$runtime_secrets" 2>/dev/null; then
+      printf 'SABNZBD_API_KEY: "REPLACE_WITH_SABNZBD_API_KEY"\n' >>"$runtime_secrets"
+      ensure_secret_file_mode "$runtime_secrets"
+      msg "  Added SABnzbd placeholder to Configarr secrets"
+    fi
+
+    if [[ "${ARRSTACK_SAB_API_KEY_STATE:-}" == "set" ]]; then
+      local sab_secret_result=""
+      if sab_secret_result="$(arrstack_update_secret_line "$runtime_secrets" "SABNZBD_API_KEY" "$SABNZBD_API_KEY" 0 2>/dev/null)"; then
+        case "$sab_secret_result" in
+          updated | created | appended)
+            msg "  Configarr secrets: synced SABnzbd API key"
+            ;;
+        esac
+      fi
+    fi
   fi
 
   local resolution_display="${sanitized_video_min_res}–${sanitized_video_max_res}"
