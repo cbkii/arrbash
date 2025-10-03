@@ -466,12 +466,16 @@ doctor_check_sabnzbd() {
     return 0
   fi
 
+  local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
+  local sab_helper_host="${SABNZBD_HELPER_HOST:-${LOCALHOST_IP:-localhost}}"
+  local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
+
   local sab_status=0
   if "$helper" version >/dev/null 2>&1; then
     doctor_ok "SABnzbd API reachable"
   else
     sab_status=1
-    doctor_fail "SABnzbd unreachable at ${SABNZBD_URL}"
+    doctor_fail "SABnzbd unreachable at ${sab_helper_url}"
   fi
 
   local sab_api_state="${ARRSTACK_SAB_API_KEY_STATE:-empty}"

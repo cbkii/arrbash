@@ -359,8 +359,9 @@ write_env() {
   fi
   SABNZBD_PORT="$sab_port_raw"
 
-  if [[ -z "${SABNZBD_URL:-}" ]]; then
-    SABNZBD_URL="http://localhost:${SABNZBD_PORT}"
+  local sab_helper_host_default="${LOCALHOST_IP:-localhost}"
+  if [[ -z "${SABNZBD_HELPER_HOST:-}" ]]; then
+    SABNZBD_HELPER_HOST="$sab_helper_host_default"
   fi
 
   local qbt_webui_default=8082
@@ -669,7 +670,7 @@ fi
     printf '%s\n' '# SABnzbd'
     write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
     write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
-    write_env_kv "SABNZBD_URL" "$SABNZBD_URL"
+    write_env_kv "SABNZBD_HELPER_HOST" "$SABNZBD_HELPER_HOST"
     write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
     write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
     write_env_kv "SABNZBD_TIMEOUT" "$SABNZBD_TIMEOUT"
@@ -746,9 +747,11 @@ YAML
     printf '    ports:\n      - "${LAN_IP}:${SABNZBD_PORT}:%s"\n' "$internal_port" >>"$target"
   fi
 
+  local sab_health_host="${LOCALHOST_IP:-localhost}"
+
   {
     printf '    healthcheck:\n'
-    printf '      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:%s/api?mode=version&output=json"]\n' "$internal_port"
+    printf '      test: ["CMD", "curl", "-fsS", "http://%s:%s/api?mode=version&output=json"]\n' "$sab_health_host" "$internal_port"
     printf '      interval: 30s\n      timeout: 5s\n      retries: 5\n      start_period: %ss\n' "$health_start_period_seconds"
   } >>"$target"
 
@@ -812,7 +815,7 @@ YAML
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
       QBT_USER: ${QBT_USER}
       QBT_PASS: ${QBT_PASS}
-      QBITTORRENT_ADDR: "http://127.0.0.1:${QBT_WEBUI_PORT}"
+      QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
@@ -872,7 +875,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:${QBT_WEBUI_PORT}/api/v2/app/version"]
+      test: ["CMD", "curl", "-f", "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}/api/v2/app/version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1048,9 +1051,9 @@ YAML
         - "CMD-SHELL"
         - >
           if command -v curl >/dev/null 2>&1; then
-            curl -fsS --max-time 10 http://127.0.0.1:8191/health >/dev/null 2>&1;
+            curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           elif command -v wget >/dev/null 2>&1; then
-            wget -qO- http://127.0.0.1:8191/health >/dev/null 2>&1;
+            wget -qO- http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           else
             exit 1;
           fi
@@ -1236,7 +1239,7 @@ services:
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
       QBT_USER: ${QBT_USER}
       QBT_PASS: ${QBT_PASS}
-      QBITTORRENT_ADDR: "http://127.0.0.1:${QBT_WEBUI_PORT}"
+      QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
@@ -1370,7 +1373,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:${QBT_WEBUI_PORT}/api/v2/app/version"]
+      test: ["CMD", "curl", "-f", "http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}/api/v2/app/version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1507,9 +1510,9 @@ YAML
         - "CMD-SHELL"
         - >
           if command -v curl >/dev/null 2>&1; then
-            curl -fsS --max-time 10 http://127.0.0.1:8191/health >/dev/null 2>&1;
+            curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           elif command -v wget >/dev/null 2>&1; then
-            wget -qO- http://127.0.0.1:8191/health >/dev/null 2>&1;
+            wget -qO- http://${LOCALHOST_IP}:${FLARESOLVERR_PORT}/health >/dev/null 2>&1;
           else
             exit 1;
           fi
@@ -1611,7 +1614,7 @@ YAML
       test:
         - "CMD-SHELL"
         - >-
-          curl -fsS --max-time 3 http://127.0.0.1/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://127.0.0.1/healthz >/dev/null 2>&1
+          curl -fsS --max-time 3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1
       interval: 10s
       timeout: 5s
       retries: 6
@@ -1727,7 +1730,7 @@ case "$PORT_VALUE" in
         ;;
 esac
 
-QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://127.0.0.1:8082}"
+QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://${LOCALHOST_IP:-localhost}:${QBT_WEBUI_PORT:-8082}}"
 PAYLOAD=$(printf 'json={"listen_port":%s,"random_port":false}' "$PORT_VALUE")
 
 COOKIE_FILE=""
@@ -2033,6 +2036,7 @@ write_caddy_assets() {
     printf '    }\n'
     printf '}\n\n'
 
+    local caddy_upstream_host="${LOCALHOST_IP:-localhost}"
     local entry name port host
     for entry in "${services[@]}"; do
       name="${entry%% *}"
@@ -2042,13 +2046,13 @@ write_caddy_assets() {
       printf '    tls internal\n'
       printf '    @lan remote_ip %s\n' "$lan_cidrs"
       printf '    handle @lan {\n'
-      printf '        reverse_proxy 127.0.0.1:%s\n' "$port"
+      printf '        reverse_proxy %s:%s\n' "$caddy_upstream_host" "$port"
       printf '    }\n'
       printf '    handle {\n'
       printf '        basic_auth * {\n'
       printf '            %s %s\n' "$CADDY_BASIC_AUTH_USER" "$caddy_auth_hash"
       printf '        }\n'
-      printf '        reverse_proxy 127.0.0.1:%s\n' "$port"
+      printf '        reverse_proxy %s:%s\n' "$caddy_upstream_host" "$port"
       printf '    }\n'
       printf '}\n\n'
     done
@@ -2065,7 +2069,7 @@ write_caddy_assets() {
       name="${entry%% *}"
       port="${entry##* }"
       printf '        handle_path /apps/%s/* {\n' "$name"
-      printf '            reverse_proxy http://127.0.0.1:%s\n' "$port"
+      printf '            reverse_proxy http://%s:%s\n' "$caddy_upstream_host" "$port"
       printf '        }\n'
     done
     printf '        respond "ARR Stack Running" 200\n'
@@ -2079,7 +2083,7 @@ write_caddy_assets() {
       name="${entry%% *}"
       port="${entry##* }"
       printf '        handle_path /apps/%s/* {\n' "$name"
-      printf '            reverse_proxy http://127.0.0.1:%s\n' "$port"
+      printf '            reverse_proxy http://%s:%s\n' "$caddy_upstream_host" "$port"
       printf '        }\n'
     done
     printf '        respond "ARR Stack Running" 200\n'
@@ -2802,7 +2806,7 @@ localConfigTemplatesPath: /app/cfs
 sonarr:
   main:
     define: true
-    host: http://127.0.0.1:8989
+    host: http://${LOCALHOST_IP}:${SONARR_PORT}
     apiKey: !secret SONARR_API_KEY
     include:
 ${sonarr_include_yaml}    custom_formats: []
@@ -2810,7 +2814,7 @@ ${sonarr_include_yaml}    custom_formats: []
 radarr:
   main:
     define: true
-    host: http://127.0.0.1:7878
+    host: http://${LOCALHOST_IP}:${RADARR_PORT}
     apiKey: !secret RADARR_API_KEY
     include:
 ${radarr_include_yaml}    custom_formats: []

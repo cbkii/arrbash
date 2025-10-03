@@ -466,7 +466,10 @@ POLICY
         msg "LAN Exposure: disabled (EXPOSE_DIRECT_PORTS=0)"
       fi
     fi
-    msg "Helper URL: ${SABNZBD_URL}"
+    local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"
+    local sab_helper_host="${SABNZBD_HELPER_HOST:-${LOCALHOST_IP:-localhost}}"
+    local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
+    msg "Helper URL: ${sab_helper_url}"
     if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${ARR_DOMAIN_SUFFIX_CLEAN:-}" ]]; then
       local sab_domain="sabnzbd.${ARR_DOMAIN_SUFFIX_CLEAN}"
       msg "Caddy Route: https://${sab_domain}"

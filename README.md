@@ -73,7 +73,7 @@ Enable in your user config (for example `${ARR_BASE}/userr.conf`):
 SABNZBD_ENABLED=1
 # Optional overrides (see docs/sabnzbd.md for the full matrix)
 SABNZBD_PORT=8080          # Host port for the WebUI (qBittorrent now defaults to 8082)
-SABNZBD_URL="http://localhost:8080"  # Helper/API endpoint (hydrated into .env)
+SABNZBD_HELPER_HOST="${LOCALHOST_IP}"  # Host sab-helper uses (defaults to LOCALHOST_IP)
 SABNZBD_CATEGORY="arrbash" # Category assigned to helper-submitted jobs
 SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
 # Set SABNZBD_IMAGE=lscr.io/linuxserver/sabnzbd:latest to pin an alternate container tag

@@ -9,6 +9,8 @@ run_case() {
   shift
   local -a overrides=("$@")
   local tmp
+  local loop_host="localhost"
+  local qbt_port="8082"
   tmp="$(mktemp -d)"
   local stack_dir="${tmp}/stack"
   local docker_dir="${tmp}/docker"
@@ -27,7 +29,7 @@ run_case() {
     PGID=1000
     TIMEZONE="UTC"
     LAN_IP="192.168.0.2"
-    LOCALHOST_IP="127.0.0.1"
+    LOCALHOST_IP="$loop_host"
     EXPOSE_DIRECT_PORTS=0
     SPLIT_VPN=0
     SABNZBD_ENABLED=1
@@ -81,18 +83,19 @@ run_case() {
         status=1
       fi
     fi
-    if grep -q 'http://127.0.0.1:8080/api/v2/app/version' "$compose_file"; then
+    local qbt_health_literal='http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}/api/v2/app/version'
+    if grep -q "http://${loop_host}:8080/api/v2/app/version" "$compose_file"; then
       echo "[${name}] qBittorrent healthcheck still uses 8080" >&2
       status=1
     fi
-    if ! grep -q 'http://127.0.0.1:${QBT_WEBUI_PORT}/api/v2/app/version' "$compose_file" \
-      && ! grep -q 'http://127.0.0.1:8082/api/v2/app/version' "$compose_file"; then
-      echo "[${name}] qBittorrent healthcheck missing 8082 placeholder" >&2
+    if ! grep -q "$qbt_health_literal" "$compose_file"; then
+      echo "[${name}] qBittorrent healthcheck missing LOCALHOST_IP placeholder" >&2
       status=1
     fi
   fi
 
   if [[ -f "$env_file" ]]; then
+    qbt_port="$(grep -E '^QBT_WEBUI_PORT=' "$env_file" | head -n1 | cut -d= -f2- || printf '8082')"
     if ! grep -q '^QBT_WEBUI_PORT=8082' "$env_file"; then
       echo "[${name}] expected QBT_WEBUI_PORT=8082 in .env" >&2
       status=1
