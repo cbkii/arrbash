@@ -58,6 +58,41 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 - Review [Security](./docs/security.md) prior to exposing services beyond your LAN.
 - Bookmark [Troubleshooting](./docs/troubleshooting.md) for recovery steps.
 
+### SABnzbd (Usenet Downloader)
+
+SABnzbd integration is optional.
+
+Enable in your user config (for example `${ARR_BASE}/userr.conf`):
+
+```bash
+SABNZBD_ENABLED=1
+SABNZBD_API_KEY=YOUR_KEY
+# Optional overrides
+SABNZBD_PORT=8780          # Host port for the WebUI (8080 used by qBittorrent)
+SABNZBD_URL="http://localhost:8780"  # Helper/API endpoint
+SABNZBD_CATEGORY="arrbash" # Category assigned to helper-submitted jobs
+SABNZBD_TIMEOUT=15         # Helper API timeout in seconds
+# Set SABNZBD_USE_VPN=1 to route via Gluetun (falls back to direct if VPN disabled)
+# Set SABNZBD_IMAGE=lscr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
+```
+
+Run:
+
+```bash
+./arrstack.sh --yes
+```
+
+Helper:
+
+```bash
+scripts/sab-helper.sh status
+scripts/sab-helper.sh add-file /path/to/file.nzb
+```
+
+VPN note:
+By default SAB runs outside the VPN (TLS to Usenet servers). Enable `SABNZBD_USE_VPN=1` for full tunnelling through Gluetun.
+If Gluetun is disabled, arrbash logs a warning and runs SAB directly so downloads continue.
+
 ## Documentation index
 - [Architecture](./docs/architecture.md) – container map, generated files, and installer flow.
 - [Configuration](./docs/configuration.md) – precedence, core variables, and permission modes.

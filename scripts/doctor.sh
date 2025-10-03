@@ -139,6 +139,22 @@ port_in_use() {
   esac
 }
 
+doctor_ok() {
+  printf '[doctor][ok] %s\n' "$*"
+}
+
+doctor_fail() {
+  printf '[doctor][error] %s\n' "$*"
+}
+
+doctor_warn() {
+  printf '[doctor][warn] %s\n' "$*"
+}
+
+doctor_note() {
+  printf '[doctor][info] %s\n' "$*"
+}
+
 # Reports whether a specific service port is free/bound, noting missing tooling
 report_port() {
   local label="$1"
@@ -207,6 +223,9 @@ check_network_security() {
   fi
 
   local -a direct_ports=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    direct_ports+=("${SABNZBD_PORT:-8780}")
+  fi
 
   if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
     if [[ -z "${LAN_IP:-}" || "${LAN_IP}" == "0.0.0.0" ]]; then
@@ -426,6 +445,59 @@ check_docker_dns_configuration() {
   fi
 }
 
+doctor_check_sabnzbd() {
+  if [[ "${SABNZBD_ENABLED:-0}" != "1" ]]; then
+    doctor_note "SABnzbd disabled"
+    return 0
+  fi
+
+  if ! command -v jq >/dev/null 2>&1; then
+    doctor_fail "jq missing (required for SAB parsing)"
+    return 1
+  fi
+
+  local helper="${ARR_STACK_DIR%/}/scripts/sab-helper.sh"
+  if [[ ! -x "$helper" ]]; then
+    helper="${REPO_ROOT}/scripts/sab-helper.sh"
+  fi
+
+  if [[ ! -x "$helper" ]]; then
+    doctor_warn "SABnzbd helper missing; skipping API check"
+    return 0
+  fi
+
+  local sab_status=0
+  if "$helper" version >/dev/null 2>&1; then
+    doctor_ok "SABnzbd API reachable"
+  else
+    sab_status=1
+    doctor_fail "SABnzbd unreachable at ${SABNZBD_URL}"
+  fi
+
+  if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
+    local gluetun_disabled=0
+    if [[ "${ENABLE_GLUETUN:-1}" == "0" ]]; then
+      gluetun_disabled=1
+    fi
+    case "${VPN_SERVICE_PROVIDER:-protonvpn}" in
+      ''|none|disabled|off)
+        gluetun_disabled=1
+        ;;
+    esac
+
+    if ((gluetun_disabled)); then
+      doctor_warn "SABNZBD_USE_VPN=1 but Gluetun not enabled"
+    else
+      local compose_file="${ARR_STACK_DIR%/}/docker-compose.yml"
+      if [[ ! -f "$compose_file" ]] || ! grep -Eq '^[[:space:]]*gluetun:' "$compose_file"; then
+        doctor_warn "SABNZBD_USE_VPN=1 but Gluetun not enabled"
+      fi
+    fi
+  fi
+
+  return $sab_status
+}
+
 SUFFIX="${LAN_DOMAIN_SUFFIX:-}"
 LAN_IP="${LAN_IP:-}"
 DNS_IP="${LAN_IP:-127.0.0.1}"
@@ -597,6 +669,8 @@ fi
 
 test_lan_connectivity
 
+doctor_check_sabnzbd
+
 if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
   case "${DNS_DISTRIBUTION_MODE}" in
     router)
@@ -618,6 +692,10 @@ echo "[doctor] From another LAN device you can try:"
 if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
   echo "  curl -I http://${lan_target}:${QBT_HTTP_PORT_HOST}"
   echo "  curl -I http://${lan_target}:${SONARR_PORT}"
+  echo "  curl -I http://${lan_target}:${RADARR_PORT}"
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    echo "  curl -I http://${lan_target}:${SABNZBD_PORT}"
+  fi
 else
   echo "  (Direct ports disabled; set EXPOSE_DIRECT_PORTS=1 to enable IP:PORT access.)"
 fi

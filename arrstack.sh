@@ -198,6 +198,9 @@ main() {
   sync_gluetun_library
   sync_vpn_auto_reconnect_assets
   write_qbt_helper_script
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    write_sab_helper_script
+  fi
   write_qbt_config
   if ! write_aliases_file; then
     warn "Helper aliases file could not be generated"

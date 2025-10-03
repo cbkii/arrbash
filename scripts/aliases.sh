@@ -73,6 +73,74 @@ CONFIGARR_HELPER
     fi
   fi
 
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    if ! grep -Fq "arr.sab.status" "$aliases_file" 2>/dev/null; then
+      {
+        printf '\n# SABnzbd helper aliases\n'
+        cat <<'SAB_ALIAS_FUNCS'
+arr.sab._helper() {
+  local cmd="$1"
+  shift || true
+  local helper="${ARR_STACK_DIR}/scripts/sab-helper.sh"
+  if [ ! -x "$helper" ] && [ -x "${ARR_STACK_DIR}/../scripts/sab-helper.sh" ]; then
+    helper="${ARR_STACK_DIR}/../scripts/sab-helper.sh"
+  fi
+  if [ ! -x "$helper" ]; then
+    echo "[arr.sab] helper not found: ${helper}" >&2
+    return 1
+  fi
+  ARR_STACK_DIR="${ARR_STACK_DIR}" bash "$helper" "$cmd" "$@"
+}
+
+arr.sab.status()   { arr.sab._helper status   "$@"; }
+arr.sab.queue()    { arr.sab._helper queue    "$@"; }
+arr.sab.history()  { arr.sab._helper history  "$@"; }
+arr.sab.version()  { arr.sab._helper version  "$@"; }
+arr.sab.pause()    { arr.sab._helper pause    "$@"; }
+arr.sab.resume()   { arr.sab._helper resume   "$@"; }
+
+arr.sab.delete() {
+  if [ $# -lt 1 ]; then
+    echo "Usage: arr.sab.delete <nzo_id>" >&2
+    return 1
+  fi
+  arr.sab._helper delete "$@"
+}
+
+arr.sab.add.file() {
+  if [ $# -lt 1 ]; then
+    echo "Usage: arr.sab.add.file <path.nzb>" >&2
+    return 1
+  fi
+  arr.sab._helper add-file "$@"
+}
+
+arr.sab.add.url() {
+  if [ $# -lt 1 ]; then
+    echo "Usage: arr.sab.add.url <url>" >&2
+    return 1
+  fi
+  arr.sab._helper add-url "$@"
+}
+
+arr.sab.help() {
+  cat <<'EOF'
+arr.sab.status             SABnzbd status summary
+arr.sab.queue              Raw queue JSON
+arr.sab.history            Raw history JSON
+arr.sab.version            SABnzbd version
+arr.sab.pause              Pause all downloads
+arr.sab.resume             Resume downloads
+arr.sab.delete <nzo_id>    Delete queue item by ID
+arr.sab.add.file <path>    Upload NZB file
+arr.sab.add.url <url>      Submit NZB URL
+EOF
+}
+SAB_ALIAS_FUNCS
+      } >>"$aliases_file"
+    fi
+  fi
+
   if ! grep -Fq "arr.vpn.auto.status" "$aliases_file" 2>/dev/null; then
     {
       printf '\n# VPN auto-reconnect helpers\n'

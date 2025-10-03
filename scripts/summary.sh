@@ -419,6 +419,26 @@ POLICY
     fi
   fi
 
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    local sab_helper_path="${ARR_STACK_DIR%/}/scripts/sab-helper.sh"
+    if [[ ! -x "$sab_helper_path" ]]; then
+      sab_helper_path="${SCRIPT_LIB_DIR}/sab-helper.sh"
+    fi
+    msg "---- SABnzbd ----"
+    if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
+      msg "VPN Routed: yes"
+    else
+      msg "VPN Routed: no"
+    fi
+    if [[ -x "$sab_helper_path" ]]; then
+      if ! "$sab_helper_path" status 2>/dev/null; then
+        msg "Status: unavailable"
+      fi
+    else
+      msg "Status: helper missing"
+    fi
+  fi
+
   cat <<SUMMARY
 Gluetun control server (local only): http://${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}
 

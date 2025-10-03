@@ -845,6 +845,7 @@ ARR service surfaces:
   arr.prowl.help               Prowlarr v1 API helpers
   arr.baz.help                 Bazarr API helpers
   arr.fsolv.help               FlareSolverr helpers
+  arr.sab.help                 SABnzbd helper commands (if enabled)
   arr.caddy.help               Caddy health endpoint helper
 
 Compatibility utilities:
