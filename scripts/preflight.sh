@@ -71,6 +71,13 @@ collect_port_requirements() {
     _requirements_ref+=("tcp|${PROWLARR_PORT}|Prowlarr WebUI|${expected}")
     _requirements_ref+=("tcp|${BAZARR_PORT}|Bazarr WebUI|${expected}")
     _requirements_ref+=("tcp|${FLARESOLVERR_PORT}|FlareSolverr API|${expected}")
+    if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+      local sab_port_check="${SABNZBD_PORT:-8780}"
+      if [[ ! "$sab_port_check" =~ ^[0-9]+$ ]]; then
+        sab_port_check="8780"
+      fi
+      _requirements_ref+=("tcp|${sab_port_check}|SABnzbd WebUI|${expected}")
+    fi
   fi
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then

@@ -187,6 +187,23 @@ main() {
 
   init_logging
 
+  # Pre-hydrate preserved configuration so preflight checks reflect the
+  # ports and credentials we intend to reuse during this run.
+  hydrate_qbt_host_port_from_env_file
+  hydrate_qbt_webui_port_from_config
+  hydrate_sab_api_key_from_config
+
+  if [[ "${MIGRATE_QBT_WEBUI_PORT:-0}" == "1" ]]; then
+    local migrate_target_port="8082"
+    local current_host_port="${ARRSTACK_QBT_HOST_PORT_ENV:-${QBT_HTTP_PORT_HOST:-$migrate_target_port}}"
+    local current_container_port="${ARRSTACK_QBT_WEBUI_PORT_CONFIG:-${QBT_WEBUI_PORT:-$migrate_target_port}}"
+
+    if [[ "$current_host_port" == "8080" || "$current_container_port" == "8080" ]]; then
+      QBT_HTTP_PORT_HOST="$migrate_target_port"
+      QBT_WEBUI_PORT="$migrate_target_port"
+    fi
+  fi
+
   preflight
   check_network_requirements
   mkdirs
