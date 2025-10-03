@@ -83,7 +83,7 @@ webui_host() {
 
 # Returns exposed qBittorrent WebUI host port
 webui_port() {
-  printf '%s' "${QBT_HTTP_PORT_HOST:-8080}"
+  printf '%s' "${QBT_HTTP_PORT_HOST:-8082}"
 }
 
 # Builds LAN domain used behind Caddy for qBittorrent
@@ -272,7 +272,8 @@ ensure_qbt_config_setting() {
 diagnose_config() {
   local cfg
   cfg="$(config_file_path)"
-  local host_port="${QBT_HTTP_PORT_HOST:-8080}"
+  local host_port="${QBT_HTTP_PORT_HOST:-8082}"
+  local expected_container_port="${QBT_WEBUI_PORT:-8082}"
 
   if [[ ! -f "$cfg" ]]; then
     log_warn "Config file not found at $cfg; nothing to diagnose"
@@ -286,11 +287,11 @@ diagnose_config() {
   ui_addr="$(grep '^WebUI\\Address=' "$cfg" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r' || true)"
 
   if [[ -n "$ui_port" ]]; then
-    if [[ "$ui_port" != "8080" ]]; then
-      log_warn "WebUI internal port is ${ui_port} but host mapping expects 8080"
+    if [[ "$ui_port" != "$expected_container_port" ]]; then
+      log_warn "WebUI internal port is ${ui_port} but expected ${expected_container_port}"
       log_info "Run 'qbt-helper.sh fix-port' to correct this"
     else
-      log_info "WebUI internal port matches expected container default (8080)"
+      log_info "WebUI internal port matches expected container default (${expected_container_port})"
     fi
   else
     log_warn "Unable to determine WebUI internal port from ${cfg}"
@@ -307,20 +308,21 @@ diagnose_config() {
     log_warn "Unable to determine WebUI bind address from ${cfg}"
   fi
 
-  if [[ -n "$ui_port" && "$ui_port" == "8080" && "$host_port" != "8080" ]]; then
-    log_info "Host exposes qBittorrent WebUI on port ${host_port} (container remains on 8080)"
+  if [[ -n "$ui_port" && "$ui_port" == "$expected_container_port" && "$host_port" != "$expected_container_port" ]]; then
+    log_info "Host exposes qBittorrent WebUI on port ${host_port} (container remains on ${expected_container_port})"
   fi
 }
 
 # Forces WebUI port back to container default and restarts service
 fix_webui_port() {
-  log_info "Restoring qBittorrent WebUI port to 8080"
+  local desired_port="${QBT_WEBUI_PORT:-8082}"
+  log_info "Restoring qBittorrent WebUI port to ${desired_port}"
   stop_container
 
   local cfg
   cfg="$(config_file_path)"
 
-  if ensure_qbt_config_setting "WebUI\\Port" "8080" "$cfg"; then
+  if ensure_qbt_config_setting "WebUI\\Port" "${desired_port}" "$cfg"; then
     log_info "Updated WebUI port in ${cfg}"
   else
     log_warn "Failed to update WebUI port; check ${cfg} manually"
@@ -348,13 +350,14 @@ fix_webui_address() {
 
 # Prints helper usage menu
 usage() {
-  cat <<'USAGE'
+  local default_port="${QBT_WEBUI_PORT:-8082}"
+  cat <<USAGE
 Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr}
   show       Display current access information
   reset      Reset authentication (generates a new temporary password)
   whitelist  Enable passwordless access from the LAN subnet
   diagnose   Check for WebUI configuration drift
-  fix-port   Restore WebUI port to container default (8080)
+  fix-port   Restore WebUI port to container default (${default_port})
   fix-addr   Restore WebUI bind address to 0.0.0.0
 USAGE
 }

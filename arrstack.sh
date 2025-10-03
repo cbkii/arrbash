@@ -177,6 +177,12 @@ main() {
 
   init_logging
 
+  # Pre-hydrate preserved configuration so preflight checks reflect the
+  # ports and credentials we intend to reuse during this run.
+  hydrate_qbt_host_port_from_env_file
+  hydrate_qbt_webui_port_from_config
+  hydrate_sab_api_key_from_config
+
   preflight
   check_network_requirements
   mkdirs
@@ -237,6 +243,8 @@ main() {
     local doctor_script="${REPO_ROOT}/scripts/doctor.sh"
     if [[ -x "${doctor_script}" ]]; then
       msg "🩺 Running LAN diagnostics"
+      export ARRSTACK_INTERNAL_PORT_CONFLICTS="${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}"
+      export ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL="${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}"
       if ! LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}" \
         LAN_IP="${LAN_IP}" \
         ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}" \

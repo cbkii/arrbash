@@ -996,7 +996,7 @@ vpn_auto_reconnect_ensure_fresh_session() {
 
 # Fetches current transfer metrics from qBittorrent API with auth retry logic
 vpn_auto_reconnect_fetch_transfer_info() {
-  local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
+  local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8082}"
   local url="${base%/}/api/v2/transfer/info"
   local cookie
   cookie="$(vpn_auto_reconnect_cookie_file)"
@@ -1018,7 +1018,7 @@ vpn_auto_reconnect_fetch_transfer_info() {
 
 # Logs into qBittorrent WebUI API storing session cookie for subsequent calls
 vpn_auto_reconnect_login_qbt() {
-  local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
+  local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8082}"
   local url="${base%/}/api/v2/auth/login"
   local cookie
   cookie="$(vpn_auto_reconnect_cookie_file)"
@@ -1033,7 +1033,7 @@ vpn_auto_reconnect_login_qbt() {
 
 # Classifies torrent activity level to avoid reconnects during active transfers
 vpn_auto_reconnect_detect_activity() {
-  local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
+  local base="${QBITTORRENT_ADDR:-http://127.0.0.1:8082}"
   local cookie
   cookie="$(vpn_auto_reconnect_cookie_file)"
   ensure_dir_mode "$(dirname -- "$cookie")" "$DATA_DIR_MODE"

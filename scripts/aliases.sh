@@ -138,6 +138,27 @@ EOF
 }
 SAB_ALIAS_FUNCS
       } >>"$aliases_file"
+      {
+        printf '\n# SABnzbd shortcuts\n'
+        cat <<'SAB_SHORTCUTS'
+sab-logs() { arr.logs sabnzbd "$@"; }
+sab-shell() { arr.shell sabnzbd "$@"; }
+open-sab() {
+  local base
+  base="$(_arr_service_base sabnzbd)"
+  if [ -z "$base" ]; then
+    echo "[open-sab] unable to resolve SABnzbd base URL" >&2
+    return 1
+  fi
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$base" >/dev/null 2>&1 &
+    disown || true
+  else
+    printf '%s\n' "$base"
+  fi
+}
+SAB_SHORTCUTS
+      } >>"$aliases_file"
     fi
   fi
 
