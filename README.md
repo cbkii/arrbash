@@ -76,6 +76,12 @@ SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
 After your first SABnzbd login, paste the API key into the WebUI once; reruns will hydrate
 `SABNZBD_API_KEY` from `sabnzbd.ini` automatically.
 
+To enable SABnzbd for a single installer run without editing `userr.conf`, pass `--enable-sab`:
+
+```bash
+./arrstack.sh --enable-sab --yes
+```
+
 Refer to [docs/sabnzbd.md](docs/sabnzbd.md) for networking scenarios, API key preservation,
 and helper usage tips.
 

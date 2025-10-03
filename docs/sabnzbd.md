@@ -4,6 +4,9 @@ This document expands on the optional SABnzbd support shipped with arrbash. It c
 networking behaviour, environment overrides, helper tooling, and the preservation
 logic that keeps your API key and configuration safe across reruns.
 
+> **Quick toggle:** Run `./arrstack.sh --enable-sab --yes` to enable SABnzbd for a single
+> install without editing `${ARR_BASE}/userr.conf`.
+
 ## Network Modes
 
 | Mode | `SABNZBD_USE_VPN` | Network namespace | Host port exposure | Notes |
@@ -57,6 +60,7 @@ Relevant environment variables:
 - `SABNZBD_ENABLED` — enable/disable the service.
 - `SABNZBD_USE_VPN` — route SABnzbd through Gluetun (`0` keeps it on arr_net).
 - `SABNZBD_PORT` — host port when SAB runs directly on the LAN (default `8080`).
+- `SABNZBD_INTERNAL_PORT` — container port bound inside the SABnzbd service (default `8080`).
 - `SABNZBD_HOST` — hostname sab-helper targets (default `${LOCALHOST_IP}`).
 - `SABNZBD_TIMEOUT` — helper timeout *and* minimum healthcheck start period.
 - `SABNZBD_CATEGORY` — optional category applied by `sab-helper.sh add-*` commands.

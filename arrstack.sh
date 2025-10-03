@@ -102,6 +102,7 @@ Usage: ./arrstack.sh [options]
 Options:
   --yes                 Run non-interactively and assume yes to prompts
   --enable-caddy        Enable the optional Caddy reverse proxy (sets ENABLE_CADDY=1)
+  --enable-sab          Enable SABnzbd for this run (sets SABNZBD_ENABLED=1)
   --rotate-api-key      Force regeneration of the Gluetun API key
   --rotate-caddy-auth   Force regeneration of the Caddy basic auth credentials
   --sync-api-keys       Force Sonarr/Radarr/Prowlarr API key sync into Configarr secrets
@@ -132,6 +133,10 @@ main() {
         ;;
       --enable-caddy)
         ENABLE_CADDY=1
+        shift
+        ;;
+      --enable-sab)
+        SABNZBD_ENABLED=1
         shift
         ;;
       --rotate-api-key)
@@ -238,6 +243,9 @@ main() {
   else
     arrstack_sync_arr_api_keys 0 || true
   fi
+
+  export ARRSTACK_SAB_API_KEY_STATE="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
+  export ARRSTACK_SAB_API_KEY_SOURCE="${ARRSTACK_SAB_API_KEY_SOURCE:-}"
 
   if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
     local doctor_script="${REPO_ROOT}/scripts/doctor.sh"
