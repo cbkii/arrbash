@@ -65,6 +65,9 @@ mkdirs() {
     if [[ "$service" == "caddy" && "${ENABLE_CADDY:-0}" != "1" ]]; then
       continue
     fi
+    if [[ "$service" == "sabnzbd" && "${SABNZBD_ENABLED:-0}" != "1" ]]; then
+      continue
+    fi
     ensure_dir_mode "${ARR_DOCKER_DIR}/${service}" "$DATA_DIR_MODE"
   done
 
@@ -294,6 +297,69 @@ write_env() {
     fi
   fi
 
+  local sab_enabled="${SABNZBD_ENABLED:-0}"
+  if [[ "$sab_enabled" != "1" ]]; then
+    sab_enabled=0
+  fi
+  SABNZBD_ENABLED="$sab_enabled"
+
+  local sab_use_vpn_raw="${SABNZBD_USE_VPN:-0}"
+  local sab_use_vpn="$sab_use_vpn_raw"
+  if [[ "$sab_use_vpn" != "0" && "$sab_use_vpn" != "1" ]]; then
+    warn "Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
+    sab_use_vpn=0
+  fi
+
+  local gluetun_available=0
+  if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1; then
+    local svc=""
+    for svc in "${ARR_DOCKER_SERVICES[@]:-}"; do
+      if [[ "$svc" == "gluetun" ]]; then
+        gluetun_available=1
+        break
+      fi
+    done
+  fi
+
+  if ((gluetun_available)); then
+    if [[ "${ENABLE_GLUETUN:-1}" == "0" ]]; then
+      gluetun_available=0
+    fi
+  fi
+
+  if ((gluetun_available)); then
+    case "${VPN_SERVICE_PROVIDER:-protonvpn}" in
+      ''|none|disabled|off)
+        gluetun_available=0
+        ;;
+    esac
+  fi
+
+  if ((sab_enabled)) && ((sab_use_vpn == 1)) && ((gluetun_available == 0)); then
+    warn "SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
+    sab_use_vpn=0
+  fi
+
+  SABNZBD_USE_VPN="$sab_use_vpn"
+
+  local sab_timeout_raw="${SABNZBD_TIMEOUT:-15}"
+  if [[ ! "$sab_timeout_raw" =~ ^[0-9]+$ || "$sab_timeout_raw" -le 0 ]]; then
+    warn "Invalid SABNZBD_TIMEOUT=${SABNZBD_TIMEOUT:-}; defaulting to 15 seconds."
+    sab_timeout_raw=15
+  fi
+  SABNZBD_TIMEOUT="$sab_timeout_raw"
+
+  local sab_port_raw="${SABNZBD_PORT:-8780}"
+  if [[ ! "$sab_port_raw" =~ ^[0-9]+$ ]]; then
+    warn "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to 8780."
+    sab_port_raw=8780
+  fi
+  SABNZBD_PORT="$sab_port_raw"
+
+  if [[ -z "${SABNZBD_URL:-}" ]]; then
+    SABNZBD_URL="http://localhost:${SABNZBD_PORT}"
+  fi
+
   load_proton_credentials
 
   PU="$OPENVPN_USER_VALUE"
@@ -338,6 +404,11 @@ elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
   for p in "${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}"; do
     if [[ -n "$p" ]] && [[ " ${firewall_ports[*]} " != *" $p "* ]]; then firewall_ports+=("$p"); fi
   done
+  if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" != "1" ]]; then
+    if [[ -n "${SABNZBD_PORT:-}" ]] && [[ " ${firewall_ports[*]} " != *" ${SABNZBD_PORT} "* ]]; then
+      firewall_ports+=("${SABNZBD_PORT}")
+    fi
+  fi
 fi
 
   local -a upstream_dns_servers=()
@@ -485,6 +556,17 @@ fi
     write_env_kv "QBT_AUTH_WHITELIST" "$QBT_AUTH_WHITELIST"
     printf '\n'
 
+    printf '%s\n' '# SABnzbd'
+    write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
+    write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
+    write_env_kv "SABNZBD_URL" "$SABNZBD_URL"
+    write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
+    write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
+    write_env_kv "SABNZBD_TIMEOUT" "$SABNZBD_TIMEOUT"
+    write_env_kv "SABNZBD_PORT" "$SABNZBD_PORT"
+    write_env_kv "ARRBASH_USENET_CLIENT" "$ARRBASH_USENET_CLIENT"
+    printf '\n'
+
     printf '%s\n' '# Reverse proxy defaults'
     write_env_kv "CADDY_DOMAIN_SUFFIX" "$ARR_DOMAIN_SUFFIX_CLEAN"
     write_env_kv "CADDY_LAN_CIDRS" "$CADDY_LAN_CIDRS"
@@ -511,6 +593,7 @@ fi
     write_env_kv "PROWLARR_IMAGE" "$PROWLARR_IMAGE"
     write_env_kv "BAZARR_IMAGE" "$BAZARR_IMAGE"
     write_env_kv "FLARESOLVERR_IMAGE" "$FLARESOLVERR_IMAGE"
+    write_env_kv "SABNZBD_IMAGE" "$SABNZBD_IMAGE"
     write_env_kv "CONFIGARR_IMAGE" "$CONFIGARR_IMAGE"
     write_env_kv "CADDY_IMAGE" "$CADDY_IMAGE"
   } >"$tmp"
@@ -581,6 +664,13 @@ services:
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:8080"
+YAML
+  if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" == "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    cat <<'YAML' >>"$tmp"
+      - "${LAN_IP}:${SABNZBD_PORT}:8080"
+YAML
+  fi
+  cat <<'YAML' >>"$tmp"
     healthcheck:
       test: /gluetun-entrypoint healthcheck
       interval: 30s
@@ -816,6 +906,80 @@ YAML
         max-file: "2"
 YAML
 
+  if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
+    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
+  sabnzbd:
+    image: ${SABNZBD_IMAGE}
+    container_name: sabnzbd
+    profiles:
+      - ipdirect
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TIMEZONE}
+      API_KEY: ${SABNZBD_API_KEY}
+    volumes:
+      - ${ARR_DOCKER_DIR}/sab/config:/config
+      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
+      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+    else
+      cat <<'YAML' >>"$tmp"
+  sabnzbd:
+    image: ${SABNZBD_IMAGE}
+    container_name: sabnzbd
+    profiles:
+      - ipdirect
+    networks:
+      - arr_net
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TIMEZONE}
+      API_KEY: ${SABNZBD_API_KEY}
+    volumes:
+      - ${ARR_DOCKER_DIR}/sab/config:/config
+      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
+      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
+YAML
+      if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+        cat <<'YAML' >>"$tmp"
+    ports:
+      - "${LAN_IP}:${SABNZBD_PORT}:8080"
+YAML
+      fi
+      cat <<'YAML' >>"$tmp"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+    fi
+  fi
+
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
   configarr:
@@ -992,6 +1156,11 @@ YAML
       - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_PORT}"
       - "${LAN_IP}:${FLARESOLVERR_PORT}:${FLARESOLVERR_PORT}"
 YAML
+    if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
+      - "${LAN_IP}:${SABNZBD_PORT}:8080"
+YAML
+    fi
   fi
 
   cat <<'YAML' >>"$tmp"
@@ -1244,6 +1413,78 @@ YAML
         max-size: "1m"
         max-file: "2"
 YAML
+
+  if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
+    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
+  sabnzbd:
+    image: ${SABNZBD_IMAGE}
+    container_name: sabnzbd
+    profiles:
+      - ipdirect
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TIMEZONE}
+      API_KEY: ${SABNZBD_API_KEY}
+    volumes:
+      - ${ARR_DOCKER_DIR}/sab/config:/config
+      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
+      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+    else
+      cat <<'YAML' >>"$tmp"
+  sabnzbd:
+    image: ${SABNZBD_IMAGE}
+    container_name: sabnzbd
+    profiles:
+      - ipdirect
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TIMEZONE}
+      API_KEY: ${SABNZBD_API_KEY}
+    volumes:
+      - ${ARR_DOCKER_DIR}/sab/config:/config
+      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
+      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
+YAML
+      if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+        cat <<'YAML' >>"$tmp"
+    ports:
+      - "${LAN_IP}:${SABNZBD_PORT}:8080"
+YAML
+      fi
+      cat <<'YAML' >>"$tmp"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+    fi
+  fi
 
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
@@ -1796,7 +2037,7 @@ sync_gluetun_library() {
 }
 
 # Syncs VPN auto-reconnect scripts with executable permissions into the stack
-sync_vpn_auto_reconnect_assets() {
+sync_vpn_auto_reconnect_assets() { 
   msg "📡 Syncing VPN auto-reconnect helpers"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
@@ -1806,6 +2047,18 @@ sync_vpn_auto_reconnect_assets() {
 
   cp "${REPO_ROOT}/scripts/vpn-auto-reconnect-daemon.sh" "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh" 755
+}
+
+# Installs SABnzbd helper into the stack scripts directory
+write_sab_helper_script() { 
+  msg "🧰 Writing SABnzbd helper script"
+
+  ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
+
+  cp "${REPO_ROOT}/scripts/sab-helper.sh" "$ARR_STACK_DIR/scripts/sab-helper.sh"
+  ensure_file_mode "$ARR_STACK_DIR/scripts/sab-helper.sh" 755
+
+  msg "  SABnzbd helper: ${ARR_STACK_DIR}/scripts/sab-helper.sh"
 }
 
 # Installs qBittorrent helper shim into the stack scripts directory

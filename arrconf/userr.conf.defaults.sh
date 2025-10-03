@@ -205,6 +205,16 @@ RADARR_PORT="${RADARR_PORT:-7878}"
 PROWLARR_PORT="${PROWLARR_PORT:-9696}"
 BAZARR_PORT="${BAZARR_PORT:-6767}"
 FLARESOLVERR_PORT="${FLARESOLVERR_PORT:-8191}"
+SABNZBD_PORT="${SABNZBD_PORT:-8780}"
+
+# SABnzbd integration
+SABNZBD_ENABLED="${SABNZBD_ENABLED:-0}"
+SABNZBD_USE_VPN="${SABNZBD_USE_VPN:-0}"
+SABNZBD_URL="${SABNZBD_URL:-http://localhost:8780}"
+SABNZBD_API_KEY="${SABNZBD_API_KEY:-}"
+SABNZBD_CATEGORY="${SABNZBD_CATEGORY:-arrbash}"
+SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT:-15}"
+ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT:-sabnzbd}"
 
 # Expose application ports directly on the host alongside Caddy's reverse proxy
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-1}"
@@ -231,6 +241,7 @@ RADARR_IMAGE="${RADARR_IMAGE:-lscr.io/linuxserver/radarr:5.27.5.10198-ls283}"
 PROWLARR_IMAGE="${PROWLARR_IMAGE:-lscr.io/linuxserver/prowlarr:latest}"
 BAZARR_IMAGE="${BAZARR_IMAGE:-lscr.io/linuxserver/bazarr:latest}"
 FLARESOLVERR_IMAGE="${FLARESOLVERR_IMAGE:-ghcr.io/flaresolverr/flaresolverr:v3.3.21}"
+SABNZBD_IMAGE="${SABNZBD_IMAGE:-lscr.io/linuxserver/sabnzbd:latest}"
 CONFIGARR_IMAGE="${CONFIGARR_IMAGE:-ghcr.io/raydak-labs/configarr:latest}"
 CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.8.4}"
 #
@@ -297,6 +308,14 @@ ARRSTACK_USERCONF_TEMPLATE_VARS=(
   PROWLARR_PORT
   BAZARR_PORT
   FLARESOLVERR_PORT
+  SABNZBD_PORT
+  SABNZBD_ENABLED
+  SABNZBD_USE_VPN
+  SABNZBD_URL
+  SABNZBD_API_KEY
+  SABNZBD_CATEGORY
+  SABNZBD_TIMEOUT
+  ARRBASH_USENET_CLIENT
   PF_MAX_TOTAL_WAIT
   PF_POLL_INTERVAL
   PF_CYCLE_AFTER
@@ -325,6 +344,7 @@ ARRSTACK_USERCONF_TEMPLATE_VARS=(
   PROWLARR_IMAGE
   BAZARR_IMAGE
   FLARESOLVERR_IMAGE
+  SABNZBD_IMAGE
   CONFIGARR_IMAGE
   CADDY_IMAGE
   ARR_VIDEO_MIN_RES
@@ -367,6 +387,7 @@ ARRSTACK_USERCONF_IMPLICIT_VARS=(
   QBT_USER
   QBT_PASS
   GLUETUN_API_KEY
+  SABNZBD_API_KEY
 )
 
 # Derived (non-user) environment keys written into .env by write_env; kept here
@@ -524,6 +545,16 @@ QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBitto
 CADDY_BASIC_AUTH_USER="${CADDY_BASIC_AUTH_USER}"           # Username clients outside CADDY_LAN_CIDRS must use (default: ${CADDY_BASIC_AUTH_USER})
 CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password (regen when empty)
 
+# --- SABnzbd (Usenet downloader) ---
+SABNZBD_ENABLED="${SABNZBD_ENABLED}"             # 1 enables SABnzbd container/helper integration (default: ${SABNZBD_ENABLED})
+SABNZBD_USE_VPN="${SABNZBD_USE_VPN}"             # 1 routes SABnzbd through Gluetun, 0 keeps direct TLS (default: ${SABNZBD_USE_VPN})
+SABNZBD_URL="${SABNZBD_URL}"                 # API endpoint for SAB helper interactions (default: ${SABNZBD_URL})
+SABNZBD_API_KEY="${SABNZBD_API_KEY}"             # Populate with SAB API key once generated (blank to skip helper auth)
+SABNZBD_CATEGORY="${SABNZBD_CATEGORY}"           # Category applied to helper-submitted jobs (default: ${SABNZBD_CATEGORY})
+SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT}"             # Helper API timeout in seconds (default: ${SABNZBD_TIMEOUT})
+SABNZBD_PORT="${SABNZBD_PORT}"                 # Host port for SAB WebUI when direct (default: ${SABNZBD_PORT})
+ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT}" # Active Usenet client label (future abstraction)
+
 # --- Service ports ---
 QBT_HTTP_PORT_HOST="${QBT_HTTP_PORT_HOST}"              # qBittorrent WebUI port exposed on the LAN (default: ${QBT_HTTP_PORT_HOST})
 SONARR_PORT="${SONARR_PORT}"                     # Sonarr WebUI port exposed on the LAN (default: ${SONARR_PORT})
@@ -565,6 +596,7 @@ VPN_MAX_RETRY_MINUTES="${VPN_MAX_RETRY_MINUTES}"              # Retry budget bef
 # PROWLARR_IMAGE="${PROWLARR_IMAGE}"                # Override the Prowlarr container tag
 # BAZARR_IMAGE="${BAZARR_IMAGE}"                    # Override the Bazarr container tag
 # FLARESOLVERR_IMAGE="${FLARESOLVERR_IMAGE}"      # Override the FlareSolverr container tag
+# SABNZBD_IMAGE="${SABNZBD_IMAGE}"                    # Override the SABnzbd container tag
 # CONFIGARR_IMAGE="${CONFIGARR_IMAGE}"            # Override the Configarr container tag
 # CADDY_IMAGE="${CADDY_IMAGE}"                      # Override the Caddy reverse-proxy container tag
 

@@ -188,7 +188,7 @@ arrstack_setup_defaults() {
   COLLAB_CREATED_MEDIA_DIRS=""
   : "$COLLAB_PERMISSION_WARNINGS" "$COLLAB_CREATED_MEDIA_DIRS"
 
-  ARR_DOCKER_SERVICES=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr configarr caddy local_dns)
+  ARR_DOCKER_SERVICES=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr sabnzbd configarr caddy local_dns)
   : "${ARR_DOCKER_SERVICES[*]}"
   readonly -a ARR_DOCKER_SERVICES
 

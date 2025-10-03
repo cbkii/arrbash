@@ -225,6 +225,40 @@ service_container_name() {
   esac
 }
 
+service_sab_helper_path() {
+  local helper="${ARR_STACK_DIR}/scripts/sab-helper.sh"
+  if [[ -x "$helper" ]]; then
+    printf '%s\n' "$helper"
+    return 0
+  fi
+  helper="${REPO_ROOT}/scripts/sab-helper.sh"
+  if [[ -x "$helper" ]]; then
+    printf '%s\n' "$helper"
+    return 0
+  fi
+  return 1
+}
+
+service_start_sabnzbd() {
+  [[ "${SABNZBD_ENABLED:-0}" == "1" ]] || return 0
+  msg "[sabnzbd] Enabled (startup managed via docker compose)."
+}
+
+service_health_sabnzbd() {
+  [[ "${SABNZBD_ENABLED:-0}" == "1" ]] || return 0
+  local helper
+  if ! helper="$(service_sab_helper_path)"; then
+    warn "[sabnzbd] Helper script not found; skipping health check"
+    return 0
+  fi
+  local version
+  if version="$($helper version 2>/dev/null)"; then
+    msg "[sabnzbd] API reachable (${version})"
+  else
+    warn "[sabnzbd] Health check failed (verify SABNZBD_URL/API key)"
+  fi
+}
+
 # Stops existing stack containers and removes stale temp artifacts without nuking volumes
 safe_cleanup() {
   msg "🧹 Safely stopping existing services..."
@@ -653,6 +687,9 @@ show_service_status() {
   if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
     services+=(local_dns)
   fi
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    services+=(sabnzbd)
+  fi
 
   for service in "${services[@]}"; do
     local container
@@ -852,6 +889,7 @@ start_stack() {
   fi
 
   start_vpn_auto_reconnect_if_enabled
+  service_start_sabnzbd
 
   local services=()
   if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
@@ -861,6 +899,9 @@ start_stack() {
     services+=(caddy)
   fi
   services+=(qbittorrent sonarr radarr prowlarr bazarr flaresolverr)
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    services+=(sabnzbd)
+  fi
   local service
   local qb_started=0
   for service in "${services[@]}"; do
@@ -938,6 +979,8 @@ start_stack() {
   if ((qb_started)); then
     sync_qbt_password_from_logs
   fi
+
+  service_health_sabnzbd
 
   msg "Services started - they may take a minute to be fully ready"
   show_service_status
