@@ -106,8 +106,6 @@ Options:
   --rotate-caddy-auth   Force regeneration of the Caddy basic auth credentials
   --sync-api-keys       Force Sonarr/Radarr/Prowlarr API key sync into Configarr secrets
   --no-auto-api-sync    Disable automatic Configarr API key sync for this run
-  --enable-sabnzbd      Enable SABnzbd service for this run (sets SABNZBD_ENABLED=1)
-  --migrate-qbt-webui-port  Force qBittorrent WebUI port migration to 8082
   --setup-host-dns      Run the host DNS takeover helper during installation
   --refresh-aliases     Regenerate helper aliases and reload your shell
   --help                Show this help message
@@ -154,14 +152,6 @@ main() {
         DISABLE_AUTO_API_KEY_SYNC=1
         shift
         ;;
-      --enable-sabnzbd)
-        SABNZBD_ENABLED=1
-        shift
-        ;;
-      --migrate-qbt-webui-port)
-        MIGRATE_QBT_WEBUI_PORT=1
-        shift
-        ;;
       --setup-host-dns)
         SETUP_HOST_DNS=1
         shift
@@ -192,12 +182,6 @@ main() {
   hydrate_qbt_host_port_from_env_file
   hydrate_qbt_webui_port_from_config
   hydrate_sab_api_key_from_config
-
-  if [[ "${MIGRATE_QBT_WEBUI_PORT:-0}" == "1" ]]; then
-    local migrate_target_port="8082"
-    QBT_HTTP_PORT_HOST="${migrate_target_port}"
-    QBT_WEBUI_PORT="${migrate_target_port}"
-  fi
 
   preflight
   check_network_requirements

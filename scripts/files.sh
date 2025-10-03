@@ -389,34 +389,11 @@ write_env() {
     qbt_host_status="default"
   fi
 
-  local migration_requested="${MIGRATE_QBT_WEBUI_PORT:-0}"
-  if [[ "$migration_requested" == "1" ]]; then
-    local host_before="$qbt_host_port"
-    local webui_before="$qbt_webui_port"
-
-    if [[ "$webui_before" == "$qbt_webui_default" && "$host_before" == "$qbt_host_default" ]]; then
-      arrstack_record_preserve_note "qBittorrent ports already using ${qbt_webui_default}; migration not required"
-      qbt_webui_status="default"
-      qbt_host_status="default"
-    else
-      if [[ "$webui_before" != "$qbt_webui_default" ]]; then
-        arrstack_record_preserve_note "Migrated qBittorrent WebUI port to ${qbt_webui_default}"
-      fi
-      if [[ "$host_before" != "$qbt_host_default" ]]; then
-        arrstack_record_preserve_note "Migrated qBittorrent host port to ${qbt_host_default}"
-      fi
-      qbt_webui_port="$qbt_webui_default"
-      qbt_webui_status="migrated"
-      qbt_host_port="$qbt_host_default"
-      qbt_host_status="migrated"
-    fi
-  else
-    if [[ "$qbt_webui_status" == "preserved" && "$qbt_webui_port" != "$qbt_webui_default" ]]; then
-      arrstack_record_preserve_note "Preserved qBittorrent WebUI port ${qbt_webui_port}"
-    fi
-    if [[ "$qbt_host_status" == "preserved" && "$qbt_host_port" != "$qbt_host_default" ]]; then
-      arrstack_record_preserve_note "Preserved qBittorrent host port ${qbt_host_port}"
-    fi
+  if [[ "$qbt_webui_status" == "preserved" && "$qbt_webui_port" != "$qbt_webui_default" ]]; then
+    arrstack_record_preserve_note "Preserved qBittorrent WebUI port ${qbt_webui_port}"
+  fi
+  if [[ "$qbt_host_status" == "preserved" && "$qbt_host_port" != "$qbt_host_default" ]]; then
+    arrstack_record_preserve_note "Preserved qBittorrent host port ${qbt_host_port}"
   fi
 
   if [[ ! "$qbt_webui_port" =~ ^[0-9]+$ ]]; then
