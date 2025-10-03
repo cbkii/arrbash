@@ -602,6 +602,47 @@ fi
 
 }
 
+# Appends the shared SABnzbd service definition to the provided compose fragment.
+# The caller handles network configuration and passes 1 as the second argument
+# when direct-mode ports should be exposed on the LAN.
+append_sabnzbd_service_body() {
+  local target="$1"
+  local include_direct_port="${2:-0}"
+
+  cat <<'YAML' >>"$target"
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TIMEZONE}
+      API_KEY: ${SABNZBD_API_KEY}
+    volumes:
+      - ${ARR_DOCKER_DIR}/sab/config:/config
+      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
+      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
+YAML
+
+  if [[ "$include_direct_port" == "1" ]]; then
+    cat <<'YAML' >>"$target"
+    ports:
+      - "${LAN_IP}:${SABNZBD_PORT}:8080"
+YAML
+  fi
+
+  cat <<'YAML' >>"$target"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+}
+
 # Generates docker-compose.yml tuned for split VPN (qBittorrent-only tunnel)
 write_compose_split_mode() {
   msg "🐳 Writing docker-compose.yml"
@@ -907,76 +948,31 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
-      cat <<'YAML' >>"$tmp"
+    cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
     container_name: sabnzbd
     profiles:
       - ipdirect
+YAML
+    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
         condition: service_healthy
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
 YAML
+      append_sabnzbd_service_body "$tmp"
     else
       cat <<'YAML' >>"$tmp"
-  sabnzbd:
-    image: ${SABNZBD_IMAGE}
-    container_name: sabnzbd
-    profiles:
-      - ipdirect
     networks:
       - arr_net
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
 YAML
+      local expose_direct_port="0"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-        cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
+        expose_direct_port="1"
       fi
-      cat <<'YAML' >>"$tmp"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
-YAML
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port"
     fi
   fi
 
@@ -1415,74 +1411,27 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
-      cat <<'YAML' >>"$tmp"
+    cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
     container_name: sabnzbd
     profiles:
       - ipdirect
+YAML
+    if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
         condition: service_healthy
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
 YAML
+      append_sabnzbd_service_body "$tmp"
     else
-      cat <<'YAML' >>"$tmp"
-  sabnzbd:
-    image: ${SABNZBD_IMAGE}
-    container_name: sabnzbd
-    profiles:
-      - ipdirect
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      API_KEY: ${SABNZBD_API_KEY}
-    volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
-YAML
+      local expose_direct_port="0"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-        cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${SABNZBD_PORT}:8080"
-YAML
+        expose_direct_port="1"
       fi
-      cat <<'YAML' >>"$tmp"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api?mode=version&output=json&apikey=${SABNZBD_API_KEY}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "1m"
-        max-file: "2"
-YAML
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port"
     fi
   fi
 
