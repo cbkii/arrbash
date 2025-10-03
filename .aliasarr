@@ -175,6 +175,9 @@ _arr_loopback() {
 }
 
 _arr_services=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr configarr caddy local_dns)
+if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
+  _arr_services+=(sabnzbd)
+fi
 
 _arr_compose() { (cd "$ARR_STACK_DIR" && docker compose "$@" ); }
 
@@ -209,12 +212,13 @@ _arr_bool() {
 _arr_service_port() {
   local svc="$1" env_var default value
   case "$svc" in
-    qbittorrent) env_var=QBT_HTTP_PORT_HOST; default=8080 ;;
+    qbittorrent) env_var=QBT_HTTP_PORT_HOST; default=8082 ;;
     sonarr)      env_var=SONARR_PORT;        default=8989 ;;
     radarr)      env_var=RADARR_PORT;        default=7878 ;;
     prowlarr)    env_var=PROWLARR_PORT;      default=9696 ;;
     bazarr)      env_var=BAZARR_PORT;        default=6767 ;;
     flaresolverr)env_var=FLARESOLVERR_PORT;  default=8191 ;;
+    sabnzbd)     env_var=SABNZBD_PORT;       default=8780 ;;
     caddy)       env_var=CADDY_PORT;         default=80   ;;
     *)           return 1 ;;
   esac
@@ -253,7 +257,7 @@ _arr_service_base() {
 
   if [ "$enable_caddy" = "1" ]; then
     case "$svc" in
-      qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr)
+      qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr|sabnzbd)
         printf 'http://%s.%s' "$svc" "$(_arr_domain_suffix)"
         return
         ;;
@@ -261,7 +265,7 @@ _arr_service_base() {
   fi
 
   case "$svc" in
-    qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr)
+    qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr|sabnzbd)
       printf 'http://%s:%s' "$(_arr_host)" "$(_arr_service_port "$svc")"
       return
       ;;

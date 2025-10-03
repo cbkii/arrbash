@@ -32,7 +32,6 @@ run_case() {
     SPLIT_VPN=0
     SABNZBD_ENABLED=1
     SABNZBD_USE_VPN=0
-    FORCE_SAB_VPN=0
     ARRCONF_DIR="${tmp}/arrconf"
     mkdir -p "$ARRCONF_DIR"
     printf 'PROTON_USER=testuser\nPROTON_PASS=testpass\n' >"${ARRCONF_DIR}/proton.auth"
@@ -47,6 +46,7 @@ run_case() {
   ) || status=$?
 
   local compose_file="${stack_dir}/docker-compose.yml"
+  local env_file="${stack_dir}/.env"
   local lan_ip=""
   local sab_port=""
   if [[ -f "${tmp}/lan_ip" ]]; then
@@ -81,6 +81,26 @@ run_case() {
         status=1
       fi
     fi
+    if grep -q 'http://127.0.0.1:8080/api/v2/app/version' "$compose_file"; then
+      echo "[${name}] qBittorrent healthcheck still uses 8080" >&2
+      status=1
+    fi
+    if ! grep -q 'http://127.0.0.1:${QBT_WEBUI_PORT}/api/v2/app/version' "$compose_file" \
+      && ! grep -q 'http://127.0.0.1:8082/api/v2/app/version' "$compose_file"; then
+      echo "[${name}] qBittorrent healthcheck missing 8082 placeholder" >&2
+      status=1
+    fi
+  fi
+
+  if [[ -f "$env_file" ]]; then
+    if ! grep -q '^QBT_WEBUI_PORT=8082' "$env_file"; then
+      echo "[${name}] expected QBT_WEBUI_PORT=8082 in .env" >&2
+      status=1
+    fi
+    if grep -q '^FORCE_SAB_VPN=' "$env_file"; then
+      echo "[${name}] .env still contains FORCE_SAB_VPN" >&2
+      status=1
+    fi
   fi
 
   rm -rf "$tmp"
@@ -93,7 +113,7 @@ main() {
     "default_expose:SPLIT_VPN=0 EXPOSE_DIRECT_PORTS=1"
     "split:SPLIT_VPN=1"
     "split_expose:SPLIT_VPN=1 EXPOSE_DIRECT_PORTS=1"
-    "vpn_forced:SPLIT_VPN=0 SABNZBD_USE_VPN=1 FORCE_SAB_VPN=1"
+    "vpn_enabled:SPLIT_VPN=0 SABNZBD_USE_VPN=1"
   )
 
   local rc=0

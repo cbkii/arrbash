@@ -6,17 +6,16 @@ logic that keeps your API key and configuration safe across reruns.
 
 ## Network Modes
 
-| Mode | `SABNZBD_USE_VPN` | `FORCE_SAB_VPN` | Network namespace | Host port exposure | Notes |
-| ---- | ----------------- | --------------- | ----------------- | ------------------ | ----- |
-| Direct (default) | `0` | `0` | `arr_net` (split VPN) or default bridge | Controlled by `EXPOSE_DIRECT_PORTS` / `SABNZBD_PORT` | Avoids qBittorrent port collisions and keeps SAB reachable by the *Arr containers. |
-| Split-VPN direct | `0` | `0` | `arr_net` | Optional host mapping | Matches downloader connectivity expected by Sonarr/Radarr while qBittorrent remains tunneled. |
-| VPN (opt-in) | `1` | `1` | Gluetun (`network_mode: "service:gluetun"`) | No host ports (shares Gluetun stack) | Only use when SAB must egress via the VPN. You **must** confirm SAB listens on a different internal port than qBittorrent. |
+| Mode | `SABNZBD_USE_VPN` | Network namespace | Host port exposure | Notes |
+| ---- | ----------------- | ----------------- | ------------------ | ----- |
+| Direct (default) | `0` | `arr_net` (split VPN) or default bridge | Controlled by `EXPOSE_DIRECT_PORTS` / `SABNZBD_PORT` | Keeps SAB reachable by the *Arr containers. |
+| Split-VPN direct | `0` | `arr_net` | Optional host mapping | Matches downloader connectivity expected by Sonarr/Radarr while qBittorrent remains tunneled. |
+| VPN (opt-in) | `1` | Gluetun (`network_mode: "service:gluetun"`) | No host ports (shares Gluetun stack) | Use only when SAB must egress via the VPN. |
 
-The installer now forces `SABNZBD_USE_VPN=0` unless `FORCE_SAB_VPN=1` is explicitly
-set. This default prevents the long-standing internal port collision with
-qBittorrent (both bind to 8080) when containers share Gluetun’s namespace. If you
-opt back into the VPN path, review your SAB configuration and adjust its listen
-port to avoid conflicts.
+qBittorrent now defaults to WebUI port **8082** which frees 8080 for SABnzbd when
+both containers share Gluetun. If you intentionally keep SAB in VPN mode, keep
+its listen port at 8080 (the new qBittorrent default avoids the historical
+collision).
 
 ## API Key Preservation
 
@@ -51,9 +50,7 @@ message inside `scripts/services.sh` has been updated accordingly.
 Relevant environment variables:
 
 - `SABNZBD_ENABLED` — enable/disable the service.
-- `SABNZBD_USE_VPN` — request Gluetun networking (ignored unless
-  `FORCE_SAB_VPN=1`).
-- `FORCE_SAB_VPN` — advanced opt-in to keep SAB behind Gluetun; defaults to `0`.
+- `SABNZBD_USE_VPN` — route SABnzbd through Gluetun (`0` keeps it on arr_net).
 - `SABNZBD_PORT` — host port when SAB runs directly on the LAN.
 - `SABNZBD_URL` — helper target URL (default `http://localhost:8780`).
 - `SABNZBD_TIMEOUT` — helper timeout *and* minimum healthcheck start period.
@@ -65,14 +62,17 @@ Example snippet for a VPN opt-in lab environment:
 ```bash
 SABNZBD_ENABLED=1
 SABNZBD_USE_VPN=1
-FORCE_SAB_VPN=1
 EXPOSE_DIRECT_PORTS=0
-SABNZBD_URL="http://sabnzbd:8081"   # ensure SAB listens on a unique internal port
+SABNZBD_URL="http://sabnzbd:8080"   # qBittorrent now listens on 8082 inside Gluetun
 ```
 
-> **Tip:** When forcing SAB through Gluetun, change SAB’s listen port inside the
-> WebUI (e.g., to 8081) before rerunning arrbash so qBittorrent and SAB do not
-> clash inside the shared namespace.
+> **Tip:** When forcing SAB through Gluetun, keep its listen port at 8080 or pick
+> another value that does not clash with your qBittorrent container port.
+
+> **Caddy note:** When SAB runs directly on the LAN (`SABNZBD_USE_VPN=0`) and
+> you enable the Caddy reverse proxy, arrbash publishes
+> `https://sabnzbd.${LAN_DOMAIN_SUFFIX}` automatically. VPN mode skips LAN port
+> exposure, so you must access SAB through Gluetun in that configuration.
 
 ## Helper Script
 
@@ -86,6 +86,9 @@ SABNZBD_URL="http://sabnzbd:8081"   # ensure SAB listens on a unique internal po
 ./scripts/sab-helper.sh add-file <path/to/file.nzb>
 ./scripts/sab-helper.sh add-url <https://example/nzb>
 ```
+
+After `./arrstack.sh --refresh-aliases`, the shell also exposes `sab-logs`,
+`sab-shell`, and `open-sab` convenience aliases.
 
 If SAB is disabled the helper prints a warning and exits gracefully. Ensure
 `SABNZBD_URL` and `SABNZBD_API_KEY` are correct before using upload commands.

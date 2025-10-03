@@ -70,6 +70,48 @@ hydrate_sab_api_key_from_config() {
   return 0
 }
 
+# Captures an existing qBittorrent WebUI host port from .env so we only migrate
+# when explicitly requested.
+hydrate_qbt_host_port_from_env_file() {
+  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
+    return 0
+  fi
+
+  local existing_host_port=""
+  existing_host_port="$(get_env_kv "QBT_HTTP_PORT_HOST" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+
+  if [[ -n "$existing_host_port" ]]; then
+    local trimmed="${existing_host_port//[[:space:]]/}"
+    if [[ "$trimmed" =~ ^[0-9]+$ ]]; then
+      ARRSTACK_QBT_HOST_PORT_ENV="$trimmed"
+    fi
+  fi
+}
+
+# Reads qBittorrent's configured WebUI port so compose generation honors
+# existing deployments that still listen on 8080.
+hydrate_qbt_webui_port_from_config() {
+  local config_dir="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/docker-data}/qbittorrent"
+  local primary_conf="${config_dir}/qBittorrent.conf"
+  local legacy_conf="${config_dir}/qBittorrent/qBittorrent.conf"
+  local candidate=""
+
+  if [[ -f "$primary_conf" ]]; then
+    candidate="$primary_conf"
+  elif [[ -f "$legacy_conf" ]]; then
+    candidate="$legacy_conf"
+  else
+    return 0
+  fi
+
+  local configured_port=""
+  configured_port="$(grep -E '^WebUI\\\\Port=' "$candidate" | tail -n1 | cut -d= -f2 | tr -d '[:space:]' || printf '')"
+
+  if [[ -n "$configured_port" && "$configured_port" =~ ^[0-9]+$ ]]; then
+    ARRSTACK_QBT_WEBUI_PORT_CONFIG="$configured_port"
+  fi
+}
+
 # Pulls existing qBittorrent credentials from .env to avoid unintended resets
 hydrate_user_credentials_from_env_file() {
   if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then

@@ -20,7 +20,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 - When local DNS is enabled, ensure only trusted clients point at the Pi. Keep a fallback public resolver in DHCP to avoid outages if the Pi is offline.
 - Verify open ports regularly:
   ```bash
-  sudo ss -tulpn | grep -E ':8080|:8989|:7878|:9696|:6767|:8191|:80|:443|:53'
+  sudo ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191|:80|:443|:53'
   ```
   Expect 80/443 only when Caddy is enabled and 53 only when local DNS is active.
 

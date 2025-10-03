@@ -57,6 +57,28 @@ ${qbt_pass_msg}
 
 QBT_INFO
 
+  local qbt_container_status="${ARRSTACK_QBT_WEBUI_PORT_STATUS:-default}"
+  local qbt_host_status="${ARRSTACK_QBT_HOST_PORT_STATUS:-default}"
+  local container_suffix=""
+  local host_suffix=""
+  case "$qbt_container_status" in
+    migrated) container_suffix="(migrated)" ;;
+    preserved) container_suffix="(preserved)" ;;
+    *) container_suffix="(default)" ;;
+  esac
+  case "$qbt_host_status" in
+    migrated) host_suffix="(migrated)" ;;
+    preserved) host_suffix="(preserved)" ;;
+    *) host_suffix="(default)" ;;
+  esac
+  msg "qBittorrent ports: container ${QBT_WEBUI_PORT} ${container_suffix}, host ${QBT_HTTP_PORT_HOST} ${host_suffix}"
+
+  if [[ "${ARRSTACK_QBT_SAB_PORT_CONFLICT:-0}" == "1" ]]; then
+    warn "SABnzbd shares Gluetun but qBittorrent still listens on 8080 — rerun with --migrate-qbt-webui-port to avoid conflicts."
+  elif [[ "${ARRSTACK_QBT_PORT_LEGACY:-0}" == "1" ]]; then
+    warn "qBittorrent WebUI still uses legacy port 8080; consider --migrate-qbt-webui-port to adopt 8082."
+  fi
+
   if [[ -n "${ARRSTACK_PRESERVE_NOTES:-}" ]]; then
     msg "Credential preservation decisions:"
     while IFS= read -r preserve_note; do
@@ -426,10 +448,12 @@ POLICY
     fi
     msg "---- SABnzbd ----"
     if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
-      msg "VPN Routed: yes"
+      msg "VPN Routed: yes (internal port 8080 via Gluetun)"
     else
       msg "VPN Routed: no"
+      msg "Host Port: ${SABNZBD_PORT}"
     fi
+    msg "Helper URL: ${SABNZBD_URL}"
     if [[ -x "$sab_helper_path" ]]; then
       if ! "$sab_helper_path" status 2>/dev/null; then
         msg "Status: unavailable"

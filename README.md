@@ -35,7 +35,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    ./arrstack.sh --yes         # omit --yes for interactive mode
    ```
    The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`.
-5. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8080` for qBittorrent).
+5. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration
 - `userr.conf` lives at `${ARR_BASE:-$HOME/srv}/userr.conf`; keep it outside version control.
@@ -49,6 +49,11 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 - Show available flags at any time:
   ```bash
   ./arrstack.sh --help
+  ```
+- Common runtime toggles:
+  ```bash
+  ./arrstack.sh --enable-sabnzbd           # one-off enable without editing userr.conf
+  ./arrstack.sh --migrate-qbt-webui-port   # adopt the 8082 WebUI port if you came from 8080
   ```
 
 ## Next steps
@@ -67,11 +72,10 @@ Enable in your user config (for example `${ARR_BASE}/userr.conf`):
 ```bash
 SABNZBD_ENABLED=1
 # Optional overrides (see docs/sabnzbd.md for the full matrix)
-SABNZBD_PORT=8780          # Host port for the WebUI (8080 reserved by qBittorrent)
+SABNZBD_PORT=8780          # Host port for the WebUI (qBittorrent now defaults to 8082)
 SABNZBD_URL="http://localhost:8780"  # Helper/API endpoint (hydrated into .env)
 SABNZBD_CATEGORY="arrbash" # Category assigned to helper-submitted jobs
 SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
-# Set FORCE_SAB_VPN=1 alongside SABNZBD_USE_VPN=1 to opt back into Gluetun networking
 # Set SABNZBD_IMAGE=lscr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
 ```
 

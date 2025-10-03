@@ -276,7 +276,7 @@ check_network_security() {
     if [[ -f "$qbt_conf" ]]; then
       local ui_port
       ui_port="$(grep '^WebUI\\Port=' "$qbt_conf" 2>/dev/null | cut -d= -f2- | tr -d '\r' || true)"
-      local host_port="${QBT_HTTP_PORT_HOST:-8080}"
+      local host_port="${QBT_HTTP_PORT_HOST:-8082}"
       if [[ -n "$ui_port" && "$ui_port" != "$host_port" ]]; then
         echo "[doctor][warn] qBittorrent WebUI internal port is ${ui_port} but host mapping expects ${host_port}"
       fi
@@ -508,7 +508,7 @@ EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-0}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
 DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-router}"
-QBT_HTTP_PORT_HOST="${QBT_HTTP_PORT_HOST:-8080}"
+QBT_HTTP_PORT_HOST="${QBT_HTTP_PORT_HOST:-8082}"
 SONARR_PORT="${SONARR_PORT:-8989}"
 RADARR_PORT="${RADARR_PORT:-7878}"
 PROWLARR_PORT="${PROWLARR_PORT:-9696}"

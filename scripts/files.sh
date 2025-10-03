@@ -236,6 +236,8 @@ write_env() {
   hydrate_caddy_auth_from_env_file
   hydrate_user_credentials_from_env_file
   hydrate_sab_api_key_from_config
+  hydrate_qbt_host_port_from_env_file
+  hydrate_qbt_webui_port_from_config
 
   CADDY_BASIC_AUTH_USER="$(sanitize_user "$CADDY_BASIC_AUTH_USER")"
 
@@ -304,14 +306,6 @@ write_env() {
   fi
   SABNZBD_ENABLED="$sab_enabled"
 
-  local force_sab_vpn_raw="${FORCE_SAB_VPN:-0}"
-  local force_sab_vpn="$force_sab_vpn_raw"
-  if [[ "$force_sab_vpn" != "0" && "$force_sab_vpn" != "1" ]]; then
-    warn "Invalid FORCE_SAB_VPN=${force_sab_vpn_raw}; defaulting to 0."
-    force_sab_vpn=0
-  fi
-  FORCE_SAB_VPN="$force_sab_vpn"
-
   local sab_use_vpn_raw="${SABNZBD_USE_VPN:-0}"
   local sab_use_vpn="$sab_use_vpn_raw"
   if [[ "$sab_use_vpn" != "0" && "$sab_use_vpn" != "1" ]]; then
@@ -344,14 +338,9 @@ write_env() {
     esac
   fi
 
-  if ((sab_enabled)) && ((sab_use_vpn == 1)); then
-    if ((force_sab_vpn != 1)); then
-      warn "FORCE_SAB_VPN=1 required to run SABnzbd inside Gluetun; forcing SABNZBD_USE_VPN=0"
-      sab_use_vpn=0
-    elif ((gluetun_available == 0)); then
-      warn "SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
-      sab_use_vpn=0
-    fi
+  if ((sab_enabled)) && ((sab_use_vpn == 1)) && ((gluetun_available == 0)); then
+    warn "SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
+    sab_use_vpn=0
   fi
 
   SABNZBD_USE_VPN="$sab_use_vpn"
@@ -372,6 +361,74 @@ write_env() {
 
   if [[ -z "${SABNZBD_URL:-}" ]]; then
     SABNZBD_URL="http://localhost:${SABNZBD_PORT}"
+  fi
+
+  local qbt_webui_default=8082
+  local qbt_host_default=8082
+  local qbt_webui_port="$qbt_webui_default"
+  local qbt_host_port="$qbt_host_default"
+  local qbt_webui_status="default"
+  local qbt_host_status="default"
+
+  if [[ -n "${ARRSTACK_QBT_WEBUI_PORT_CONFIG:-}" ]]; then
+    qbt_webui_port="${ARRSTACK_QBT_WEBUI_PORT_CONFIG}"
+    qbt_webui_status="preserved"
+  fi
+
+  if [[ -n "${ARRSTACK_QBT_HOST_PORT_ENV:-}" ]]; then
+    qbt_host_port="${ARRSTACK_QBT_HOST_PORT_ENV}"
+    qbt_host_status="preserved"
+  elif [[ -n "${QBT_HTTP_PORT_HOST:-}" ]]; then
+    qbt_host_port="${QBT_HTTP_PORT_HOST}"
+  fi
+
+  if [[ ! "$qbt_host_port" =~ ^[0-9]+$ ]]; then
+    warn "Invalid QBT_HTTP_PORT_HOST=${qbt_host_port}; defaulting to ${qbt_host_default}."
+    qbt_host_port="$qbt_host_default"
+    qbt_host_status="default"
+  fi
+
+  if [[ "${MIGRATE_QBT_WEBUI_PORT:-0}" == "1" ]]; then
+    if [[ "$qbt_webui_port" != "$qbt_webui_default" ]]; then
+      arrstack_record_preserve_note "Migrated qBittorrent WebUI port to ${qbt_webui_default}"
+    fi
+    qbt_webui_port="$qbt_webui_default"
+    qbt_webui_status="migrated"
+    if [[ "$qbt_host_port" != "$qbt_host_default" ]]; then
+      arrstack_record_preserve_note "Migrated qBittorrent host port to ${qbt_host_default}"
+    fi
+    qbt_host_port="$qbt_host_default"
+    qbt_host_status="migrated"
+  else
+    if [[ "$qbt_webui_status" == "preserved" && "$qbt_webui_port" != "$qbt_webui_default" ]]; then
+      arrstack_record_preserve_note "Preserved qBittorrent WebUI port ${qbt_webui_port}"
+    fi
+    if [[ "$qbt_host_status" == "preserved" && "$qbt_host_port" != "$qbt_host_default" ]]; then
+      arrstack_record_preserve_note "Preserved qBittorrent host port ${qbt_host_port}"
+    fi
+  fi
+
+  if [[ ! "$qbt_webui_port" =~ ^[0-9]+$ ]]; then
+    warn "Invalid qBittorrent WebUI port ${qbt_webui_port}; using ${qbt_webui_default}."
+    qbt_webui_port="$qbt_webui_default"
+    qbt_webui_status="default"
+  fi
+
+  QBT_WEBUI_PORT="$qbt_webui_port"
+  QBT_HTTP_PORT_HOST="$qbt_host_port"
+  ARRSTACK_QBT_WEBUI_PORT_STATUS="$qbt_webui_status"
+  ARRSTACK_QBT_HOST_PORT_STATUS="$qbt_host_status"
+
+  ARRSTACK_QBT_PORT_LEGACY=0
+  if [[ "$QBT_WEBUI_PORT" == "8080" ]]; then
+    ARRSTACK_QBT_PORT_LEGACY=1
+  fi
+
+  if ((sab_enabled)) && [[ "$SABNZBD_USE_VPN" == "1" ]] && [[ "$QBT_WEBUI_PORT" == "8080" ]]; then
+    warn "SABnzbd and qBittorrent share Gluetun but qBittorrent still listens on 8080; run --migrate-qbt-webui-port to avoid conflicts."
+    ARRSTACK_QBT_SAB_PORT_CONFLICT=1
+  else
+    ARRSTACK_QBT_SAB_PORT_CONFLICT=0
   fi
 
   load_proton_credentials
@@ -555,6 +612,7 @@ fi
     printf '\n'
 
     printf '%s\n' '# Service ports'
+    write_env_kv "QBT_WEBUI_PORT" "$QBT_WEBUI_PORT"
     write_env_kv "QBT_HTTP_PORT_HOST" "$QBT_HTTP_PORT_HOST"
     write_env_kv "SONARR_PORT" "$SONARR_PORT"
     write_env_kv "RADARR_PORT" "$RADARR_PORT"
@@ -573,7 +631,6 @@ fi
     printf '%s\n' '# SABnzbd'
     write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
     write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
-    write_env_kv "FORCE_SAB_VPN" "$FORCE_SAB_VPN"
     write_env_kv "SABNZBD_URL" "$SABNZBD_URL"
     write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
     write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
@@ -717,7 +774,7 @@ YAML
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
       QBT_USER: ${QBT_USER}
       QBT_PASS: ${QBT_PASS}
-      QBITTORRENT_ADDR: "http://127.0.0.1:8080"
+      QBITTORRENT_ADDR: "http://127.0.0.1:${QBT_WEBUI_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
@@ -733,7 +790,7 @@ YAML
       - ${ARR_DOCKER_DIR}/gluetun:/gluetun
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:8080"
+      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:${QBT_WEBUI_PORT}"
 YAML
   cat <<'YAML' >>"$tmp"
     healthcheck:
@@ -777,7 +834,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/v2/app/version"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:${QBT_WEBUI_PORT}/api/v2/app/version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1141,7 +1198,7 @@ services:
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
       QBT_USER: ${QBT_USER}
       QBT_PASS: ${QBT_PASS}
-      QBITTORRENT_ADDR: "http://127.0.0.1:8080"
+      QBITTORRENT_ADDR: "http://127.0.0.1:${QBT_WEBUI_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
@@ -1170,7 +1227,7 @@ YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:8080"
+      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:${QBT_WEBUI_PORT}"
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_PORT}"
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_PORT}"
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_PORT}"
@@ -1275,7 +1332,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/v2/app/version"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:${QBT_WEBUI_PORT}/api/v2/app/version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1632,7 +1689,7 @@ case "$PORT_VALUE" in
         ;;
 esac
 
-QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://127.0.0.1:8080}"
+QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://127.0.0.1:8082}"
 PAYLOAD=$(printf 'json={"listen_port":%s,"random_port":false}' "$PORT_VALUE")
 
 COOKIE_FILE=""
@@ -1896,13 +1953,25 @@ write_caddy_assets() {
   local domain_suffix="${ARR_DOMAIN_SUFFIX_CLEAN}"
 
   local -a services=(
-    "qbittorrent 8080"
+    "qbittorrent ${QBT_WEBUI_PORT}"
     "sonarr ${SONARR_PORT}"
     "radarr ${RADARR_PORT}"
     "prowlarr ${PROWLARR_PORT}"
     "bazarr ${BAZARR_PORT}"
     "flaresolverr ${FLARESOLVERR_PORT}"
   )
+
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    local sab_proxy_port=""
+    if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
+      sab_proxy_port="8080"
+    else
+      sab_proxy_port="${SABNZBD_PORT}"
+    fi
+    if [[ -n "$sab_proxy_port" && "$sab_proxy_port" =~ ^[0-9]+$ ]]; then
+      services+=("sabnzbd ${sab_proxy_port}")
+    fi
+  fi
 
   local caddyfile_content
   caddyfile_content="$({
@@ -2110,7 +2179,7 @@ Downloads\TempPathEnabled=true
 WebUI\Address=0.0.0.0
 WebUI\AlternativeUIEnabled=${vt_alt_value}
 WebUI\RootFolder=${vt_root}
-WebUI\Port=8080
+WebUI\Port=${QBT_WEBUI_PORT}
 WebUI\Username=${QBT_USER}
 WebUI\LocalHostAuth=true
 WebUI\AuthSubnetWhitelistEnabled=true
@@ -2131,7 +2200,7 @@ EOF
   local managed_spec
   local -a managed_lines=(
     "WebUI\\Address=0.0.0.0"
-    "WebUI\\Port=8080"
+    "WebUI\\Port=${QBT_WEBUI_PORT}"
     "WebUI\\AlternativeUIEnabled=${vt_alt_value}"
     "WebUI\\RootFolder=${vt_root}"
     "WebUI\\ServerDomains=*"
