@@ -77,7 +77,7 @@ collect_port_requirements() {
     _requirements_ref+=("tcp|${BAZARR_PORT}|Bazarr WebUI|${expected}")
     _requirements_ref+=("tcp|${FLARESOLVERR_PORT}|FlareSolverr API|${expected}")
     if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
-      local sab_port_check="${SABNZBD_PORT:-}" 
+      local sab_port_check="${SABNZBD_PORT:-}"
       if [[ -z "$sab_port_check" && -n "${ARRSTACK_DEFAULT_SABNZBD_PORT:-}" ]]; then
         sab_port_check="${ARRSTACK_DEFAULT_SABNZBD_PORT}"
       fi
