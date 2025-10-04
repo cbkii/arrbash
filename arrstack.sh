@@ -33,6 +33,16 @@ _expected_base="${ARR_BASE:-${HOME}/srv}"
 _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_expected_base}")"
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
 
+# Returns 0 if the given variable name is readonly, 1 otherwise
+arrstack_var_is_readonly() {
+  local varname=$1 out
+  # Ensure it's a variable that exists (not a function); bail if missing.
+  out=$(declare -p -- "$varname" 2>/dev/null) || return 1
+  # Bash prints like: "declare -r name=…", "declare -rx name=…", "declare -ar name=…"
+  [[ $out == declare\ -*r* ]] && return 0
+  return 1
+}
+
 declare -a _arrstack_env_override_order=()
 declare -A _arrstack_env_overrides=()
 declare -A _arrstack_env_override_seen=()
@@ -68,6 +78,19 @@ for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
 done
 unset _arrstack_env_var
 
+for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
+  if [[ -v "_arrstack_env_overrides[${_arrstack_env_var}]" ]]; then
+    if [[ "${_arrstack_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      if ! arrstack_var_is_readonly "${_arrstack_env_var}"; then
+        readonly "${_arrstack_env_var}" 2>/dev/null || :
+      fi
+    else
+      printf '[arrstack] WARN: Skipping readonly guard for invalid environment variable name: %s\n' "${_arrstack_env_var}" >&2
+    fi
+  fi
+done
+unset _arrstack_env_var
+
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
     if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
@@ -80,21 +103,26 @@ if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
 fi
 
 if [[ -f "${_canon_userconf}" ]]; then
+  _arrstack_userr_conf_errlog="$(mktemp)"
+  trap - ERR
+  set +e
   # shellcheck source=/dev/null
-  . "${_canon_userconf}"
+  . "${_canon_userconf}" 2> >(tee "${_arrstack_userr_conf_errlog}" >&2)
+  _arrstack_userr_conf_status=$?
+  set -e
+  trap 'arrstack_err_trap' ERR
+  if ((_arrstack_userr_conf_status != 0)); then
+    if [[ -s "${_arrstack_userr_conf_errlog}" ]] && ! grep -v "readonly variable" "${_arrstack_userr_conf_errlog}" >/dev/null; then
+      :
+    else
+      printf '[arrstack] Failed to source user config (status=%s): %s\n' "${_arrstack_userr_conf_status}" "${_canon_userconf}" >&2
+      rm -f "${_arrstack_userr_conf_errlog}"
+      exit "${_arrstack_userr_conf_status}"
+    fi
+  fi
+  rm -f "${_arrstack_userr_conf_errlog}"
+  unset _arrstack_userr_conf_status _arrstack_userr_conf_errlog
 fi
-
-# Returns 0 if the given variable name is readonly, 1 otherwise
-arrstack_var_is_readonly() {
-  local varname=$1 out
-  # Ensure it's a variable that exists (not a function); bail if missing.
-  out=$(declare -p -- "$varname" 2>/dev/null) || return 1
-  # Bash prints like: "declare -r name=…", "declare -rx name=…", "declare -ar name=…"
-  [[ $out == declare\ -*r* ]] && return 0
-  return 1
-}
-
-}
 for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
   if [[ -v "_arrstack_env_overrides[${_arrstack_env_var}]" ]]; then
     if arrstack_var_is_readonly "${_arrstack_env_var}"; then
