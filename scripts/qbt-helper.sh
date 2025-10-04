@@ -89,10 +89,7 @@ webui_host() {
 
 # Returns exposed qBittorrent WebUI host port
 webui_port() {
-  local port="${QBT_HTTP_PORT:-}"
-  if [[ -z "$port" && -n "${ARRSTACK_DEFAULT_QBT_HTTP_PORT:-}" ]]; then
-    port="${ARRSTACK_DEFAULT_QBT_HTTP_PORT}"
-  fi
+  local port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
   printf '%s' "$port"
 }
 
@@ -282,11 +279,8 @@ ensure_qbt_config_setting() {
 diagnose_config() {
   local cfg
   cfg="$(config_file_path)"
-  local host_port="${QBT_HTTP_PORT:-}"
-  if [[ -z "$host_port" && -n "${ARRSTACK_DEFAULT_QBT_HTTP_PORT:-}" ]]; then
-    host_port="${ARRSTACK_DEFAULT_QBT_HTTP_PORT}"
-  fi
-  local expected_container_port="${QBT_WEBUI_PORT:-${ARRSTACK_DEFAULT_QBT_WEBUI_PORT:-}}"
+  local host_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+  local expected_container_port="${QBT_INT_PORT:-8082}"
 
   if [[ ! -f "$cfg" ]]; then
     log_warn "Config file not found at $cfg; nothing to diagnose"
@@ -328,7 +322,7 @@ diagnose_config() {
 
 # Forces WebUI port back to container default and restarts service
 fix_webui_port() {
-  local desired_port="${QBT_WEBUI_PORT:-${ARRSTACK_DEFAULT_QBT_WEBUI_PORT:-}}"
+  local desired_port="${QBT_INT_PORT:-8082}"
   log_info "Restoring qBittorrent WebUI port to ${desired_port}"
   stop_container
 
@@ -363,7 +357,7 @@ fix_webui_address() {
 
 # Prints helper usage menu
 usage() {
-  local default_port="${QBT_WEBUI_PORT:-${ARRSTACK_DEFAULT_QBT_WEBUI_PORT:-}}"
+  local default_port="${QBT_INT_PORT:-8082}"
   cat <<USAGE
 Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr}
   show       Display current access information

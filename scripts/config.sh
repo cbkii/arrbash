@@ -165,12 +165,12 @@ Credentials & secrets
 
 Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
-  • qBittorrent WebUI (host): ${QBT_HTTP_PORT}
+  • qBittorrent WebUI (host): ${QBT_PORT}
   • Sonarr: ${SONARR_PORT}
   • Radarr: ${RADARR_PORT}
   • Prowlarr: ${PROWLARR_PORT}
   • Bazarr: ${BAZARR_PORT}
-  • FlareSolverr: ${FLARESOLVERR_PORT}
+  • FlareSolverr: ${FLARR_PORT}
 
 Files that will be created/updated
   • Environment file: ${ARR_ENV_FILE}
@@ -200,12 +200,12 @@ validate_config() {
     validate_ipv4 "${LAN_IP}" || die "Invalid LAN_IP: ${LAN_IP}"
   fi
   validate_port "${GLUETUN_CONTROL_PORT}" || die "Invalid GLUETUN_CONTROL_PORT: ${GLUETUN_CONTROL_PORT}"
-  validate_port "${QBT_HTTP_PORT}" || die "Invalid QBT_HTTP_PORT: ${QBT_HTTP_PORT}"
+  validate_port "${QBT_PORT}" || die "Invalid QBT_PORT: ${QBT_PORT}"
   validate_port "${SONARR_PORT}" || die "Invalid SONARR_PORT: ${SONARR_PORT}"
   validate_port "${RADARR_PORT}" || die "Invalid RADARR_PORT: ${RADARR_PORT}"
   validate_port "${PROWLARR_PORT}" || die "Invalid PROWLARR_PORT: ${PROWLARR_PORT}"
   validate_port "${BAZARR_PORT}" || die "Invalid BAZARR_PORT: ${BAZARR_PORT}"
-  validate_port "${FLARESOLVERR_PORT}" || die "Invalid FLARESOLVERR_PORT: ${FLARESOLVERR_PORT}"
+  validate_port "${FLARR_PORT}" || die "Invalid FLARR_PORT: ${FLARR_PORT}"
 
   validate_proton_creds "${_vu}" "${_vp}" || die "Invalid ProtonVPN credentials format"
 }

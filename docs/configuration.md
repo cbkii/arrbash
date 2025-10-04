@@ -14,6 +14,10 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 ## Core settings to review
 - **Network**
   - `LAN_IP`: private address for the host; required before ports are exposed.
+  - `LOCALHOST_IP` must be loopback.
+    Healthchecks run inside containers. Set `LOCALHOST_IP` to a loopback address (`127.0.0.1`). If you point it at a LAN IP, some healthchecks will probe the wrong interface and flap. Example:
+
+    `LOCALHOST_IP=127.0.0.1`
   - `LAN_DOMAIN_SUFFIX`: optional suffix for hostnames (default `home.arpa`). Needed for local DNS or Caddy.
   - `SPLIT_VPN`: set `1` to run only qBittorrent inside Gluetun, or `0` to tunnel everything.
   - `EXPOSE_DIRECT_PORTS`: leave at `1` for LAN-friendly URLs, or set `0` to keep services internal to Docker networking.

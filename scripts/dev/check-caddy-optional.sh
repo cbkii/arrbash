@@ -58,8 +58,8 @@ fi
 
 http_port="$(grep -E '^CADDY_HTTP_PORT=' "$tmp_env" | tail -n1 | cut -d= -f2- || true)"
 https_port="$(grep -E '^CADDY_HTTPS_PORT=' "$tmp_env" | tail -n1 | cut -d= -f2- || true)"
-http_port="${http_port:-${ARRSTACK_DEFAULT_CADDY_HTTP_PORT:-}}"
-https_port="${https_port:-${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT:-}}"
+http_port="${http_port:-80}"
+https_port="${https_port:-443}"
 
 if grep -q ":${http_port}:${http_port}" "$compose_path"; then
   echo "[check-caddy-optional] Found a ${http_port}:${http_port} port mapping with Caddy disabled." >&2

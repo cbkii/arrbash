@@ -192,6 +192,14 @@ arrstack_setup_defaults() {
   : "${ARR_DOCKER_SERVICES[*]}"
   readonly -a ARR_DOCKER_SERVICES
 
+  : "${QBT_INT_PORT:=8082}"
+  : "${SONARR_INT_PORT:=8989}"
+  : "${RADARR_INT_PORT:=7878}"
+  : "${PROWLARR_INT_PORT:=9696}"
+  : "${BAZARR_INT_PORT:=6767}"
+  : "${FLARR_INT_PORT:=8191}"
+  : "${SABNZBD_INT_PORT:=8080}"
+
   CYAN='\033[0;36m'
   YELLOW='\033[0;33m'
   RESET='\033[0m'

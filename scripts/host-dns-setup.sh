@@ -232,8 +232,8 @@ msg "Testing DNS -> qbittorrent.${SUFFIX} via ${LAN_IP}"
 dig +short @"${LAN_IP}" "qbittorrent.${SUFFIX}"
 DIG_RC=$?
 msg "Testing HTTPS (Caddy) -> qbittorrent.${SUFFIX} (forced resolve)"
-caddy_https_port="${CADDY_HTTPS_PORT:-${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT:-}}"
-arrstack_resolve_port caddy_https_port "$caddy_https_port" "${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT}"
+caddy_https_port="${CADDY_HTTPS_PORT:-443}"
+arrstack_resolve_port caddy_https_port "$caddy_https_port" 443
 curl -kI --max-time 5 --resolve "qbittorrent.${SUFFIX}:${caddy_https_port}:${LAN_IP}" "https://qbittorrent.${SUFFIX}/"
 CURL_RC=$?
 set -e
