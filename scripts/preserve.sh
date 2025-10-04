@@ -33,13 +33,9 @@ hydrate_sab_api_key_from_config() {
     return 0
   fi
 
-  local api_key_line="" api_key_value="" pattern=""
-  for pattern in '^[[:space:]]*api_key[[:space:]]*='; do
-    api_key_line="$(grep -iE "$pattern" "$ini_path" | tail -n1 || printf '')"
-    if [[ -n "$api_key_line" ]]; then
-      break
-    fi
-  done
+  local api_key_line="" api_key_value=""
+  local pattern='^[[:space:]]*api_key[[:space:]]*='
+  api_key_line="$(grep -iE "$pattern" "$ini_path" | head -n1 || printf '')"
 
   if [[ -z "$api_key_line" ]]; then
     return 0
