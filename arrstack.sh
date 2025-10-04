@@ -55,7 +55,7 @@ else
     fi
   done < <(env)
 fi
-unset _arrstack_env_override_seen _arrstack_env_rest
+unset -v _arrstack_env_override_seen _arrstack_env_rest 2>/dev/null || :
 
 for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
   if [[ "$(declare -p -- "$_arrstack_env_var" 2>/dev/null)" == "declare -x "* ]]; then
