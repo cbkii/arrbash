@@ -380,9 +380,8 @@ write_env() {
   if ((sab_enabled)) && ((sab_use_vpn == 1)); then
     local sab_host_lower="${sab_host_value,,}"
     local sab_default_lower="${sab_host_default,,}"
-    hostpatterns="$sab_default_lower|127.0.0.1|localhost|$LOCALHOST_IP"
     case "$sab_host_lower" in
-      $hostpatterns)
+      "$sab_default_lower"|127.0.0.1|localhost|"$LOCALHOST_IP")
         sab_host_value="sabnzbd"
         sab_host_auto=1
         ;;
