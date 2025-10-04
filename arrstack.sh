@@ -86,17 +86,14 @@ fi
 
 # Returns 0 if the given variable name is readonly, 1 otherwise
 arrstack_var_is_readonly() {
-  local varname="$1"
-  # Check if variable exists
-  if ! declare -p -- "$varname" &>/dev/null; then
-    return 1
-  fi
-  # Check for readonly flag (-r) in declare output
-  if [[ "$(declare -p -- "$varname" 2>/dev/null)" == declare\ -r* ]]; then
-    return 0
-  else
-    return 1
-  fi
+  local varname=$1 out
+  # Ensure it's a variable that exists (not a function); bail if missing.
+  out=$(declare -p -- "$varname" 2>/dev/null) || return 1
+  # Bash prints like: "declare -r name=…", "declare -rx name=…", "declare -ar name=…"
+  [[ $out == declare\ -*r* ]] && return 0
+  return 1
+}
+
 }
 for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
   if [[ -v "_arrstack_env_overrides[${_arrstack_env_var}]" ]]; then
