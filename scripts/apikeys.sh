@@ -1,6 +1,8 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034
 
+API_SYNC_DELAY=${API_SYNC_DELAY:-60}"
+
 # Extracts API key from an Arr config.xml, tolerating partially initialised files
 arrstack_detect_api_key_from_config() {
   local config_path="$1"
@@ -274,7 +276,7 @@ arrstack_schedule_delayed_api_sync() {
     return 0
   fi
 
-  local delay="${1:-60}"
+  local delay="${1:-${API_SYNC_DELAY:-5}}"
   local script_dir="${ARR_STACK_DIR}/scripts"
   local script_path="${script_dir}/delayed-sync.sh"
   local arrstack_script="${REPO_ROOT}/arrstack.sh"
