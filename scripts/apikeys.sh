@@ -268,3 +268,46 @@ arrstack_sync_arr_api_keys() {
 
   return 0
 }
+
+arrstack_schedule_delayed_api_sync() {
+  if [[ "${ENABLE_CONFIGARR:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  local delay="${1:-60}"
+  local script_dir="${ARR_STACK_DIR}/scripts"
+  local script_path="${script_dir}/delayed-sync.sh"
+  local arrstack_script="${REPO_ROOT}/arrstack.sh"
+
+  if [[ ! -x "$arrstack_script" ]]; then
+    warn "Unable to schedule API key sync; arrstack.sh not found at ${arrstack_script}"
+    return 0
+  fi
+
+  ensure_dir_mode "$script_dir" 755
+
+  cat >"$script_path" <<'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+STACK_DIR="$1"
+DELAY="$2"
+ARRSTACK_SCRIPT="$3"
+
+echo "Scheduled API key sync will run in $DELAY seconds"
+sleep "$DELAY"
+
+cd "$STACK_DIR" || exit 1
+"$ARRSTACK_SCRIPT" --sync-api-keys
+SCRIPT
+
+  chmod 755 "$script_path"
+
+  if [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" != "1" ]]; then
+    ARRSTACK_SCHEDULED_API_SYNC_DELAY="$delay"
+    msg "Scheduling delayed API key sync in ${delay} seconds"
+    nohup bash "$script_path" "$ARR_STACK_DIR" "$delay" "$arrstack_script" >/dev/null 2>&1 &
+  fi
+
+  return 0
+}

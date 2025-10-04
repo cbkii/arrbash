@@ -1061,10 +1061,12 @@ start_stack() {
   fi
 
   if ((qb_started)); then
-    sync_qbt_password_from_logs
+    ensure_qbt_config || true
   fi
 
   service_health_sabnzbd
+
+  arrstack_schedule_delayed_api_sync || true
 
   msg "Services started - they may take a minute to be fully ready"
   show_service_status
