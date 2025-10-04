@@ -381,7 +381,7 @@ write_env() {
     local sab_host_lower="${sab_host_value,,}"
     local sab_default_lower="${sab_host_default,,}"
     case "$sab_host_lower" in
-      "$sab_default_lower"|"127.0.0.1"|"localhost")
+      "$sab_default_lower"|"${LOCALHOST_IP}"|"localhost")
         sab_host_value="sabnzbd"
         sab_host_auto=1
         ;;
@@ -579,7 +579,7 @@ fi
   local qbt_whitelist_raw
   qbt_whitelist_raw="${QBT_AUTH_WHITELIST:-}"
   if [[ -z "$qbt_whitelist_raw" ]]; then
-    qbt_whitelist_raw="127.0.0.1/32,::1/128"
+    qbt_whitelist_raw="${LOCALHOST_IP}/32,::1/128"
   fi
   if [[ -n "$lan_private_subnet" ]]; then
     qbt_whitelist_raw+="${qbt_whitelist_raw:+,}${lan_private_subnet}"
@@ -763,7 +763,7 @@ YAML
 
   {
     printf '    healthcheck:\n'
-    printf '      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:%s/api?mode=version&output=json"]\n' "$internal_port"
+    printf '      test: ["CMD", "curl", "-fsS", "http://${LOCALHOST_IP}:%s/api?mode=version&output=json"]\n' "$internal_port"
     printf '      interval: 30s\n      timeout: 5s\n      retries: 5\n      start_period: %ss\n' "$health_start_period_seconds"
   } >>"$target"
 
@@ -1060,7 +1060,7 @@ YAML
     environment:
       LOG_LEVEL: info
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://127.0.0.1:${FLARR_INT_PORT}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1337,11 +1337,11 @@ YAML
         - "CMD-SHELL"
         - >
           if command -v drill >/dev/null 2>&1; then
-            drill -Q example.com @127.0.0.1 >/dev/null 2>&1;
+            drill -Q example.com @${LOCALHOST_IP} >/dev/null 2>&1;
           elif command -v nslookup >/dev/null 2>&1; then
-            nslookup example.com 127.0.0.1 >/dev/null 2>&1;
+            nslookup example.com ${LOCALHOST_IP} >/dev/null 2>&1;
           elif command -v dig >/dev/null 2>&1; then
-            dig +time=2 +tries=1 @127.0.0.1 example.com >/dev/null 2>&1;
+            dig +time=2 +tries=1 @${LOCALHOST_IP} example.com >/dev/null 2>&1;
           else
             exit 1;
           fi
@@ -1510,7 +1510,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://127.0.0.1:${FLARR_INT_PORT}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1976,7 +1976,7 @@ write_caddy_assets() {
   lan_cidrs="$(printf '%s' "${CADDY_LAN_CIDRS}" | tr ',\t\r\n' '    ')"
   lan_cidrs="$(printf '%s\n' "$lan_cidrs" | xargs 2>/dev/null || printf '')"
   if [[ -z "$lan_cidrs" ]]; then
-    lan_cidrs="127.0.0.1/32"
+    lan_cidrs="${LOCALHOST_IP}/32"
   fi
 
   local caddy_auth_hash
@@ -2180,7 +2180,7 @@ write_qbt_config() {
     msg "  Removing unused legacy config at ${legacy_conf}"
     rm -f "$legacy_conf"
   fi
-  local default_auth_whitelist="127.0.0.1/32,::1/128"
+  local default_auth_whitelist="${LOCALHOST_IP}/32,::1/128"
   local qb_lan_whitelist=""
   if qb_lan_whitelist="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
     default_auth_whitelist+=,${qb_lan_whitelist}
