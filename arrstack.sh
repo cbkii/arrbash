@@ -85,7 +85,7 @@ for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
         readonly "${_arrstack_env_var}" 2>/dev/null || :
       fi
     else
-      printf '[arrstack] WARN: Skipping readonly guard for invalid environment variable name: %s\n' "${_arrstack_env_var}" >&2
+      printf '[arrstack] WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${_arrstack_env_var}" >&2
     fi
   fi
 done
