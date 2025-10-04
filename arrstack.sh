@@ -33,6 +33,41 @@ _expected_base="${ARR_BASE:-${HOME}/srv}"
 _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_expected_base}")"
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
 
+declare -a _arrstack_env_override_order=()
+declare -A _arrstack_env_overrides=()
+declare -A _arrstack_env_override_seen=()
+if declare -f arrstack_collect_all_expected_env_keys >/dev/null 2>&1; then
+  while IFS= read -r _arrstack_env_var; do
+    [[ -n "${_arrstack_env_var}" ]] || continue
+    if [[ -z "${_arrstack_env_override_seen[${_arrstack_env_var}]+x}" ]]; then
+      _arrstack_env_override_order+=("${_arrstack_env_var}")
+      _arrstack_env_override_seen["${_arrstack_env_var}"]=1
+    fi
+  done < <(arrstack_collect_all_expected_env_keys)
+else
+  while read -r _arrstack_env_line; do
+    _arrstack_env_var="${_arrstack_env_line%%=*}"
+    if [[ "${_arrstack_env_var}" == ARR_* || "${_arrstack_env_var}" == ARRSTACK_* ]]; then
+      if [[ -z "${_arrstack_env_override_seen[${_arrstack_env_var}]+x}" ]]; then
+        _arrstack_env_override_order+=("${_arrstack_env_var}")
+        _arrstack_env_override_seen["${_arrstack_env_var}"]=1
+      fi
+    fi
+  done < <(env)
+fi
+unset -v _arrstack_env_override_seen _arrstack_env_rest 2>/dev/null || :
+
+for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
+  if [[ "$(declare -p -- "$_arrstack_env_var" 2>/dev/null)" == "declare -x "* ]]; then
+    if [[ ${!_arrstack_env_var+x} ]]; then
+      _arrstack_env_overrides["${_arrstack_env_var}"]="${!_arrstack_env_var}"
+    else
+      _arrstack_env_overrides["${_arrstack_env_var}"]=""
+    fi
+  fi
+done
+unset _arrstack_env_var
+
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
     if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
@@ -48,6 +83,35 @@ if [[ -f "${_canon_userconf}" ]]; then
   # shellcheck source=/dev/null
   . "${_canon_userconf}"
 fi
+
+# Returns 0 if the given variable name is readonly, 1 otherwise
+arrstack_var_is_readonly() {
+  local varname=$1 out
+  # Ensure it's a variable that exists (not a function); bail if missing.
+  out=$(declare -p -- "$varname" 2>/dev/null) || return 1
+  # Bash prints like: "declare -r name=…", "declare -rx name=…", "declare -ar name=…"
+  [[ $out == declare\ -*r* ]] && return 0
+  return 1
+}
+
+}
+for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
+  if [[ -v "_arrstack_env_overrides[${_arrstack_env_var}]" ]]; then
+    if arrstack_var_is_readonly "${_arrstack_env_var}"; then
+      continue
+    fi
+    # Validate variable name format before assignment
+    if [[ "${_arrstack_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf -v "${_arrstack_env_var}" '%s' "${_arrstack_env_overrides[${_arrstack_env_var}]}"
+      export "${_arrstack_env_var}"
+    else
+      printf '[arrstack] WARN: Skipping invalid environment variable name: %s\n' "${_arrstack_env_var}" >&2
+    fi
+  fi
+done
+unset _arrstack_env_var
+
+unset _arrstack_env_override_order _arrstack_env_overrides
 
 ARR_USERCONF_PATH="${_canon_userconf}"
 unset _canon_userconf _canon_base _expected_base

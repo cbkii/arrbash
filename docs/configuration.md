@@ -2,10 +2,10 @@
 
 # Configuration guide
 
-Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arrstack.sh` loads environment variables first, then your overrides, and finally the shipped defaults so the last writer wins.
+Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arrstack.sh` now snapshots exported environment variables before loading your config and reapplies them afterwards so they continue to win over anything set inside `userr.conf` or the defaults.
 
 ## Configuration layers
-1. **Shell environment** – anything exported before running `./arrstack.sh` overrides the other sources (use for CI or one-off toggles).
+1. **Shell environment** – anything exported before running `./arrstack.sh` overrides the other sources (use for CI or one-off toggles). Values are reasserted after `userr.conf` loads, except for internal read-only variables and normalized paths such as `ARR_USERCONF_PATH`, which may be canonicalised to an absolute path during startup.
 2. **`${ARR_BASE}/userr.conf`** – your persistent copy (defaults to `~/srv/userr.conf`). Keep it out of version control and rerun the installer after every edit.
 3. **`arrconf/userr.conf.defaults.sh`** – project defaults committed in the repo.
 
