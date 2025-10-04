@@ -68,17 +68,10 @@ unset __arrstack_env_guard_var
 unset ARRSTACK_ENV_SNAPSHOT
 
 if [[ -f "${_canon_userconf}" ]]; then
-  trap - ERR
-  set +e
   # shellcheck source=/dev/null
-  . "${_canon_userconf}"
-  __arrstack_userconf_rc=$?
-  set -e
-  trap 'arrstack_err_trap' ERR
-  if (( __arrstack_userconf_rc != 0 )); then
-    printf '[arrstack] WARN: user configuration returned %s (see messages above for details)\n' "${__arrstack_userconf_rc}" >&2
+  if ! . "${_canon_userconf}"; then
+    printf '[arrstack] WARN: user configuration failed to source (see messages above for details)\n' >&2
   fi
-  unset __arrstack_userconf_rc
 fi
 
 unset _canon_userconf _canon_base _expected_base
