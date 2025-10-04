@@ -44,7 +44,7 @@ hydrate_sab_api_key_from_config() {
   api_key_value="${api_key_line#*=}"
   api_key_value="${api_key_value#${api_key_value%%[![:space:]]*}}"
   api_key_value="${api_key_value%${api_key_value##*[![:space:]]}}"
-  api_key_length="16"
+  local api_key_length="16"
 
   if [[ -z "$api_key_value" ]]; then
     return 0
