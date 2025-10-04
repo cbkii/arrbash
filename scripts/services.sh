@@ -736,7 +736,9 @@ wait_for_vpn_connection() {
       fi
 
       failure_in_iteration=1
-    elif [[ "$health" == "unhealthy" ]]; then
+    fi
+
+    if [[ "$health" == "unhealthy" ]]; then
       failure_in_iteration=1
     fi
 
