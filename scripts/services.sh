@@ -79,7 +79,7 @@ install_vuetorrent() {
         continue
       fi
 
-      temp_zip="/tmp/vuetorrent-$$-${attempt}.zip"
+      temp_zip="$(mktemp -p /tmp 'vuetorrent.XXXXXX.zip')"
       if ! curl -fsSL "$download_url" -o "$temp_zip"; then
         warn "  Failed to download VueTorrent archive"
         rm -f "$temp_zip" 2>/dev/null || true
