@@ -315,6 +315,7 @@ validate_compose_or_die() {
   local log_dir="${ARR_STACK_DIR}/logs"
   ensure_dir "$log_dir"
   local errlog="${log_dir}/compose.err"
+  local configdump="${log_dir}/compose-config.json"
 
   if ! compose -f "$file" config -q 2>"$errlog"; then
     echo "[arrstack] Compose validation failed; see $errlog"
@@ -324,10 +325,25 @@ validate_compose_or_die() {
       local start=$((line - 5))
       local end=$((line + 5))
       ((start < 1)) && start=1
+      echo "[arrstack] Error context from docker-compose.yml:"
       nl -ba "$file" | sed -n "${start},${end}p"
     fi
+
+    compose -f "$file" config --services 2>/dev/null | while read -r service; do
+      [[ -z "$service" ]] && continue
+      echo "[arrstack] Checking service: $service"
+      if ! compose -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
+        echo "[arrstack] Service $service has configuration errors:"
+        cat "${errlog}.${service}" 2>/dev/null || true
+      else
+        rm -f "${errlog}.${service}" 2>/dev/null || true
+      fi
+    done
+
     exit 1
   fi
+
+  compose -f "$file" config --format=json >"$configdump" 2>/dev/null || true
 
   rm -f "$errlog"
 }
