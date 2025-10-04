@@ -380,8 +380,9 @@ write_env() {
   if ((sab_enabled)) && ((sab_use_vpn == 1)); then
     local sab_host_lower="${sab_host_value,,}"
     local sab_default_lower="${sab_host_default,,}"
+    hostpatterns="$sab_default_lower|127.0.0.1|localhost|$LOCALHOST_IP"
     case "$sab_host_lower" in
-      "$sab_default_lower"|"${LOCALHOST_IP}"|"localhost")
+      $hostpatterns)
         sab_host_value="sabnzbd"
         sab_host_auto=1
         ;;
@@ -763,7 +764,7 @@ YAML
 
   {
     printf '    healthcheck:\n'
-    printf '      test: ["CMD", "curl", "-fsS", "http://${LOCALHOST_IP}:%s/api?mode=version&output=json"]\n' "$internal_port"
+    printf '      test: ["CMD", "curl", "-fsS", "http://%s:%s/api?mode=version&output=json"]\n' "$LOCALHOST_IP" "$internal_port"
     printf '      interval: 30s\n      timeout: 5s\n      retries: 5\n      start_period: %ss\n' "$health_start_period_seconds"
   } >>"$target"
 
@@ -1221,7 +1222,7 @@ YAML
     cat <<'YAML'
 services:
   gluetun:
-    image: ${GLUETUN_IMAGE}
+    image: "${GLUETUN_IMAGE}"
     container_name: gluetun
     profiles:
       - ipdirect
@@ -1230,34 +1231,34 @@ services:
     devices:
       - /dev/net/tun
     environment:
-      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER}
+      VPN_SERVICE_PROVIDER: "${VPN_SERVICE_PROVIDER}"
       VPN_TYPE: openvpn
-      OPENVPN_USER: ${OPENVPN_USER}
-      OPENVPN_PASSWORD: ${OPENVPN_PASSWORD}
+      OPENVPN_USER: "${OPENVPN_USER}"
+      OPENVPN_PASSWORD: "${OPENVPN_PASSWORD}"
       FREE_ONLY: "off"
-      SERVER_COUNTRIES: ${SERVER_COUNTRIES}
+      SERVER_COUNTRIES: "${SERVER_COUNTRIES}"
       VPN_PORT_FORWARDING: "on"
       VPN_PORT_FORWARDING_PROVIDER: protonvpn
-      HTTP_CONTROL_SERVER_ADDRESS: 0.0.0.0:${GLUETUN_CONTROL_PORT}
+      HTTP_CONTROL_SERVER_ADDRESS: "0.0.0.0:${GLUETUN_CONTROL_PORT}"
       HTTP_CONTROL_SERVER_AUTH: "apikey"
       HTTP_CONTROL_SERVER_APIKEY: "${GLUETUN_API_KEY}"
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
-      QBT_USER: ${QBT_USER}
-      QBT_PASS: ${QBT_PASS}
+      QBT_USER: "${QBT_USER}"
+      QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
       HEALTH_SUCCESS_WAIT_DURATION: "10s"
       DNS_KEEP_NAMESERVER: "off"
-      FIREWALL_OUTBOUND_SUBNETS: ${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}
-      FIREWALL_INPUT_PORTS: ${GLUETUN_FIREWALL_INPUT_PORTS}
+      FIREWALL_OUTBOUND_SUBNETS: "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}"
+      FIREWALL_INPUT_PORTS: "${GLUETUN_FIREWALL_INPUT_PORTS}"
       UPDATER_PERIOD: "24h"
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
     volumes:
-      - ${ARR_DOCKER_DIR}/gluetun:/gluetun
+      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
     ports:
       # Centralize host exposure since all services share gluetun's namespace
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
@@ -1300,7 +1301,7 @@ YAML
   if ((include_local_dns)); then
     cat <<'YAML' >>"$tmp"
   local_dns:
-    image: 4km3/dnsmasq:2.90-r3
+    image: "4km3/dnsmasq:2.90-r3"
     container_name: arr_local_dns
     profiles:
       - localdns
@@ -1355,15 +1356,15 @@ YAML
 
   cat <<'YAML' >>"$tmp"
   qbittorrent:
-    image: ${QBITTORRENT_IMAGE}
+    image: "${QBITTORRENT_IMAGE}"
     container_name: qbittorrent
     profiles:
       - ipdirect
     network_mode: "service:gluetun"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
       LANG: en_US.UTF-8
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
@@ -1371,9 +1372,9 @@ YAML
   fi
   cat <<'YAML' >>"$tmp"
     volumes:
-      - ${ARR_DOCKER_DIR}/qbittorrent:/config
-      - ${DOWNLOADS_DIR}:/downloads
-      - ${COMPLETED_DIR}:/completed
+      - "${ARR_DOCKER_DIR}/qbittorrent:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
     depends_on:
       gluetun:
         condition: service_healthy
@@ -1390,21 +1391,21 @@ YAML
         max-file: "2"
 
   sonarr:
-    image: ${SONARR_IMAGE}
+    image: "${SONARR_IMAGE}"
     container_name: sonarr
     profiles:
       - ipdirect
     network_mode: "service:gluetun"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
       LANG: en_US.UTF-8
     volumes:
-      - ${ARR_DOCKER_DIR}/sonarr:/config
-      - ${DOWNLOADS_DIR}:/downloads
-      - ${COMPLETED_DIR}:/completed
-      - ${TV_DIR}:/tv
+      - "${ARR_DOCKER_DIR}/sonarr:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${TV_DIR}:/tv"
     depends_on:
       gluetun:
         condition: service_healthy
@@ -1416,21 +1417,21 @@ YAML
         max-file: "2"
 
   radarr:
-    image: ${RADARR_IMAGE}
+    image: "${RADARR_IMAGE}"
     container_name: radarr
     profiles:
       - ipdirect
     network_mode: "service:gluetun"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
       LANG: en_US.UTF-8
     volumes:
-      - ${ARR_DOCKER_DIR}/radarr:/config
-      - ${DOWNLOADS_DIR}:/downloads
-      - ${COMPLETED_DIR}:/completed
-      - ${MOVIES_DIR}:/movies
+      - "${ARR_DOCKER_DIR}/radarr:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${MOVIES_DIR}:/movies"
     depends_on:
       gluetun:
         condition: service_healthy
@@ -1442,18 +1443,18 @@ YAML
         max-file: "2"
 
   prowlarr:
-    image: ${PROWLARR_IMAGE}
+    image: "${PROWLARR_IMAGE}"
     container_name: prowlarr
     profiles:
       - ipdirect
     network_mode: "service:gluetun"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
       LANG: en_US.UTF-8
     volumes:
-      - ${ARR_DOCKER_DIR}/prowlarr:/config
+      - "${ARR_DOCKER_DIR}/prowlarr:/config"
     depends_on:
       gluetun:
         condition: service_healthy
@@ -1465,25 +1466,25 @@ YAML
         max-file: "2"
 
   bazarr:
-    image: ${BAZARR_IMAGE}
+    image: "${BAZARR_IMAGE}"
     container_name: bazarr
     profiles:
       - ipdirect
     network_mode: "service:gluetun"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
       LANG: en_US.UTF-8
     volumes:
-      - ${ARR_DOCKER_DIR}/bazarr:/config
-      - ${TV_DIR}:/tv
-      - ${MOVIES_DIR}:/movies
+      - "${ARR_DOCKER_DIR}/bazarr:/config"
+      - "${TV_DIR}:/tv"
+      - "${MOVIES_DIR}:/movies"
 YAML
 
   if [[ -n "${SUBS_DIR:-}" ]]; then
     cat <<'YAML' >>"$tmp"
-      - ${SUBS_DIR}:/subs
+      - "${SUBS_DIR}:/subs"
 YAML
   fi
 
@@ -1499,7 +1500,7 @@ YAML
         max-file: "2"
 
   flaresolverr:
-    image: ${FLARR_IMAGE}
+    image: "${FLARR_IMAGE}"
     container_name: flaresolverr
     profiles:
       - ipdirect
@@ -1528,7 +1529,7 @@ YAML
     arrstack_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
     cat <<'YAML' >>"$tmp"
   sabnzbd:
-    image: ${SABNZBD_IMAGE}
+    image: "${SABNZBD_IMAGE}"
     container_name: sabnzbd
     profiles:
       - ipdirect
@@ -1553,7 +1554,7 @@ YAML
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
   configarr:
-    image: ${CONFIGARR_IMAGE}
+    image: "${CONFIGARR_IMAGE}"
     container_name: configarr
     profiles:
       - ipdirect
@@ -1566,13 +1567,13 @@ YAML
       radarr:
         condition: service_started
     volumes:
-      - ${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro
-      - ${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro
-      - ${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro
+      - "${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro"
     working_dir: /app
     entrypoint: ["/bin/sh","-lc","node dist/index.js || exit 1"]
     environment:
-      TZ: ${TIMEZONE}
+      TZ: "${TIMEZONE}"
     restart: "no"
     logging:
       driver: json-file
@@ -1585,16 +1586,16 @@ YAML
   if ((include_caddy)); then
     cat <<'YAML' >>"$tmp"
   caddy:
-    image: ${CADDY_IMAGE}
+    image: "${CADDY_IMAGE}"
     container_name: caddy
     profiles:
       - proxy
     network_mode: "service:gluetun"
     volumes:
-      - ${ARR_DOCKER_DIR}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ${ARR_DOCKER_DIR}/caddy/data:/data
-      - ${ARR_DOCKER_DIR}/caddy/config:/config
-      - ${ARR_DOCKER_DIR}/caddy/ca-pub:/ca-pub:ro
+      - "${ARR_DOCKER_DIR}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "${ARR_DOCKER_DIR}/caddy/data:/data"
+      - "${ARR_DOCKER_DIR}/caddy/config:/config"
+      - "${ARR_DOCKER_DIR}/caddy/ca-pub:/ca-pub:ro"
     depends_on:
       gluetun:
         condition: service_healthy
@@ -1623,7 +1624,7 @@ YAML
         max-file: "2"
 YAML
   fi
-
+  
   if ! verify_single_level_env_placeholders "$tmp"; then
     rm -f "$tmp"
     die "Generated docker-compose.yml contains nested environment placeholders"
