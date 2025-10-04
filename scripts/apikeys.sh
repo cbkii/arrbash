@@ -276,7 +276,7 @@ arrstack_schedule_delayed_api_sync() {
     return 0
   fi
 
-  local delay="${1:-${API_SYNC_DELAY:-5}}"
+  local delay="${1:-${API_SYNC_DELAY:-60}}"
   local script_dir="${ARR_STACK_DIR}/scripts"
   local script_path="${script_dir}/delayed-sync.sh"
   local arrstack_script="${REPO_ROOT}/arrstack.sh"
@@ -293,7 +293,7 @@ arrstack_schedule_delayed_api_sync() {
 set -euo pipefail
 
 STACK_DIR="$1"
-DELAY="$2"
+DELAY="${2:-${API_SYNC_DELAY}}"
 ARRSTACK_SCRIPT="$3"
 
 echo "Scheduled API key sync will run in $DELAY seconds"
@@ -306,7 +306,6 @@ SCRIPT
   chmod 755 "$script_path"
 
   if [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" != "1" ]]; then
-    ARRSTACK_SCHEDULED_API_SYNC_DELAY="$delay"
     msg "Scheduling delayed API key sync in ${delay} seconds"
     nohup bash "$script_path" "$ARR_STACK_DIR" "$delay" "$arrstack_script" >/dev/null 2>&1 &
   fi
