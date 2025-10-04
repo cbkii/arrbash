@@ -1623,7 +1623,7 @@ YAML
       test:
         - "CMD-SHELL"
         - >-
-          curl -fsS --max-time 3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1
+          curl -fsS --max-time 3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1 || http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1
       interval: 10s
       timeout: 5s
       retries: 6
