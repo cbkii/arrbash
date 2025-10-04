@@ -1511,7 +1511,7 @@ YAML
       gluetun:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || wget -q --timeout=10 -O- http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
