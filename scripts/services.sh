@@ -16,10 +16,55 @@ vuetorrent_manual_version() {
   fi
 }
 
+# Cleans up temporary VueTorrent artifacts between install attempts
+vuetorrent_cleanup_attempt() {
+  local manual_dir="$1"
+  local -n temp_zip_ref="$2"
+  local -n temp_extract_ref="$3"
+  local -n staging_dir_ref="$4"
+  local -n backup_dir_ref="$5"
+
+  local temp_zip="$temp_zip_ref"
+  local temp_extract="$temp_extract_ref"
+  local staging_dir="$staging_dir_ref"
+  local backup_dir="$backup_dir_ref"
+
+  if [[ -n "$temp_zip" ]]; then
+    rm -f "$temp_zip" 2>/dev/null || true
+  fi
+  if [[ -n "$temp_extract" ]]; then
+    rm -rf "$temp_extract" 2>/dev/null || true
+  fi
+  if [[ -n "$staging_dir" ]]; then
+    rm -rf "$staging_dir" 2>/dev/null || true
+  fi
+  if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
+    if [[ ! -d "$manual_dir" ]]; then
+      mv "$backup_dir" "$manual_dir" 2>/dev/null || rm -rf "$backup_dir" 2>/dev/null || true
+    else
+      rm -rf "$backup_dir" 2>/dev/null || true
+    fi
+  fi
+
+  temp_zip_ref=""
+  temp_extract_ref=""
+  staging_dir_ref=""
+  backup_dir_ref=""
+}
+
 # Manages VueTorrent deployment, choosing LSIO mod or manual download as configured
 install_vuetorrent() {
   local manual_dir="${ARR_DOCKER_DIR}/qbittorrent/vuetorrent"
   local releases_url="https://api.github.com/repos/VueTorrent/VueTorrent/releases/latest"
+  local max_retries=3
+  local attempted_install=0
+  local install_success=0
+  local attempts=0
+  local download_url=""
+  local temp_zip=""
+  local temp_extract=""
+  local staging_dir=""
+  local backup_dir=""
 
   if [[ "${VUETORRENT_MODE}" != "manual" ]]; then
     msg "🎨 Using VueTorrent from LSIO Docker mod"
@@ -45,118 +90,134 @@ install_vuetorrent() {
     had_existing_complete=1
   fi
 
-  local attempted_install=0
-  local install_success=0
-  local download_url=""
-  local temp_zip=""
-  local temp_extract=""
-  local staging_dir=""
-  local backup_dir=""
-
-  while true; do
-    if ! check_dependencies jq unzip; then
-      warn "  Missing jq or unzip; skipping VueTorrent download"
-      break
-    fi
-
-    attempted_install=1
-
-    download_url=$(curl -sL "$releases_url" | jq -r '.assets[] | select(.name == "vuetorrent.zip") | .browser_download_url' 2>/dev/null || printf '')
-    if [[ -z "$download_url" ]]; then
-      warn "  Could not determine VueTorrent download URL"
-      break
-    fi
-
-    temp_zip="/tmp/vuetorrent-$$.zip"
-    if ! curl -sL "$download_url" -o "$temp_zip"; then
-      warn "  Failed to download VueTorrent archive"
-      break
-    fi
-
-    if ! temp_extract="$(arrstack_mktemp_dir "/tmp/vuetorrent.XXXX")"; then
-      warn "  Failed to create extraction directory"
-      break
-    fi
-
-    if ! unzip -qo "$temp_zip" -d "$temp_extract"; then
-      warn "  Failed to extract VueTorrent archive"
-      break
-    fi
-
-    local source_root="$temp_extract"
-    if [[ ! -f "$source_root/index.html" ]]; then
-      local nested_index=""
-      nested_index="$(find "$temp_extract" -type f -name 'index.html' -print -quit 2>/dev/null || printf '')"
-      if [[ -n "$nested_index" ]]; then
-        source_root="$(dirname "$nested_index")"
+  if ! check_dependencies jq unzip; then
+    warn "  Missing jq or unzip; skipping VueTorrent download"
+  else
+    local retry=0
+    while ((retry < max_retries && install_success == 0)); do
+      ((retry++))
+      if ((retry > 1)); then
+        msg "  Attempt ${retry} of ${max_retries}..."
       fi
-    fi
 
-    if [[ ! -f "$source_root/index.html" ]]; then
-      warn "  VueTorrent archive did not include index.html"
-      break
-    fi
-
-    if ! staging_dir="$(arrstack_mktemp_dir "/tmp/vuetorrent.staging.XXXX")"; then
-      warn "  Failed to create staging directory"
-      break
-    fi
-
-    if ! cp -a "$source_root"/. "$staging_dir"/; then
-      warn "  Failed to stage VueTorrent files"
-      break
-    fi
-
-    if [[ ! -f "$staging_dir/public/index.html" ]]; then
-      warn "  Staged VueTorrent files missing public/index.html"
-      break
-    fi
-
-    if [[ ! -f "$staging_dir/version.txt" ]]; then
-      warn "  Staged VueTorrent files missing version.txt"
-      break
-    fi
-
-    if [[ -d "$manual_dir" ]]; then
-      backup_dir="${manual_dir}.bak.$$"
-      if ! mv "$manual_dir" "$backup_dir"; then
-        warn "  Failed to move existing VueTorrent install aside"
-        break
-      fi
-    fi
-
-    ensure_dir "${ARR_DOCKER_DIR}/qbittorrent"
-    if ! mv "$staging_dir" "$manual_dir"; then
-      warn "  Failed to activate new VueTorrent install"
-      if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
-        mv "$backup_dir" "$manual_dir" 2>/dev/null || warn "  Failed to restore previous VueTorrent files"
-      fi
-      break
-    fi
-
-    staging_dir=""
-
-    if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
-      rm -rf "$backup_dir" 2>/dev/null || true
+      attempted_install=1
+      attempts=retry
+      temp_zip="/tmp/vuetorrent-$$-${retry}.zip"
+      temp_extract=""
+      staging_dir=""
       backup_dir=""
-    fi
 
-    install_success=1
-    break
-  done
+      local api_response=""
+      if ! api_response="$(curl -fsSL "$releases_url" 2>/dev/null)"; then
+        warn "  Failed to query VueTorrent release metadata"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
 
-  if [[ -n "$temp_zip" ]]; then
-    rm -f "$temp_zip" 2>/dev/null || true
+      download_url=$(printf '%s' "$api_response" | jq -r '.assets[] | select(.name == "vuetorrent.zip") | .browser_download_url' 2>/dev/null || printf '')
+      if [[ -z "$download_url" ]]; then
+        warn "  Could not determine VueTorrent download URL"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! curl -fsSL "$download_url" -o "$temp_zip"; then
+        warn "  Failed to download VueTorrent archive"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ ! -s "$temp_zip" ]]; then
+        warn "  Downloaded VueTorrent archive is empty"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! temp_extract="$(arrstack_mktemp_dir "/tmp/vuetorrent.XXXX")"; then
+        warn "  Failed to create extraction directory"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! unzip -qo "$temp_zip" -d "$temp_extract"; then
+        warn "  Failed to extract VueTorrent archive"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      local source_root="$temp_extract"
+      if [[ ! -f "$source_root/public/index.html" ]]; then
+        local nested_public=""
+        nested_public="$(find "$temp_extract" -type f -path '*/public/index.html' -print -quit 2>/dev/null || printf '')"
+        if [[ -n "$nested_public" ]]; then
+          local nested_public_dir=""
+          nested_public_dir="$(dirname "$nested_public")"
+          source_root="$(dirname "$nested_public_dir")"
+        fi
+      fi
+
+      if [[ ! -f "$source_root/public/index.html" ]]; then
+        warn "  VueTorrent archive did not include public/index.html"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! staging_dir="$(arrstack_mktemp_dir "/tmp/vuetorrent.staging.XXXX")"; then
+        warn "  Failed to create staging directory"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! cp -a "$source_root"/. "$staging_dir"/; then
+        warn "  Failed to stage VueTorrent files"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ ! -f "$staging_dir/public/index.html" ]]; then
+        warn "  Extracted VueTorrent files missing public/index.html"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ ! -f "$staging_dir/version.txt" ]]; then
+        warn "  Extracted VueTorrent files missing version.txt"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ -d "$manual_dir" ]]; then
+        backup_dir="${manual_dir}.bak.$$-${retry}"
+        if ! mv "$manual_dir" "$backup_dir"; then
+          warn "  Failed to move existing VueTorrent install aside"
+          vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+          continue
+        fi
+      fi
+
+      ensure_dir "${ARR_DOCKER_DIR}/qbittorrent"
+      if ! mv "$staging_dir" "$manual_dir"; then
+        warn "  Failed to activate new VueTorrent install"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      staging_dir=""
+
+      if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
+        rm -rf "$backup_dir" 2>/dev/null || true
+      fi
+
+      install_success=1
+      break
+    done
   fi
-  if [[ -n "$temp_extract" ]]; then
-    rm -rf "$temp_extract" 2>/dev/null || true
+
+  if ((attempted_install)) && ((install_success == 0)); then
+    warn "  Failed to install VueTorrent after ${attempts:-0}/${max_retries} attempts"
   fi
-  if [[ -n "$staging_dir" && -d "$staging_dir" ]]; then
-    rm -rf "$staging_dir" 2>/dev/null || true
-  fi
-  if [[ -n "$backup_dir" && -d "$backup_dir" && ! -d "$manual_dir" ]]; then
-    mv "$backup_dir" "$manual_dir" 2>/dev/null || rm -rf "$backup_dir" 2>/dev/null || true
-  fi
+
+  vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
 
   if ((install_success)); then
     chown -R "${PUID}:${PGID}" "$manual_dir" 2>/dev/null || true
