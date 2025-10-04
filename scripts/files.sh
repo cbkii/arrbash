@@ -2330,7 +2330,7 @@ EOF
 ensure_qbt_config() {
   msg "Ensuring qBittorrent configuration is applied"
 
-  # Sleep to allow qBittorrent to initialize; configurable via QBT_CONFIG_SLEEP (default: 5 seconds)
+  # Sleep to allow qBittorrent to restart safely; configurable via QBT_CONFIG_SLEEP (default: 5 seconds)
   sleep "${QBT_CONFIG_SLEEP:-5}"
 
   if ! docker inspect qbittorrent --format '{{.State.Running}}' 2>/dev/null | grep -q "true"; then
@@ -2340,7 +2340,7 @@ ensure_qbt_config() {
   sync_qbt_password_from_logs || true
 
   docker stop qbittorrent >/dev/null 2>&1 || true
-  sleep 2
+  sleep "${QBT_CONFIG_SLEEP:-5}"
 
   write_qbt_config
 
