@@ -104,13 +104,22 @@ fi
 
 if [[ -f "${_canon_userconf}" ]]; then
   _arrstack_userr_conf_errlog="$(mktemp)"
+  # Save current ERR trap (if any), then disable while sourcing user config
+  _prev_err_trap="$(trap -p ERR 2>/dev/null || true)"
   trap - ERR
   set +e
   # shellcheck source=/dev/null
   . "${_canon_userconf}" 2>"${_arrstack_userr_conf_errlog}"
   _arrstack_userr_conf_status=$?
   set -e
-  trap 'arrstack_err_trap' ERR
+  # Restore previous ERR trap exactly as it was
+  if [[ -n "${_prev_err_trap}" ]]; then
+    eval "${_prev_err_trap}"
+  else
+    trap - ERR
+  fi
+  unset _prev_err_trap
+
   if ((_arrstack_userr_conf_status != 0)); then
     if [[ -s "${_arrstack_userr_conf_errlog}" ]] && ! grep -v "readonly variable" "${_arrstack_userr_conf_errlog}" >/dev/null; then
       :
