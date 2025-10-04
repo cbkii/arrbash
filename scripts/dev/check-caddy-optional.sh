@@ -10,6 +10,12 @@ if [[ ! -d "$STACK_DIR" ]]; then
   exit 1
 fi
 
+if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
+  # shellcheck disable=SC1091
+  # shellcheck source=arrconf/userr.conf.defaults.sh
+  . "${STACK_DIR}/arrconf/userr.conf.defaults.sh"
+fi
+
 compose_path="${STACK_DIR}/docker-compose.yml"
 if [[ ! -f "$compose_path" ]]; then
   echo "[check-caddy-optional] docker-compose.yml not found at ${compose_path}. Run ./arrstack.sh first." >&2
@@ -50,13 +56,18 @@ if grep -q '^[[:space:]]*caddy:' "$compose_path"; then
   exit 1
 fi
 
-if grep -q '":80:80"' "$compose_path"; then
-  echo "[check-caddy-optional] Found an 80:80 port mapping with Caddy disabled." >&2
+http_port="$(grep -E '^CADDY_HTTP_PORT=' "$tmp_env" | tail -n1 | cut -d= -f2- || true)"
+https_port="$(grep -E '^CADDY_HTTPS_PORT=' "$tmp_env" | tail -n1 | cut -d= -f2- || true)"
+http_port="${http_port:-${ARRSTACK_DEFAULT_CADDY_HTTP_PORT:-}}"
+https_port="${https_port:-${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT:-}}"
+
+if grep -q ":${http_port}:${http_port}" "$compose_path"; then
+  echo "[check-caddy-optional] Found a ${http_port}:${http_port} port mapping with Caddy disabled." >&2
   exit 1
 fi
 
-if grep -q '":443:443"' "$compose_path"; then
-  echo "[check-caddy-optional] Found a 443:443 port mapping with Caddy disabled." >&2
+if grep -q ":${https_port}:${https_port}" "$compose_path"; then
+  echo "[check-caddy-optional] Found a ${https_port}:${https_port} port mapping with Caddy disabled." >&2
   exit 1
 fi
 

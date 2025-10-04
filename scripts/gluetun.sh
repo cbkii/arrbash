@@ -494,7 +494,10 @@ start_async_pf_if_enabled() {
 # Builds base URL for Gluetun control API from LAN/localhost settings
 _gluetun_control_base() {
   local port host
-  port="${GLUETUN_CONTROL_PORT:-8000}"
+  port="${GLUETUN_CONTROL_PORT:-}"
+  if [[ -z "$port" && -n "${ARRSTACK_DEFAULT_GLUETUN_CONTROL_PORT:-}" ]]; then
+    port="${ARRSTACK_DEFAULT_GLUETUN_CONTROL_PORT}"
+  fi
   host="${LOCALHOST_IP:-127.0.0.1}"
   if [[ $host == *:* && $host != [* ]]; then
     printf 'http://[%s]:%s' "$host" "$port"

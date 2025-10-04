@@ -7,12 +7,6 @@ validate_ipv4() {
   [[ "$ip" =~ $regex ]]
 }
 
-# Ensures port is numeric and within 1-65535
-validate_port() {
-  local port="$1"
-  [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
-}
-
 # Detects RFC1918 IPv4 ranges after format validation
 is_private_ipv4() {
   local ip="$1"

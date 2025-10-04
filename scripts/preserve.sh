@@ -84,7 +84,7 @@ hydrate_qbt_host_port_from_env_file() {
   fi
 
   local existing_host_port=""
-  existing_host_port="$(get_env_kv "QBT_HTTP_PORT_HOST" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+  existing_host_port="$(get_env_kv "QBT_HTTP_PORT" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
 
   if [[ -n "$existing_host_port" ]]; then
     local trimmed="${existing_host_port//[[:space:]]/}"

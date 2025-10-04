@@ -17,6 +17,8 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `LAN_DOMAIN_SUFFIX`: optional suffix for hostnames (default `home.arpa`). Needed for local DNS or Caddy.
   - `SPLIT_VPN`: set `1` to run only qBittorrent inside Gluetun, or `0` to tunnel everything.
   - `EXPOSE_DIRECT_PORTS`: leave at `1` for LAN-friendly URLs, or set `0` to keep services internal to Docker networking.
+  - `DNS_DISTRIBUTION_MODE`: choose `router` (default) to update DHCP Option 6, or `per-device` when pointing clients at the resolver manually.
+  - `ARRSTACK_PORT_CHECK_MODE`: `enforce` (default) fails fast on conflicts, `warn` prints notices, and `skip` disables port validation (use sparingly).
 - **Paths & storage**
   - `ARR_BASE`: root directory for generated files and Docker data (default `~/srv`).
   - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: map to your storage volumes.
@@ -26,8 +28,8 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `GLUETUN_API_KEY`, `CADDY_BASIC_AUTH_USER`, `CADDY_BASIC_AUTH_HASH`: left blank by default so rotation helpers manage them.
   - `QBT_AUTH_WHITELIST`: CIDRs that bypass the qBittorrent login (auto-populated with loopback and your LAN subnet).
 - **Optional services**
-  - `ENABLE_CADDY`: `1` enables the HTTPS proxy on ports 80/443.
-  - `ENABLE_LOCAL_DNS`: `1` runs the dnsmasq container for LAN hostnames.
+  - `ENABLE_CADDY`: `1` enables the HTTPS proxy on `CADDY_HTTP_PORT`/`CADDY_HTTPS_PORT` (defaults 80/443). Adjust those port variables if another web server is present.
+  - `ENABLE_LOCAL_DNS`: `1` runs the dnsmasq container for LAN hostnames; combine with `DNS_DISTRIBUTION_MODE` to control how clients learn the resolver.
   - `ENABLE_CONFIGARR`: `1` keeps Configarr managing Sonarr/Radarr settings.
   - `SPLIT_VPN` and optional toggles such as `ENABLE_CADDY` can also be set per run with `./arrstack.sh` flags.
 - **VPN automation**

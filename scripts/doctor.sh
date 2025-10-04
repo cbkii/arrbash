@@ -175,7 +175,7 @@ report_port() {
 }
 
 # Lists normalized bind addresses for a port using ss or lsof output
-port_bind_addresses() {
+port_bind_addresses() { 
   local proto="$1"
   local port="$2"
 
@@ -210,6 +210,19 @@ port_bind_addresses() {
   fi
 }
 
+resolve_caddy_ports() {
+  local __http_name="$1"
+  local __https_name="$2"
+  local http_value="${CADDY_HTTP_PORT:-${ARRSTACK_DEFAULT_CADDY_HTTP_PORT:-}}"
+  local https_value="${CADDY_HTTPS_PORT:-${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT:-}}"
+
+  arrstack_resolve_port http_value "$http_value" "${ARRSTACK_DEFAULT_CADDY_HTTP_PORT}"
+  arrstack_resolve_port https_value "$https_value" "${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT}"
+
+  printf -v "$__http_name" '%s' "$http_value"
+  printf -v "$__https_name" '%s' "$https_value"
+}
+
 # Audits exposed services versus expected LAN bindings and warns on unsafe listeners
 check_network_security() {
   echo "[doctor] Auditing bind addresses for safety"
@@ -222,9 +235,18 @@ check_network_security() {
     EXPOSE_DIRECT_PORTS=0
   fi
 
-  local -a direct_ports=("${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
+  local qbt_http_port="${QBT_HTTP_PORT:-}"
+  if [[ -z "$qbt_http_port" && -n "${ARRSTACK_DEFAULT_QBT_HTTP_PORT:-}" ]]; then
+    qbt_http_port="${ARRSTACK_DEFAULT_QBT_HTTP_PORT}"
+  fi
+
+  local -a direct_ports=("${qbt_http_port}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}")
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
-    direct_ports+=("${SABNZBD_PORT:-8080}")
+    local sab_port_value="${SABNZBD_PORT:-}"
+    if [[ -z "$sab_port_value" && -n "${ARRSTACK_DEFAULT_SABNZBD_PORT:-}" ]]; then
+      sab_port_value="${ARRSTACK_DEFAULT_SABNZBD_PORT}"
+    fi
+    direct_ports+=("${sab_port_value}")
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
@@ -276,7 +298,7 @@ check_network_security() {
     if [[ -f "$qbt_conf" ]]; then
       local ui_port
       ui_port="$(grep '^WebUI\\Port=' "$qbt_conf" 2>/dev/null | cut -d= -f2- | tr -d '\r' || true)"
-      local host_port="${QBT_HTTP_PORT_HOST:-8082}"
+      local host_port="${QBT_HTTP_PORT:-${ARRSTACK_DEFAULT_QBT_HTTP_PORT:-}}"
       if [[ -n "$ui_port" && "$ui_port" != "$host_port" ]]; then
         echo "[doctor][warn] qBittorrent WebUI internal port is ${ui_port} but host mapping expects ${host_port}"
       fi
@@ -298,8 +320,11 @@ check_network_security() {
   fi
 
   if [[ "${ENABLE_CADDY}" != "1" ]]; then
+    local caddy_http_port=""
+    local caddy_https_port=""
+    resolve_caddy_ports caddy_http_port caddy_https_port
     local port
-    for port in 80 443; do
+    for port in "$caddy_http_port" "$caddy_https_port"; do
       local -a bindings=()
       mapfile -t bindings < <(port_bind_addresses tcp "$port")
       if ((${#bindings[@]} > 0)); then
@@ -524,14 +549,14 @@ LOCAL_DNS_SERVICE_ENABLED="${LOCAL_DNS_SERVICE_ENABLED:-1}"
 ENABLE_CADDY="${ENABLE_CADDY:-0}"
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-0}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
-GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
+GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-${ARRSTACK_DEFAULT_GLUETUN_CONTROL_PORT:-}}"
 DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-router}"
-QBT_HTTP_PORT_HOST="${QBT_HTTP_PORT_HOST:-8082}"
-SONARR_PORT="${SONARR_PORT:-8989}"
-RADARR_PORT="${RADARR_PORT:-7878}"
-PROWLARR_PORT="${PROWLARR_PORT:-9696}"
-BAZARR_PORT="${BAZARR_PORT:-6767}"
-FLARESOLVERR_PORT="${FLARESOLVERR_PORT:-8191}"
+QBT_HTTP_PORT="${QBT_HTTP_PORT:-${ARRSTACK_DEFAULT_QBT_HTTP_PORT:-}}"
+SONARR_PORT="${SONARR_PORT:-${ARRSTACK_DEFAULT_SONARR_PORT:-}}"
+RADARR_PORT="${RADARR_PORT:-${ARRSTACK_DEFAULT_RADARR_PORT:-}}"
+PROWLARR_PORT="${PROWLARR_PORT:-${ARRSTACK_DEFAULT_PROWLARR_PORT:-}}"
+BAZARR_PORT="${BAZARR_PORT:-${ARRSTACK_DEFAULT_BAZARR_PORT:-}}"
+FLARESOLVERR_PORT="${FLARESOLVERR_PORT:-${ARRSTACK_DEFAULT_FLARESOLVERR_PORT:-}}"
 
 if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
   echo "[doctor][warn] Duplicate host port assignments detected in configuration:"
@@ -607,7 +632,7 @@ if [[ -z "${LAN_IP}" || "${LAN_IP}" == "0.0.0.0" ]]; then
   echo "[doctor][warn] Skipping LAN port checks because LAN_IP is not set to a specific address."
 else
   if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
-    report_port "qBittorrent UI" tcp "${LAN_IP}" "${QBT_HTTP_PORT_HOST}"
+    report_port "qBittorrent UI" tcp "${LAN_IP}" "${QBT_HTTP_PORT}"
     report_port "Sonarr UI" tcp "${LAN_IP}" "${SONARR_PORT}"
     report_port "Radarr UI" tcp "${LAN_IP}" "${RADARR_PORT}"
     report_port "Prowlarr UI" tcp "${LAN_IP}" "${PROWLARR_PORT}"
@@ -618,8 +643,11 @@ else
   fi
 
   if [[ "${ENABLE_CADDY}" == "1" ]]; then
-    report_port "Caddy HTTP" tcp "${LAN_IP}" 80
-    report_port "Caddy HTTPS" tcp "${LAN_IP}" 443
+    local caddy_http_port=""
+    local caddy_https_port=""
+    resolve_caddy_ports caddy_http_port caddy_https_port
+    report_port "Caddy HTTP" tcp "${LAN_IP}" "$caddy_http_port"
+    report_port "Caddy HTTPS" tcp "${LAN_IP}" "$caddy_https_port"
   else
     echo "[doctor][info] Skipping Caddy port checks (ENABLE_CADDY=0)."
   fi
@@ -666,6 +694,9 @@ else
 fi
 
 if [[ "${ENABLE_CADDY}" == "1" ]]; then
+  local caddy_http_port=""
+  local caddy_https_port=""
+  resolve_caddy_ports caddy_http_port caddy_https_port
   echo "[doctor] Testing CA fetch over HTTP (bootstrap)"
   if have_command curl && have_command openssl; then
     if cert_output="$(curl -fsS "http://ca.${SUFFIX}/root.crt" 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null)"; then
@@ -683,7 +714,7 @@ if [[ "${ENABLE_CADDY}" == "1" ]]; then
   else
     curl_args=(-k --silent --max-time 5)
     if [[ -n "${LAN_IP}" && "${LAN_IP}" != "0.0.0.0" ]]; then
-      curl_args+=(--resolve "qbittorrent.${SUFFIX}:443:${LAN_IP}" --resolve "qbittorrent.${SUFFIX}:80:${LAN_IP}")
+      curl_args+=(--resolve "qbittorrent.${SUFFIX}:${caddy_https_port}:${LAN_IP}" --resolve "qbittorrent.${SUFFIX}:${caddy_http_port}:${LAN_IP}")
     fi
     if curl "${curl_args[@]}" "https://qbittorrent.${SUFFIX}/" -o /dev/null; then
       echo "[doctor][ok] HTTPS endpoint reachable"
@@ -718,7 +749,7 @@ fi
 lan_target="${LAN_IP:-<unset>}"
 echo "[doctor] From another LAN device you can try:"
 if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
-  echo "  curl -I http://${lan_target}:${QBT_HTTP_PORT_HOST}"
+  echo "  curl -I http://${lan_target}:${QBT_HTTP_PORT}"
   echo "  curl -I http://${lan_target}:${SONARR_PORT}"
   echo "  curl -I http://${lan_target}:${RADARR_PORT}"
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
@@ -739,7 +770,10 @@ elif [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
 fi
 
 if [[ "${ENABLE_CADDY}" == "1" ]]; then
-  echo "  curl -k https://qbittorrent.${SUFFIX}/ --resolve qbittorrent.${SUFFIX}:443:${lan_target}"
+  local _unused_caddy_http_port=""
+  local caddy_https_port=""
+  resolve_caddy_ports _unused_caddy_http_port caddy_https_port
+  echo "  curl -k https://qbittorrent.${SUFFIX}/ --resolve qbittorrent.${SUFFIX}:${caddy_https_port}:${lan_target}"
 fi
 
 exit 0

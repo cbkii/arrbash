@@ -300,6 +300,16 @@ write_env() {
     fi
   fi
 
+  local caddy_http_port_value
+  arrstack_resolve_port caddy_http_port_value "${CADDY_HTTP_PORT:-}" "${ARRSTACK_DEFAULT_CADDY_HTTP_PORT}" \
+    "Invalid CADDY_HTTP_PORT=${CADDY_HTTP_PORT:-}; defaulting to ${ARRSTACK_DEFAULT_CADDY_HTTP_PORT}."
+  CADDY_HTTP_PORT="$caddy_http_port_value"
+
+  local caddy_https_port_value
+  arrstack_resolve_port caddy_https_port_value "${CADDY_HTTPS_PORT:-}" "${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT}" \
+    "Invalid CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-}; defaulting to ${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT}."
+  CADDY_HTTPS_PORT="$caddy_https_port_value"
+
   local sab_enabled="${SABNZBD_ENABLED:-0}"
   if [[ "$sab_enabled" != "1" ]]; then
     sab_enabled=0
@@ -345,25 +355,19 @@ write_env() {
 
   SABNZBD_USE_VPN="$sab_use_vpn"
 
-  local sab_timeout_raw="${SABNZBD_TIMEOUT:-15}"
-  if [[ ! "$sab_timeout_raw" =~ ^[0-9]+$ || "$sab_timeout_raw" -le 0 ]]; then
-    warn "Invalid SABNZBD_TIMEOUT=${SABNZBD_TIMEOUT:-}; defaulting to 15 seconds."
-    sab_timeout_raw=15
-  fi
+  local sab_timeout_raw
+  arrstack_resolve_positive_int sab_timeout_raw "${SABNZBD_TIMEOUT:-}" 15 \
+    "Invalid SABNZBD_TIMEOUT=${SABNZBD_TIMEOUT:-}; defaulting to 15 seconds."
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
-  local sab_internal_port_raw="${SABNZBD_INTERNAL_PORT:-8080}"
-  if [[ ! "$sab_internal_port_raw" =~ ^[0-9]+$ ]]; then
-    warn "Invalid SABNZBD_INTERNAL_PORT=${SABNZBD_INTERNAL_PORT:-}; defaulting to 8080."
-    sab_internal_port_raw=8080
-  fi
+  local sab_internal_port_raw
+  arrstack_resolve_port sab_internal_port_raw "${SABNZBD_INTERNAL_PORT:-}" "${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT}" \
+    "Invalid SABNZBD_INTERNAL_PORT=${SABNZBD_INTERNAL_PORT:-}; defaulting to ${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT}."
   SABNZBD_INTERNAL_PORT="$sab_internal_port_raw"
 
-  local sab_port_raw="${SABNZBD_PORT:-8080}"
-  if [[ ! "$sab_port_raw" =~ ^[0-9]+$ ]]; then
-    warn "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to 8080."
-    sab_port_raw=8080
-  fi
+  local sab_port_raw
+  arrstack_resolve_port sab_port_raw "${SABNZBD_PORT:-}" "${ARRSTACK_DEFAULT_SABNZBD_PORT}" \
+    "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to ${ARRSTACK_DEFAULT_SABNZBD_PORT}."
   SABNZBD_PORT="$sab_port_raw"
 
   local sab_host_default="${LOCALHOST_IP:-localhost}"
@@ -397,8 +401,8 @@ write_env() {
   SABNZBD_HOST="$sab_host_value"
   ARRSTACK_SAB_HOST_AUTO="$sab_host_auto"
 
-  local qbt_webui_default=8082
-  local qbt_host_default=8082
+  local qbt_webui_default="${ARRSTACK_DEFAULT_QBT_WEBUI_PORT}"
+  local qbt_host_default="${ARRSTACK_DEFAULT_QBT_HTTP_PORT}"
   local qbt_webui_port="$qbt_webui_default"
   local qbt_host_port="$qbt_host_default"
   local qbt_webui_status="default"
@@ -412,13 +416,14 @@ write_env() {
   if [[ -n "${ARRSTACK_QBT_HOST_PORT_ENV:-}" ]]; then
     qbt_host_port="${ARRSTACK_QBT_HOST_PORT_ENV}"
     qbt_host_status="preserved"
-  elif [[ -n "${QBT_HTTP_PORT_HOST:-}" ]]; then
-    qbt_host_port="${QBT_HTTP_PORT_HOST}"
+  elif [[ -n "${QBT_HTTP_PORT:-}" ]]; then
+    qbt_host_port="${QBT_HTTP_PORT}"
   fi
 
-  if [[ ! "$qbt_host_port" =~ ^[0-9]+$ ]]; then
-    warn "Invalid QBT_HTTP_PORT_HOST=${qbt_host_port}; defaulting to ${qbt_host_default}."
-    qbt_host_port="$qbt_host_default"
+  local qbt_host_port_raw="$qbt_host_port"
+  arrstack_resolve_port qbt_host_port "$qbt_host_port_raw" "$qbt_host_default" \
+    "Invalid QBT_HTTP_PORT=${qbt_host_port_raw}; defaulting to ${qbt_host_default}."
+  if [[ "$qbt_host_port" == "$qbt_host_default" && "$qbt_host_port_raw" != "$qbt_host_default" ]]; then
     qbt_host_status="default"
   fi
 
@@ -429,14 +434,15 @@ write_env() {
     arrstack_record_preserve_note "Preserved qBittorrent host port ${qbt_host_port}"
   fi
 
-  if [[ ! "$qbt_webui_port" =~ ^[0-9]+$ ]]; then
-    warn "Invalid qBittorrent WebUI port ${qbt_webui_port}; using ${qbt_webui_default}."
-    qbt_webui_port="$qbt_webui_default"
+  local qbt_webui_port_raw="$qbt_webui_port"
+  arrstack_resolve_port qbt_webui_port "$qbt_webui_port_raw" "$qbt_webui_default" \
+    "Invalid qBittorrent WebUI port ${qbt_webui_port_raw}; using ${qbt_webui_default}."
+  if [[ "$qbt_webui_port" == "$qbt_webui_default" && "$qbt_webui_port_raw" != "$qbt_webui_default" ]]; then
     qbt_webui_status="default"
   fi
 
   QBT_WEBUI_PORT="$qbt_webui_port"
-  QBT_HTTP_PORT_HOST="$qbt_host_port"
+  QBT_HTTP_PORT="$qbt_host_port"
   ARRSTACK_QBT_WEBUI_PORT_STATUS="$qbt_webui_status"
   ARRSTACK_QBT_HOST_PORT_STATUS="$qbt_host_status"
 
@@ -495,19 +501,24 @@ write_env() {
 
   local -a firewall_ports=()
   # Add Caddy ports if not split VPN
-if (( split_vpn == 0 )) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-  for p in 80 443; do
-    [[ " ${firewall_ports[*]} " == *" $p "* ]] || firewall_ports+=("$p")
-  done
-fi
+  if (( split_vpn == 0 )) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+    local caddy_port
+    for caddy_port in "$CADDY_HTTP_PORT" "$CADDY_HTTPS_PORT"; do
+      if [[ -n "$caddy_port" ]] && [[ " ${firewall_ports[*]} " != *" $caddy_port "* ]]; then
+        firewall_ports+=("$caddy_port")
+      fi
+    done
+  fi
 
 # qBittorrent port handling
 if (( split_vpn == 1 )); then
-  if [[ -n "${QBT_HTTP_PORT_HOST:-}" ]]; then
-    [[ " ${firewall_ports[*]} " == *" ${QBT_HTTP_PORT_HOST} "* ]] || firewall_ports+=("${QBT_HTTP_PORT_HOST}")
+  local qbt_split_port="${QBT_HTTP_PORT:-}"
+  if [[ -n "$qbt_split_port" ]]; then
+    [[ " ${firewall_ports[*]} " == *" ${qbt_split_port} "* ]] || firewall_ports+=("${qbt_split_port}")
   fi
 elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-  for p in "${QBT_HTTP_PORT_HOST}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}"; do
+  local qbt_direct_port="${QBT_HTTP_PORT:-}"
+  for p in "$qbt_direct_port" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARESOLVERR_PORT}"; do
     if [[ -n "$p" ]] && [[ " ${firewall_ports[*]} " != *" $p "* ]]; then firewall_ports+=("$p"); fi
   done
   if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" != "1" ]]; then
@@ -648,7 +659,7 @@ fi
 
     printf '%s\n' '# Service ports'
     write_env_kv "QBT_WEBUI_PORT" "$QBT_WEBUI_PORT"
-    write_env_kv "QBT_HTTP_PORT_HOST" "$QBT_HTTP_PORT_HOST"
+    write_env_kv "QBT_HTTP_PORT" "$QBT_HTTP_PORT"
     write_env_kv "SONARR_PORT" "$SONARR_PORT"
     write_env_kv "RADARR_PORT" "$RADARR_PORT"
     write_env_kv "PROWLARR_PORT" "$PROWLARR_PORT"
@@ -675,6 +686,8 @@ fi
     printf '\n'
 
     printf '%s\n' '# Reverse proxy defaults'
+    write_env_kv "CADDY_HTTP_PORT" "$CADDY_HTTP_PORT"
+    write_env_kv "CADDY_HTTPS_PORT" "$CADDY_HTTPS_PORT"
     write_env_kv "CADDY_DOMAIN_SUFFIX" "$ARR_DOMAIN_SUFFIX_CLEAN"
     write_env_kv "CADDY_LAN_CIDRS" "$CADDY_LAN_CIDRS"
     write_env_kv "CADDY_BASIC_AUTH_USER" "$CADDY_BASIC_AUTH_USER"
@@ -715,14 +728,13 @@ fi
 append_sabnzbd_service_body() {
   local target="$1"
   local include_direct_port="${2:-0}"
-  local internal_port="${3:-${SABNZBD_INTERNAL_PORT:-8080}}"
+  local sab_internal_fallback="${SABNZBD_INTERNAL_PORT:-${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}}"
+  local internal_port="${3:-${sab_internal_fallback}}"
   local via_vpn="${4:-0}"
   # shellcheck disable=SC2034  # reserved for future per-network tweaks
 
-  local sab_timeout_for_health="${SABNZBD_TIMEOUT:-60}"
-  if [[ ! "$sab_timeout_for_health" =~ ^[0-9]+$ ]]; then
-    sab_timeout_for_health=60
-  fi
+  local sab_timeout_for_health
+  arrstack_resolve_positive_int sab_timeout_for_health "${SABNZBD_TIMEOUT:-}" 60
   local health_start_period_seconds=60
   if ((sab_timeout_for_health > health_start_period_seconds)); then
     health_start_period_seconds="$sab_timeout_for_health"
@@ -766,9 +778,9 @@ write_compose_split_mode() {
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
-  local sab_internal_port="${SABNZBD_INTERNAL_PORT:-8080}"
+  local sab_internal_port="${SABNZBD_INTERNAL_PORT:-${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}}"
   if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
-    sab_internal_port="8080"
+    sab_internal_port="${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
   fi
 
   LOCAL_DNS_SERVICE_ENABLED=0
@@ -828,7 +840,7 @@ YAML
       - ${ARR_DOCKER_DIR}/gluetun:/gluetun
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:${QBT_WEBUI_PORT}"
+      - "${LAN_IP}:${QBT_HTTP_PORT}:${QBT_WEBUI_PORT}"
 YAML
   cat <<'YAML' >>"$tmp"
     healthcheck:
@@ -1067,9 +1079,9 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-8080}"
+    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}}"
     if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
-      sab_internal_port="8080"
+      sab_internal_port="${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
     fi
     cat <<'YAML' >>"$tmp"
   sabnzbd:
@@ -1261,14 +1273,14 @@ YAML
 
   if ((include_caddy)); then
     cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:80:80"
-      - "${LAN_IP}:443:443"
+      - "${LAN_IP}:${CADDY_HTTP_PORT}:${CADDY_HTTP_PORT}"
+      - "${LAN_IP}:${CADDY_HTTPS_PORT}:${CADDY_HTTPS_PORT}"
 YAML
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${QBT_HTTP_PORT_HOST}:${QBT_WEBUI_PORT}"
+      - "${LAN_IP}:${QBT_HTTP_PORT}:${QBT_WEBUI_PORT}"
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_PORT}"
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_PORT}"
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_PORT}"
@@ -1529,9 +1541,9 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-8080}"
+    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}}"
     if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
-      sab_internal_port="8080"
+      sab_internal_port="${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
     fi
     cat <<'YAML' >>"$tmp"
   sabnzbd:
@@ -1733,7 +1745,7 @@ case "$PORT_VALUE" in
         ;;
 esac
 
-QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://${LOCALHOST_IP:-localhost}:${QBT_WEBUI_PORT:-8082}}"
+QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://${LOCALHOST_IP:-localhost}:${QBT_WEBUI_PORT:-$ARRSTACK_DEFAULT_QBT_WEBUI_PORT}}"
 PAYLOAD=$(printf 'json={"listen_port":%s,"random_port":false}' "$PORT_VALUE")
 
 COOKIE_FILE=""
@@ -2065,7 +2077,7 @@ write_caddy_assets() {
       printf '}\n\n'
     done
 
-    printf ':80, :443 {\n'
+    printf ':%s, :%s {\n' "$CADDY_HTTP_PORT" "$CADDY_HTTPS_PORT"
     printf '    encode zstd gzip\n'
     printf '    @lan remote_ip %s\n' "$lan_cidrs"
     printf '    route /healthz {\n'

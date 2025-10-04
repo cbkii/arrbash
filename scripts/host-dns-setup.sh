@@ -13,6 +13,12 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 # shellcheck source=scripts/common.sh
 . "${REPO_ROOT}/scripts/common.sh"
 
+if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
+  # shellcheck disable=SC1091
+  # shellcheck source=arrconf/userr.conf.defaults.sh
+  . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+fi
+
 arrstack_escalate_privileges "$@" || exit $?
 
 # -E included to preserve ERR trap behavior in function/subshell contexts.
@@ -226,7 +232,9 @@ msg "Testing DNS -> qbittorrent.${SUFFIX} via ${LAN_IP}"
 dig +short @"${LAN_IP}" "qbittorrent.${SUFFIX}"
 DIG_RC=$?
 msg "Testing HTTPS (Caddy) -> qbittorrent.${SUFFIX} (forced resolve)"
-curl -kI --max-time 5 --resolve "qbittorrent.${SUFFIX}:443:${LAN_IP}" "https://qbittorrent.${SUFFIX}/"
+caddy_https_port="${CADDY_HTTPS_PORT:-${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT:-}}"
+arrstack_resolve_port caddy_https_port "$caddy_https_port" "${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT}"
+curl -kI --max-time 5 --resolve "qbittorrent.${SUFFIX}:${caddy_https_port}:${LAN_IP}" "https://qbittorrent.${SUFFIX}/"
 CURL_RC=$?
 set -e
 

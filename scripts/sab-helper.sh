@@ -35,6 +35,12 @@ fi
 # shellcheck source=scripts/common.sh
 . "$COMMON_HELPER"
 
+if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
+  # shellcheck disable=SC1091
+  # shellcheck source=arrconf/userr.conf.defaults.sh
+  . "${STACK_DIR}/arrconf/userr.conf.defaults.sh"
+fi
+
 CONFIG_HELPER="${STACK_DIR}/scripts/config.sh"
 if [[ ! -f "$CONFIG_HELPER" ]]; then
   if [[ -n "${REPO_ROOT:-}" ]] && resolve_helper_path "${REPO_ROOT}/scripts/config.sh" >/dev/null; then
@@ -96,16 +102,12 @@ sab_check_env() {
     log_warn "[sab] SABNZBD_API_KEY is empty; API calls may fail"
   fi
 
-  local timeout="${SABNZBD_TIMEOUT:-15}"
-  if [[ ! "$timeout" =~ ^[0-9]+$ || "$timeout" -le 0 ]]; then
-    timeout=15
-  fi
+  local timeout
+  arrstack_resolve_positive_int timeout "${SABNZBD_TIMEOUT:-}" 15 "" log_warn
   SABNZBD_TIMEOUT="$timeout"
 
-  local sab_port="${SABNZBD_PORT:-8080}"
-  if [[ ! "$sab_port" =~ ^[0-9]+$ ]]; then
-    sab_port=8080
-  fi
+  local sab_port
+  arrstack_resolve_port sab_port "${SABNZBD_PORT:-}" "${ARRSTACK_DEFAULT_SABNZBD_PORT}" "" log_warn
   SABNZBD_PORT="$sab_port"
 
   local sab_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
@@ -128,7 +130,7 @@ sab_base_url() {
   sab_check_env || return 1
   local scheme="${SABNZBD_HELPER_SCHEME:-http}"
   local host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
-  local port="${SABNZBD_PORT:-8080}"
+  local port="${SABNZBD_PORT:-${ARRSTACK_DEFAULT_SABNZBD_PORT:-}}"
   printf '%s://%s:%s' "$scheme" "$host" "$port" | sed 's#[[:space:]]##g' | sed 's#/*$##'
 }
 
