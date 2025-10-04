@@ -103,9 +103,13 @@ for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
     if arrstack_var_is_readonly "${_arrstack_env_var}"; then
       continue
     fi
-    # Variable name validation is redundant; Bash enforces valid names
-    printf -v "${_arrstack_env_var}" '%s' "${_arrstack_env_overrides[${_arrstack_env_var}]}"
-    export "${_arrstack_env_var}"
+    # Validate variable name format before assignment
+    if [[ "${_arrstack_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf -v "${_arrstack_env_var}" '%s' "${_arrstack_env_overrides[${_arrstack_env_var}]}"
+      export "${_arrstack_env_var}"
+    else
+      printf '[arrstack] WARN: Skipping invalid environment variable name: %s\n' "${_arrstack_env_var}" >&2
+    fi
   fi
 done
 unset _arrstack_env_var
