@@ -293,7 +293,7 @@ arrstack_schedule_delayed_api_sync() {
 set -euo pipefail
 
 STACK_DIR="$1"
-DELAY="${2:-${API_SYNC_DELAY}}"
+DELAY="${2:-${API_SYNC_DELAY:-60}}"
 ARRSTACK_SCRIPT="$3"
 
 echo "Scheduled API key sync will run in $DELAY seconds"
