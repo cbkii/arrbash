@@ -666,15 +666,12 @@ stop_existing_vpn_auto_reconnect_workers() {
     return 0
   fi
 
-  if ((${#candidate_pids[@]} > 1)); then
-    # Deduplicate candidate_pids using associative array for O(n) complexity
-    declare -A seen_pids=()
-    for pid in "${candidate_pids[@]}"; do
-      [[ "$pid" =~ ^[0-9]+$ ]] || continue
-      seen_pids["$pid"]=1
-    done
-    candidate_pids=("${!seen_pids[@]}")
-  fi
+  # Deduplicate candidate_pids using associative array for O(n) complexity
+  declare -A seen_pids=()
+  for pid in "${candidate_pids[@]}"; do
+    seen_pids["$pid"]=1
+  done
+  candidate_pids=("${!seen_pids[@]}")
 
   msg "[vpn-auto] Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
 
