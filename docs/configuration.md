@@ -2,12 +2,13 @@
 
 # Configuration guide
 
-Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arrstack.sh` loads environment variables first, then your overrides, and finally the shipped defaults so the last writer wins.
+Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arrstack.sh` now honors exported environment variables before reading `userr.conf`, applies CLI flags afterwards, and falls back to the shipped defaults for everything else.
 
 ## Configuration layers
-1. **Shell environment** – anything exported before running `./arrstack.sh` overrides the other sources (use for CI or one-off toggles).
-2. **`${ARR_BASE}/userr.conf`** – your persistent copy (defaults to `~/srv/userr.conf`). Keep it out of version control and rerun the installer after every edit.
-3. **`arrconf/userr.conf.defaults.sh`** – project defaults committed in the repo.
+1. **Shell environment** – anything exported before running `./arrstack.sh` wins over every other source (ideal for CI or temporary overrides). Those values are locked so `userr.conf` cannot replace them.
+2. **CLI flags** – options such as `./arrstack.sh --enable-caddy` apply after `userr.conf` for run-scoped toggles. Use them when you want a temporary change without touching your config file (or when an environment export is not already pinning the value).
+3. **`${ARR_BASE}/userr.conf`** – your persistent copy (defaults to `~/srv/userr.conf`). Keep it out of version control and rerun the installer after every edit.
+4. **`arrconf/userr.conf.defaults.sh`** – project defaults committed in the repo.
 
 The installer prints a configuration table during preflight. Cancel with `Ctrl+C` if a value looks wrong, adjust `userr.conf`, and rerun.
 

@@ -22,6 +22,13 @@ arrstack_err_trap() {
 trap 'arrstack_err_trap' ERR
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+
+declare -A ARRSTACK_ENV_SNAPSHOT=()
+while IFS='=' read -r __arrstack_env_key _; do
+  ARRSTACK_ENV_SNAPSHOT["${__arrstack_env_key}"]=1
+done < <(env)
+unset __arrstack_env_key
+
 if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
@@ -32,6 +39,8 @@ ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE:-${HOME}/srv}/userr.conf}"
 _expected_base="${ARR_BASE:-${HOME}/srv}"
 _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_expected_base}")"
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
+
+ARR_USERCONF_PATH="${_canon_userconf}"
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
@@ -44,12 +53,34 @@ if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   fi
 fi
 
+if declare -f arrstack_collect_all_expected_env_keys >/dev/null 2>&1; then
+  while IFS= read -r __arrstack_env_guard_var; do
+    [[ -z "${__arrstack_env_guard_var}" ]] && continue
+    if [[ -n ${ARRSTACK_ENV_SNAPSHOT[${__arrstack_env_guard_var}]+_} ]] && [[ -n ${!__arrstack_env_guard_var+x} ]]; then
+      if ! declare -f arrstack_var_is_readonly >/dev/null 2>&1 || \
+        ! arrstack_var_is_readonly "${__arrstack_env_guard_var}"; then
+        readonly "${__arrstack_env_guard_var}"
+      fi
+    fi
+  done < <(arrstack_collect_all_expected_env_keys)
+fi
+unset __arrstack_env_guard_var
+unset ARRSTACK_ENV_SNAPSHOT
+
 if [[ -f "${_canon_userconf}" ]]; then
+  trap - ERR
+  set +e
   # shellcheck source=/dev/null
   . "${_canon_userconf}"
+  __arrstack_userconf_rc=$?
+  set -e
+  trap 'arrstack_err_trap' ERR
+  if (( __arrstack_userconf_rc != 0 )); then
+    printf '[arrstack] WARN: user configuration returned %s (see messages above for details)\n' "${__arrstack_userconf_rc}" >&2
+  fi
+  unset __arrstack_userconf_rc
 fi
 
-ARR_USERCONF_PATH="${_canon_userconf}"
 unset _canon_userconf _canon_base _expected_base
 
 if [[ "${ARRSTACK_HARDEN_READONLY:-0}" == "1" ]]; then
