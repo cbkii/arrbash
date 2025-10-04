@@ -627,6 +627,88 @@ wait_for_vpn_connection() {
 }
 
 # Launches VPN auto-reconnect daemon when configured and available
+stop_existing_vpn_auto_reconnect_workers() {
+  local daemon_path="$1"
+  local pid_file="$2"
+
+  if [[ -z "$daemon_path" ]]; then
+    return 0
+  fi
+
+  local -a candidate_pids=()
+  local pid
+
+  if [[ -n "$pid_file" && -f "$pid_file" ]]; then
+    pid="$(cat "$pid_file" 2>/dev/null || printf '')"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      candidate_pids+=("$pid")
+    fi
+  fi
+
+  if command -v pgrep >/dev/null 2>&1; then
+    while IFS= read -r pid; do
+      if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        candidate_pids+=("$pid")
+      fi
+    done < <(pgrep -f -- "$daemon_path" 2>/dev/null || true)
+  else
+    while IFS= read -r pid; do
+      if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        candidate_pids+=("$pid")
+      fi
+    done < <(ps -eo pid,command 2>/dev/null | awk -v path="$daemon_path" 'index($0, path) {print $1}' || true)
+  fi
+
+  if [[ ${#candidate_pids[@]} -eq 0 ]]; then
+    if [[ -n "$pid_file" ]]; then
+      rm -f "$pid_file" 2>/dev/null || true
+    fi
+    return 0
+  fi
+
+  if ((${#candidate_pids[@]} > 1)); then
+    local -a unique_pids=()
+    for pid in "${candidate_pids[@]}"; do
+      [[ "$pid" =~ ^[0-9]+$ ]] || continue
+      local already_present=0
+      local existing
+      for existing in "${unique_pids[@]}"; do
+        if [[ "$existing" == "$pid" ]]; then
+          already_present=1
+          break
+        fi
+      done
+      if (( already_present == 0 )); then
+        unique_pids+=("$pid")
+      fi
+    done
+    candidate_pids=("${unique_pids[@]}")
+  fi
+
+  msg "[vpn-auto] Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
+
+  local attempt
+  for pid in "${candidate_pids[@]}"; do
+    if kill "$pid" 2>/dev/null; then
+      for attempt in 1 2 3 4 5; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+          break
+        fi
+        sleep 1
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    fi
+  done
+
+  if [[ -n "$pid_file" ]]; then
+    rm -f "$pid_file" 2>/dev/null || true
+  fi
+
+  return 0
+}
+
 start_vpn_auto_reconnect_if_enabled() {
   if ! declare -f vpn_auto_reconnect_is_enabled >/dev/null 2>&1; then
     return 0
@@ -652,15 +734,7 @@ start_vpn_auto_reconnect_if_enabled() {
   pid_file="${state_dir}/daemon.pid"
   log_file="${state_dir}/daemon.log"
 
-  if [[ -f "$pid_file" ]]; then
-    local existing_pid
-    existing_pid="$(cat "$pid_file" 2>/dev/null || printf '')"
-    if [[ "$existing_pid" =~ ^[0-9]+$ ]] && kill -0 "$existing_pid" 2>/dev/null; then
-      msg "[vpn-auto] Auto-reconnect daemon already running (pid ${existing_pid})"
-      return 0
-    fi
-    rm -f "$pid_file" 2>/dev/null || true
-  fi
+  stop_existing_vpn_auto_reconnect_workers "$daemon_path" "$pid_file"
 
   msg "[vpn-auto] Launching auto-reconnect daemon"
 
