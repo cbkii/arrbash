@@ -57,7 +57,7 @@ fi
 unset _arrstack_env_override_seen _arrstack_env_rest
 
 for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
-  if export -p "${_arrstack_env_var}" >/dev/null 2>&1; then
+  if [[ "$(declare -p -- "$_arrstack_env_var" 2>/dev/null)" == "declare -x "* ]]; then
     if [[ ${!_arrstack_env_var+x} ]]; then
       _arrstack_env_overrides["${_arrstack_env_var}"]="${!_arrstack_env_var}"
     else
