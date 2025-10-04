@@ -201,21 +201,27 @@ VPN_ROTATION_JITTER_SECONDS="${VPN_ROTATION_JITTER_SECONDS:-0}"
 CADDY_HTTP_PORT="${CADDY_HTTP_PORT:-80}"
 CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT:-443}"
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
-QBT_PORT="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
-SONARR_PORT="${SONARR_PORT:-${SONARR_INT_PORT:-8989}}"
-RADARR_PORT="${RADARR_PORT:-${RADARR_INT_PORT:-7878}}"
-PROWLARR_PORT="${PROWLARR_PORT:-${PROWLARR_INT_PORT:-9696}}"
-BAZARR_PORT="${BAZARR_PORT:-${BAZARR_INT_PORT:-6767}}"
-FLARR_PORT="${FLARR_PORT:-${FLARR_INT_PORT:-8191}}"
-SABNZBD_PORT="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8080}}"
 
 QBT_INT_PORT="${QBT_INT_PORT:-8082}"
+QBT_PORT="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+
 SONARR_INT_PORT="${SONARR_INT_PORT:-8989}"
+SONARR_PORT="${SONARR_PORT:-${SONARR_INT_PORT:-8989}}"
+
 RADARR_INT_PORT="${RADARR_INT_PORT:-7878}"
+RADARR_PORT="${RADARR_PORT:-${RADARR_INT_PORT:-7878}}"
+
 PROWLARR_INT_PORT="${PROWLARR_INT_PORT:-9696}"
+PROWLARR_PORT="${PROWLARR_PORT:-${PROWLARR_INT_PORT:-9696}}"
+
 BAZARR_INT_PORT="${BAZARR_INT_PORT:-6767}"
+BAZARR_PORT="${BAZARR_PORT:-${BAZARR_INT_PORT:-6767}}"
+
 FLARR_INT_PORT="${FLARR_INT_PORT:-8191}"
+FLARR_PORT="${FLARR_PORT:-${FLARR_INT_PORT:-8191}}"
+
 SABNZBD_INT_PORT="${SABNZBD_INT_PORT:-8080}"
+SABNZBD_PORT="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8080}}"
 
 # SABnzbd integration
 SABNZBD_ENABLED="${SABNZBD_ENABLED:-0}"
@@ -314,20 +320,20 @@ ARRSTACK_USERCONF_TEMPLATE_VARS=(
   QBT_DOCKER_MODS
   QBT_AUTH_WHITELIST
   CADDY_BASIC_AUTH_USER
-  QBT_PORT
   QBT_INT_PORT
-  SONARR_PORT
+  QBT_PORT
   SONARR_INT_PORT
-  RADARR_PORT
+  SONARR_PORT
   RADARR_INT_PORT
-  PROWLARR_PORT
+  RADARR_PORT
   PROWLARR_INT_PORT
-  BAZARR_PORT
+  PROWLARR_PORT
   BAZARR_INT_PORT
-  FLARR_PORT
+  BAZARR_PORT
   FLARR_INT_PORT
-  SABNZBD_PORT
+  FLARR_PORT
   SABNZBD_INT_PORT
+  SABNZBD_PORT
   SABNZBD_ENABLED
   SABNZBD_USE_VPN
   SABNZBD_HOST
@@ -573,18 +579,18 @@ SABNZBD_HOST="${SABNZBD_HOST}"           # Host used by sab-helper (default: ${S
 SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"             # Hydrated automatically from sabnzbd.ini when available
 SABNZBD_CATEGORY="${SABNZBD_CATEGORY}"           # Category applied to helper-submitted jobs (default: ${SABNZBD_CATEGORY})
 SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT}"             # Helper API timeout in seconds (default: ${SABNZBD_TIMEOUT})
-SABNZBD_PORT="${SABNZBD_PORT}"                 # Host port for SAB WebUI when direct (default: ${SABNZBD_PORT})
 ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT}" # Active Usenet client label (future abstraction)
 
 # --- Service ports ---
-QBT_PORT="${QBT_PORT}"              # qBittorrent WebUI port exposed on the LAN (default: ${QBT_PORT})
 QBT_INT_PORT="${QBT_INT_PORT}"             # Internal qBittorrent WebUI port; match the container WEBUI_PORT env if you change it
+QBT_PORT="${QBT_PORT}"              # qBittorrent WebUI port exposed on the LAN (default: ${QBT_PORT})
 SONARR_PORT="${SONARR_PORT}"                     # Sonarr WebUI port exposed on the LAN (default: ${SONARR_PORT})
 RADARR_PORT="${RADARR_PORT}"                     # Radarr WebUI port exposed on the LAN (default: ${RADARR_PORT})
 PROWLARR_PORT="${PROWLARR_PORT}"                   # Prowlarr WebUI port exposed on the LAN (default: ${PROWLARR_PORT})
 BAZARR_PORT="${BAZARR_PORT}"                     # Bazarr WebUI port exposed on the LAN (default: ${BAZARR_PORT})
 FLARR_PORT="${FLARR_PORT}"               # FlareSolverr service port exposed on the LAN (default: ${FLARR_PORT})
 SABNZBD_INT_PORT="${SABNZBD_INT_PORT}"           # Internal SABnzbd WebUI port; match the container PORT env if you change it
+SABNZBD_PORT="${SABNZBD_PORT}"                 # Host port for SAB WebUI when direct (default: ${SABNZBD_PORT})
 
 # --- ProtonVPN port-forward timing (advanced) ---
 PF_MAX_TOTAL_WAIT="${PF_MAX_TOTAL_WAIT}"          # Max seconds to wait for a forwarded port before failing (legacy sync mode)
