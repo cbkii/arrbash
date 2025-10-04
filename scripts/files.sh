@@ -778,10 +778,8 @@ write_compose_split_mode() {
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
-  local sab_internal_port="${SABNZBD_INTERNAL_PORT:-${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}}"
-  if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
-    sab_internal_port="${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
-  fi
+  local sab_internal_port
+  arrstack_resolve_port sab_internal_port "${SABNZBD_INTERNAL_PORT:-}" "${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
 
   LOCAL_DNS_SERVICE_ENABLED=0
 
@@ -1079,10 +1077,8 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}}"
-    if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
-      sab_internal_port="${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
-    fi
+    local sab_internal_port
+    arrstack_resolve_port sab_internal_port "${SABNZBD_INTERNAL_PORT:-}" "${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
@@ -1541,10 +1537,8 @@ YAML
 YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
-    local sab_internal_port="${SABNZBD_INTERNAL_PORT:-${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}}"
-    if [[ ! "$sab_internal_port" =~ ^[0-9]+$ ]]; then
-      sab_internal_port="${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
-    fi
+    local sab_internal_port
+    arrstack_resolve_port sab_internal_port "${SABNZBD_INTERNAL_PORT:-}" "${ARRSTACK_DEFAULT_SABNZBD_INTERNAL_PORT:-}"
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
