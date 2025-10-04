@@ -59,7 +59,7 @@ install_vuetorrent() {
   local max_retries=3
   local attempted_install=0
   local install_success=0
-  local attempts=0
+  local retry=0
   local download_url=""
   local temp_zip=""
   local temp_extract=""
@@ -93,7 +93,6 @@ install_vuetorrent() {
   if ! check_dependencies jq unzip; then
     warn "  Missing jq or unzip; skipping VueTorrent download"
   else
-    local retry=0
     while ((retry < max_retries && install_success == 0)); do
       ((retry++))
       if ((retry > 1)); then
@@ -101,7 +100,6 @@ install_vuetorrent() {
       fi
 
       attempted_install=1
-      attempts=retry
       temp_zip="/tmp/vuetorrent-$$-${retry}.zip"
       temp_extract=""
       staging_dir=""
@@ -206,6 +204,7 @@ install_vuetorrent() {
 
       if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
         rm -rf "$backup_dir" 2>/dev/null || true
+        backup_dir=""
       fi
 
       install_success=1
@@ -214,7 +213,7 @@ install_vuetorrent() {
   fi
 
   if ((attempted_install)) && ((install_success == 0)); then
-    warn "  Failed to install VueTorrent after ${attempts:-0}/${max_retries} attempts"
+    warn "  Failed to install VueTorrent after ${retry:-0}/${max_retries} attempts"
   fi
 
   vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
