@@ -165,7 +165,7 @@ Credentials & secrets
 
 Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
-  • qBittorrent WebUI (host): ${QBT_HTTP_PORT_HOST}
+  • qBittorrent WebUI (host): ${QBT_HTTP_PORT}
   • Sonarr: ${SONARR_PORT}
   • Radarr: ${RADARR_PORT}
   • Prowlarr: ${PROWLARR_PORT}
@@ -200,7 +200,7 @@ validate_config() {
     validate_ipv4 "${LAN_IP}" || die "Invalid LAN_IP: ${LAN_IP}"
   fi
   validate_port "${GLUETUN_CONTROL_PORT}" || die "Invalid GLUETUN_CONTROL_PORT: ${GLUETUN_CONTROL_PORT}"
-  validate_port "${QBT_HTTP_PORT_HOST}" || die "Invalid QBT_HTTP_PORT_HOST: ${QBT_HTTP_PORT_HOST}"
+  validate_port "${QBT_HTTP_PORT}" || die "Invalid QBT_HTTP_PORT: ${QBT_HTTP_PORT}"
   validate_port "${SONARR_PORT}" || die "Invalid SONARR_PORT: ${SONARR_PORT}"
   validate_port "${RADARR_PORT}" || die "Invalid RADARR_PORT: ${RADARR_PORT}"
   validate_port "${PROWLARR_PORT}" || die "Invalid PROWLARR_PORT: ${PROWLARR_PORT}"

@@ -56,6 +56,11 @@ collect_port_requirements() {
 
   _requirements_ref+=("tcp|${GLUETUN_CONTROL_PORT}|Gluetun control API|${LOCALHOST_IP:-127.0.0.1}")
 
+  local qbt_http_port="${QBT_HTTP_PORT:-}"
+  if [[ -z "$qbt_http_port" && -n "${ARRSTACK_DEFAULT_QBT_HTTP_PORT:-}" ]]; then
+    qbt_http_port="${ARRSTACK_DEFAULT_QBT_HTTP_PORT}"
+  fi
+
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     if ((lan_ip_known == 0)); then
       die "EXPOSE_DIRECT_PORTS=1 requires LAN_IP to be set to your host's private IPv4 address before installation."
@@ -65,16 +70,19 @@ collect_port_requirements() {
     fi
 
     local expected="${LAN_IP}"
-    _requirements_ref+=("tcp|${QBT_HTTP_PORT_HOST}|qBittorrent WebUI|${expected}")
+    _requirements_ref+=("tcp|${qbt_http_port}|qBittorrent WebUI|${expected}")
     _requirements_ref+=("tcp|${SONARR_PORT}|Sonarr WebUI|${expected}")
     _requirements_ref+=("tcp|${RADARR_PORT}|Radarr WebUI|${expected}")
     _requirements_ref+=("tcp|${PROWLARR_PORT}|Prowlarr WebUI|${expected}")
     _requirements_ref+=("tcp|${BAZARR_PORT}|Bazarr WebUI|${expected}")
     _requirements_ref+=("tcp|${FLARESOLVERR_PORT}|FlareSolverr API|${expected}")
     if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
-      local sab_port_check="${SABNZBD_PORT:-8080}"
+      local sab_port_check="${SABNZBD_PORT:-}" 
+      if [[ -z "$sab_port_check" && -n "${ARRSTACK_DEFAULT_SABNZBD_PORT:-}" ]]; then
+        sab_port_check="${ARRSTACK_DEFAULT_SABNZBD_PORT}"
+      fi
       if [[ ! "$sab_port_check" =~ ^[0-9]+$ ]]; then
-        sab_port_check="8080"
+        sab_port_check="${ARRSTACK_DEFAULT_SABNZBD_PORT:-}" 
       fi
       _requirements_ref+=("tcp|${sab_port_check}|SABnzbd WebUI|${expected}")
     fi
@@ -88,12 +96,30 @@ collect_port_requirements() {
       die "LAN_IP='${LAN_IP}' is not a private IPv4 address. Set LAN_IP correctly before enabling split VPN mode."
     fi
 
-    _requirements_ref+=("tcp|${QBT_HTTP_PORT_HOST}|qBittorrent WebUI|${LAN_IP}")
+    _requirements_ref+=("tcp|${qbt_http_port}|qBittorrent WebUI|${LAN_IP}")
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]] && ((lan_ip_known)); then
-    _requirements_ref+=("tcp|80|Caddy HTTP|${LAN_IP}")
-    _requirements_ref+=("tcp|443|Caddy HTTPS|${LAN_IP}")
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+    local caddy_http_port
+    local caddy_https_port
+    arrstack_resolve_port caddy_http_port "${CADDY_HTTP_PORT:-}" "${ARRSTACK_DEFAULT_CADDY_HTTP_PORT}" \
+      "    Invalid CADDY_HTTP_PORT=${CADDY_HTTP_PORT:-}; defaulting to ${ARRSTACK_DEFAULT_CADDY_HTTP_PORT}."
+    arrstack_resolve_port caddy_https_port "${CADDY_HTTPS_PORT:-}" "${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT}" \
+      "    Invalid CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-}; defaulting to ${ARRSTACK_DEFAULT_CADDY_HTTPS_PORT}."
+    CADDY_HTTP_PORT="$caddy_http_port"
+    CADDY_HTTPS_PORT="$caddy_https_port"
+
+    local caddy_expected="*"
+    if ((lan_ip_known)); then
+      caddy_expected="$LAN_IP"
+    else
+      if [[ "${ARRSTACK_WARNED_CADDY_LAN_UNKNOWN:-0}" != "1" ]]; then
+        warn "    LAN_IP unknown; validating Caddy ports on all interfaces. Set LAN_IP in ${ARR_USERCONF_PATH:-userr.conf} to lock bindings."
+        ARRSTACK_WARNED_CADDY_LAN_UNKNOWN=1
+      fi
+    fi
+    _requirements_ref+=("tcp|${caddy_http_port}|Caddy HTTP|${caddy_expected}")
+    _requirements_ref+=("tcp|${caddy_https_port}|Caddy HTTPS|${caddy_expected}")
   fi
 
   if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then

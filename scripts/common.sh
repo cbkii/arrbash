@@ -38,8 +38,75 @@ arrstack_resolve_color_output() {
 arrstack_resolve_color_output
 
 # Checks command availability without emitting output (used for optional deps)
-have_command() {
+have_command() { 
   command -v "$1" >/dev/null 2>&1
+}
+
+# Ensures port is numeric and within 1-65535
+validate_port() {
+  local port="$1"
+  [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+}
+
+# Normalises a port value, falling back to a default and warning when invalid
+arrstack_resolve_port() {
+  local __resultvar="$1"
+  local raw="${2-}"
+  local default="${3-}"
+  local warn_message="${4-}"
+  local log_handler="${5-}"
+  local value="$raw"
+
+  if [[ -z "$value" ]]; then
+    value="$default"
+  fi
+
+  if ! validate_port "$value"; then
+    value="$default"
+    if [[ -n "$warn_message" ]]; then
+      if [[ -n "$log_handler" ]] && declare -F "$log_handler" >/dev/null 2>&1; then
+        "$log_handler" "$warn_message"
+      else
+        warn "$warn_message"
+      fi
+    fi
+  fi
+
+  printf -v "$__resultvar" '%s' "$value"
+}
+
+# Coerces a positive integer, defaulting and warning when invalid or <= 0
+arrstack_resolve_positive_int() {
+  local __resultvar="$1"
+  local raw="${2-}"
+  local default="${3-}"
+  local warn_message="${4-}"
+  local log_handler="${5-}"
+  local value="$raw"
+
+  if [[ -z "$value" ]]; then
+    value="$default"
+  fi
+
+  local invalid=0
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    invalid=1
+  elif ((value <= 0)); then
+    invalid=1
+  fi
+
+  if ((invalid)); then
+    value="$default"
+    if [[ -n "$warn_message" ]]; then
+      if [[ -n "$log_handler" ]] && declare -F "$log_handler" >/dev/null 2>&1; then
+        "$log_handler" "$warn_message"
+      else
+        warn "$warn_message"
+      fi
+    fi
+  fi
+
+  printf -v "$__resultvar" '%s' "$value"
 }
 
 # Detects docker compose command once per shell and memoizes result for callers

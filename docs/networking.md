@@ -17,7 +17,7 @@ Use these controls to choose how traffic flows, manage Proton VPN forwarding, an
    ```bash
    ./arrstack.sh --yes
    ```
-4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_HTTP_PORT_HOST}` when running split tunnel (the
+4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_HTTP_PORT}` when running split tunnel (the
    host defaults to port **8082** unless you preserved a legacy value).
 
 Revert by setting `SPLIT_VPN=0` and rerunning the installer.
