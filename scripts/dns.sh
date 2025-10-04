@@ -110,11 +110,14 @@ run_host_dns_setup() {
     "UPSTREAM_DNS_1=${UPSTREAM_DNS_1}"
     "UPSTREAM_DNS_2=${UPSTREAM_DNS_2}"
   )
+  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+    helper_env+=("ARR_STACK_DIR=${ARR_STACK_DIR}")
+  fi
 
   if ((need_root)) && [[ "$(id -u)" != "0" ]]; then
     if command -v sudo >/dev/null 2>&1; then
       warn "DNS setup requires root privileges. Re-running with sudo..."
-      if sudo env "${helper_env[@]}" bash -c 'cd "$1" && shift && exec bash "$@"' _ "${ARR_STACK_DIR}" "$helper_script" "${helper_args[@]}"; then
+      if sudo env "${helper_env[@]}" "$helper_script" "${helper_args[@]}"; then
         msg "✅ Host DNS setup helper completed"
       else
         warn "Host DNS setup helper reported an error; review the output above or run scripts/host-dns-setup.sh manually."
@@ -124,15 +127,7 @@ run_host_dns_setup() {
     die "DNS setup requires root privileges. Please run as root or install sudo."
   fi
 
-  if (
-    cd "${ARR_STACK_DIR}" 2>/dev/null \
-      && LAN_IP="${LAN_IP}" \
-        LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}" \
-        UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS}" \
-        UPSTREAM_DNS_1="${UPSTREAM_DNS_1}" \
-        UPSTREAM_DNS_2="${UPSTREAM_DNS_2}" \
-        bash "$helper_script" "${helper_args[@]}"
-  ); then
+  if env "${helper_env[@]}" "$helper_script" "${helper_args[@]}"; then
     msg "✅ Host DNS setup helper completed"
   else
     warn "Host DNS setup helper reported an error; review the output above or run scripts/host-dns-setup.sh manually."
@@ -156,7 +151,7 @@ notify_dns_dependents() {
   local service
   for service in "${affected_services[@]}"; do
     msg "  Restarting $service..."
-    if ! compose restart "$service" >/dev/null 2>&1; then
+    if ! restart_stack_service "$service"; then
       warn "Failed to restart $service"
     fi
   done

@@ -225,6 +225,25 @@ service_container_name() {
   esac
 }
 
+restart_stack_service() {
+  local service="$1"
+
+  if [[ -z "$service" ]]; then
+    return 0
+  fi
+
+  if ! declare -f compose >/dev/null 2>&1; then
+    warn "compose helper unavailable; cannot restart ${service}"
+    return 1
+  fi
+
+  if ! compose restart "$service" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  return 0
+}
+
 service_sab_helper_path() {
   local helper="${ARR_STACK_DIR}/scripts/sab-helper.sh"
   if [[ -x "$helper" ]]; then
@@ -387,11 +406,13 @@ validate_caddy_config() {
     env_args+=(-e "LOCALHOST_IP=${LOCALHOST_IP}")
   fi
 
-  if ! docker run --rm "${env_args[@]}" \
-    -v "${caddyfile}:/etc/caddy/Caddyfile:ro" \
-    "${CADDY_IMAGE}" \
-    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
-    >"$logfile" 2>&1; then
+  local -a docker_args=(--rm)
+  if ((${#env_args[@]} > 0)); then
+    docker_args+=("${env_args[@]}")
+  fi
+  docker_args+=(-v "${caddyfile}:/etc/caddy/Caddyfile:ro" "${CADDY_IMAGE}" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile)
+
+  if ! docker run "${docker_args[@]}" >"$logfile" 2>&1; then
     warn "Caddy validation failed; see ${logfile}"
     cat "$logfile"
     exit 1
