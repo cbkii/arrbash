@@ -84,6 +84,7 @@ run_host_dns_setup() {
   fi
 
   local helper_script="${REPO_ROOT}/scripts/host-dns-setup.sh"
+  local -a helper_args=("$@")
 
   if [[ ! -f "$helper_script" ]]; then
     warn "Host DNS helper script not found at ${helper_script}; skipping --setup-host-dns"
@@ -95,7 +96,33 @@ run_host_dns_setup() {
     return 0
   fi
 
+  local need_root=0
+  if [[ -f "/etc/resolv.conf" && ! -w "/etc/resolv.conf" ]]; then
+    need_root=1
+  fi
+
   msg "🔧 Running host DNS setup helper (--setup-host-dns)"
+
+  local -a helper_env=(
+    "LAN_IP=${LAN_IP}"
+    "LAN_DOMAIN_SUFFIX=${LAN_DOMAIN_SUFFIX}"
+    "UPSTREAM_DNS_SERVERS=${UPSTREAM_DNS_SERVERS}"
+    "UPSTREAM_DNS_1=${UPSTREAM_DNS_1}"
+    "UPSTREAM_DNS_2=${UPSTREAM_DNS_2}"
+  )
+
+  if ((need_root)) && [[ "$(id -u)" != "0" ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+      warn "DNS setup requires root privileges. Re-running with sudo..."
+      if sudo env "${helper_env[@]}" bash -c 'cd "$1" && shift && exec bash "$@"' _ "${ARR_STACK_DIR}" "$helper_script" "${helper_args[@]}"; then
+        msg "✅ Host DNS setup helper completed"
+      else
+        warn "Host DNS setup helper reported an error; review the output above or run scripts/host-dns-setup.sh manually."
+      fi
+      return 0
+    fi
+    die "DNS setup requires root privileges. Please run as root or install sudo."
+  fi
 
   if (
     cd "${ARR_STACK_DIR}" 2>/dev/null \
@@ -104,10 +131,35 @@ run_host_dns_setup() {
         UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS}" \
         UPSTREAM_DNS_1="${UPSTREAM_DNS_1}" \
         UPSTREAM_DNS_2="${UPSTREAM_DNS_2}" \
-        bash "$helper_script"
+        bash "$helper_script" "${helper_args[@]}"
   ); then
     msg "✅ Host DNS setup helper completed"
   else
     warn "Host DNS setup helper reported an error; review the output above or run scripts/host-dns-setup.sh manually."
   fi
+}
+
+notify_dns_dependents() {
+  DNS_SETTINGS_CHANGED="${DNS_SETTINGS_CHANGED:-0}"
+
+  if [[ "${DNS_SETTINGS_CHANGED}" != "1" ]]; then
+    return 0
+  fi
+
+  msg "DNS settings changed, restarting dependent services..."
+  local -a affected_services=()
+
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+    affected_services+=(caddy)
+  fi
+
+  local service
+  for service in "${affected_services[@]}"; do
+    msg "  Restarting $service..."
+    if ! compose restart "$service" >/dev/null 2>&1; then
+      warn "Failed to restart $service"
+    fi
+  done
+
+  DNS_SETTINGS_CHANGED=0
 }
