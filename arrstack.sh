@@ -240,6 +240,9 @@ main() {
     if [[ -f "${ARR_DOCKER_DIR}/configarr/secrets.yml" ]] && grep -Fq 'REPLACE_WITH_' "${ARR_DOCKER_DIR}/configarr/secrets.yml" 2>/dev/null; then
       API_KEYS_SYNCED_PLACEHOLDERS=1
     fi
+  elif [[ -n "${ARRSTACK_SCHEDULED_API_SYNC_DELAY:-}" ]]; then
+    API_KEYS_SYNCED_STATUS="scheduled"
+    API_KEYS_SYNCED_MESSAGE="Configarr API key sync scheduled to run in ${ARRSTACK_SCHEDULED_API_SYNC_DELAY} seconds."
   else
     arrstack_sync_arr_api_keys 0 || true
   fi

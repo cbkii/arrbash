@@ -15,6 +15,9 @@ arrstack_record_preserve_note() {
   fi
 }
 
+# Minimum length for SABnzbd API keys is 16 characters (see SABnzbd documentation)
+SABNZBD_API_KEY_MIN_LENGTH="16"
+
 # Hydrates SABNZBD_API_KEY from sabnzbd.ini when available so reruns keep API access
 hydrate_sab_api_key_from_config() {
   if [[ "${SABNZBD_ENABLED:-0}" != "1" ]]; then
@@ -33,8 +36,10 @@ hydrate_sab_api_key_from_config() {
     return 0
   fi
 
-  local api_key_line api_key_value
-  api_key_line="$(grep -i '^[[:space:]]*api_key[[:space:]]*=' "$ini_path" | tail -n1 || printf '')"
+  local api_key_line="" api_key_value=""
+  local pattern='^[[:space:]]*api_key[[:space:]]*='
+  api_key_line="$(grep -iE "$pattern" "$ini_path" | head -n1 || printf '')"
+
   if [[ -z "$api_key_line" ]]; then
     return 0
   fi
@@ -44,6 +49,11 @@ hydrate_sab_api_key_from_config() {
   api_key_value="${api_key_value%${api_key_value##*[![:space:]]}}"
 
   if [[ -z "$api_key_value" ]]; then
+    return 0
+  fi
+
+  if [[ ${#api_key_value} -lt ${SABNZBD_API_KEY_MIN_LENGTH} ]]; then
+    warn "Detected SABnzbd API key seems too short, ignoring: ${#api_key_value} chars"
     return 0
   fi
 

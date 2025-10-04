@@ -1607,7 +1607,10 @@ YAML
     fi
     cat <<'YAML' >>"$tmp"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:${CADDY_HTTP_PORT}/healthz || wget -qO- --timeout=3 http://127.0.0.1:${CADDY_HTTP_PORT}/healthz"]
+      test:
+        - "CMD-SHELL"
+        - >-
+          curl -fsS --max-time 3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1 || curl -fsS --max-time 3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1
       interval: 10s
       timeout: 5s
       retries: 6
@@ -2309,6 +2312,28 @@ EOF
   )"
 
   atomic_write "$conf_file" "$updated_content" "$SECRET_FILE_MODE"
+}
+
+ensure_qbt_config() {
+  msg "Ensuring qBittorrent configuration is applied"
+
+  # Sleep to allow qBittorrent to restart safely; configurable via QBT_CONFIG_SLEEP (default: 5 seconds)
+  sleep "${QBT_CONFIG_SLEEP:-5}"
+
+  if ! docker inspect qbittorrent --format '{{.State.Running}}' 2>/dev/null | grep -q "true"; then
+    warn "qBittorrent container not running, skipping config sync"
+  fi
+
+  sync_qbt_password_from_logs || true
+
+  docker stop qbittorrent >/dev/null 2>&1 || true
+  sleep "${QBT_CONFIG_SLEEP:-5}"
+
+  write_qbt_config
+
+  docker start qbittorrent >/dev/null 2>&1 || true
+
+  return 0
 }
 
 # Materializes Configarr config/secrets with sanitized policy values when enabled

@@ -16,10 +16,55 @@ vuetorrent_manual_version() {
   fi
 }
 
+# Cleans up temporary VueTorrent artifacts between install attempts
+vuetorrent_cleanup_attempt() {
+  local manual_dir="$1"
+  local -n temp_zip_ref="$2"
+  local -n temp_extract_ref="$3"
+  local -n staging_dir_ref="$4"
+  local -n backup_dir_ref="$5"
+
+  local temp_zip="$temp_zip_ref"
+  local temp_extract="$temp_extract_ref"
+  local staging_dir="$staging_dir_ref"
+  local backup_dir="$backup_dir_ref"
+
+  if [[ -n "$temp_zip" ]]; then
+    rm -f "$temp_zip" 2>/dev/null || true
+  fi
+  if [[ -n "$temp_extract" ]]; then
+    rm -rf "$temp_extract" 2>/dev/null || true
+  fi
+  if [[ -n "$staging_dir" ]]; then
+    rm -rf "$staging_dir" 2>/dev/null || true
+  fi
+  if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
+    if [[ ! -d "$manual_dir" ]]; then
+      mv "$backup_dir" "$manual_dir" 2>/dev/null || rm -rf "$backup_dir" 2>/dev/null || true
+    else
+      rm -rf "$backup_dir" 2>/dev/null || true
+    fi
+  fi
+
+  temp_zip_ref=""
+  temp_extract_ref=""
+  staging_dir_ref=""
+  backup_dir_ref=""
+}
+
 # Manages VueTorrent deployment, choosing LSIO mod or manual download as configured
 install_vuetorrent() {
   local manual_dir="${ARR_DOCKER_DIR}/qbittorrent/vuetorrent"
   local releases_url="https://api.github.com/repos/VueTorrent/VueTorrent/releases/latest"
+  local max_retries=3
+  local attempted_install=0
+  local install_success=0
+  local retry=0
+  local download_url=""
+  local temp_zip=""
+  local temp_extract=""
+  local staging_dir=""
+  local backup_dir=""
 
   if [[ "${VUETORRENT_MODE}" != "manual" ]]; then
     msg "🎨 Using VueTorrent from LSIO Docker mod"
@@ -45,118 +90,133 @@ install_vuetorrent() {
     had_existing_complete=1
   fi
 
-  local attempted_install=0
-  local install_success=0
-  local download_url=""
-  local temp_zip=""
-  local temp_extract=""
-  local staging_dir=""
-  local backup_dir=""
-
-  while true; do
-    if ! check_dependencies jq unzip; then
-      warn "  Missing jq or unzip; skipping VueTorrent download"
-      break
-    fi
-
-    attempted_install=1
-
-    download_url=$(curl -sL "$releases_url" | jq -r '.assets[] | select(.name == "vuetorrent.zip") | .browser_download_url' 2>/dev/null || printf '')
-    if [[ -z "$download_url" ]]; then
-      warn "  Could not determine VueTorrent download URL"
-      break
-    fi
-
-    temp_zip="/tmp/vuetorrent-$$.zip"
-    if ! curl -sL "$download_url" -o "$temp_zip"; then
-      warn "  Failed to download VueTorrent archive"
-      break
-    fi
-
-    if ! temp_extract="$(arrstack_mktemp_dir "/tmp/vuetorrent.XXXX")"; then
-      warn "  Failed to create extraction directory"
-      break
-    fi
-
-    if ! unzip -qo "$temp_zip" -d "$temp_extract"; then
-      warn "  Failed to extract VueTorrent archive"
-      break
-    fi
-
-    local source_root="$temp_extract"
-    if [[ ! -f "$source_root/index.html" ]]; then
-      local nested_index=""
-      nested_index="$(find "$temp_extract" -type f -name 'index.html' -print -quit 2>/dev/null || printf '')"
-      if [[ -n "$nested_index" ]]; then
-        source_root="$(dirname "$nested_index")"
+  if ! check_dependencies jq unzip; then
+    warn "  Missing jq or unzip; skipping VueTorrent download"
+  else
+    while ((retry < max_retries && install_success == 0)); do
+      ((retry++))
+      if ((retry > 1)); then
+        msg "  Attempt ${retry} of ${max_retries}..."
       fi
-    fi
 
-    if [[ ! -f "$source_root/index.html" ]]; then
-      warn "  VueTorrent archive did not include index.html"
-      break
-    fi
-
-    if ! staging_dir="$(arrstack_mktemp_dir "/tmp/vuetorrent.staging.XXXX")"; then
-      warn "  Failed to create staging directory"
-      break
-    fi
-
-    if ! cp -a "$source_root"/. "$staging_dir"/; then
-      warn "  Failed to stage VueTorrent files"
-      break
-    fi
-
-    if [[ ! -f "$staging_dir/public/index.html" ]]; then
-      warn "  Staged VueTorrent files missing public/index.html"
-      break
-    fi
-
-    if [[ ! -f "$staging_dir/version.txt" ]]; then
-      warn "  Staged VueTorrent files missing version.txt"
-      break
-    fi
-
-    if [[ -d "$manual_dir" ]]; then
-      backup_dir="${manual_dir}.bak.$$"
-      if ! mv "$manual_dir" "$backup_dir"; then
-        warn "  Failed to move existing VueTorrent install aside"
-        break
-      fi
-    fi
-
-    ensure_dir "${ARR_DOCKER_DIR}/qbittorrent"
-    if ! mv "$staging_dir" "$manual_dir"; then
-      warn "  Failed to activate new VueTorrent install"
-      if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
-        mv "$backup_dir" "$manual_dir" 2>/dev/null || warn "  Failed to restore previous VueTorrent files"
-      fi
-      break
-    fi
-
-    staging_dir=""
-
-    if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
-      rm -rf "$backup_dir" 2>/dev/null || true
+      attempted_install=1
+      temp_zip="/tmp/vuetorrent-$$-${retry}.zip"
+      temp_extract=""
+      staging_dir=""
       backup_dir=""
-    fi
 
-    install_success=1
-    break
-  done
+      local api_response=""
+      if ! api_response="$(curl -fsSL "$releases_url" 2>/dev/null)"; then
+        warn "  Failed to query VueTorrent release metadata"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
 
-  if [[ -n "$temp_zip" ]]; then
-    rm -f "$temp_zip" 2>/dev/null || true
+      download_url=$(printf '%s' "$api_response" | jq -r '.assets[] | select(.name == "vuetorrent.zip") | .browser_download_url' 2>/dev/null || printf '')
+      if [[ -z "$download_url" ]]; then
+        warn "  Could not determine VueTorrent download URL"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! curl -fsSL "$download_url" -o "$temp_zip"; then
+        warn "  Failed to download VueTorrent archive"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ ! -s "$temp_zip" ]]; then
+        warn "  Downloaded VueTorrent archive is empty"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! temp_extract="$(arrstack_mktemp_dir "/tmp/vuetorrent.XXXX")"; then
+        warn "  Failed to create extraction directory"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! unzip -qo "$temp_zip" -d "$temp_extract"; then
+        warn "  Failed to extract VueTorrent archive"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      local source_root="$temp_extract"
+      if [[ ! -f "$source_root/public/index.html" ]]; then
+        local nested_public=""
+        nested_public="$(find "$temp_extract" -type f -path '*/public/index.html' -print -quit 2>/dev/null || printf '')"
+        if [[ -n "$nested_public" ]]; then
+          local nested_public_dir=""
+          nested_public_dir="$(dirname "$nested_public")"
+          source_root="$(dirname "$nested_public_dir")"
+        fi
+      fi
+
+      if [[ ! -f "$source_root/public/index.html" ]]; then
+        warn "  VueTorrent archive did not include public/index.html"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! staging_dir="$(arrstack_mktemp_dir "/tmp/vuetorrent.staging.XXXX")"; then
+        warn "  Failed to create staging directory"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if ! cp -a "$source_root"/. "$staging_dir"/; then
+        warn "  Failed to stage VueTorrent files"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ ! -f "$staging_dir/public/index.html" ]]; then
+        warn "  Extracted VueTorrent files missing public/index.html"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ ! -f "$staging_dir/version.txt" ]]; then
+        warn "  Extracted VueTorrent files missing version.txt"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      if [[ -d "$manual_dir" ]]; then
+        backup_dir="${manual_dir}.bak.$$-${retry}"
+        if ! mv "$manual_dir" "$backup_dir"; then
+          warn "  Failed to move existing VueTorrent install aside"
+          vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+          continue
+        fi
+      fi
+
+      ensure_dir "${ARR_DOCKER_DIR}/qbittorrent"
+      if ! mv "$staging_dir" "$manual_dir"; then
+        warn "  Failed to activate new VueTorrent install"
+        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
+        continue
+      fi
+
+      staging_dir=""
+
+      if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
+        rm -rf "$backup_dir" 2>/dev/null || true
+        backup_dir=""
+      fi
+
+      install_success=1
+      break
+    done
   fi
-  if [[ -n "$temp_extract" ]]; then
-    rm -rf "$temp_extract" 2>/dev/null || true
+
+  if ((attempted_install)) && ((install_success == 0)); then
+    warn "  Failed to install VueTorrent after ${retry:-0}/${max_retries} attempts"
   fi
-  if [[ -n "$staging_dir" && -d "$staging_dir" ]]; then
-    rm -rf "$staging_dir" 2>/dev/null || true
-  fi
-  if [[ -n "$backup_dir" && -d "$backup_dir" && ! -d "$manual_dir" ]]; then
-    mv "$backup_dir" "$manual_dir" 2>/dev/null || rm -rf "$backup_dir" 2>/dev/null || true
-  fi
+
+  vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
 
   if ((install_success)); then
     chown -R "${PUID}:${PGID}" "$manual_dir" 2>/dev/null || true
@@ -223,6 +283,25 @@ service_container_name() {
       printf '%s' "$service"
       ;;
   esac
+}
+
+restart_stack_service() {
+  local service="$1"
+
+  if [[ -z "$service" ]]; then
+    return 0
+  fi
+
+  if ! declare -f compose >/dev/null 2>&1; then
+    warn "compose helper unavailable; cannot restart ${service}"
+    return 1
+  fi
+
+  if ! compose restart "$service" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  return 0
 }
 
 service_sab_helper_path() {
@@ -315,6 +394,7 @@ validate_compose_or_die() {
   local log_dir="${ARR_STACK_DIR}/logs"
   ensure_dir "$log_dir"
   local errlog="${log_dir}/compose.err"
+  local configdump="${log_dir}/compose-config.json"
 
   if ! compose -f "$file" config -q 2>"$errlog"; then
     echo "[arrstack] Compose validation failed; see $errlog"
@@ -324,10 +404,31 @@ validate_compose_or_die() {
       local start=$((line - 5))
       local end=$((line + 5))
       ((start < 1)) && start=1
+      echo "[arrstack] Error context from docker-compose.yml:"
       nl -ba "$file" | sed -n "${start},${end}p"
     fi
+
+    while IFS= read -r service; do
+      [[ -z "$service" ]] && continue
+      echo "[arrstack] Checking service: $service"
+      if ! compose -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
+        echo "[arrstack] Service $service has configuration errors:"
+        cat "${errlog}.${service}" 2>/dev/null || true
+      else
+        rm -f "${errlog}.${service}" 2>/dev/null || true
+      fi
+    done < <(compose -f "$file" config --services 2>/dev/null)
+
     exit 1
   fi
+
+  if ! compose -f "$file" config --format=json >"$configdump" 2>"${errlog}.json"; then
+    echo "[arrstack] Failed to generate JSON config dump at $configdump" >&2
+    cat "${errlog}.json" 2>/dev/null >&2 || true
+    rm -f "$configdump"
+  fi
+
+  rm -f "${errlog}.json" 2>/dev/null || true
 
   rm -f "$errlog"
 }
@@ -357,14 +458,29 @@ validate_caddy_config() {
 
   msg "🧪 Validating Caddy configuration"
 
-  if ! docker run --rm \
-    -v "${caddyfile}:/etc/caddy/Caddyfile:ro" \
-    "${CADDY_IMAGE}" \
-    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
-    >"$logfile" 2>&1; then
+  local -a env_args=()
+  if [[ -n "${LAN_IP:-}" ]]; then
+    env_args+=(-e "LAN_IP=${LAN_IP}")
+  fi
+  if [[ -n "${LOCALHOST_IP:-}" ]]; then
+    env_args+=(-e "LOCALHOST_IP=${LOCALHOST_IP}")
+  fi
+
+  local -a docker_args=(--rm)
+  if ((${#env_args[@]} > 0)); then
+    docker_args+=("${env_args[@]}")
+  fi
+  docker_args+=(-v "${caddyfile}:/etc/caddy/Caddyfile:ro" "${CADDY_IMAGE}" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile)
+
+  if ! docker run "${docker_args[@]}" >"$logfile" 2>&1; then
     warn "Caddy validation failed; see ${logfile}"
     cat "$logfile"
     exit 1
+  fi
+
+  if grep -q '\${' "$caddyfile"; then
+    warn "Caddyfile contains unresolved variable references that might cause issues at runtime"
+    grep -n '\${' "$caddyfile"
   fi
 
   rm -f "$logfile"
@@ -627,6 +743,76 @@ wait_for_vpn_connection() {
 }
 
 # Launches VPN auto-reconnect daemon when configured and available
+stop_existing_vpn_auto_reconnect_workers() {
+  local daemon_path="$1"
+  local pid_file="$2"
+
+  if [[ -z "$daemon_path" ]]; then
+    return 0
+  fi
+
+  local -a candidate_pids=()
+  local pid
+
+  if [[ -n "$pid_file" && -f "$pid_file" ]]; then
+    pid="$(cat "$pid_file" 2>/dev/null || printf '')"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      candidate_pids+=("$pid")
+    fi
+  fi
+
+  if command -v pgrep >/dev/null 2>&1; then
+    while IFS= read -r pid; do
+      if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        candidate_pids+=("$pid")
+      fi
+    done < <(pgrep -f -- "$daemon_path" 2>/dev/null || true)
+  else
+    while IFS= read -r pid; do
+      if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        candidate_pids+=("$pid")
+      fi
+    done < <(ps -eo pid,command 2>/dev/null | awk -v path="$daemon_path" 'index($0, path) {print $1}' || true)
+  fi
+
+  if [[ ${#candidate_pids[@]} -eq 0 ]]; then
+    if [[ -n "$pid_file" ]]; then
+      rm -f "$pid_file" 2>/dev/null || true
+    fi
+    return 0
+  fi
+
+  # Deduplicate candidate_pids using associative array for O(n) complexity
+  declare -A seen_pids=()
+  for pid in "${candidate_pids[@]}"; do
+    seen_pids["$pid"]=1
+  done
+  candidate_pids=("${!seen_pids[@]}")
+
+  msg "[vpn-auto] Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
+
+  local attempt
+  for pid in "${candidate_pids[@]}"; do
+    if kill "$pid" 2>/dev/null; then
+      for attempt in 1 2 3 4 5; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+          break
+        fi
+        sleep 1
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    fi
+  done
+
+  if [[ -n "$pid_file" ]]; then
+    rm -f "$pid_file" 2>/dev/null || true
+  fi
+
+  return 0
+}
+
 start_vpn_auto_reconnect_if_enabled() {
   if ! declare -f vpn_auto_reconnect_is_enabled >/dev/null 2>&1; then
     return 0
@@ -652,15 +838,7 @@ start_vpn_auto_reconnect_if_enabled() {
   pid_file="${state_dir}/daemon.pid"
   log_file="${state_dir}/daemon.log"
 
-  if [[ -f "$pid_file" ]]; then
-    local existing_pid
-    existing_pid="$(cat "$pid_file" 2>/dev/null || printf '')"
-    if [[ "$existing_pid" =~ ^[0-9]+$ ]] && kill -0 "$existing_pid" 2>/dev/null; then
-      msg "[vpn-auto] Auto-reconnect daemon already running (pid ${existing_pid})"
-      return 0
-    fi
-    rm -f "$pid_file" 2>/dev/null || true
-  fi
+  stop_existing_vpn_auto_reconnect_workers "$daemon_path" "$pid_file"
 
   msg "[vpn-auto] Launching auto-reconnect daemon"
 
@@ -977,10 +1155,12 @@ start_stack() {
   fi
 
   if ((qb_started)); then
-    sync_qbt_password_from_logs
+    ensure_qbt_config || true
   fi
 
   service_health_sabnzbd
+
+  arrstack_schedule_delayed_api_sync || true
 
   msg "Services started - they may take a minute to be fully ready"
   show_service_status
