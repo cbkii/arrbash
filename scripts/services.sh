@@ -662,91 +662,85 @@ wait_for_vpn_connection() {
   local elapsed=0
   local check_interval=5
   local host="${LOCALHOST_IP:-127.0.0.1}"
-  local vpn_status_url
-  local public_ip_url
+  local host_uri base_url vpn_status_url public_ip_url
   local consecutive_failures=0
   local max_consecutive=3
+  local reported_healthy=0
 
-  msg "Waiting for VPN connection (max ${max_wait}s)..."
-
-  while ((elapsed < 30)); do
-    local status
-    status="$(docker inspect gluetun --format '{{.State.Status}}' 2>/dev/null || echo "not found")"
-    if [[ "$status" == "running" ]]; then
-      break
-    fi
-    sleep 2
-    elapsed=$((elapsed + 2))
-  done
-
-  if [[ $host == *:* && $host != [* ]]; then
-    vpn_status_url="http://[$host]:${GLUETUN_CONTROL_PORT}/v1/openvpn/status"
-    public_ip_url="http://[$host]:${GLUETUN_CONTROL_PORT}/v1/publicip/ip"
+  # One-time host→URI normalisation (IPv6 needs brackets)
+  if [[ $host == *:* && $host != \[*\] ]]; then
+    host_uri="[$host]"
   else
-    vpn_status_url="http://${host}:${GLUETUN_CONTROL_PORT}/v1/openvpn/status"
-    public_ip_url="http://${host}:${GLUETUN_CONTROL_PORT}/v1/publicip/ip"
+    host_uri="$host"
   fi
 
-  elapsed=0
-  local reported_healthy=0
+  base_url="http://${host_uri}:${GLUETUN_CONTROL_PORT}/v1"
+  vpn_status_url="${base_url}/openvpn/status"
+  public_ip_url="${base_url}/publicip/ip"
+
+  # Build curl cmd once
   local -a curl_cmd=(curl -fsS --max-time 5)
   if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
     curl_cmd+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
   fi
 
+  msg "Waiting for VPN connection (max ${max_wait}s)..."
+
   while ((elapsed < max_wait)); do
-    local health=""
-    local failure_in_iteration=0
-    local progress_in_iteration=0
+    # Grab both status and health in a single inspect
+    local inspect status health
+    inspect="$(docker inspect gluetun --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+    status="${inspect%% *}"
+    health="${inspect#* }"
+    [[ "$inspect" == "$health" ]] && health="" # if there was no space, no health
 
-    if ! health="$(docker inspect gluetun --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null)"; then
-      failure_in_iteration=1
-      health=""
+    local progressed=0
+    local failed_tick=0
+
+    # Phase 1: wait until the container is running
+    if [[ "$status" != "running" ]]; then
+      # not running yet → neither progress nor hard failure; just wait
+      :
     else
-      health="$(printf '%s' "$health" | tr -d '\r\n')"
-    fi
-
-    if [[ "$health" == "healthy" ]]; then
-      progress_in_iteration=1
-      if ((reported_healthy == 0)); then
-        msg "  ✅ Gluetun is healthy"
-        reported_healthy=1
-      fi
-
-      if "${curl_cmd[@]}" "$vpn_status_url" >/dev/null 2>&1; then
-        msg "  ✅ VPN connected after ${elapsed}s"
-        msg "  ✅ VPN API responding"
-
-        local ip_payload
-        ip_payload="$("${curl_cmd[@]}" "$public_ip_url" 2>/dev/null || true)"
-        if [[ -n "$ip_payload" ]]; then
-          local ip_summary
-          if ip_summary="$(gluetun_public_ip_summary "$ip_payload" 2>/dev/null || true)" && [[ -n "$ip_summary" ]]; then
-            msg "  🌐 Public IP: ${ip_summary}"
-          elif [[ "$ip_payload" =~ \"public_ip\"[[:space:]]*:[[:space:]]*\"\" ]]; then
-            msg "  🌐 Public IP: (pending assignment)"
-          else
-            msg "  🌐 Public IP response: ${ip_payload}"
-          fi
-        else
-          msg "  🌐 Public IP: (pending assignment)"
+      # Phase 2: evaluate health and API reachability
+      if [[ "$health" == "healthy" ]]; then
+        progressed=1
+        if ((reported_healthy == 0)); then
+          msg "  ✅ Gluetun is healthy"
+          reported_healthy=1
         fi
 
-        return 0
+        if "${curl_cmd[@]}" "$vpn_status_url" >/dev/null 2>&1; then
+          msg "  ✅ VPN connected after ${elapsed}s"
+          msg "  ✅ VPN API responding"
+
+          local ip_payload ip_summary
+          ip_payload="$("${curl_cmd[@]}" "$public_ip_url" 2>/dev/null || true)"
+          if [[ -n "$ip_payload" ]]; then
+            if ip_summary="$(gluetun_public_ip_summary "$ip_payload" 2>/dev/null || true)" && [[ -n "$ip_summary" ]]; then
+              msg "  🌐 Public IP: ${ip_summary}"
+            elif [[ "$ip_payload" =~ \"public_ip\"[[:space:]]*:[[:space:]]*\"\" ]]; then
+              msg "  🌐 Public IP: (pending assignment)"
+            else
+              msg "  🌐 Public IP response: ${ip_payload}"
+            fi
+          else
+            msg "  🌐 Public IP: (pending assignment)"
+          fi
+          return 0
+        else
+          failed_tick=1
+        fi
+      elif [[ "$health" == "unhealthy" ]]; then
+        failed_tick=1
       fi
-
-      failure_in_iteration=1
     fi
 
-    if [[ "$health" == "unhealthy" ]]; then
-      failure_in_iteration=1
-    fi
-
-    if ((progress_in_iteration != 0)); then
+    # Failure / progress bookkeeping (unchanged semantics)
+    if ((progressed)); then
       consecutive_failures=0
     fi
-
-    if ((failure_in_iteration != 0)); then
+    if ((failed_tick)); then
       consecutive_failures=$((consecutive_failures + 1))
       if ((consecutive_failures >= max_consecutive)); then
         warn "VPN health checks failing consistently after ${elapsed}s"
@@ -754,13 +748,10 @@ wait_for_vpn_connection() {
       fi
     fi
 
+    # Sleep until next tick
     local remaining=$((max_wait - elapsed))
-    if ((remaining <= 0)); then
-      break
-    fi
-
+    ((remaining <= 0)) && break
     local sleep_for=$((remaining < check_interval ? remaining : check_interval))
-
     sleep "$sleep_for"
     elapsed=$((elapsed + sleep_for))
   done
