@@ -107,7 +107,7 @@ if [[ -f "${_canon_userconf}" ]]; then
   trap - ERR
   set +e
   # shellcheck source=/dev/null
-  . "${_canon_userconf}" 2> >(tee "${_arrstack_userr_conf_errlog}" >&2)
+  . "${_canon_userconf}" 2>"${_arrstack_userr_conf_errlog}"
   _arrstack_userr_conf_status=$?
   set -e
   trap 'arrstack_err_trap' ERR
@@ -116,6 +116,8 @@ if [[ -f "${_canon_userconf}" ]]; then
       :
     else
       printf '[arrstack] Failed to source user config (status=%s): %s\n' "${_arrstack_userr_conf_status}" "${_canon_userconf}" >&2
+      # Replay captured stderr to aid debugging
+      cat "${_arrstack_userr_conf_errlog}" >&2 || :
       rm -f "${_arrstack_userr_conf_errlog}"
       exit "${_arrstack_userr_conf_status}"
     fi
