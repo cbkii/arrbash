@@ -759,10 +759,7 @@ wait_for_vpn_connection() {
       break
     fi
 
-    local sleep_for=$check_interval
-    if ((sleep_for > remaining)); then
-      sleep_for=$remaining
-    fi
+    local sleep_for=$((remaining < check_interval ? remaining : check_interval))
 
     sleep "$sleep_for"
     elapsed=$((elapsed + sleep_for))
