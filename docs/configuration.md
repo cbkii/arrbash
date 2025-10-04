@@ -2,12 +2,13 @@
 
 # Configuration guide
 
-Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arrstack.sh` now snapshots exported environment variables before loading your config and reapplies them afterwards so they continue to win over anything set inside `userr.conf` or the defaults.
+Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arrstack.sh` snapshots exported environment variables, marks them read-only before sourcing your config, and reapplies them afterwards so they continue to win over anything set inside `userr.conf` or the defaults.
 
 ## Configuration layers
-1. **Shell environment** – anything exported before running `./arrstack.sh` overrides the other sources (use for CI or one-off toggles). Values are reasserted after `userr.conf` loads, except for internal read-only variables and normalized paths such as `ARR_USERCONF_PATH`, which may be canonicalised to an absolute path during startup.
-2. **`${ARR_BASE}/userr.conf`** – your persistent copy (defaults to `~/srv/userr.conf`). Keep it out of version control and rerun the installer after every edit.
-3. **`arrconf/userr.conf.defaults.sh`** – project defaults committed in the repo.
+1. **Shell environment** – anything exported before running `./arrstack.sh` overrides every other source (use for CI or one-off toggles). Values are made read-only while `userr.conf` loads and reasserted afterwards, except for internal read-only variables and normalized paths such as `ARR_USERCONF_PATH`, which may be canonicalised to an absolute path during startup.
+2. **CLI flags** – run-scoped toggles (for example `./arrstack.sh --enable-caddy`) apply after the read-only guard. Use them to temporarily override `userr.conf` without editing the file. Environment exports still win if both are present.
+3. **`${ARR_BASE}/userr.conf`** – your persistent copy (defaults to `~/srv/userr.conf`). Keep it out of version control and rerun the installer after every edit.
+4. **`arrconf/userr.conf.defaults.sh`** – project defaults committed in the repo.
 
 The installer prints a configuration table during preflight. Cancel with `Ctrl+C` if a value looks wrong, adjust `userr.conf`, and rerun.
 
