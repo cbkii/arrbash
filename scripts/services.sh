@@ -329,7 +329,7 @@ validate_compose_or_die() {
       nl -ba "$file" | sed -n "${start},${end}p"
     fi
 
-    compose -f "$file" config --services 2>/dev/null | while read -r service; do
+    while IFS= read -r service; do
       [[ -z "$service" ]] && continue
       echo "[arrstack] Checking service: $service"
       if ! compose -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
@@ -338,12 +338,18 @@ validate_compose_or_die() {
       else
         rm -f "${errlog}.${service}" 2>/dev/null || true
       fi
-    done
+    done < <(compose -f "$file" config --services 2>/dev/null)
 
     exit 1
   fi
 
-  compose -f "$file" config --format=json >"$configdump" 2>/dev/null || true
+  if ! compose -f "$file" config --format=json >"$configdump" 2>"${errlog}.json"; then
+    echo "[arrstack] Failed to generate JSON config dump at $configdump" >&2
+    cat "${errlog}.json" 2>/dev/null >&2 || true
+    rm -f "$configdump"
+  fi
+
+  rm -f "${errlog}.json" 2>/dev/null || true
 
   rm -f "$errlog"
 }
