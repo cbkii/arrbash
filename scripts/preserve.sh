@@ -44,12 +44,13 @@ hydrate_sab_api_key_from_config() {
   api_key_value="${api_key_line#*=}"
   api_key_value="${api_key_value#${api_key_value%%[![:space:]]*}}"
   api_key_value="${api_key_value%${api_key_value##*[![:space:]]}}"
+  api_key_length="16"
 
   if [[ -z "$api_key_value" ]]; then
     return 0
   fi
 
-  if [[ ${#api_key_value} -lt 16 ]]; then
+  if [[ ${#api_key_value} -lt ${api_key_length} ]]; then
     warn "Detected SABnzbd API key seems too short, ignoring: ${#api_key_value} chars"
     return 0
   fi
