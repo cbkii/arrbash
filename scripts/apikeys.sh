@@ -289,23 +289,41 @@ arrstack_schedule_delayed_api_sync() {
   ensure_dir_mode "$script_dir" 755
 
   cat >"$script_path" <<'SCRIPT'
-#!/bin/bash
-set -euo pipefail
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-STACK_DIR="$1"
-DELAY="${2:-${API_SYNC_DELAY:-60}}"
-ARRSTACK_SCRIPT="$3"
+STACK_DIR="${1:?missing stack directory}"
+DELAY="${2:-60}"
+ARRSTACK_SCRIPT="${3:?missing arrstack script path}"
 
-echo "Scheduled API key sync will run in $DELAY seconds"
-sleep "$DELAY"
+log() {
+  printf '%s\n' "[delayed-sync] $*" >&2
+}
 
-cd "$STACK_DIR" || exit 1
-"$ARRSTACK_SCRIPT" --sync-api-keys
+log "Scheduled API key sync will run in ${DELAY} seconds"
+sleep "${DELAY}"
+
+if ! cd "${STACK_DIR}"; then
+  log "Failed to change directory to ${STACK_DIR}"
+  exit 1
+fi
+
+export ASSUME_YES=1
+export DISABLE_AUTO_API_KEY_SYNC=1
+
+if "${ARRSTACK_SCRIPT}" --sync-api-keys --no-auto-api-sync --yes; then
+  log "Configarr API key sync completed successfully."
+else
+  status=$?
+  log "Configarr API key sync failed with status ${status}."
+  exit "${status}"
+fi
 SCRIPT
 
   chmod 755 "$script_path"
 
   if [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" != "1" ]]; then
+    export ARRSTACK_SCHEDULED_API_SYNC_DELAY="$delay"
     msg "Scheduling delayed API key sync in ${delay} seconds"
     nohup bash "$script_path" "$ARR_STACK_DIR" "$delay" "$arrstack_script" >/dev/null 2>&1 &
   fi
