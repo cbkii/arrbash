@@ -16,7 +16,7 @@ arrstack_record_preserve_note() {
 }
 
 # Minimum length for SABnzbd API keys is 16 characters (see SABnzbd documentation)
-local SABNZBD_API_KEY_MIN_LENGTH="16"
+SABNZBD_API_KEY_MIN_LENGTH="16"
 
 # Hydrates SABNZBD_API_KEY from sabnzbd.ini when available so reruns keep API access
 hydrate_sab_api_key_from_config() {
