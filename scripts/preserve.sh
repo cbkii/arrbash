@@ -33,8 +33,14 @@ hydrate_sab_api_key_from_config() {
     return 0
   fi
 
-  local api_key_line api_key_value
-  api_key_line="$(grep -i '^[[:space:]]*api_key[[:space:]]*=' "$ini_path" | tail -n1 || printf '')"
+  local api_key_line="" api_key_value="" pattern=""
+  for pattern in '^[[:space:]]*api_key[[:space:]]*=' '^api_key[[:space:]]*=' '^[[:space:]]*api_key=' '^api_key='; do
+    api_key_line="$(grep -iE "$pattern" "$ini_path" | head -n1 || printf '')"
+    if [[ -n "$api_key_line" ]]; then
+      break
+    fi
+  done
+
   if [[ -z "$api_key_line" ]]; then
     return 0
   fi
@@ -44,6 +50,11 @@ hydrate_sab_api_key_from_config() {
   api_key_value="${api_key_value%${api_key_value##*[![:space:]]}}"
 
   if [[ -z "$api_key_value" ]]; then
+    return 0
+  fi
+
+  if [[ ${#api_key_value} -lt 16 ]]; then
+    warn "Detected SABnzbd API key seems too short, ignoring: ${#api_key_value} chars"
     return 0
   fi
 
