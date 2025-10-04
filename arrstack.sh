@@ -84,6 +84,20 @@ if [[ -f "${_canon_userconf}" ]]; then
   . "${_canon_userconf}"
 fi
 
+# Returns 0 if the given variable name is readonly, 1 otherwise
+arrstack_var_is_readonly() {
+  local varname="$1"
+  # Check if variable exists
+  if ! declare -p -- "$varname" &>/dev/null; then
+    return 1
+  fi
+  # Check for readonly flag (-r) in declare output
+  if [[ "$(declare -p -- "$varname" 2>/dev/null)" == declare\ -r* ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
 for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
   if [[ -v "_arrstack_env_overrides[${_arrstack_env_var}]" ]]; then
     if arrstack_var_is_readonly "${_arrstack_env_var}"; then
