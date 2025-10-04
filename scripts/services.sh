@@ -695,10 +695,19 @@ wait_for_vpn_connection() {
   fi
 
   while ((elapsed < max_wait)); do
-    local health
-    health="$(docker inspect gluetun --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
+    local health=""
+    local failure_in_iteration=0
+    local progress_in_iteration=0
+
+    if ! health="$(docker inspect gluetun --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null)"; then
+      failure_in_iteration=1
+      health=""
+    else
+      health="$(printf '%s' "$health" | tr -d '\r\n')"
+    fi
 
     if [[ "$health" == "healthy" ]]; then
+      progress_in_iteration=1
       if ((reported_healthy == 0)); then
         msg "  ✅ Gluetun is healthy"
         reported_healthy=1
@@ -725,17 +734,36 @@ wait_for_vpn_connection() {
 
         return 0
       fi
+
+      failure_in_iteration=1
+    elif [[ "$health" == "unhealthy" ]]; then
+      failure_in_iteration=1
     fi
 
-    consecutive_failures=$((consecutive_failures + 1))
-
-    if ((consecutive_failures >= max_consecutive)); then
-      warn "VPN health checks failing consistently after ${elapsed}s"
-      return 1
+    if ((progress_in_iteration != 0)); then
+      consecutive_failures=0
     fi
 
-    sleep "$check_interval"
-    elapsed=$((elapsed + check_interval))
+    if ((failure_in_iteration != 0)); then
+      consecutive_failures=$((consecutive_failures + 1))
+      if ((consecutive_failures >= max_consecutive)); then
+        warn "VPN health checks failing consistently after ${elapsed}s"
+        return 1
+      fi
+    fi
+
+    local remaining=$((max_wait - elapsed))
+    if ((remaining <= 0)); then
+      break
+    fi
+
+    local sleep_for=$check_interval
+    if ((sleep_for > remaining)); then
+      sleep_for=$remaining
+    fi
+
+    sleep "$sleep_for"
+    elapsed=$((elapsed + sleep_for))
   done
 
   warn "VPN connection timeout after ${max_wait}s"
