@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034
 
-API_SYNC_DELAY=${API_SYNC_DELAY:-60}"
+API_SYNC_DELAY=${API_SYNC_DELAY:-60}
 
 # Extracts API key from an Arr config.xml, tolerating partially initialised files
 arrstack_detect_api_key_from_config() {
