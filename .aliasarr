@@ -212,12 +212,12 @@ _arr_bool() {
 _arr_service_port() {
   local svc="$1" env_var default value
   case "$svc" in
-    qbittorrent) env_var=QBT_HTTP_PORT_HOST; default=8082 ;;
+    qbittorrent) env_var=QBT_PORT; default=8082 ;;
     sonarr)      env_var=SONARR_PORT;        default=8989 ;;
     radarr)      env_var=RADARR_PORT;        default=7878 ;;
     prowlarr)    env_var=PROWLARR_PORT;      default=9696 ;;
     bazarr)      env_var=BAZARR_PORT;        default=6767 ;;
-    flaresolverr)env_var=FLARESOLVERR_PORT;  default=8191 ;;
+    flaresolverr)env_var=FLARR_PORT;  default=8191 ;;
     sabnzbd)     env_var=SABNZBD_PORT;       default=8080 ;;
     caddy)       env_var=CADDY_PORT;         default=80   ;;
     *)           return 1 ;;
@@ -757,12 +757,12 @@ EOF
 
   local host qbt_port sonarr_port radarr_port prowlarr_port bazarr_port flaresolverr_port
   host="$(_arr_host)"
-  qbt_port="${QBT_HTTP_PORT_HOST:-$(_arr_env_get QBT_HTTP_PORT_HOST)}"
+  qbt_port="${QBT_PORT:-$(_arr_env_get QBT_PORT)}"
   sonarr_port="${SONARR_PORT:-$(_arr_env_get SONARR_PORT)}"
   radarr_port="${RADARR_PORT:-$(_arr_env_get RADARR_PORT)}"
   prowlarr_port="${PROWLARR_PORT:-$(_arr_env_get PROWLARR_PORT)}"
   bazarr_port="${BAZARR_PORT:-$(_arr_env_get BAZARR_PORT)}"
-  flaresolverr_port="${FLARESOLVERR_PORT:-$(_arr_env_get FLARESOLVERR_PORT)}"
+  flaresolverr_port="${FLARR_PORT:-$(_arr_env_get FLARR_PORT)}"
 
   printf 'Caddy disabled (ENABLE_CADDY=0). Showing direct IP:PORT endpoints instead.\n'
   local -a urls=(
@@ -1705,7 +1705,7 @@ arr.baz.series.history() { _arr_bazarr_call GET /api/series/history   | _arr_pre
 arr.baz.movies.wanted()  { _arr_bazarr_call GET /api/movies/wanted    | _arr_pretty_json; }
 arr.baz.movies.history() { _arr_bazarr_call GET /api/movies/history   | _arr_pretty_json; }
 
-arr.fsolv.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get FLARESOLVERR_PORT)"; }
+arr.fsolv.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get FLARR_PORT)"; }
 arr.fsolv.logs() { docker logs -f flaresolverr; }
 arr.fsolv.restart() { docker restart flaresolverr; }
 

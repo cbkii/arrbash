@@ -996,7 +996,7 @@ vpn_auto_reconnect_ensure_fresh_session() {
 
 # Fetches current transfer metrics from qBittorrent API with auth retry logic
 vpn_auto_reconnect_fetch_transfer_info() {
-  local default_base="http://${LOCALHOST_IP:-127.0.0.1}:${QBT_WEBUI_PORT:-${ARRSTACK_DEFAULT_QBT_WEBUI_PORT:-}}"
+  local default_base="http://${LOCALHOST_IP:-127.0.0.1}:${QBT_INT_PORT:-8082}"
   local base="${QBITTORRENT_ADDR:-${default_base}}"
   local url="${base%/}/api/v2/transfer/info"
   local cookie
@@ -1019,7 +1019,7 @@ vpn_auto_reconnect_fetch_transfer_info() {
 
 # Logs into qBittorrent WebUI API storing session cookie for subsequent calls
 vpn_auto_reconnect_login_qbt() {
-  local default_base="http://${LOCALHOST_IP:-127.0.0.1}:${QBT_WEBUI_PORT:-${ARRSTACK_DEFAULT_QBT_WEBUI_PORT:-}}"
+  local default_base="http://${LOCALHOST_IP:-127.0.0.1}:${QBT_INT_PORT:-8082}"
   local base="${QBITTORRENT_ADDR:-${default_base}}"
   local url="${base%/}/api/v2/auth/login"
   local cookie
@@ -1035,7 +1035,7 @@ vpn_auto_reconnect_login_qbt() {
 
 # Classifies torrent activity level to avoid reconnects during active transfers
 vpn_auto_reconnect_detect_activity() {
-  local default_base="http://${LOCALHOST_IP:-127.0.0.1}:${QBT_WEBUI_PORT:-${ARRSTACK_DEFAULT_QBT_WEBUI_PORT:-}}"
+  local default_base="http://${LOCALHOST_IP:-127.0.0.1}:${QBT_INT_PORT:-8082}"
   local base="${QBITTORRENT_ADDR:-${default_base}}"
   local cookie
   cookie="$(vpn_auto_reconnect_cookie_file)"
@@ -1170,10 +1170,7 @@ vpn_auto_reconnect_wait_for_health() {
   local interval=5
   local elapsed=0
   local host="${LOCALHOST_IP:-127.0.0.1}"
-  local port="${GLUETUN_CONTROL_PORT:-}"
-  if [[ -z "$port" && -n "${ARRSTACK_DEFAULT_GLUETUN_CONTROL_PORT:-}" ]]; then
-    port="${ARRSTACK_DEFAULT_GLUETUN_CONTROL_PORT}"
-  fi
+  local port="${GLUETUN_CONTROL_PORT:-8000}"
   local url
   if [[ $host == *:* && $host != [* ]]; then
     url="http://[$host]:${port}/v1/openvpn/status"

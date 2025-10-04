@@ -35,7 +35,8 @@ TIMEZONE="Australia/Sydney"            # Timezone for container logs and schedul
 
 # --- Networking ---
 LAN_IP=""                              # Bind services to one LAN IP (set a DHCP reservation or static IP before install)
-LOCALHOST_IP="127.0.0.1"               # Loopback used by the Gluetun control API
+# Healthchecks run inside containers. Use loopback here.
+LOCALHOST_IP="127.0.0.1"
 LAN_DOMAIN_SUFFIX="home.arpa"          # Suffix appended to service hostnames (default: home.arpa)
 CADDY_DOMAIN_SUFFIX="home.arpa"  # Override Caddy hostname suffix independently of LAN DNS (default: home.arpa)
 SERVER_COUNTRIES="Netherlands"              # ProtonVPN exit country list (default: Netherlands)
@@ -78,12 +79,14 @@ SABNZBD_PORT="8080"                 # Host port for SAB WebUI when direct (defau
 ARRBASH_USENET_CLIENT="sabnzbd" # Active Usenet client label (future abstraction)
 
 # --- Service ports ---
-QBT_HTTP_PORT="8082"              # Host-exposed qBittorrent WebUI port (default: 8082). QBT_WEBUI_PORT is the internal container port.
+QBT_PORT="8082"              # Host-exposed qBittorrent WebUI port (default: 8082)
+QBT_INT_PORT="8082"             # Internal qBittorrent WebUI port; match the container WEBUI_PORT env if you change it
 SONARR_PORT="8989"                     # Sonarr WebUI port exposed on the LAN (default: 8989)
 RADARR_PORT="7878"                     # Radarr WebUI port exposed on the LAN (default: 7878)
 PROWLARR_PORT="9696"                   # Prowlarr WebUI port exposed on the LAN (default: 9696)
 BAZARR_PORT="6767"                     # Bazarr WebUI port exposed on the LAN (default: 6767)
-FLARESOLVERR_PORT="8191"               # FlareSolverr service port exposed on the LAN (default: 8191)
+FLARR_PORT="8191"               # FlareSolverr service port exposed on the LAN (default: 8191)
+SABNZBD_INT_PORT="8080"           # Internal SABnzbd WebUI port; match the container PORT env if you change it
 
 # --- ProtonVPN port-forward timing (advanced) ---
 PF_MAX_TOTAL_WAIT="60"          # Max seconds to wait for a forwarded port before failing (legacy sync mode)
@@ -117,7 +120,7 @@ VPN_MAX_RETRY_MINUTES="20"              # Retry budget before auto-disabling (de
 # RADARR_IMAGE="lscr.io/linuxserver/radarr:5.27.5.10198-ls283"        # Override the Radarr container tag
 # PROWLARR_IMAGE="lscr.io/linuxserver/prowlarr:latest"                # Override the Prowlarr container tag
 # BAZARR_IMAGE="lscr.io/linuxserver/bazarr:latest"                    # Override the Bazarr container tag
-# FLARESOLVERR_IMAGE="ghcr.io/flaresolverr/flaresolverr:v3.3.21"      # Override the FlareSolverr container tag
+# FLARR_IMAGE="ghcr.io/flaresolverr/flaresolverr:v3.3.21"      # Override the FlareSolverr container tag
 # SABNZBD_IMAGE="lscr.io/linuxserver/sabnzbd:latest"                    # Override the SABnzbd container tag
 # CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"            # Override the Configarr container tag
 # CADDY_IMAGE="caddy:2.8.4"                      # Override the Caddy reverse-proxy container tag

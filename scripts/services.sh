@@ -536,7 +536,7 @@ validate_images() {
     RADARR_IMAGE
     PROWLARR_IMAGE
     BAZARR_IMAGE
-    FLARESOLVERR_IMAGE
+    FLARR_IMAGE
   )
 
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then

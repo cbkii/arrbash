@@ -94,7 +94,7 @@ hydrate_qbt_host_port_from_env_file() {
   fi
 
   local existing_host_port=""
-  existing_host_port="$(get_env_kv "QBT_HTTP_PORT" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+  existing_host_port="$(get_env_kv "QBT_PORT" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
 
   if [[ -n "$existing_host_port" ]]; then
     local trimmed="${existing_host_port//[[:space:]]/}"
@@ -124,7 +124,7 @@ hydrate_qbt_webui_port_from_config() {
   configured_port="$(grep -E '^WebUI\\\\Port=' "$candidate" | tail -n1 | cut -d= -f2 | tr -d '[:space:]' || printf '')"
 
   if [[ -n "$configured_port" && "$configured_port" =~ ^[0-9]+$ ]]; then
-    ARRSTACK_QBT_WEBUI_PORT_CONFIG="$configured_port"
+    ARRSTACK_QBT_INT_PORT_CONFIG="$configured_port"
   fi
 }
 

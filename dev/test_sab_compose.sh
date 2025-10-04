@@ -83,7 +83,7 @@ run_case() {
         status=1
       fi
     fi
-    local qbt_health_literal='http://${LOCALHOST_IP}:${QBT_WEBUI_PORT}/api/v2/app/version'
+    local qbt_health_literal='http://${LOCALHOST_IP}:${QBT_INT_PORT}/api/v2/app/version'
     if grep -q "http://${loop_host}:8080/api/v2/app/version" "$compose_file"; then
       echo "[${name}] qBittorrent healthcheck still uses 8080" >&2
       status=1
@@ -95,9 +95,9 @@ run_case() {
   fi
 
   if [[ -f "$env_file" ]]; then
-    qbt_port="$(grep -E '^QBT_WEBUI_PORT=' "$env_file" | head -n1 | cut -d= -f2- || printf '8082')"
-    if ! grep -q '^QBT_WEBUI_PORT=8082' "$env_file"; then
-      echo "[${name}] expected QBT_WEBUI_PORT=8082 in .env" >&2
+    qbt_port="$(grep -E '^QBT_INT_PORT=' "$env_file" | head -n1 | cut -d= -f2- || printf '8082')"
+    if ! grep -q '^QBT_INT_PORT=8082' "$env_file"; then
+      echo "[${name}] expected QBT_INT_PORT=8082 in .env" >&2
       status=1
     fi
     if grep -q '^FORCE_SAB_VPN=' "$env_file"; then

@@ -42,7 +42,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   The media services should list LAN ports when exposure is enabled.
 
 ### *Arr apps cannot reach qBittorrent in split mode
-- Update each download client host to `http://LAN_IP:${QBT_HTTP_PORT}`. Docker service names no longer resolve outside Gluetun.
+- Update each download client host to `http://LAN_IP:${QBT_PORT}`. Docker service names no longer resolve outside Gluetun.
 - Use the in-app **Test** button to confirm connectivity.
 
 ### Proton forwarded port stuck at 0

@@ -8,9 +8,9 @@ This stack renders configuration from a small set of scripts, then launches Dock
 | Service | Purpose | Default access |
 | --- | --- | --- |
 | Gluetun | Proton VPN tunnel and port forwarding worker. | Control API on `http://127.0.0.1:${GLUETUN_CONTROL_PORT:-8000}` (API key required). |
-| qBittorrent | Torrent client routed through Gluetun. | `http://LAN_IP:${QBT_HTTP_PORT}` (VueTorrent optional). |
+| qBittorrent | Torrent client routed through Gluetun. | `http://LAN_IP:${QBT_PORT}` (VueTorrent optional). |
 | Sonarr / Radarr / Prowlarr / Bazarr | Media automation apps on the LAN bridge. | `http://LAN_IP:${SONARR_PORT}`, `:${RADARR_PORT}`, etc. |
-| FlareSolverr | Captcha solver service used by indexers. | `http://LAN_IP:${FLARESOLVERR_PORT}`. |
+| FlareSolverr | Captcha solver service used by indexers. | `http://LAN_IP:${FLARR_PORT}`. |
 | Configarr (optional) | Keeps Sonarr/Radarr configuration in sync. | Runs headless; configure via Configarr secrets. |
 | Caddy (optional) | HTTPS reverse proxy with internal CA. | `https://<service>.<LAN_DOMAIN_SUFFIX>` with basic auth for remote access. |
 | local_dns (optional) | dnsmasq-based resolver that answers `*.home.arpa`. | List the Pi as primary DNS on clients. |

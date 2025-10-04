@@ -40,7 +40,7 @@ show_summary() {
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
     msg "VPN Mode: split (only qbittorrent behind VPN)"
-    msg "Configure *Arr download client host as: http://${ip_hint}:${QBT_HTTP_PORT}"
+    msg "Configure *Arr download client host as: http://${ip_hint}:${QBT_PORT}"
   else
     msg "VPN Mode: full-tunnel (all services through VPN)"
     warn "Consider SPLIT_VPN=1 for improved indexer reliability."
@@ -50,14 +50,14 @@ show_summary() {
 ================================================
 qBittorrent Access Information:
 ================================================
-WebUI:    http://${ip_hint}:${QBT_HTTP_PORT}
+WebUI:    http://${ip_hint}:${QBT_PORT}
 Username: ${QBT_USER}
 ${qbt_pass_msg}
 ================================================
 
 QBT_INFO
 
-  local qbt_container_status="${ARRSTACK_QBT_WEBUI_PORT_STATUS:-default}"
+  local qbt_container_status="${ARRSTACK_QBT_INT_PORT_STATUS:-default}"
   local qbt_host_status="${ARRSTACK_QBT_HOST_PORT_STATUS:-default}"
   local container_suffix=""
   local host_suffix=""
@@ -69,7 +69,7 @@ QBT_INFO
     preserved) host_suffix="(preserved)" ;;
     *) host_suffix="(default)" ;;
   esac
-  msg "qBittorrent ports: container ${QBT_WEBUI_PORT} ${container_suffix}, host ${QBT_HTTP_PORT} ${host_suffix}"
+  msg "qBittorrent ports: container ${QBT_INT_PORT} ${container_suffix}, host ${QBT_PORT} ${host_suffix}"
 
   if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
     warn "Stack configuration has duplicate host port assignments:"
@@ -109,12 +109,12 @@ QBT_INFO
 Direct LAN URLs (ipdirect profile enabled):
 DIRECT
     cat <<DIRECT_URLS
-  qBittorrent:  http://${ip_hint}:${QBT_HTTP_PORT}
+  qBittorrent:  http://${ip_hint}:${QBT_PORT}
   Sonarr:       http://${ip_hint}:${SONARR_PORT}
   Radarr:       http://${ip_hint}:${RADARR_PORT}
   Prowlarr:     http://${ip_hint}:${PROWLARR_PORT}
   Bazarr:       http://${ip_hint}:${BAZARR_PORT}
-  FlareSolverr: http://${ip_hint}:${FLARESOLVERR_PORT}
+  FlareSolverr: http://${ip_hint}:${FLARR_PORT}
 DIRECT_URLS
   else
     cat <<'DIRECT_DISABLED'
