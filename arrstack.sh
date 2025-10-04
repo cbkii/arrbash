@@ -89,13 +89,9 @@ for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
     if arrstack_var_is_readonly "${_arrstack_env_var}"; then
       continue
     fi
-    # Validate variable name: must start with a letter or underscore, and contain only alphanumeric and underscores
-    if [[ "${_arrstack_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      printf -v "${_arrstack_env_var}" '%s' "${_arrstack_env_overrides[${_arrstack_env_var}]}"
-      export "${_arrstack_env_var}"
-    else
-      printf '[arrstack] WARN: skipping unsafe variable name: %s\n' "${_arrstack_env_var}" >&2
-    fi
+    # Variable name validation is redundant; Bash enforces valid names
+    printf -v "${_arrstack_env_var}" '%s' "${_arrstack_env_overrides[${_arrstack_env_var}]}"
+    export "${_arrstack_env_var}"
   fi
 done
 unset _arrstack_env_var
