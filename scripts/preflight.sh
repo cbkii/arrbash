@@ -82,7 +82,7 @@ collect_port_requirements() {
         sab_port_check="${ARRSTACK_DEFAULT_SABNZBD_PORT}"
       fi
       if [[ ! "$sab_port_check" =~ ^[0-9]+$ ]]; then
-        sab_port_check="${ARRSTACK_DEFAULT_SABNZBD_PORT:-}" 
+        sab_port_check="${ARRSTACK_DEFAULT_SABNZBD_PORT:-}"
       fi
       _requirements_ref+=("tcp|${sab_port_check}|SABnzbd WebUI|${expected}")
     fi
