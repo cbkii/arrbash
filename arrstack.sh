@@ -45,7 +45,8 @@ if declare -f arrstack_collect_all_expected_env_keys >/dev/null 2>&1; then
     fi
   done < <(arrstack_collect_all_expected_env_keys)
 else
-  while IFS='=' read -r _arrstack_env_var _arrstack_env_rest; do
+  while read -r _arrstack_env_line; do
+    _arrstack_env_var="${_arrstack_env_line%%=*}"
     if [[ "${_arrstack_env_var}" == ARR_* || "${_arrstack_env_var}" == ARRSTACK_* ]]; then
       if [[ -z "${_arrstack_env_override_seen[${_arrstack_env_var}]+x}" ]]; then
         _arrstack_env_override_order+=("${_arrstack_env_var}")
