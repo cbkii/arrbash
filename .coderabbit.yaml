@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
 
 language: "en-AU"
-tone_instructions: "Be concise and practical. Prioritise correctness, security, and safe ops on Debian 12. Use POSIX-safe Bash, defensive quoting, explicit error handling, idempotent installers. Skip style nitpicks unless they reduce risk"
+tone_instructions: "Be concise, practical. Prioritize correctness, security & safe ops on PiOS Debian 12. Use POSIX-safe Bash, defensive quoting, error handling, idempotent installs. Skip style nitpicks unless risk. Always include actionable commit suggestions"
 
 early_access: false
 enable_free_tier: true  # Full Pro features apply to public/OSS repos; rate limits may apply.
@@ -14,6 +14,7 @@ reviews:
   fail_commit_status: false
   collapse_walkthrough: true
   poem: false
+  committable_suggestions: true
 
   # Only review what matters for this repo.
   path_filters:
@@ -105,6 +106,7 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
+      - "*.md"
       - "docs/architecture.md"
       - "docs/security.md"
       - "docs/networking.md"
