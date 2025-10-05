@@ -281,7 +281,7 @@ WARNING
     if [[ -n "${ARR_STACK_DIR:-}" ]]; then
       vpn_auto_state_base="${ARR_STACK_DIR%/}/docker-data"
     else
-      vpn_auto_state_base="${HOME:-.}/srv/docker-data"
+      vpn_auto_state_base="${ARR_DATA_ROOT%/}/docker-data"
     fi
   fi
   local vpn_auto_state_file="${vpn_auto_state_base%/}/gluetun/auto-reconnect/state.json"

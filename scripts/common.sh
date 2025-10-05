@@ -13,6 +13,18 @@
 : "${DATA_DIR_MODE:=700}"
 : "${LOCK_FILE_MODE:=640}"
 
+if [[ -z "${ARR_DATA_ROOT:-}" ]]; then
+  if [[ -n "${HOME:-}" ]]; then
+    ARR_DATA_ROOT="${HOME%/}/srv"
+  else
+    ARR_DATA_ROOT="/srv/${STACK}"
+  fi
+fi
+
+if [[ -z "${ARR_BASE:-}" ]]; then
+  ARR_BASE="${ARR_DATA_ROOT}"
+fi
+
 # shellcheck disable=SC2034  # exported for other modules
 STACK_LABEL="[${STACK}]"
 
@@ -180,13 +192,19 @@ arr_docker_data_root() {
     return
   fi
 
-  local home_dir="${HOME:-}"
-  if [[ -n "$home_dir" ]]; then
-    printf '%s' "${home_dir%/}/srv/docker-data"
+  local base_root="${ARR_BASE:-${ARR_DATA_ROOT:-}}"
+  if [[ -n "$base_root" ]]; then
+    printf '%s/docker-data' "${base_root%/}"
     return
   fi
 
-  printf '%s' "./srv/docker-data"
+  local home_dir="${HOME:-}"
+  if [[ -n "$home_dir" ]]; then
+    printf '%s/srv/docker-data' "${home_dir%/}"
+    return
+  fi
+
+  printf '%s' "/srv/${STACK}/docker-data"
 }
 
 # Resolves the Gluetun data directory under the docker-data root

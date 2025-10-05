@@ -55,7 +55,7 @@ arr_find_userconf_override() {
 
 # Resolve the effective userr.conf path, preferring an explicit ARR_USERCONF_PATH
 # when set, otherwise falling back to the first sibling override and finally the
-# default under ARR_BASE (or $HOME/srv when unset). Sets the provided variable
+# default under ARR_BASE (or ARR_DATA_ROOT when unset). Sets the provided variable
 # names to the canonical path, discovered override, and source label.
 arr_resolve_userconf_paths() {
   local __path_var="$1"
@@ -73,7 +73,7 @@ arr_resolve_userconf_paths() {
       candidate="${override}"
       source="override"
     else
-      candidate="${ARR_BASE:-${HOME}/srv}/userr.conf"
+      candidate="${ARR_BASE:-${ARR_DATA_ROOT}}/userr.conf"
       source="default"
       override=""
     fi

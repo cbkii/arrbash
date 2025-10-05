@@ -3,7 +3,7 @@
 # This file is sourced *before* ${ARR_BASE}/userr.conf.
 # Keep assignments idempotent and avoid relying on side effects so overrides
 # behave predictably when the user configuration runs afterwards.
-# Override these in ${ARR_BASE}/userr.conf (git-ignored; defaults to ${HOME}/srv/userr.conf).
+# Override these in ${ARR_BASE}/userr.conf (git-ignored; defaults to ${ARR_DATA_ROOT}/userr.conf where ARR_DATA_ROOT defaults to ~/srv).
 
 # Guard helpers for shells that source these defaults alongside other scripts
 if ! declare -f arr_var_is_readonly >/dev/null 2>&1; then
@@ -29,7 +29,16 @@ fi
 STACK="${STACK:-arr}"
 STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
 export STACK STACK_UPPER
-ARR_BASE="${ARR_BASE:-${HOME}/srv}"
+
+if [[ -z "${ARR_DATA_ROOT:-}" ]]; then
+  if [[ -n "${HOME:-}" ]]; then
+    ARR_DATA_ROOT="${HOME%/}/srv"
+  else
+    ARR_DATA_ROOT="/srv/${STACK}"
+  fi
+fi
+
+ARR_BASE="${ARR_BASE:-${ARR_DATA_ROOT}}"
 ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_BASE}/${STACK}}"
 ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_BASE}/docker-data}"
 ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
@@ -516,12 +525,13 @@ arr_render_userconf_template() {
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 # Keep arrconf/userr.conf.example in sync with any changes made here.
-# Copy to ${ARR_BASE}/userr.conf (default: ${HOME}/srv/userr.conf) and edit as needed.
+# Copy to ${ARR_BASE}/userr.conf (default: ${ARR_DATA_ROOT}/userr.conf) and edit as needed.
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
 # --- Stack paths ---
 STACK="${STACK}"                    # Project identifier used for directories, logs, and labels
-ARR_BASE="${HOME}/srv"                 # Root directory for generated stack files
+ARR_DATA_ROOT="${HOME}/srv"           # Default data root (matches historical ~/srv layout)
+ARR_BASE="${ARR_DATA_ROOT}"           # Root directory for generated stack files
 ARR_STACK_DIR="${ARR_BASE}/${STACK}"  # Location for docker-compose.yml, scripts, and aliases
 ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
 ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage

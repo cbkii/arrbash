@@ -629,7 +629,7 @@ compose_service_is_running() {
   local service="$1"
   local project
 
-  project="$(arr_effective_project_name 2>/dev/null || printf 'arrstack')"
+  project="$(arr_effective_project_name 2>/dev/null || printf '%s' "${STACK}")"
 
   docker ps \
     --filter "label=com.docker.compose.project=${project}" \
