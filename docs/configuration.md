@@ -2,7 +2,7 @@
 
 # Configuration guide
 
-Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arr.sh` snapshots exported environment variables, marks them read-only before sourcing your config, and reapplies them afterwards so they continue to win over anything set inside `userr.conf` or the defaults.
+Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arr.sh` snapshots exported environment variables, marks them read-only before sourcing your config, and reapplies them afterwards so they continue to win over anything set inside `userr.conf` or the defaults. Preflight looks in the directory above the repo for the first file named `userr.conf` (for example `../userr.conf` or `../overrides/site-a/userr.conf`) and surfaces that path in the configuration preview so you can confirm which override will apply.
 
 ## Configuration layers
 1. **Shell environment** – anything exported before running `./arr.sh` overrides every other source (use for CI or one-off toggles). Values are made read-only while `userr.conf` loads and reasserted afterwards, except for internal read-only variables and normalized paths such as `ARR_USERCONF_PATH`, which may be canonicalised to an absolute path during startup.

@@ -38,7 +38,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    ```bash
    ./arr.sh --yes         # omit --yes for interactive mode
    ```
-   The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`.
+   The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`. During preflight the installer looks one directory above the repo and uses the first `userr.conf` it finds there (for example `../userr.conf` or a sibling project override), so keep only the copy you want applied.
 6. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration

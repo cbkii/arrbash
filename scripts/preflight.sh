@@ -41,6 +41,73 @@ install_missing() {
   fi
 }
 
+# Locates the first userr.conf override relative to the repo parent
+preflight_find_userconf_override() {
+  local target_name="userr.conf" search_root=".." repo_root="" canonical=""
+
+  if [[ -n "${REPO_ROOT:-}" ]]; then
+    if repo_root="$(cd "${REPO_ROOT}" 2>/dev/null && pwd -P)"; then
+      if search_root="$(cd "${repo_root}/.." 2>/dev/null && pwd -P)"; then
+        :
+      else
+        search_root=".."
+      fi
+    fi
+  else
+    if search_root="$(cd ".." 2>/dev/null && pwd -P)"; then
+      :
+    else
+      search_root=".."
+    fi
+  fi
+
+  local current_path="${ARR_USERCONF_PATH:-}"
+  if [[ -n "$current_path" && -f "$current_path" ]]; then
+    canonical="$(readlink -f "$current_path" 2>/dev/null || printf '%s' "$current_path")"
+    printf '%s\n' "$canonical"
+    return 0
+  fi
+
+  if [[ ! -d "$search_root" ]]; then
+    return 1
+  fi
+
+  local root_candidate="${search_root%/}/$target_name"
+  if [[ -f "$root_candidate" ]]; then
+    canonical="$(readlink -f "$root_candidate" 2>/dev/null || printf '%s' "$root_candidate")"
+    printf '%s\n' "$canonical"
+    return 0
+  fi
+
+  local -a sibling_dirs=()
+  local entry=""
+  while IFS= read -r -d '' entry; do
+    if [[ -n "$repo_root" ]] && [[ "$entry" == "$repo_root" ]]; then
+      continue
+    fi
+    sibling_dirs+=("$entry")
+  done < <(find "$search_root" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | LC_ALL=C sort -z)
+
+  for entry in "${sibling_dirs[@]}"; do
+    local candidate="${entry%/}/$target_name"
+    if [[ -f "$candidate" ]]; then
+      canonical="$(readlink -f "$candidate" 2>/dev/null || printf '%s' "$candidate")"
+      printf '%s\n' "$canonical"
+      return 0
+    fi
+
+    local found=""
+    found="$(find "$entry" -type f -name "$target_name" -print -quit 2>/dev/null || true)"
+    if [[ -n "$found" ]]; then
+      canonical="$(readlink -f "$found" 2>/dev/null || printf '%s' "$found")"
+      printf '%s\n' "$canonical"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 # Builds list of host ports the stack expects based on current configuration
 collect_port_requirements() {
   local _requirements_name="$1"
@@ -541,6 +608,15 @@ preflight() {
   acquire_lock
 
   msg "  Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
+
+  local userconf_override_path=""
+  if userconf_override_path="$(preflight_find_userconf_override)" && [[ -n "$userconf_override_path" ]]; then
+    # shellcheck disable=SC2034  # consumed by scripts/config.sh
+    ARR_USERCONF_OVERRIDE_PATH="$userconf_override_path"
+  else
+    # shellcheck disable=SC2034  # consumed by scripts/config.sh
+    ARR_USERCONF_OVERRIDE_PATH=""
+  fi
 
   if [[ ! -f "${ARRCONF_DIR}/proton.auth" ]]; then
     die "Missing ${ARRCONF_DIR}/proton.auth - create it with PROTON_USER and PROTON_PASS"
