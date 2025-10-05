@@ -27,7 +27,7 @@ show_summary() {
         warn "See docs/networking.md (Proton port forwarding) to restore the forwarded port."
         ;;
       *)
-        warn "Check ${ARR_STACK_DIR}/logs and rerun with --verbose for additional detail."
+        warn "Check ${ARR_STACK_DIR}/logs for additional detail."
         ;;
     esac
     return 0
