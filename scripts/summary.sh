@@ -170,10 +170,10 @@ DNS_HTTP
   fi
 
   if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    if [[ "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
+    if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
       msg "Local DNS is enabled. Point DHCP Option 6 (or per-device DNS) at ${LAN_IP:-<unset>} so hostnames resolve."
     else
-      warn "Local DNS requested but the container is disabled (port 53 conflict). Resolve the conflict and rerun."
+      warn "Local DNS requested but not active: ${LOCAL_DNS_STATE_REASON:-Local DNS is disabled}. Resolve the issue and rerun."
     fi
   fi
 

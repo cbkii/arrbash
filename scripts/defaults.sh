@@ -40,8 +40,9 @@ arr_setup_defaults() {
     LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX#.}"
   fi
 
-  LOCAL_DNS_SERVICE_ENABLED=0
-  : "$LOCAL_DNS_SERVICE_ENABLED" # referenced by other modules after defaults load
+  LOCAL_DNS_STATE="inactive"
+  LOCAL_DNS_STATE_REASON="Local DNS disabled (ENABLE_LOCAL_DNS=0)"
+  : "$LOCAL_DNS_STATE" "$LOCAL_DNS_STATE_REASON" # referenced by other modules after defaults load
 
   if [[ -z "${QBT_DOCKER_MODS+x}" ]]; then
     QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"

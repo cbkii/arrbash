@@ -16,8 +16,8 @@ configure_local_dns_entries() {
 
   local helper_script="${REPO_ROOT}/scripts/setup-lan-dns.sh"
 
-  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" || "${LOCAL_DNS_SERVICE_ENABLED:-0}" != "1" ]]; then
-    msg "  Local DNS container disabled; skipping host entries helper"
+  if [[ "${LOCAL_DNS_STATE:-inactive}" != "active" ]]; then
+    msg "  Local DNS container disabled (${LOCAL_DNS_STATE_REASON:-not enabled}); skipping host entries helper"
     return 0
   fi
 

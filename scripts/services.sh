@@ -558,7 +558,7 @@ validate_images() {
     image_vars+=(SABNZBD_IMAGE)
   fi
 
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
+  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
     LOCALDNS_IMAGE="${LOCALDNS_IMAGE:-4km3/dnsmasq:2.90-r3}"
     image_vars+=(LOCALDNS_IMAGE)
   fi
@@ -988,7 +988,7 @@ show_service_status() {
   if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     services+=(caddy)
   fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
+  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
     services+=(local_dns)
   fi
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
@@ -1017,7 +1017,7 @@ show_service_status() {
 
 # Disables Docker's userland proxy to let dnsmasq bind :53 reliably
 ensure_docker_userland_proxy_disabled() {
-  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" || "${LOCAL_DNS_SERVICE_ENABLED:-0}" != "1" ]]; then
+  if [[ "${LOCAL_DNS_STATE:-inactive}" != "active" ]]; then
     msg "[dns] Skipping userland-proxy update (local DNS inactive)"
     return 0
   fi
@@ -1278,7 +1278,7 @@ start_stack() {
   service_start_sabnzbd
 
   local services=()
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
+  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
     services+=(local_dns)
   fi
   if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then

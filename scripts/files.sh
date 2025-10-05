@@ -834,7 +834,8 @@ write_compose_split_mode() {
   local sab_internal_port
   arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
 
-  LOCAL_DNS_SERVICE_ENABLED=0
+  LOCAL_DNS_STATE="split-disabled"
+  LOCAL_DNS_STATE_REASON="Local DNS disabled in split mode (SPLIT_VPN=1)"
 
   tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
@@ -1198,7 +1199,7 @@ YAML
   mv "$tmp" "$compose_path"
   ensure_nonsecret_file_mode "$compose_path"
 
-  msg "  Local DNS status: Local DNS disabled in split mode (SPLIT_VPN=1) (LOCAL_DNS_SERVICE_ENABLED=0)"
+  msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
 
 # Generates docker-compose.yml for default mode, gating optional services on runtime checks
@@ -1213,10 +1214,10 @@ write_compose() {
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
 
-  LOCAL_DNS_SERVICE_ENABLED=0
+  LOCAL_DNS_STATE="inactive"
+  LOCAL_DNS_STATE_REASON="Local DNS container disabled (ENABLE_LOCAL_DNS=0)"
   local include_caddy=0
   local include_local_dns=0
-  local local_dns_state_message="Local DNS container disabled (ENABLE_LOCAL_DNS=0)"
   local -a upstream_dns_servers=()
   local userconf_path="${ARR_USERCONF_PATH:-${ARR_BASE:-${HOME}/srv}/userr.conf}"
 
@@ -1228,20 +1229,22 @@ write_compose() {
 
   if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
     include_local_dns=1
-    local_dns_state_message="Local DNS container requested"
+    LOCAL_DNS_STATE="requested"
+    LOCAL_DNS_STATE_REASON="Local DNS container requested"
   fi
 
   if ((include_local_dns)); then
     if port_bound_any udp 53 || port_bound_any tcp 53; then
       include_local_dns=0
-      local_dns_state_message="Local DNS disabled automatically (port 53 already in use)"
-      warn "Port 53 is already in use (likely systemd-resolved). Local DNS will be disabled (LOCAL_DNS_SERVICE_ENABLED=0)."
+      LOCAL_DNS_STATE="blocked"
+      LOCAL_DNS_STATE_REASON="Local DNS disabled automatically (port 53 already in use)"
+      warn "Port 53 is already in use (likely systemd-resolved). Local DNS will be disabled (LOCAL_DNS_STATE=blocked)."
     fi
   fi
 
   if ((include_local_dns)); then
-    LOCAL_DNS_SERVICE_ENABLED=1
-    local_dns_state_message="Local DNS container enabled"
+    LOCAL_DNS_STATE="active"
+    LOCAL_DNS_STATE_REASON="Local DNS container enabled"
     if [[ -z "${LAN_IP:-}" || "${LAN_IP}" == "0.0.0.0" ]]; then
       warn "Local DNS will bind to all interfaces (0.0.0.0:53)"
     fi
@@ -1679,7 +1682,7 @@ YAML
   mv "$tmp" "$compose_path"
   ensure_nonsecret_file_mode "$compose_path"
 
-  msg "  Local DNS status: ${local_dns_state_message} (LOCAL_DNS_SERVICE_ENABLED=${LOCAL_DNS_SERVICE_ENABLED})"
+  msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
 
 # Writes Gluetun hook/auth assets so API key and port forwarding stay aligned
