@@ -25,6 +25,7 @@ Use these controls to choose how traffic flows, manage Proton VPN forwarding, an
 Revert by setting `SPLIT_VPN=0` and rerunning the installer.
 
 ## Proton port forwarding
+- Proton port forwarding is optional—the installer makes a quick attempt after VPN startup and continues even without a lease (you'll see a non-fatal notice in the summary).
 - Gluetun acquires the Proton forwarded port after the VPN is healthy. The installer writes hooks in `docker-data/gluetun` and spawns an async worker so other services can start without waiting.
 - Worker state lives in `docker-data/gluetun/pf-state.json`; logs stream to `docker-data/gluetun/port-forwarding.log`.
 - Helper aliases (available after sourcing `.aliasarr`) expose status:
