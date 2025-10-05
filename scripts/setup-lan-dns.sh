@@ -48,14 +48,19 @@ fuzzy_remove_entries() {
   local begin_marker="$2"
   local end_marker="$3"
 
-  awk -v begin="${begin_marker}" -v end="${end_marker}" '
-    BEGIN { skip=0 }
-    $0 == begin { skip=1; next }
-    $0 == end { skip=0; next }
+  local -r managed_marker="${STACK}-managed"
+
+  awk -v begin="${begin_marker}" -v end="${end_marker}" -v marker="${managed_marker}" '
+    BEGIN {
+      skip = 0
+      marker_lower = tolower(marker)
+    }
+    $0 == begin { skip = 1; next }
+    $0 == end { skip = 0; next }
     skip { next }
     {
       line = tolower($0)
-      if (index(line, "${STACK}-managed") > 0) {
+      if (marker_lower != "" && index(line, marker_lower) > 0) {
         next
       }
       print $0
