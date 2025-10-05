@@ -43,9 +43,9 @@ arr_find_userconf_override() {
   [[ -d "${parent}" ]] || return 1
 
   if [[ -n "${repo_root}" ]]; then
-    first="$(find -L "${parent}" -path "${repo_root}" -prune -o -type f -name "${target}" -print -quit 2>/dev/null)" || true
+    first="$(find -L "${parent}" -maxdepth 4 -path "${repo_root}" -prune -o -type f -name "${target}" -print -quit 2>/dev/null)" || true
   else
-    first="$(find -L "${parent}" -type f -name "${target}" -print -quit 2>/dev/null)" || true
+    first="$(find -L "${parent}" -maxdepth 4 -type f -name "${target}" -print -quit 2>/dev/null)" || true
   fi
 
   [[ -n "${first}" ]] || return 1
