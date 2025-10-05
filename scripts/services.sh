@@ -1400,7 +1400,6 @@ start_stack() {
       ARR_PF_NOTICE=""
       export ARR_PF_STATUS ARR_PF_NOTICE
       msg "[pf] Port forwarding wait skipped (PF_ASYNC_ENABLE=0)."
-      return 0
     fi
     local pf_wait_timeout pf_wait_interval
     arr_resolve_positive_int pf_wait_timeout "${ARR_PF_WAIT_TIMEOUT:-}" "${ARR_PF_WAIT_TIMEOUT_DEFAULT}" "Invalid ARR_PF_WAIT_TIMEOUT, defaulting to ${ARR_PF_WAIT_TIMEOUT_DEFAULT}s" warn
