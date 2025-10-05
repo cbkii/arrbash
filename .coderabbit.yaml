@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+
+language: "en-AU"
+tone_instructions: >
+  Be concise and practical. Prioritise correctness, security, and operational safety for
+  Bash on Debian 12 (Bookworm). Prefer POSIX-safe constructs, defensive quoting, explicit
+  error handling, and idempotent installers. Avoid style-only nitpicks unless they reduce risk.
+
+early_access: false
+enable_free_tier: true  # Full Pro features apply to public/OSS repos; rate limits may apply.
+
+reviews:
+  profile: "assertive"         # Ask for more signal; we filter noise with path filters/instructions.
+  high_level_summary: true
+  review_status: true
+  commit_status: true
+  fail_commit_status: false
+  collapse_walkthrough: true
+  poem: false
+
+  # Only review what matters for this repo.
+  path_filters:
+    - "arrstack.sh"
+    - "scripts/**/*.sh"
+    - "arrconf/**/*.sh"
+    - "dev/**/*.sh"
+    - ".env*"
+    - "docs/**/*.md"
+    # Ignore common clutter if it appears later:
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/.venv/**"
+
+  # File/path-specific guidance for arrbash.
+  path_instructions:
+    - path: "arrstack.sh"
+      instructions: >
+        Treat as the primary installer/orchestrator. Check idempotency, strict mode correctness
+        (set -Eeuo pipefail + IFS), errexit-safe conditionals, safe trap usage, and restoration
+        on failure. Verify permissions/umask handling, sudo/root assumptions, and rollback on
+        network/DNS/iptables/capabilities changes.
+    - path: "scripts/**/*.sh"
+      instructions: >
+        Enforce defensive Bash: quote all expansions, avoid word-splitting, prefer arrays for
+        argv, check command exit codes, avoid eval/unsafe globbing, use mktemp for temp files,
+        prefer find -print0/xargs -0 for paths, and guard sed/grep with LC_ALL=C where needed.
+        Prefer POSIX sh features if possible; when using Bashisms, confirm /usr/bin/env bash.
+    - path: "scripts/*dns*.sh"
+      instructions: >
+        Changes to resolver/host DNS must be reversible. Validate that setup scripts create a
+        working rollback path and preserve host resolv.conf behaviour on Debian 12. Flag any
+        assumptions that break NetworkManager/systemd-resolved variants.
+    - path: "scripts/*vpn*.sh"
+      instructions: >
+        Check Proton/Gluetun integration and auto-reconnect logic for race conditions, port
+        forwarding updates, and leak protection. Call out any window where traffic can bypass
+        the tunnel. Prefer explicit iptables/nftables rules with safe defaults.
+    - path: "arrconf/**/*.sh"
+      instructions: >
+        Validate defaults vs. overrides. Ensure values from userr.conf are validated, type-checked
+        (integers/paths/addresses), and normalised (readlink -f where appropriate). Avoid sourcing
+        untrusted files; restrict with readonly/declare -r where helpful.
+    - path: ".env*"
+      instructions: >
+        Check for secrets or accidental credentials. Ensure variables used by Docker/compose or
+        scripts are documented and validated. Recommend keeping secrets outside VCS.
+    - path: "docs/**/*.md"
+      instructions: >
+        Prefer precise, actionable operator guidance. Flag mismatches between docs and scripts
+        (e.g., flags, env var names, required packages, Debian Bookworm specifics).
+
+  # Automatic review behaviour
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    ignore_title_keywords: ["wip", "draft"]
+    labels: ["!wip"]          # review everything except PRs labelled wip
+    base_branches: []         # default branch plus any you add later
+    ignore_usernames: []      # keep empty for OSS contributions
+
+  # “Finishing touches” (not very relevant for Bash—disable)
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+  # Run first-party tool integrations in CodeRabbit (Pro features are free for public repos).
+  tools:
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    dotenvLint:
+      enabled: true
+    # Enable later if you add corresponding files:
+    # hadolint: { enabled: true }        # if Dockerfiles appear
+    # osvScanner: { enabled: true }      # if you add language/package manifests
+    # checkmake: { enabled: true }       # if Makefiles appear
+
+# Teach CodeRabbit from your own docs so reviews follow arrbash’s conventions.
+knowledge_base:
+  opt_out: false
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "docs/architecture.md"
+      - "docs/security.md"
+      - "docs/networking.md"
+      - "docs/operations.md"
+      - "docs/version-management.md"
+      - "docs/troubleshooting.md"
+      - "docs/AGENTS.md"   # team/agent instructions if applicable
