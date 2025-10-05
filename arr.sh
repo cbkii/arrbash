@@ -213,7 +213,7 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
     # Validate variable name format before assignment
     if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
       printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
-      export "${_arr_env_var?}"
+      export "${_arr_env_var}"
     else
       printf '%s WARN: Skipping invalid environment variable name: %s\n' "${STACK_TAG}" "${_arr_env_var}" >&2
     fi
