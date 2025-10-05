@@ -2,9 +2,9 @@
 
 language: "en-AU"
 tone_instructions: >
-  Be concise and practical. Prioritise correctness, security, and operational safety for
-  Bash on Debian 12 (Bookworm). Prefer POSIX-safe constructs, defensive quoting, explicit
-  error handling, and idempotent installers. Avoid style-only nitpicks unless they reduce risk.
+  Be concise and practical.  Prioritise correctness, security, and safe ops on Debian 12.
+  Use POSIX-safe Bash, defensive quoting, explicit error handling, and idempotent installers.
+  Skip style nitpicks unless they reduce risk.
 
 early_access: false
 enable_free_tier: true  # Full Pro features apply to public/OSS repos; rate limits may apply.
