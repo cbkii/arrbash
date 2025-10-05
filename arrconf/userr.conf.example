@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# Keep this example in sync with arrconf/userr.conf.defaults.sh when defaults change.
+# When updating arrconf/userr.conf.defaults.sh, manually review and update this example file to match any new or changed default variables.
 # Copy to ${ARR_BASE}/userr.conf (default: ${HOME}/srv/userr.conf) and edit as needed.
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
