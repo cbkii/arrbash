@@ -624,13 +624,51 @@ validate_images() {
   return 0
 }
 
+# Returns 0 when the compose-managed service is currently running
+compose_service_is_running() {
+  local service="$1"
+  local project
+
+  project="$(arr_effective_project_name 2>/dev/null || printf 'arrstack')"
+
+  docker ps \
+    --filter "label=com.docker.compose.project=${project}" \
+    --filter "label=com.docker.compose.service=${service}" \
+    --filter "status=running" \
+    --format '{{.ID}}' \
+    | grep -q .
+}
+
 # Starts individual compose service and streams docker compose output
 compose_up_service() {
   local service="$1"
+  local was_running=0
+
+  if compose_service_is_running "$service"; then
+    was_running=1
+  fi
 
   msg "  Starting $service..."
   if compose up -d "$service"; then
-    msg "  $service started"
+    local running_after=0
+    if compose_service_is_running "$service"; then
+      running_after=1
+    else
+      sleep 1
+      if compose_service_is_running "$service"; then
+        running_after=1
+      fi
+    fi
+
+    if ((running_after)); then
+      if ((was_running)); then
+        msg "  $service already running (no changes needed)"
+      else
+        msg "  $service started"
+      fi
+    else
+      warn "  $service not running after docker compose up; inspect container logs"
+    fi
   else
     warn "  Failed to start $service"
   fi
