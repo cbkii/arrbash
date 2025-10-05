@@ -9,6 +9,7 @@ STACK="${STACK:-arr}"               # Project identifier used for directories, l
 TIMEZONE="Australia/Sydney"            # Timezone for container logs and schedules (default: Australia/Sydney)
 PUID="$(id -u)"                        # Numeric user ID containers should run as
 PGID="$(id -g)"                        # Numeric group ID with write access (match your media group when using collab)
+ARR_PERMISSION_PROFILE="strict"        # strict keeps secrets 600/700, collab enables group read/write (660/770)
 
 # --- Essential paths ---
 ARR_BASE="${HOME}/srv"                 # Root directory for generated stack files
@@ -35,6 +36,7 @@ ENABLE_CADDY="0"                       # Optional Caddy reverse proxy (run ./arr
 ENABLE_CONFIGARR="1"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
 
 # --- Ports (user-facing) ---
+ARR_PORT_CHECK_MODE="enforce"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing
 QBT_PORT="8082"              # qBittorrent WebUI port exposed on the LAN (default: 8082)
 QBT_INT_PORT="8082"             # Internal qBittorrent WebUI port; match the container WEBUI_PORT env if you change it
 SONARR_PORT="8989"                     # Sonarr WebUI port exposed on the LAN (default: 8989)
@@ -62,7 +64,7 @@ CADDY_LAN_CIDRS="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"  
 SPLIT_VPN="0"
 SERVER_COUNTRIES="Netherlands"              # ProtonVPN exit country list (default: Netherlands)
 # SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) if PF stays at 0
-PVPN_ROTATE_COUNTRIES=""  # Optional rotation order for arr.vpn switch (default: empty/disabled)
+PVPN_ROTATE_COUNTRIES="Switzerland,Malaysia,Romania,Luxembourg,Australia,Spain"  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_API_KEY=""                     # Pre-seed a Gluetun API key or leave empty to auto-generate
 
 # --- VPN auto-reconnect (optional) ---
@@ -132,25 +134,23 @@ ARR_MBMIN_DECIMALS="1"       # Decimals precision for minimum size rules (defaul
 # CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"            # Override the Configarr container tag
 # CADDY_IMAGE="caddy:2.8.4"                      # Override the Caddy reverse-proxy container tag
 # LOCALDNS_IMAGE="4km3/dnsmasq:2.90-r3"                # Override the dnsmasq container tag when local DNS is enabled
-
-# --- Behaviour & safety toggles ---
-# ASSUME_YES="0"                         # Skip confirmation prompts when scripting installs
-ARR_PORT_CHECK_MODE="enforce"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing
-# FORCE_ROTATE_API_KEY="0"               # Force regeneration of the Gluetun API key on next run
-# FORCE_REGEN_CADDY_AUTH="0"             # Rotate the Caddy username/password on next run
-# SETUP_HOST_DNS="0"                      # Automate host DNS takeover helper (or call with --setup-host-dns)
-# REFRESH_ALIASES="0"                     # Regenerate helper aliases without running the installer
 QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"  # Vuetorrent WebUI mod (set empty to disable)
 QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"  # CIDRs allowed to bypass the qBittorrent login prompt (default: 127.0.0.1/32,::1/128)
 CADDY_BASIC_AUTH_USER="user"           # Username clients outside CADDY_LAN_CIDRS must use (default: user)
 CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password (regen when empty)
+
+# --- Behaviour toggles ---
+# ASSUME_YES="0"                         # Skip confirmation prompts when scripting installs
 ARR_COLOR_OUTPUT="1"       # 1 keeps colorful CLI output, set 0 to disable ANSI colors
-ARR_PERMISSION_PROFILE="strict"        # strict keeps secrets 600/700, collab enables group read/write (660/770)
+# FORCE_ROTATE_API_KEY="0"               # Force regeneration of the Gluetun API key on next run
+# FORCE_REGEN_CADDY_AUTH="0"             # Rotate the Caddy username/password on next run
+# SETUP_HOST_DNS="0"                      # Automate host DNS takeover helper (or call with --setup-host-dns)
+# REFRESH_ALIASES="0"                     # Regenerate helper aliases without running the installer
 
 # --- Internal/resolution paths (rarely touched) ---
 ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
 ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
-# ARR_USERCONF_PATH="${ARR_BASE}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
-# ARRCONF_DIR="${HOME}/.config/${STACK}"  # Optional: relocate Proton creds outside the repo
+ARRCONF_DIR="${ARR_BASE}/${STACK}configs"  # Optional: relocate Proton creds outside the repo
+ARR_USERCONF_PATH="${ARRCONF_DIR}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
 ARR_LOG_DIR="${ARR_STACK_DIR}/logs"           # Directory for runtime/service logs (default: ${ARR_STACK_DIR}/logs)
 ARR_INSTALL_LOG="${ARR_LOG_DIR}/${STACK}-install.log"   # Installer run log location (default: ${ARR_LOG_DIR}/${STACK}-install.log)
