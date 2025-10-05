@@ -23,6 +23,16 @@ arr_err_trap() {
 trap 'arr_err_trap' ERR
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+
+USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
+if [[ -f "${USERCONF_LIB}" ]]; then
+  # shellcheck source=scripts/userconf.sh
+  . "${USERCONF_LIB}"
+else
+  printf '[arr] missing required module: %s\n' "${USERCONF_LIB}" >&2
+  exit 1
+fi
+
 if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
@@ -33,10 +43,14 @@ STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
 STACK_TAG="[${STACK}]"
 
 # Resolve and optionally constrain user config
-ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE:-${HOME}/srv}/userr.conf}"
+ARR_USERCONF_OVERRIDE_PATH="${ARR_USERCONF_OVERRIDE_PATH:-}"
+_arr_userconf_source="default"
+
+arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _arr_userconf_source
+
 _expected_base="${ARR_BASE:-${HOME}/srv}"
-_canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_expected_base}")"
-_canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
+_canon_base="$(arr_canonical_path "${_expected_base}")"
+_canon_userconf="${ARR_USERCONF_PATH}"
 
 # Returns 0 if the given variable name is readonly, 1 otherwise
 arr_var_is_readonly() {
@@ -97,7 +111,7 @@ done
 unset _arr_env_var
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
-  if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
+  if [[ "${_arr_userconf_source}" != "override" && "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
     if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
       printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
       exit 1
@@ -147,7 +161,7 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
     # Validate variable name format before assignment
     if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
       printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
-      export "${_arr_env_var}"
+      export "${_arr_env_var?}"
     else
       printf '%s WARN: Skipping invalid environment variable name: %s\n' "${STACK_TAG}" "${_arr_env_var}" >&2
     fi
@@ -158,6 +172,7 @@ unset _arr_env_var
 unset _arr_env_override_order _arr_env_overrides
 
 ARR_USERCONF_PATH="${_canon_userconf}"
+unset _arr_userconf_source
 unset _canon_userconf _canon_base _expected_base
 
 if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
