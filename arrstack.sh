@@ -34,6 +34,8 @@ _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_ex
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
 ARR_USERCONF_PATH="${_canon_userconf}"
 
+_arr_timezone_before="${TIMEZONE:-}"
+
 # Returns 0 if the given variable name is readonly, 1 otherwise
 arr_var_is_readonly() {
   local varname=$1 out
@@ -151,13 +153,40 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
 done
 unset _arr_env_var
 
-if [[ "${TIMEZONE:-}" != "UTC" ]]; then
-  ARR_TIMEZONE_AUTO_FALLBACK=0
+_arr_userconf_timezone_override=0
+if [[ -n "${TIMEZONE:-}" ]]; then
+  if [[ "${TIMEZONE}" != "${_arr_timezone_before:-}" ]]; then
+    _arr_userconf_timezone_override=1
+  elif [[ -f "${ARR_USERCONF_PATH}" ]]; then
+    if grep -Eq '^[[:space:]]*(export[[:space:]]+)?TIMEZONE[[:space:]]*=' "${ARR_USERCONF_PATH}" 2>/dev/null; then
+      _arr_userconf_timezone_override=1
+    fi
+  fi
 fi
+
+if ((_arr_userconf_timezone_override)); then
+  ARR_TIMEZONE_AUTO_SOURCE="provided"
+  ARR_TIMEZONE_AUTO_FALLBACK=0
+  ARR_TIMEZONE_DETECTED_VALUE=""
+else
+  if [[ -z "${TIMEZONE:-}" ]]; then
+    if declare -f arr_detect_timezone >/dev/null 2>&1; then
+      TIMEZONE="$(arr_detect_timezone)"
+      ARR_TIMEZONE_DETECTED_VALUE="${TIMEZONE:-}"
+      ARR_TIMEZONE_AUTO_SOURCE="detected"
+    fi
+  fi
+fi
+
+if [[ -z "${ARR_TIMEZONE_DETECTED_VALUE:-}" && "${ARR_TIMEZONE_AUTO_SOURCE:-}" == "detected" ]]; then
+  ARR_TIMEZONE_DETECTED_VALUE="${TIMEZONE:-}"
+fi
+export ARR_TIMEZONE_DETECTED_VALUE
 
 unset _arr_env_override_order _arr_env_overrides
 
 unset _canon_userconf _canon_base _expected_base
+unset _arr_timezone_before _arr_userconf_timezone_override
 
 if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly REPO_ROOT ARR_USERCONF_PATH

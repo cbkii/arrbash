@@ -5,6 +5,8 @@
 : "${ARR_PF_FAILURE_REASON:=}"
 : "${ARR_PF_STATUS:=not_requested}"
 : "${ARR_PF_NOTICE:=}"
+: "${ARR_PF_WAIT_TIMEOUT_DEFAULT:=60}"
+: "${ARR_PF_WAIT_INTERVAL_DEFAULT:=5}"
 
 # Confirms manual VueTorrent install has required assets before activation
 vuetorrent_manual_is_complete() {
@@ -570,7 +572,7 @@ validate_images() {
       tag_part="${image##*:}"
     fi
 
-    if [[ -z "$tag_part" || "$repo_part" == "$image" || "$tag_part" =~ [[:space:]] ]]; then
+    if [[ -z "$tag_part" || "$repo_part" == "$image" || "$tag_part" =~ [[:space:]] || "$tag_part" == */* ]]; then
       warn "  ❌ ${var_name} is missing a valid tag. Set ${var_name}=repository:tag in ${ARR_ENV_FILE} or ${ARR_USERCONF_PATH}."
       invalid_images+=("$var_name")
       failed_images+=("${image:-<empty>}")
@@ -885,8 +887,8 @@ arr_wait_for_gluetun_ready() {
 
 arr_wait_for_pf_ready() {
   local name="${1:-gluetun}"
-  local max_wait="${2:-120}"
-  local check_interval="${3:-5}"
+  local max_wait="${2:-${ARR_PF_WAIT_TIMEOUT_DEFAULT}}"
+  local check_interval="${3:-${ARR_PF_WAIT_INTERVAL_DEFAULT}}"
 
   ARR_PF_FAILURE_REASON=""
   ARR_PF_STATUS="waiting"
@@ -1394,8 +1396,8 @@ start_stack() {
 
   if [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
     local pf_wait_timeout pf_wait_interval
-    arr_resolve_positive_int pf_wait_timeout "${ARR_PF_WAIT_TIMEOUT:-}" 60 "Invalid ARR_PF_WAIT_TIMEOUT, defaulting to 60s" warn
-    arr_resolve_positive_int pf_wait_interval "${ARR_PF_WAIT_INTERVAL:-}" 5 "Invalid ARR_PF_WAIT_INTERVAL, defaulting to 5s" warn
+    arr_resolve_positive_int pf_wait_timeout "${ARR_PF_WAIT_TIMEOUT:-}" "${ARR_PF_WAIT_TIMEOUT_DEFAULT}" "Invalid ARR_PF_WAIT_TIMEOUT, defaulting to ${ARR_PF_WAIT_TIMEOUT_DEFAULT}s" warn
+    arr_resolve_positive_int pf_wait_interval "${ARR_PF_WAIT_INTERVAL:-}" "${ARR_PF_WAIT_INTERVAL_DEFAULT}" "Invalid ARR_PF_WAIT_INTERVAL, defaulting to ${ARR_PF_WAIT_INTERVAL_DEFAULT}s" warn
 
     if ! arr_wait_for_pf_ready gluetun "$pf_wait_timeout" "$pf_wait_interval"; then
       local pf_reason="${ARR_PF_FAILURE_REASON:-Proton port forwarding not ready}"
