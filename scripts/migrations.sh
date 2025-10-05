@@ -5,7 +5,7 @@ run_one_time_migrations() {
   if [[ ! -f "$gluetun_340_marker" ]]; then
     local auth_config="${ARR_DOCKER_DIR}/gluetun/auth/config.toml"
     if gluetun_version_requires_auth_config 2>/dev/null; then
-      msg "🔄 Upgrading to Gluetun 3.40+ auth model"
+      step "🔄 Upgrading to Gluetun 3.40+ auth model"
 
       if [[ -f "$auth_config" ]]; then
         local auth_backup=""

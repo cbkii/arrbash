@@ -11,8 +11,8 @@ install_missing() {
   fi
 
   DOCKER_COMPOSE_CMD=()
-  ARRSTACK_COMPOSE_VERSION=""
-  arrstack_resolve_compose_cmd
+  ARR_COMPOSE_VERSION=""
+  arr_resolve_compose_cmd
   if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
     die "Docker Compose v2+ is required but not found"
   fi
@@ -33,7 +33,7 @@ install_missing() {
 
   msg "  Docker: $(docker version --format '{{.Server.Version}}')"
   local compose_cmd_display="${DOCKER_COMPOSE_CMD[*]}"
-  local compose_version_display="${ARRSTACK_COMPOSE_VERSION:-unknown}"
+  local compose_version_display="${ARR_COMPOSE_VERSION:-unknown}"
   if [[ -n "$compose_version_display" && "$compose_version_display" != "unknown" ]]; then
     msg "  Compose: ${compose_cmd_display} ${compose_version_display}"
   else
@@ -96,9 +96,9 @@ collect_port_requirements() {
   if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     local caddy_http_port
     local caddy_https_port
-    arrstack_resolve_port caddy_http_port "${CADDY_HTTP_PORT:-}" 80 \
+    arr_resolve_port caddy_http_port "${CADDY_HTTP_PORT:-}" 80 \
       "    Invalid CADDY_HTTP_PORT=${CADDY_HTTP_PORT:-}; defaulting to 80."
-    arrstack_resolve_port caddy_https_port "${CADDY_HTTPS_PORT:-}" 443 \
+    arr_resolve_port caddy_https_port "${CADDY_HTTPS_PORT:-}" 443 \
       "    Invalid CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-}; defaulting to 443."
     CADDY_HTTP_PORT="$caddy_http_port"
     CADDY_HTTPS_PORT="$caddy_https_port"
@@ -107,9 +107,9 @@ collect_port_requirements() {
     if ((lan_ip_known)); then
       caddy_expected="$LAN_IP"
     else
-      if [[ "${ARRSTACK_WARNED_CADDY_LAN_UNKNOWN:-0}" != "1" ]]; then
+      if [[ "${ARR_WARNED_CADDY_LAN_UNKNOWN:-0}" != "1" ]]; then
         warn "    LAN_IP unknown; validating Caddy ports on all interfaces. Set LAN_IP in ${ARR_USERCONF_PATH:-userr.conf} to lock bindings."
-        ARRSTACK_WARNED_CADDY_LAN_UNKNOWN=1
+        ARR_WARNED_CADDY_LAN_UNKNOWN=1
       fi
     fi
     _requirements_ref+=("tcp|${caddy_http_port}|Caddy HTTP|${caddy_expected}")
@@ -306,16 +306,16 @@ port_conflict_guidance() {
   warn "      • Updating LAN_IP or port overrides in ${ARR_USERCONF_PATH}"
 }
 
-: "${ARRSTACK_PORT_CONFLICT_AUTO_FIX:=1}"
-_arrstack_port_conflict_quickfix_attempted=0
+: "${ARR_PORT_CONFLICT_AUTO_FIX:=1}"
+_arr_port_conflict_quickfix_attempted=0
 
 # Tries stopping existing arrstack containers once to clear port conflicts
 attempt_port_conflict_quickfix() {
-  if [[ "${ARRSTACK_PORT_CONFLICT_AUTO_FIX}" != "1" ]]; then
+  if [[ "${ARR_PORT_CONFLICT_AUTO_FIX}" != "1" ]]; then
     return 1
   fi
 
-  if [[ "${_arrstack_port_conflict_quickfix_attempted:-0}" == "1" ]]; then
+  if [[ "${_arr_port_conflict_quickfix_attempted:-0}" == "1" ]]; then
     return 1
   fi
 
@@ -327,7 +327,7 @@ attempt_port_conflict_quickfix() {
     return 1
   fi
 
-  _arrstack_port_conflict_quickfix_attempted=1
+  _arr_port_conflict_quickfix_attempted=1
   msg "    Attempting automatic quick fix: stopping existing arrstack containers"
   safe_cleanup
   return 0
@@ -337,7 +337,7 @@ attempt_port_conflict_quickfix() {
 simple_port_check() {
   msg "  Checking required host ports"
 
-  local mode_raw="${ARRSTACK_PORT_CHECK_MODE:-enforce}"
+  local mode_raw="${ARR_PORT_CHECK_MODE:-enforce}"
   local mode="${mode_raw,,}"
 
   case "$mode" in
@@ -346,19 +346,19 @@ simple_port_check() {
       mode="enforce"
       ;;
     *)
-      warn "    Unknown ARRSTACK_PORT_CHECK_MODE='${mode_raw}'. Falling back to enforce."
+      warn "    Unknown ARR_PORT_CHECK_MODE='${mode_raw}'. Falling back to enforce."
       mode="enforce"
       ;;
   esac
 
   if [[ "$mode" == "skip" ]]; then
-    warn "    Port availability checks skipped (ARRSTACK_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
+    warn "    Port availability checks skipped (ARR_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
     return 0
   fi
 
   local quickfix_used=0
-  ARRSTACK_INTERNAL_PORT_CONFLICTS=0
-  ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL=""
+  ARR_INTERNAL_PORT_CONFLICTS=0
+  ARR_INTERNAL_PORT_CONFLICT_DETAIL=""
 
   while :; do
     local -a requirements=()
@@ -372,7 +372,7 @@ simple_port_check() {
     local -a internal_conflicts=()
     detect_internal_port_conflicts requirements internal_conflicts
     if ((${#internal_conflicts[@]} > 0)); then
-      ARRSTACK_INTERNAL_PORT_CONFLICTS=1
+      ARR_INTERNAL_PORT_CONFLICTS=1
       local -a detail_lines=()
       local -a summary_tokens=()
       local conflict_entry=""
@@ -385,7 +385,7 @@ simple_port_check() {
         detail_lines+=("${proto^^} ${port}: ${label_list}")
         summary_tokens+=("${proto^^} ${port} (${label_list})")
       done
-      ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL="$(printf '%s\n' "${detail_lines[@]}")"
+      ARR_INTERNAL_PORT_CONFLICT_DETAIL="$(printf '%s\n' "${detail_lines[@]}")"
 
       if [[ "$mode" == "warn" ]]; then
         local summary_joined="${summary_tokens[*]}"
@@ -393,7 +393,7 @@ simple_port_check() {
           summary_joined="$(printf '%s; ' "${summary_tokens[@]}")"
           summary_joined="${summary_joined%; }"
         fi
-        warn "    Port conflicts detected (ARRSTACK_PORT_CHECK_MODE=warn): ${summary_joined}; adjust ${ARR_USERCONF_PATH:-userr.conf} to assign unique host ports."
+        warn "    Port conflicts detected (ARR_PORT_CHECK_MODE=warn): ${summary_joined}; adjust ${ARR_USERCONF_PATH:-userr.conf} to assign unique host ports."
       else
         warn "    Stack configuration port conflicts detected:"
         local detail_line=""
@@ -474,7 +474,7 @@ simple_port_check() {
     fi
 
     if [[ "$mode" == "warn" ]]; then
-      warn "    Continuing despite port conflicts (ARRSTACK_PORT_CHECK_MODE=warn). Services may fail to bind."
+      warn "    Continuing despite port conflicts (ARR_PORT_CHECK_MODE=warn). Services may fail to bind."
       return 0
     fi
 
@@ -536,7 +536,7 @@ validate_dns_configuration() {
 
 # Runs installer preflight: locks, dependency validation, prompts, and previews
 preflight() {
-  msg "🚀 Preflight checks"
+  step "🚀 Preflight checks"
 
   acquire_lock
 

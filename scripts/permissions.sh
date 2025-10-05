@@ -54,7 +54,7 @@ verify_permissions() {
     collab_enabled=1
   fi
 
-  msg "🔒 Verifying file permissions"
+  step "🔒 Verifying file permissions"
 
   local -a secret_files=(
     "${ARR_ENV_FILE}"
@@ -105,8 +105,8 @@ verify_permissions() {
       if ! check_and_fix_mode "$dir" "$DATA_DIR_MODE" "Loose permissions" 1; then
         if ((collab_enabled)); then
           chmod "$DATA_DIR_MODE" "$dir" 2>/dev/null || true
-          if ! arrstack_is_group_writable "$dir"; then
-            arrstack_warn_collab_once "$(printf '%s is not group-writable; adjust manually to let the media group manage container\ndata' "$dir")"
+          if ! arr_is_group_writable "$dir"; then
+            arr_warn_collab_once "$(printf '%s is not group-writable; adjust manually to let the media group manage container\ndata' "$dir")"
           fi
         fi
         ((issues++))
@@ -124,8 +124,8 @@ verify_permissions() {
       if [[ -d "$dir" ]]; then
         if ! check_and_fix_mode "$dir" "$DATA_DIR_MODE" "Loose permissions" 1; then
           chmod "$DATA_DIR_MODE" "$dir" 2>/dev/null || true
-          if ! arrstack_is_group_writable "$dir"; then
-            arrstack_warn_collab_once "${collab_check_labels[$idx]} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${dir}"
+          if ! arr_is_group_writable "$dir"; then
+            arr_warn_collab_once "${collab_check_labels[$idx]} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${dir}"
           fi
           ((issues++))
         fi
@@ -139,8 +139,8 @@ verify_permissions() {
         if [[ -d "$collab_created_dir" ]]; then
           if ! check_and_fix_mode "$collab_created_dir" "$DATA_DIR_MODE" "Loose permissions" 1; then
             chmod "$DATA_DIR_MODE" "$collab_created_dir" 2>/dev/null || true
-            if ! arrstack_is_group_writable "$collab_created_dir"; then
-              arrstack_warn_collab_once "${collab_created_dir} is not group-writable; adjust manually so the media apps can manage it"
+            if ! arr_is_group_writable "$collab_created_dir"; then
+              arr_warn_collab_once "${collab_created_dir} is not group-writable; adjust manually so the media apps can manage it"
             fi
             ((issues++))
           fi
@@ -169,7 +169,7 @@ verify_permissions() {
           continue
         fi
         chmod "$DATA_DIR_MODE" "$media_dir" 2>/dev/null || true
-        if ! arrstack_is_group_writable "$media_dir"; then
+        if ! arr_is_group_writable "$media_dir"; then
           local label=""
           if [[ -n "${TV_DIR:-}" && "$media_dir" == "$TV_DIR" ]]; then
             label="TV"
@@ -180,9 +180,9 @@ verify_permissions() {
           fi
 
           if [[ -n "$label" ]]; then
-            arrstack_warn_collab_once "${label} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${media_dir}"
+            arr_warn_collab_once "${label} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${media_dir}"
           else
-            arrstack_warn_collab_once "$(printf '%s stays non-group-writable (existing library); update manually if the media group should write here' "$media_dir")"
+            arr_warn_collab_once "$(printf '%s stays non-group-writable (existing library); update manually if the media group should write here' "$media_dir")"
           fi
         fi
       fi

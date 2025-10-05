@@ -25,8 +25,8 @@ VPN_AUTO_RECONNECT_SUPPRESS_RETRY=0
 
 # Resolves Gluetun root directory via shared helpers when available
 vpn_auto_gluetun_root() {
-  if declare -f arrstack_gluetun_dir >/dev/null 2>&1; then
-    arrstack_gluetun_dir
+  if declare -f arr_gluetun_dir >/dev/null 2>&1; then
+    arr_gluetun_dir
     return
   fi
 
@@ -56,8 +56,8 @@ vpn_auto_has_jq() {
 
 # Resolves auto-reconnect working directory under docker-data
 vpn_auto_reconnect_state_dir() {
-  if declare -f arrstack_gluetun_auto_reconnect_dir >/dev/null 2>&1; then
-    arrstack_gluetun_auto_reconnect_dir
+  if declare -f arr_gluetun_auto_reconnect_dir >/dev/null 2>&1; then
+    arr_gluetun_auto_reconnect_dir
     return
   fi
 

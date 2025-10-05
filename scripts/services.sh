@@ -4,7 +4,7 @@
 vuetorrent_manual_is_complete() {
   local dir="$1"
 
-  [[ -d "$dir" && -f "$dir/public/index.html" && -f "$dir/version.txt" ]]
+  [[ -d "$dir" && -f "$dir/public/index.html" ]]
 }
 
 # Reads installed VueTorrent version from version.txt when available
@@ -16,58 +16,23 @@ vuetorrent_manual_version() {
   fi
 }
 
-# Cleans up temporary VueTorrent artifacts between install attempts
-vuetorrent_cleanup_attempt() {
-  local manual_dir="$1"
-  local -n temp_zip_ref="$2"
-  local -n temp_extract_ref="$3"
-  local -n staging_dir_ref="$4"
-  local -n backup_dir_ref="$5"
-
-  local temp_zip="$temp_zip_ref"
-  local temp_extract="$temp_extract_ref"
-  local staging_dir="$staging_dir_ref"
-  local backup_dir="$backup_dir_ref"
-
-  if [[ -n "$temp_zip" ]]; then
-    rm -f "$temp_zip" 2>/dev/null || true
-  fi
-  if [[ -n "$temp_extract" ]]; then
-    rm -rf "$temp_extract" 2>/dev/null || true
-  fi
-  if [[ -n "$staging_dir" ]]; then
-    rm -rf "$staging_dir" 2>/dev/null || true
-  fi
-  if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
-    if [[ ! -d "$manual_dir" ]]; then
-      mv "$backup_dir" "$manual_dir" 2>/dev/null || rm -rf "$backup_dir" 2>/dev/null || true
-    else
-      rm -rf "$backup_dir" 2>/dev/null || true
-    fi
-  fi
-
-  temp_zip_ref=""
-  temp_extract_ref=""
-  staging_dir_ref=""
-  backup_dir_ref=""
+vuetorrent_manual_unavailable() {
+  # shellcheck disable=SC2034
+  VUETORRENT_VERSION=""
+  # shellcheck disable=SC2034
+  VUETORRENT_ALT_ENABLED=0
+  # shellcheck disable=SC2034
+  VUETORRENT_STATUS_LEVEL="warn"
+  # shellcheck disable=SC2034
+  VUETORRENT_STATUS_MESSAGE="Manual VueTorrent install unavailable; qBittorrent default UI active."
+  write_qbt_config
 }
 
 # Manages VueTorrent deployment, choosing LSIO mod or manual download as configured
 install_vuetorrent() {
   local manual_dir="${ARR_DOCKER_DIR}/qbittorrent/vuetorrent"
-  local releases_url="https://api.github.com/repos/VueTorrent/VueTorrent/releases/latest"
-  local max_retries=3
-  local attempted_install=0
-  local install_success=0
-  local retry=0
-  local download_url=""
-  local temp_zip=""
-  local temp_extract=""
-  local staging_dir=""
-  local backup_dir=""
-
   if [[ "${VUETORRENT_MODE}" != "manual" ]]; then
-    msg "🎨 Using VueTorrent from LSIO Docker mod"
+    step "Ensuring VueTorrent (LSIO Docker mod)"
     # shellcheck disable=SC2034
     VUETORRENT_ALT_ENABLED=1
     # shellcheck disable=SC2034
@@ -77,157 +42,14 @@ install_vuetorrent() {
     # shellcheck disable=SC2034
     VUETORRENT_STATUS_MESSAGE="VueTorrent via LSIO Docker mod (WebUI root ${VUETORRENT_ROOT})."
     if [[ -d "$manual_dir" ]]; then
-      msg "  Removing manual VueTorrent directory at ${manual_dir} (LSIO mod active)"
-      rm -rf "$manual_dir" 2>/dev/null || warn "  Could not remove ${manual_dir}"
+      rm -rf "$manual_dir" 2>/dev/null || warn "Could not remove manual VueTorrent directory at ${manual_dir}"
     fi
     return 0
   fi
 
-  msg "🎨 Ensuring VueTorrent WebUI (manual mode)"
+  step "Ensuring VueTorrent (manual mode)"
 
-  local had_existing_complete=0
   if vuetorrent_manual_is_complete "$manual_dir"; then
-    had_existing_complete=1
-  fi
-
-  if ! check_dependencies jq unzip; then
-    warn "  Missing jq or unzip; skipping VueTorrent download"
-  else
-    while ((retry < max_retries && install_success == 0)); do
-      ((retry++))
-      if ((retry > 1)); then
-        msg "  Attempt ${retry} of ${max_retries}..."
-      fi
-
-      attempted_install=1
-      temp_zip="/tmp/vuetorrent-$$-${retry}.zip"
-      temp_extract=""
-      staging_dir=""
-      backup_dir=""
-
-      local api_response=""
-      if ! api_response="$(curl -fsSL "$releases_url" 2>/dev/null)"; then
-        warn "  Failed to query VueTorrent release metadata"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      download_url=$(printf '%s' "$api_response" | jq -r '.assets[] | select(.name == "vuetorrent.zip") | .browser_download_url' 2>/dev/null || printf '')
-      if [[ -z "$download_url" ]]; then
-        warn "  Could not determine VueTorrent download URL"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if ! curl -fsSL "$download_url" -o "$temp_zip"; then
-        warn "  Failed to download VueTorrent archive"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if [[ ! -s "$temp_zip" ]]; then
-        warn "  Downloaded VueTorrent archive is empty"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if ! temp_extract="$(arrstack_mktemp_dir "/tmp/vuetorrent.XXXX")"; then
-        warn "  Failed to create extraction directory"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if ! unzip -qo "$temp_zip" -d "$temp_extract"; then
-        warn "  Failed to extract VueTorrent archive"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      local source_root="$temp_extract"
-      if [[ ! -f "$source_root/public/index.html" ]]; then
-        local nested_public=""
-        nested_public="$(find "$temp_extract" -type f -path '*/public/index.html' -print -quit 2>/dev/null || printf '')"
-        if [[ -n "$nested_public" ]]; then
-          local nested_public_dir=""
-          nested_public_dir="$(dirname "$nested_public")"
-          source_root="$(dirname "$nested_public_dir")"
-        fi
-      fi
-
-      if [[ ! -f "$source_root/public/index.html" ]]; then
-        warn "  VueTorrent archive did not include public/index.html"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if ! staging_dir="$(arrstack_mktemp_dir "/tmp/vuetorrent.staging.XXXX")"; then
-        warn "  Failed to create staging directory"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if ! cp -a "$source_root"/. "$staging_dir"/; then
-        warn "  Failed to stage VueTorrent files"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if [[ ! -f "$staging_dir/public/index.html" ]]; then
-        warn "  Extracted VueTorrent files missing public/index.html"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if [[ ! -f "$staging_dir/version.txt" ]]; then
-        warn "  Extracted VueTorrent files missing version.txt"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      if [[ -d "$manual_dir" ]]; then
-        backup_dir="${manual_dir}.bak.$$-${retry}"
-        if ! mv "$manual_dir" "$backup_dir"; then
-          warn "  Failed to move existing VueTorrent install aside"
-          vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-          continue
-        fi
-      fi
-
-      ensure_dir "${ARR_DOCKER_DIR}/qbittorrent"
-      if ! mv "$staging_dir" "$manual_dir"; then
-        warn "  Failed to activate new VueTorrent install"
-        vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-        continue
-      fi
-
-      staging_dir=""
-
-      if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
-        rm -rf "$backup_dir" 2>/dev/null || true
-        backup_dir=""
-      fi
-
-      install_success=1
-      break
-    done
-  fi
-
-  if ((attempted_install)) && ((install_success == 0)); then
-    warn "  Failed to install VueTorrent after ${retry:-0}/${max_retries} attempts"
-  fi
-
-  vuetorrent_cleanup_attempt "$manual_dir" temp_zip temp_extract staging_dir backup_dir
-
-  if ((install_success)); then
-    chown -R "${PUID}:${PGID}" "$manual_dir" 2>/dev/null || true
-  fi
-
-  local manual_complete=0
-  if vuetorrent_manual_is_complete "$manual_dir"; then
-    manual_complete=1
-  fi
-
-  if ((manual_complete)); then
     local version
     version="$(vuetorrent_manual_version "$manual_dir")"
     # shellcheck disable=SC2034
@@ -236,40 +58,165 @@ install_vuetorrent() {
     VUETORRENT_ALT_ENABLED=1
     # shellcheck disable=SC2034
     VUETORRENT_STATUS_LEVEL="msg"
-    if ((install_success)); then
-      msg "  ✅ VueTorrent installed at ${manual_dir}${version:+ (version ${version})}"
-    elif ((had_existing_complete)); then
-      msg "  ℹ️ VueTorrent already present at ${manual_dir}${version:+ (version ${version})}"
-    else
-      msg "  ✅ VueTorrent files verified at ${manual_dir}"
-    fi
     if [[ -n "$version" ]]; then
+      msg "  VueTorrent already present at ${manual_dir} (version ${version})"
       # shellcheck disable=SC2034
       VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT} (version ${version})."
     else
+      msg "  VueTorrent already present at ${manual_dir}"
       # shellcheck disable=SC2034
       VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT}."
     fi
-  else
-    if ((attempted_install)); then
-      warn "  Manual VueTorrent install is incomplete"
-    elif ((had_existing_complete)); then
-      warn "  Existing VueTorrent files missing required assets"
-    else
-      warn "  Manual VueTorrent files not found"
-    fi
-    # shellcheck disable=SC2034
-    VUETORRENT_VERSION=""
-    # shellcheck disable=SC2034
-    VUETORRENT_ALT_ENABLED=0
-    # shellcheck disable=SC2034
-    VUETORRENT_STATUS_LEVEL="warn"
-    # shellcheck disable=SC2034
-    VUETORRENT_STATUS_MESSAGE="Manual VueTorrent install unavailable; qBittorrent default UI active."
-    write_qbt_config
+    chown -R "${PUID}:${PGID}" "$manual_dir" 2>/dev/null || true
+    return 0
   fi
 
-  # Avoid aggressive cleanup so sibling services aren't interrupted mid-run
+  if ! check_dependencies curl unzip sha256sum; then
+    warn "Missing curl, unzip, or sha256sum; skipping VueTorrent download"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  local download_url
+  if [[ -n "${VUETORRENT_DOWNLOAD_URL:-}" ]]; then
+    download_url="${VUETORRENT_DOWNLOAD_URL}"
+  else
+    download_url="https://github.com/VueTorrent/VueTorrent/releases/latest/download/vuetorrent.zip"
+  fi
+
+  local tmp_archive
+  if ! tmp_archive="$(arr_mktemp_file "/tmp/vuetorrent.download.XXXXXX" "$NONSECRET_FILE_MODE")"; then
+    warn "Unable to create temporary file for VueTorrent archive"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  local -a curl_args=(
+    --fail
+    --location
+    --silent
+    --show-error
+    --output "$tmp_archive"
+  )
+
+  if ! curl "${curl_args[@]}" "$download_url" >/dev/null 2>&1; then
+    local curl_status=$?
+    rm -f "$tmp_archive" 2>/dev/null || true
+    warn "Failed to download VueTorrent archive (curl exit status ${curl_status})"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  local archive_sha
+  archive_sha="$(sha256sum "$tmp_archive" 2>/dev/null | awk '{print $1}' || true)"
+  if [[ -n "$archive_sha" ]]; then
+    msg "  VueTorrent archive SHA256 ${archive_sha}"
+  fi
+
+  if [[ -n "${VUETORRENT_SHA256:-}" && "$archive_sha" != "${VUETORRENT_SHA256}" ]]; then
+    rm -f "$tmp_archive" 2>/dev/null || true
+    warn "Downloaded VueTorrent archive checksum mismatch"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  local extract_dir
+  if ! extract_dir="$(arr_mktemp_dir "/tmp/vuetorrent.extract.XXXXXX")"; then
+    rm -f "$tmp_archive" 2>/dev/null || true
+    warn "Unable to create extraction directory for VueTorrent"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  if ! unzip -qo "$tmp_archive" -d "$extract_dir"; then
+    rm -f "$tmp_archive" 2>/dev/null || true
+    rm -rf "$extract_dir" 2>/dev/null || true
+    warn "Failed to unzip VueTorrent archive"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  rm -f "$tmp_archive" 2>/dev/null || true
+
+  local source_root="$extract_dir"
+  if [[ ! -f "$source_root/public/index.html" ]]; then
+    local nested_public
+    nested_public="$(find "$extract_dir" -type f -path '*/public/index.html' -print -quit 2>/dev/null || printf '')"
+    if [[ -n "$nested_public" ]]; then
+      source_root="$(dirname "$(dirname "$nested_public")")"
+    fi
+  fi
+
+  if [[ ! -f "$source_root/public/index.html" ]]; then
+    rm -rf "$extract_dir" 2>/dev/null || true
+    warn "VueTorrent archive missing public/index.html"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  local staging_dir
+  if ! staging_dir="$(arr_mktemp_dir "/tmp/vuetorrent.staging.XXXXXX")"; then
+    rm -rf "$extract_dir" 2>/dev/null || true
+    warn "Unable to stage VueTorrent files"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  if ! cp -a "$source_root"/. "$staging_dir"/; then
+    rm -rf "$extract_dir" "$staging_dir" 2>/dev/null || true
+    warn "Failed to prepare VueTorrent files"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  rm -rf "$extract_dir" 2>/dev/null || true
+
+  ensure_dir "${ARR_DOCKER_DIR}/qbittorrent"
+
+  local backup_dir=""
+  if [[ -d "$manual_dir" ]]; then
+    backup_dir="${manual_dir}.bak.$$"
+    if ! mv "$manual_dir" "$backup_dir"; then
+      rm -rf "$staging_dir" 2>/dev/null || true
+      warn "Unable to move existing VueTorrent directory"
+      vuetorrent_manual_unavailable
+      return 0
+    fi
+  fi
+
+  if ! mv "$staging_dir" "$manual_dir"; then
+    rm -rf "$staging_dir" 2>/dev/null || true
+    if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
+      mv "$backup_dir" "$manual_dir" 2>/dev/null || rm -rf "$backup_dir" 2>/dev/null || true
+    fi
+    warn "Failed to activate VueTorrent manual install"
+    vuetorrent_manual_unavailable
+    return 0
+  fi
+
+  if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
+    rm -rf "$backup_dir" 2>/dev/null || true
+  fi
+
+  chown -R "${PUID}:${PGID}" "$manual_dir" 2>/dev/null || true
+
+  local version
+  version="$(vuetorrent_manual_version "$manual_dir")"
+  # shellcheck disable=SC2034
+  VUETORRENT_VERSION="$version"
+  # shellcheck disable=SC2034
+  VUETORRENT_ALT_ENABLED=1
+  # shellcheck disable=SC2034
+  VUETORRENT_STATUS_LEVEL="msg"
+  if [[ -n "$version" ]]; then
+    msg "  VueTorrent installed at ${manual_dir} (version ${version})"
+    # shellcheck disable=SC2034
+    VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT} (version ${version})."
+  else
+    msg "  VueTorrent installed at ${manual_dir}"
+    # shellcheck disable=SC2034
+    VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT}."
+  fi
 }
 
 # Maps logical service names to compose container identifiers (handles overrides)
@@ -338,9 +285,58 @@ service_health_sabnzbd() {
   fi
 }
 
+arr_effective_project_name() {
+  local project="${COMPOSE_PROJECT_NAME:-}"
+
+  if [[ -n "$project" ]]; then
+    printf '%s\n' "$project"
+    return 0
+  fi
+
+  local -a env_candidates=()
+  if [[ -n "${ARR_ENV_FILE:-}" ]]; then
+    env_candidates+=("${ARR_ENV_FILE}")
+  fi
+  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+    local stack_env="${ARR_STACK_DIR}/.env"
+    if [[ -z "${ARR_ENV_FILE:-}" || "${ARR_ENV_FILE}" != "$stack_env" ]]; then
+      env_candidates+=("$stack_env")
+    fi
+  fi
+
+  local candidate value
+  for candidate in "${env_candidates[@]}"; do
+    if [[ -f "$candidate" ]] && value="$(get_env_kv "COMPOSE_PROJECT_NAME" "$candidate" 2>/dev/null)"; then
+      project="$value"
+      break
+    fi
+  done
+
+  if [[ -z "$project" && -n "${ARR_STACK_DIR:-}" ]]; then
+    local compose_file="${ARR_STACK_DIR}/docker-compose.yml"
+    if [[ -f "$compose_file" ]]; then
+      local raw
+      raw="$(grep -m1 -E '^[[:space:]]*name:[[:space:]]*' "$compose_file" 2>/dev/null || printf '')"
+      raw="${raw#*:}"
+      raw="${raw%%#*}"
+      raw="${raw//\"/}"
+      raw="${raw//\'/}"
+      if [[ -n "$raw" ]]; then
+        project="$(printf '%s\n' "$raw" | xargs 2>/dev/null || printf '%s' "$raw")"
+      fi
+    fi
+  fi
+
+  if [[ -z "$project" ]]; then
+    project="arrstack"
+  fi
+
+  printf '%s\n' "$project"
+}
+
 # Stops existing stack containers and removes stale temp artifacts without nuking volumes
 safe_cleanup() {
-  msg "🧹 Safely stopping existing services..."
+  step "🧹 Safely stopping existing services..."
 
   if [[ -f "${ARR_STACK_DIR}/docker-compose.yml" ]]; then
     compose stop 2>/dev/null || true
@@ -360,7 +356,10 @@ safe_cleanup() {
     rm -f "$file" 2>/dev/null || true
   done
 
-  docker ps -a --filter "label=com.docker.compose.project=arrstack" --format "{{.ID}}" \
+  local project_label
+  project_label="$(arr_effective_project_name 2>/dev/null || printf 'arrstack')"
+
+  docker ps -a --filter "label=com.docker.compose.project=${project_label}" --format "{{.ID}}" \
     | xargs -r docker rm -f 2>/dev/null || true
 }
 
@@ -379,7 +378,6 @@ preflight_compose_interpolation() {
   if grep -qE 'variable is not set' "$warn_log" 2>/dev/null; then
     echo "[arrstack] unresolved Compose variables detected:" >&2
     grep -E 'variable is not set' "$warn_log" >&2 || true
-    echo "[arrstack] Tip: run scripts/dev/find-unescaped-dollar.sh \"${file}\"" >&2
     exit 1
   fi
 
@@ -456,7 +454,7 @@ validate_caddy_config() {
   ensure_dir "$log_dir"
   local logfile="${log_dir}/caddy-validate.log"
 
-  msg "🧪 Validating Caddy configuration"
+  step "🧪 Validating Caddy configuration"
 
   local -a env_args=()
   if [[ -n "${LAN_IP:-}" ]]; then
@@ -508,6 +506,10 @@ check_image_exists() {
 
   local timeout=10
 
+  if ! command -v docker >/dev/null 2>&1; then
+    return 2
+  fi
+
   if command -v timeout >/dev/null 2>&1; then
     if timeout "$timeout" docker manifest inspect "$image" >/dev/null 2>&1; then
       return 0
@@ -525,9 +527,14 @@ check_image_exists() {
   return 1
 }
 
-# Ensures all service images exist, falling back to :latest for LSIO when needed
+# Ensures all service images exist using declared tags without silent downgrades
 validate_images() {
-  msg "🔍 Validating Docker images..."
+  step "🔍 Validating Docker images..."
+
+  if ! command -v docker >/dev/null 2>&1; then
+    warn "  Docker CLI unavailable; skipping image validation (sandbox)."
+    return 0
+  fi
 
   local image_vars=(
     GLUETUN_IMAGE
@@ -547,7 +554,17 @@ validate_images() {
     image_vars+=(CADDY_IMAGE)
   fi
 
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    image_vars+=(SABNZBD_IMAGE)
+  fi
+
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED:-0}" == "1" ]]; then
+    LOCALDNS_IMAGE="${LOCALDNS_IMAGE:-4km3/dnsmasq:2.90-r3}"
+    image_vars+=(LOCALDNS_IMAGE)
+  fi
+
   local failed_images=()
+  local -A downgrade_applied=()
 
   for var_name in "${image_vars[@]}"; do
     local image="${!var_name:-}"
@@ -555,13 +572,11 @@ validate_images() {
 
     msg "  Checking $image..."
 
-    # Check via manifest (remote) or local cache without pulling layers
     if check_image_exists "$image"; then
       msg "  ✅ Valid: $image"
       continue
     fi
 
-    # If failed, try fallback for LinuxServer images only
     local base_image="$image"
     local tag=""
     if [[ "$image" == *:* ]]; then
@@ -569,30 +584,20 @@ validate_images() {
       tag="${image##*:}"
     fi
 
-    if [[ "$tag" != "latest" && "$base_image" == lscr.io/linuxserver/* ]]; then
+    if [[ "$tag" != "latest" && "$base_image" == lscr.io/linuxserver/* && "${ARR_ALLOW_TAG_DOWNGRADE:-0}" == "1" ]]; then
       local latest_image="${base_image}:latest"
-      msg "    Trying fallback: $latest_image"
+      msg "    Trying opt-in fallback: $latest_image"
 
       if check_image_exists "$latest_image"; then
         msg "    ✅ Using fallback: $latest_image"
-
-        case "$base_image" in
-          *qbittorrent) update_env_image_var QBITTORRENT_IMAGE "$latest_image" ;;
-          *sonarr) update_env_image_var SONARR_IMAGE "$latest_image" ;;
-          *radarr) update_env_image_var RADARR_IMAGE "$latest_image" ;;
-          *prowlarr) update_env_image_var PROWLARR_IMAGE "$latest_image" ;;
-          *bazarr) update_env_image_var BAZARR_IMAGE "$latest_image" ;;
-        esac
-
+        downgrade_applied["$var_name"]="$latest_image"
+        update_env_image_var "$var_name" "$latest_image"
         continue
-      else
-        warn "  ⚠️ Could not validate: $image"
-        failed_images+=("$image")
       fi
-    else
-      warn "  ⚠️ Could not validate: $image"
-      failed_images+=("$image")
     fi
+
+    warn "  ❌ Could not validate: $image"
+    failed_images+=("$image")
   done
 
   if ((${#failed_images[@]} > 0)); then
@@ -601,9 +606,22 @@ validate_images() {
     for img in "${failed_images[@]}"; do
       warn "  - $img"
     done
+    if [[ "${ARR_ALLOW_TAG_DOWNGRADE:-0}" != "1" ]]; then
+      warn "Set ARR_ALLOW_TAG_DOWNGRADE=1 to permit temporary :latest fallback for LinuxServer images."
+    fi
     warn "Check the image names and tags in .env or ${ARR_USERCONF_PATH}"
     warn "================================================"
+    return 1
   fi
+
+  if ((${#downgrade_applied[@]} > 0)); then
+    local key
+    for key in "${!downgrade_applied[@]}"; do
+      msg "  ⤵️  ${key} downgraded to ${downgrade_applied[$key]} (ARR_ALLOW_TAG_DOWNGRADE=1)"
+    done
+  fi
+
+  return 0
 }
 
 # Starts individual compose service and prints any non-empty output
@@ -656,107 +674,197 @@ sync_qbt_password_from_logs() {
   warn "  Unable to automatically determine the qBittorrent password. Update QBT_PASS in .env manually."
 }
 
-# Polls Gluetun health and control API until VPN is ready or times out
-wait_for_vpn_connection() {
-  local max_wait="${1:-180}"
-  local elapsed=0
-  local check_interval=5
-  local host="${LOCALHOST_IP:-127.0.0.1}"
-  local host_uri base_url vpn_status_url public_ip_url
-  local consecutive_failures=0
-  local max_consecutive=3
-  local reported_healthy=0
+# Checks if a default route exists via a VPN tunnel interface (configurable pattern)
+arr_gluetun_tunnel_route_present() {
+  local name="${1:-gluetun}"
+  local iface_pattern="${2:-dev (tun[0-9]+|wg[0-9]+)}"
 
-  # One-time host→URI normalisation (IPv6 needs brackets)
-  if [[ $host == *:* && $host != \[*\] ]]; then
-    host_uri="[$host]"
+  docker exec "$name" sh -c "ip -4 route show default 2>/dev/null | grep -Eq '$iface_pattern'" >/dev/null 2>&1
+}
+
+arr_gluetun_connectivity_probe() {
+  local name="${1:-gluetun}"
+  shift || true
+
+  local -a urls=()
+  if (($# == 0)); then
+    urls=(
+      "https://api.ipify.org"
+      "https://ipconfig.io/ip"
+      "https://1.1.1.1/cdn-cgi/trace"
+    )
   else
-    host_uri="$host"
+    urls=("$@")
   fi
 
-  base_url="http://${host_uri}:${GLUETUN_CONTROL_PORT}/v1"
-  vpn_status_url="${base_url}/openvpn/status"
-  public_ip_url="${base_url}/publicip/ip"
+  local url=""
+  ARR_GLUETUN_CONNECTIVITY_LAST_URL=""
 
-  # Build curl cmd once
-  local -a curl_cmd=(curl -fsS --max-time 5)
-  if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
-    curl_cmd+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
+  for url in "${urls[@]}"; do
+    if docker exec "$name" sh -c "curl -fsS --connect-timeout 5 --max-time 8 '$url' >/dev/null" >/dev/null 2>&1; then
+      ARR_GLUETUN_CONNECTIVITY_LAST_URL="$url"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+arr_wait_for_gluetun_ready() {
+  local name="${1:-gluetun}"
+  local max_wait="${2:-150}"
+  local check_interval="${3:-5}"
+
+  ARR_GLUETUN_FAILURE_REASON=""
+
+  if ! command -v docker >/dev/null 2>&1; then
+    ARR_GLUETUN_FAILURE_REASON="docker binary not available"
+    return 1
   fi
 
-  msg "Waiting for VPN connection (max ${max_wait}s)..."
+  msg "Waiting for Gluetun readiness (container, health, tunnel, connectivity)..."
+
+  local elapsed=0
+  local last_state=""
+  local last_health=""
+  local reported_no_healthcheck=0
+  local tunnel_announced=0
+  local tunnel_warned=0
+  local connectivity_warned=0
 
   while ((elapsed < max_wait)); do
-    # Grab both status and health in a single inspect
-    local inspect status health
-    inspect="$(docker inspect gluetun --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null || true)"
-    status="${inspect%% *}"
-    health="${inspect#* }"
-    [[ "$inspect" == "$health" ]] && health="" # if there was no space, no health
+    local inspect_output=""
+    inspect_output="$(docker inspect "$name" --format '{{.State.Status}} {{if .State.Health}}true {{.State.Health.Status}}{{else}}false none{{end}}' 2>/dev/null || true)"
 
-    local progressed=0
-    local failed_tick=0
+    if [[ -z "$inspect_output" ]]; then
+      ARR_GLUETUN_FAILURE_REASON="Gluetun container '${name}' not found"
+      warn "  Gluetun container '${name}' not found."
+      return 1
+    fi
 
-    # Phase 1: wait until the container is running
-    if [[ "$status" != "running" ]]; then
-      # not running yet → neither progress nor hard failure; just wait
-      :
-    else
-      # Phase 2: evaluate health and API reachability
-      if [[ "$health" == "healthy" ]]; then
-        progressed=1
-        if ((reported_healthy == 0)); then
-          msg "  ✅ Gluetun is healthy"
-          reported_healthy=1
-        fi
+    local state has_health health_status
+    read -r state has_health health_status <<<"$inspect_output"
 
-        if "${curl_cmd[@]}" "$vpn_status_url" >/dev/null 2>&1; then
-          msg "  ✅ VPN connected after ${elapsed}s"
-          msg "  ✅ VPN API responding"
-
-          local ip_payload ip_summary
-          ip_payload="$("${curl_cmd[@]}" "$public_ip_url" 2>/dev/null || true)"
-          if [[ -n "$ip_payload" ]]; then
-            if ip_summary="$(gluetun_public_ip_summary "$ip_payload" 2>/dev/null || true)" && [[ -n "$ip_summary" ]]; then
-              msg "  🌐 Public IP: ${ip_summary}"
-            elif [[ "$ip_payload" =~ \"public_ip\"[[:space:]]*:[[:space:]]*\"\" ]]; then
-              msg "  🌐 Public IP: (pending assignment)"
-            else
-              msg "  🌐 Public IP response: ${ip_payload}"
-            fi
-          else
-            msg "  🌐 Public IP: (pending assignment)"
+    if [[ "$state" != "running" ]]; then
+      case "$state" in
+        restarting)
+          if [[ "$last_state" != "$state" ]]; then
+            warn "  Gluetun is restarting; waiting for stability..."
           fi
-          return 0
-        else
-          failed_tick=1
-        fi
-      elif [[ "$health" == "unhealthy" ]]; then
-        failed_tick=1
+          ;;
+        created|starting)
+          if [[ "$last_state" != "$state" ]]; then
+            msg "  Gluetun container reported state '${state}'. Waiting for it to run..."
+          fi
+          ;;
+        exited|dead|removing|paused)
+          ARR_GLUETUN_FAILURE_REASON="Gluetun state '${state}' (expected running)"
+          warn "  Gluetun state is '${state}' (expected running)."
+          return 1
+          ;;
+        *)
+          ARR_GLUETUN_FAILURE_REASON="Gluetun state '${state}' (expected running)"
+          warn "  Gluetun state is '${state}' (expected running)."
+          return 1
+          ;;
+      esac
+
+      last_state="$state"
+
+      local remaining=$((max_wait - elapsed))
+      local sleep_for=$check_interval
+      if ((remaining < sleep_for)); then
+        sleep_for=$remaining
       fi
+      sleep "$sleep_for"
+      elapsed=$((elapsed + sleep_for))
+      continue
     fi
 
-    # Failure / progress bookkeeping (unchanged semantics)
-    if ((progressed)); then
-      consecutive_failures=0
+    if [[ "$last_state" != "running" ]]; then
+      msg "  ✅ Gluetun container is running"
     fi
-    if ((failed_tick)); then
-      consecutive_failures=$((consecutive_failures + 1))
-      if ((consecutive_failures >= max_consecutive)); then
-        warn "VPN health checks failing consistently after ${elapsed}s"
-        return 1
+    last_state="$state"
+
+    if [[ "$has_health" == "true" ]]; then
+      case "$health_status" in
+        healthy)
+          if [[ "$last_health" != "healthy" ]]; then
+            msg "  ✅ Gluetun healthcheck reports healthy"
+          fi
+          ;;
+        starting)
+          if [[ "$last_health" != "starting" ]]; then
+            msg "  Gluetun healthcheck starting; waiting for healthy signal..."
+          fi
+          last_health="$health_status"
+
+          local remaining=$((max_wait - elapsed))
+          local sleep_for=$check_interval
+          if ((remaining < sleep_for)); then
+            sleep_for=$remaining
+          fi
+          sleep "$sleep_for"
+          elapsed=$((elapsed + sleep_for))
+          continue
+          ;;
+        *)
+          ARR_GLUETUN_FAILURE_REASON="Gluetun healthcheck reported '${health_status}'"
+          warn "  Gluetun healthcheck reported '${health_status}'."
+          return 1
+          ;;
+      esac
+    else
+      if ((reported_no_healthcheck == 0)); then
+        msg "  Gluetun container has no Docker healthcheck; relying on tunnel/connectivity probes."
+        reported_no_healthcheck=1
       fi
     fi
+    last_health="$health_status"
 
-    # Sleep until next tick
+    if arr_gluetun_tunnel_route_present "$name"; then
+      if ((tunnel_announced == 0)); then
+        msg "  ✅ VPN tunnel interface (tun0/wg0) present"
+        tunnel_announced=1
+      fi
+    else
+      if ((tunnel_warned == 0)); then
+        warn "  Waiting for VPN tunnel interface (tun0/wg0) inside Gluetun..."
+        tunnel_warned=1
+      fi
+
+      local remaining=$((max_wait - elapsed))
+      local sleep_for=$check_interval
+      if ((remaining < sleep_for)); then
+        sleep_for=$remaining
+      fi
+      sleep "$sleep_for"
+      elapsed=$((elapsed + sleep_for))
+      continue
+    fi
+
+    if arr_gluetun_connectivity_probe "$name"; then
+      local probe_url="${ARR_GLUETUN_CONNECTIVITY_LAST_URL:-unknown}"
+      msg "  ✅ VPN connectivity confirmed via ${probe_url}"
+      return 0
+    fi
+
+    if ((connectivity_warned == 0)); then
+      warn "  Waiting for outbound connectivity through Gluetun tunnel..."
+      connectivity_warned=1
+    fi
+
     local remaining=$((max_wait - elapsed))
-    ((remaining <= 0)) && break
-    local sleep_for=$((remaining < check_interval ? remaining : check_interval))
+    local sleep_for=$check_interval
+    if ((remaining < sleep_for)); then
+      sleep_for=$remaining
+    fi
     sleep "$sleep_for"
     elapsed=$((elapsed + sleep_for))
   done
 
-  warn "VPN connection timeout after ${max_wait}s"
+  ARR_GLUETUN_FAILURE_REASON="VPN connectivity not verified within ${max_wait}s"
+  warn "  Gluetun did not become ready within ${max_wait}s."
   return 1
 }
 
@@ -909,148 +1017,230 @@ show_service_status() {
 
 # Disables Docker's userland proxy to let dnsmasq bind :53 reliably
 ensure_docker_userland_proxy_disabled() {
-  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" ]]; then
+  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" || "${LOCAL_DNS_SERVICE_ENABLED:-0}" != "1" ]]; then
+    msg "[dns] Skipping userland-proxy update (local DNS inactive)"
     return 0
   fi
 
-  local conf="/etc/docker/daemon.json"
-  if [[ -f "$conf" ]] && grep -q '"userland-proxy"[[:space:]]*:[[:space:]]*false' "$conf" 2>/dev/null; then
-    return 0
-  fi
-
-  if [[ ! -w "$conf" && ! -w "$(dirname "$conf")" ]]; then
-    warn "[dns] Docker daemon.json requires root to modify."
-    warn "[dns] Run: sudo ${BASH_SOURCE[0]} to configure userland-proxy"
-    warn "[dns] Or manually set: {\"userland-proxy\": false} in $conf and restart Docker"
-    return 0
-  fi
-
-  msg "[dns] Disabling Docker userland-proxy for reliable :53 publishing"
-
+  local conf="${ARR_DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
   local conf_dir
   conf_dir="$(dirname "$conf")"
-  if ! mkdir -p "$conf_dir"; then
-    warn "[dns] Failed to create ${conf_dir}"
-    return 0
+
+  local merge_tool_preference="${ARR_DAEMON_JSON_TOOL:-}"
+  local merge_tool=""
+  if [[ "$merge_tool_preference" == "python" ]] && command -v python3 >/dev/null 2>&1; then
+    merge_tool="python"
+  elif [[ "$merge_tool_preference" == "jq" ]] && command -v jq >/dev/null 2>&1; then
+    merge_tool="jq"
+  elif command -v jq >/dev/null 2>&1; then
+    merge_tool="jq"
+  elif command -v python3 >/dev/null 2>&1; then
+    merge_tool="python"
+  else
+    warn "[dns] jq or python3 is required to edit ${conf}. Install one of them and rerun."
+    return 1
   fi
 
-  if command -v jq >/dev/null 2>&1 && [[ -s "$conf" ]]; then
-    local tmp
-    if ! tmp="$(mktemp)"; then
-      warn "[dns] Failed to create temporary file for ${conf}"
+  if [[ ! -e "$conf" ]]; then
+    if [[ ! -d "$conf_dir" ]] && ! mkdir -p "$conf_dir"; then
+      warn "[dns] Failed to create ${conf_dir}"
+      return 1
+    fi
+  fi
+
+  if [[ -f "$conf" && ! -w "$conf" && ! -w "$conf_dir" ]]; then
+    warn "[dns] Docker daemon.json requires root to modify."
+    warn "[dns] Run with sudo or set {\"userland-proxy\": false} in ${conf} manually."
+    return 1
+  fi
+
+  if [[ "$merge_tool" == "jq" && -s "$conf" ]]; then
+    if jq -e '."userland-proxy" == false' "$conf" >/dev/null 2>&1; then
+      msg "[dns] Docker userland-proxy already disabled"
       return 0
     fi
-    if ! jq -S --argjson v false '."userland-proxy"=$v' "$conf" >"$tmp"; then
-      rm -f "$tmp" 2>/dev/null || true
-      warn "[dns] Failed to update ${conf}"
-      return 0
+    if ! jq empty "$conf" >/dev/null 2>&1; then
+      warn "[dns] ${conf} contains invalid JSON; fix the file manually before continuing."
+      return 1
     fi
-    if ! mv "$tmp" "$conf"; then
-      rm -f "$tmp" 2>/dev/null || true
-      warn "[dns] Failed to replace ${conf}"
-      return 0
+  elif [[ "$merge_tool" == "python" && -s "$conf" ]]; then
+    local python_status=0
+    python3 - "$conf" <<'PY' || python_status=$?
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text()) if path.stat().st_size else {}
+except json.JSONDecodeError as exc:  # pragma: no cover
+    print(f"Invalid JSON: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+if data.get("userland-proxy") is False:
+    sys.exit(0)
+
+sys.exit(1)
+PY
+    case "$python_status" in
+      0)
+        msg "[dns] Docker userland-proxy already disabled"
+        return 0
+        ;;
+      1)
+        :
+        ;;
+      *)
+        warn "[dns] ${conf} contains invalid JSON; fix the file manually before continuing."
+        return 1
+        ;;
+    esac
+  fi
+
+  local backup
+  backup="${conf}.arrstack.$(date +%Y%m%d-%H%M%S).bak"
+  if [[ -f "$conf" ]]; then
+    if ! cp -p "$conf" "$backup"; then
+      warn "[dns] Failed to create backup at ${backup}"
+      return 1
     fi
   else
-    if ! printf '{\n  "userland-proxy": false\n}\n' >"$conf"; then
-      warn "[dns] Failed to write ${conf}"
-      return 0
-    fi
+    printf '{}\n' >"$backup" 2>/dev/null || true
   fi
 
-  if command -v systemctl >/dev/null 2>&1; then
-    if ! systemctl restart docker >/dev/null 2>&1; then
-      die "[dns] Failed to restart Docker after updating ${conf}"
-    fi
-    if ! systemctl is-active --quiet docker; then
-      die "[dns] Docker failed to restart after userland-proxy change. Check: journalctl -xeu docker"
-    fi
-  elif command -v service >/dev/null 2>&1; then
-    if ! service docker restart >/dev/null 2>&1; then
-      die "[dns] Failed to restart Docker after updating ${conf}"
-    fi
-    if ! service docker status >/dev/null 2>&1; then
-      die "[dns] Docker failed to restart after userland-proxy change. Check: service docker status"
+  local tmp
+  if ! tmp="$(mktemp)"; then
+    warn "[dns] Failed to create temporary file for ${conf}"
+    return 1
+  fi
+
+  local merge_status=0
+  if [[ "$merge_tool" == "jq" ]]; then
+    if [[ -s "$conf" ]]; then
+      jq -S '."userland-proxy" = false' "$conf" >"$tmp" 2>/dev/null || merge_status=$?
+    else
+      printf '{\n  "userland-proxy": false\n}\n' >"$tmp" || merge_status=1
     fi
   else
-    warn "[dns] Docker restart command not found; restart Docker manually to apply userland-proxy change"
-    return 0
+    python3 - "$conf" "$tmp" <<'PY' || merge_status=$?
+import json
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1])
+dest = pathlib.Path(sys.argv[2])
+
+data = {}
+if source.exists() and source.stat().st_size:
+    try:
+        data = json.loads(source.read_text())
+    except json.JSONDecodeError as exc:
+        print(f"Invalid JSON: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+data["userland-proxy"] = False
+
+dest.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+PY
   fi
 
-  msg "[dns] Docker userland-proxy disabled successfully"
+  if ((merge_status != 0)); then
+    rm -f "$tmp" 2>/dev/null || true
+    warn "[dns] Failed to merge userland-proxy setting into ${conf}"
+    warn "[dns] Backup saved at ${backup}"
+    return 1
+  fi
+
+  if ! mv "$tmp" "$conf"; then
+    rm -f "$tmp" 2>/dev/null || true
+    warn "[dns] Failed to replace ${conf}. Backup saved at ${backup}"
+    return 1
+  fi
+  if [[ -f "$backup" ]]; then
+    chmod --reference "$backup" "$conf" 2>/dev/null || ensure_nonsecret_file_mode "$conf"
+  else
+    ensure_nonsecret_file_mode "$conf"
+  fi
+
+  local restart_allowed=0
+  if [[ "${ASSUME_YES:-0}" == "1" || "${ARR_HOST_RESTART_OK:-0}" == "1" ]]; then
+    restart_allowed=1
+  fi
+
+  if ((restart_allowed)); then
+    if command -v systemctl >/dev/null 2>&1; then
+      if ! systemctl restart docker >/dev/null 2>&1; then
+        warn "[dns] Failed to restart Docker; run 'sudo systemctl restart docker' manually."
+        return 1
+      fi
+      if ! systemctl is-active --quiet docker; then
+        warn "[dns] Docker failed to report healthy after restart; inspect 'journalctl -xeu docker'."
+        return 1
+      fi
+      msg "[dns] Docker daemon restarted to apply userland-proxy change"
+    elif command -v service >/dev/null 2>&1; then
+      if ! service docker restart >/dev/null 2>&1; then
+        warn "[dns] Failed to restart Docker; run 'sudo service docker restart' manually."
+        return 1
+      fi
+      msg "[dns] Docker daemon restarted to apply userland-proxy change"
+    else
+      warn "[dns] Docker restart command not found; restart the daemon manually to apply changes."
+    fi
+  else
+    warn "[dns] Docker restart required to apply userland-proxy change. Re-run with --yes or ARR_HOST_RESTART_OK=1."
+  fi
+
+  msg "[dns] Docker userland-proxy set to false"
   return 0
 }
 
 # Orchestrates service startup: cleanup, validation, image pulls, health waits, summaries
 start_stack() {
-  msg "🚀 Starting services"
+  step "Starting service stack"
 
   cd "${ARR_STACK_DIR}" || die "Failed to change to ${ARR_STACK_DIR}"
 
+  arr_clear_run_failure || true
+
   safe_cleanup
 
-  ensure_docker_userland_proxy_disabled
+  if ! ensure_docker_userland_proxy_disabled; then
+    return 1
+  fi
 
-  validate_images
+  if ! validate_images; then
+    return 1
+  fi
 
   install_vuetorrent
 
   msg "Starting Gluetun VPN container..."
-  if ! compose up -d gluetun 2>&1; then
-    warn "Initial Gluetun start failed (compose)"
+  local gluetun_output=""
+  if ! gluetun_output="$(compose up -d gluetun 2>&1)"; then
+    warn "Failed to start Gluetun via docker compose"
+    if [[ -n "$gluetun_output" ]]; then
+      while IFS= read -r line; do
+        printf '  %s\n' "$line"
+      done <<<"$gluetun_output"
+    fi
     docker logs --tail=60 gluetun 2>&1 | sed 's/^/    /' || true
+    arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING"
+    return 1
   fi
 
-  sleep 10
+  if [[ -n "$gluetun_output" ]]; then
+    while IFS= read -r line; do
+      printf '  %s\n' "$line"
+    done <<<"$gluetun_output"
+  fi
 
-  local restart_count=0
-  local gluetun_status=""
-  while ((restart_count < 5)); do
-    gluetun_status="$(docker inspect gluetun --format '{{.State.Status}}' 2>/dev/null || echo "unknown")"
-
-    if [[ "$gluetun_status" == "running" ]]; then
-      break
-    elif [[ "$gluetun_status" == "restarting" ]]; then
-      warn "Gluetun is restarting (attempt $((restart_count + 1))/5)"
-      docker logs --tail=25 gluetun 2>&1 | grep -E -i 'auth|fail|error|cannot|fatal' | tail -n 8 | sed 's/^/    /' || true
-      sleep 8
-      ((restart_count++))
-    else
-      break
-    fi
-  done
-
-  if ((restart_count >= 5)); then
-    warn "Gluetun stuck in restart loop. Common causes:"
-    warn "  - Wrong Proton credentials (ensure +pmp)."
-    warn "  - SERVER_COUNTRIES invalid / empty."
-    warn "  - DNS or base network outage."
-    warn "  - Gluetun <3.40 with stray auth config (delete gluetun/auth/config.toml)."
+  if ! arr_wait_for_gluetun_ready gluetun 150 5; then
+    local failure_reason
+    failure_reason="${ARR_GLUETUN_FAILURE_REASON:-Gluetun did not become ready}"
     docker logs --tail=120 gluetun 2>&1 | sed 's/^/    /' || true
-    die "Aborting due to repeated Gluetun restarts"
-  fi
-
-  if [[ "$gluetun_status" != "running" ]]; then
-    warn "Gluetun status after startup: ${gluetun_status}"
-  fi
-
-  msg "Waiting for VPN connection (baseline tunnel; PF may still be pending)..."
-  local vpn_wait_levels=(60 120 180)
-  local vpn_ready=0
-
-  local max_wait
-  for max_wait in "${vpn_wait_levels[@]}"; do
-    if wait_for_vpn_connection "$max_wait"; then
-      vpn_ready=1
-      break
-    fi
-
-    warn "VPN not ready after ${max_wait}s, extending timeout..."
-  done
-
-  if ((vpn_ready == 0)); then
-    warn "VPN connection not verified after extended wait."
-    warn "Continuing anyway; dependent services may encounter connectivity errors until Gluetun stabilizes."
-    docker logs --tail=120 gluetun 2>&1 | sed 's/^/    /' || true
+    arr_write_run_failure "VPN not running: ${failure_reason}." "VPN_NOT_RUNNING"
+    return 1
   fi
 
   if declare -f start_async_pf_if_enabled >/dev/null 2>&1; then
@@ -1098,11 +1288,13 @@ start_stack() {
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     services+=(sabnzbd)
   fi
+
   local service
   local qb_started=0
+  local -a failed_services=()
+
   for service in "${services[@]}"; do
     msg "Starting $service..."
-    local service_started=0
     local start_output=""
 
     if start_output="$(compose up -d "$service" 2>&1)"; then
@@ -1111,37 +1303,18 @@ start_stack() {
           printf '  %s\n' "$line"
         done <<<"$start_output"
       fi
-      service_started=1
+      if [[ "$service" == "qbittorrent" ]]; then
+        qb_started=1
+      fi
     else
-      warn "Failed to start $service with normal dependencies"
+      warn "Failed to start $service"
       if [[ -n "$start_output" ]]; then
         while IFS= read -r line; do
           printf '  %s\n' "$line"
         done <<<"$start_output"
       fi
-
-      local fallback_output=""
-      if fallback_output="$(compose up -d --no-deps "$service" 2>&1)"; then
-        msg "  Started $service without dependency checks"
-        if [[ -n "$fallback_output" ]]; then
-          while IFS= read -r line; do
-            printf '    %s\n' "$line"
-          done <<<"$fallback_output"
-        fi
-        service_started=1
-      else
-        warn "Failed to start $service even without dependencies, skipping..."
-        if [[ -n "$fallback_output" ]]; then
-          while IFS= read -r line; do
-            printf '    %s\n' "$line"
-          done <<<"$fallback_output"
-        fi
-        continue
-      fi
-    fi
-
-    if [[ "$service" == "qbittorrent" ]] && ((service_started == 1)); then
-      qb_started=1
+      failed_services+=("$service")
+      continue
     fi
 
     sleep 3
@@ -1176,9 +1349,15 @@ start_stack() {
     ensure_qbt_config || true
   fi
 
+  if ((${#failed_services[@]} > 0)); then
+    warn "The following services failed to start: ${failed_services[*]}"
+  fi
+
   service_health_sabnzbd
 
-  arrstack_schedule_delayed_api_sync || true
+  if ! arr_schedule_delayed_api_sync; then
+    warn "arr_schedule_delayed_api_sync failed; API sync may be delayed or incomplete."
+  fi
 
   msg "Services started - they may take a minute to be fully ready"
   show_service_status

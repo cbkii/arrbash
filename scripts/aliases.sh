@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Renders helper alias bundle and injects optional VPN/configarr helpers if templates permit
 write_aliases_file() {
-  msg "🛠️ Generating helper aliases file"
+  step "🛠️ Generating helper aliases file"
 
   local template_file="${REPO_ROOT}/.aliasarr"
   local aliases_file="${ARR_STACK_DIR}/.aliasarr"
@@ -13,7 +13,7 @@ write_aliases_file() {
   fi
 
   local tmp_file
-  if ! tmp_file="$(arrstack_mktemp_file "${aliases_file}.XXXX" "$SECRET_FILE_MODE")"; then
+  if ! tmp_file="$(arr_mktemp_file "${aliases_file}.XXXX" "$SECRET_FILE_MODE")"; then
     warn "Failed to create temporary aliases file"
     return 1
   fi
@@ -318,7 +318,7 @@ VPN_AUTO_ALIAS
 install_aliases() {
   local bashrc="${HOME}/.bashrc"
   local repo_escaped
-  repo_escaped="$(arrstack_shell_escape_double_quotes "${REPO_ROOT}")"
+  repo_escaped="$(arr_shell_escape_double_quotes "${REPO_ROOT}")"
   local alias_line
   alias_line=$(printf "alias arrstack='cd \"%s\" && ./arrstack.sh'" "${repo_escaped}")
   local source_line="# source ${ARR_STACK_DIR}/.aliasarr  # Optional helper functions"
@@ -440,7 +440,7 @@ log_info "Diagnostics complete!"
 DIAG
 
   local diag_tmp
-  if ! diag_tmp="$(arrstack_mktemp_file "${diag_script}.XXXX")"; then
+  if ! diag_tmp="$(arr_mktemp_file "${diag_script}.XXXX")"; then
     warn "Failed to create temporary diagnostic script"
     return 1
   fi
@@ -455,7 +455,7 @@ DIAG
 }
 
 refresh_aliases() {
-  msg "🔄 Refreshing helper aliases"
+  step "🔄 Refreshing helper aliases"
 
   ensure_dir "$ARR_STACK_DIR"
 

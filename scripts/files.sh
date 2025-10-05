@@ -25,7 +25,7 @@ caddy_bcrypt() {
 }
 
 # Records newly created media directories for later collab warnings
-arrstack_track_created_media_dir() {
+arr_track_created_media_dir() {
   local dir="$1"
 
   if [[ -z "$dir" ]]; then
@@ -44,15 +44,55 @@ arrstack_track_created_media_dir() {
 }
 
 # Emits a one-time warning when collab profile cannot grant group write
-arrstack_report_collab_skip() {
+arr_report_collab_skip() {
   if [[ -n "${COLLAB_GROUP_WRITE_DISABLED_REASON:-}" ]]; then
-    arrstack_append_collab_warning "${COLLAB_GROUP_WRITE_DISABLED_REASON}"
+    arr_append_collab_warning "${COLLAB_GROUP_WRITE_DISABLED_REASON}"
   fi
+}
+
+arr_prompt_direct_port_exposure() {
+  local lan_ip="$1"
+  local ip_hint="$lan_ip"
+
+  if [[ -z "$ip_hint" || "$ip_hint" == "0.0.0.0" ]]; then
+    ip_hint="<set LAN_IP (hostname -I | awk \"{print \\\$1}\")>"
+  fi
+
+  msg "EXPOSE_DIRECT_PORTS=1 will publish the following LAN URLs:"
+  printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
+  printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
+  printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
+  printf '  %-11s → http://%s:%s\n' "Prowlarr" "$ip_hint" "$PROWLARR_PORT"
+  printf '  %-11s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
+  printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
+
+  if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+    msg "ASSUME_YES=1; continuing without additional confirmation."
+    return 0
+  fi
+
+  printf 'Expose these ports on the LAN? [y/N]: '
+  local response=""
+  if ! read -r response; then
+    warn "Could not read confirmation response; disabling EXPOSE_DIRECT_PORTS for safety."
+    EXPOSE_DIRECT_PORTS=0
+    return 0
+  fi
+
+  case "${response,,}" in
+    y|yes)
+      msg "Continuing with EXPOSE_DIRECT_PORTS=1."
+      ;;
+    *)
+      warn "Disabling EXPOSE_DIRECT_PORTS for this run; rerun with --yes to skip the prompt."
+      EXPOSE_DIRECT_PORTS=0
+      ;;
+  esac
 }
 
 # Creates stack/data/media directories and reconciles permissions per profile
 mkdirs() {
-  msg "📂 Creating directories"
+  step "📂 Creating directories"
   ensure_dir_mode "$ARR_STACK_DIR" 755
 
   ensure_dir_mode "$ARR_DOCKER_DIR" "$DATA_DIR_MODE"
@@ -75,7 +115,7 @@ mkdirs() {
   if [[ "${ARR_PERMISSION_PROFILE}" == "collab" && "${COLLAB_GROUP_WRITE_ENABLED:-0}" == "1" ]]; then
     collab_enabled=1
   elif [[ "${ARR_PERMISSION_PROFILE}" == "collab" ]]; then
-    arrstack_report_collab_skip
+    arr_report_collab_skip
   fi
 
   local -a collab_setup_dirs=("$DOWNLOADS_DIR" "$COMPLETED_DIR") collab_setup_labels=("Downloads" "Completed")
@@ -86,8 +126,8 @@ mkdirs() {
     ensure_dir "$dir"
     if ((collab_enabled)) && [[ -d "$dir" ]]; then
       chmod "$DATA_DIR_MODE" "$dir" 2>/dev/null || true
-      if ! arrstack_is_group_writable "$dir"; then
-        arrstack_warn_collab_once "${label} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${dir}"
+      if ! arr_is_group_writable "$dir"; then
+        arr_warn_collab_once "${label} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${dir}"
       fi
     fi
   done
@@ -110,7 +150,7 @@ mkdirs() {
       warn "${label} directory does not exist: ${dir}"
       warn "Creating it now (may fail if parent directory is missing)"
       if mkdir -p "$dir" 2>/dev/null; then
-        arrstack_track_created_media_dir "$dir"
+        arr_track_created_media_dir "$dir"
       else
         warn "Could not create ${label} directory"
         return 0
@@ -119,8 +159,8 @@ mkdirs() {
 
     if ((collab_enabled)) && [[ -d "$dir" ]]; then
       chmod "$DATA_DIR_MODE" "$dir" 2>/dev/null || true
-      if ! arrstack_is_group_writable "$dir"; then
-        arrstack_warn_collab_once "${label} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${dir}"
+      if ! arr_is_group_writable "$dir"; then
+        arr_warn_collab_once "${label} directory not group-writable and could not apply ${DATA_DIR_MODE} (collab) — fix manually: ${dir}"
       fi
     fi
   }
@@ -179,7 +219,7 @@ safe_random_alnum() {
 
 # Ensures GLUETUN_API_KEY exists, rotating auth config when forced or missing
 generate_api_key() {
-  msg "🔐 Generating API key"
+  step "🔐 Generating API key"
 
   if [[ -f "$ARR_ENV_FILE" ]] && [[ "$FORCE_ROTATE_API_KEY" != "1" ]]; then
     local existing
@@ -231,7 +271,7 @@ hydrate_caddy_auth_from_env_file() {
 
 # Renders .env with derived networking, VPN, and credential values; enforces prerequisites
 write_env() {
-  msg "📝 Writing .env file"
+  step "📝 Writing .env file"
 
   hydrate_caddy_auth_from_env_file
   hydrate_user_credentials_from_env_file
@@ -277,6 +317,7 @@ write_env() {
     else
       LAN_IP="0.0.0.0"
       warn "LAN_IP could not be detected automatically; set it in ${userconf_path} so services bind to the correct interface."
+      warn "Determine the address with: hostname -I | awk \"{print \\\$1}\""
     fi
   fi
 
@@ -300,13 +341,17 @@ write_env() {
     fi
   fi
 
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    arr_prompt_direct_port_exposure "$LAN_IP"
+  fi
+
   local caddy_http_port_value
-  arrstack_resolve_port caddy_http_port_value "${CADDY_HTTP_PORT:-}" 80 \
+  arr_resolve_port caddy_http_port_value "${CADDY_HTTP_PORT:-}" 80 \
     "Invalid CADDY_HTTP_PORT=${CADDY_HTTP_PORT:-}; defaulting to 80."
   CADDY_HTTP_PORT="$caddy_http_port_value"
 
   local caddy_https_port_value
-  arrstack_resolve_port caddy_https_port_value "${CADDY_HTTPS_PORT:-}" 443 \
+  arr_resolve_port caddy_https_port_value "${CADDY_HTTPS_PORT:-}" 443 \
     "Invalid CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-}; defaulting to 443."
   CADDY_HTTPS_PORT="$caddy_https_port_value"
 
@@ -356,17 +401,17 @@ write_env() {
   SABNZBD_USE_VPN="$sab_use_vpn"
 
   local sab_timeout_raw
-  arrstack_resolve_positive_int sab_timeout_raw "${SABNZBD_TIMEOUT:-}" 15 \
+  arr_resolve_positive_int sab_timeout_raw "${SABNZBD_TIMEOUT:-}" 15 \
     "Invalid SABNZBD_TIMEOUT=${SABNZBD_TIMEOUT:-}; defaulting to 15 seconds."
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
   local sab_internal_port_raw
-  arrstack_resolve_port sab_internal_port_raw "${SABNZBD_INT_PORT:-}" 8080 \
+  arr_resolve_port sab_internal_port_raw "${SABNZBD_INT_PORT:-}" 8080 \
     "Invalid SABNZBD_INT_PORT=${SABNZBD_INT_PORT:-}; defaulting to 8080."
   SABNZBD_INT_PORT="$sab_internal_port_raw"
 
   local sab_port_raw
-  arrstack_resolve_port sab_port_raw "${SABNZBD_PORT:-}" "$SABNZBD_INT_PORT" \
+  arr_resolve_port sab_port_raw "${SABNZBD_PORT:-}" "$SABNZBD_INT_PORT" \
     "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to ${SABNZBD_INT_PORT}."
   SABNZBD_PORT="$sab_port_raw"
 
@@ -399,7 +444,7 @@ write_env() {
   fi
 
   SABNZBD_HOST="$sab_host_value"
-  ARRSTACK_SAB_HOST_AUTO="$sab_host_auto"
+  ARR_SAB_HOST_AUTO="$sab_host_auto"
 
   local qbt_webui_default="${QBT_INT_PORT:-8082}"
   local qbt_host_default="$qbt_webui_default"
@@ -408,34 +453,34 @@ write_env() {
   local qbt_webui_status="default"
   local qbt_host_status="default"
 
-  if [[ -n "${ARRSTACK_QBT_INT_PORT_CONFIG:-}" ]]; then
-    qbt_webui_port="${ARRSTACK_QBT_INT_PORT_CONFIG}"
+  if [[ -n "${ARR_QBT_INT_PORT_CONFIG:-}" ]]; then
+    qbt_webui_port="${ARR_QBT_INT_PORT_CONFIG}"
     qbt_webui_status="preserved"
   fi
 
-  if [[ -n "${ARRSTACK_QBT_HOST_PORT_ENV:-}" ]]; then
-    qbt_host_port="${ARRSTACK_QBT_HOST_PORT_ENV}"
+  if [[ -n "${ARR_QBT_HOST_PORT_ENV:-}" ]]; then
+    qbt_host_port="${ARR_QBT_HOST_PORT_ENV}"
     qbt_host_status="preserved"
   elif [[ -n "${QBT_PORT:-}" ]]; then
     qbt_host_port="${QBT_PORT}"
   fi
 
   local qbt_host_port_raw="$qbt_host_port"
-  arrstack_resolve_port qbt_host_port "$qbt_host_port_raw" "$qbt_host_default" \
+  arr_resolve_port qbt_host_port "$qbt_host_port_raw" "$qbt_host_default" \
     "Invalid QBT_PORT=${qbt_host_port_raw}; defaulting to ${qbt_host_default}."
   if [[ "$qbt_host_port" == "$qbt_host_default" && "$qbt_host_port_raw" != "$qbt_host_default" ]]; then
     qbt_host_status="default"
   fi
 
   if [[ "$qbt_webui_status" == "preserved" && "$qbt_webui_port" != "$qbt_webui_default" ]]; then
-    arrstack_record_preserve_note "Preserved qBittorrent WebUI port ${qbt_webui_port}"
+    arr_record_preserve_note "Preserved qBittorrent WebUI port ${qbt_webui_port}"
   fi
   if [[ "$qbt_host_status" == "preserved" && "$qbt_host_port" != "$qbt_host_default" ]]; then
-    arrstack_record_preserve_note "Preserved qBittorrent host port ${qbt_host_port}"
+    arr_record_preserve_note "Preserved qBittorrent host port ${qbt_host_port}"
   fi
 
   local qbt_webui_port_raw="$qbt_webui_port"
-  arrstack_resolve_port qbt_webui_port "$qbt_webui_port_raw" "$qbt_webui_default" \
+  arr_resolve_port qbt_webui_port "$qbt_webui_port_raw" "$qbt_webui_default" \
     "Invalid qBittorrent WebUI port ${qbt_webui_port_raw}; using ${qbt_webui_default}."
   if [[ "$qbt_webui_port" == "$qbt_webui_default" && "$qbt_webui_port_raw" != "$qbt_webui_default" ]]; then
     qbt_webui_status="default"
@@ -443,8 +488,8 @@ write_env() {
 
   QBT_INT_PORT="$qbt_webui_port"
   QBT_PORT="$qbt_host_port"
-  ARRSTACK_QBT_INT_PORT_STATUS="$qbt_webui_status"
-  ARRSTACK_QBT_HOST_PORT_STATUS="$qbt_host_status"
+  ARR_QBT_INT_PORT_STATUS="$qbt_webui_status"
+  ARR_QBT_HOST_PORT_STATUS="$qbt_host_status"
 
   local sab_api_state="empty"
   local sab_api_value="${SABNZBD_API_KEY:-}"
@@ -456,19 +501,19 @@ write_env() {
       sab_api_state="set"
     fi
   fi
-  ARRSTACK_SAB_API_KEY_STATE="$sab_api_state"
-  export ARRSTACK_SAB_API_KEY_STATE
+  ARR_SAB_API_KEY_STATE="$sab_api_state"
+  export ARR_SAB_API_KEY_STATE
   case "$sab_api_state" in
     set)
-      if [[ -z "${ARRSTACK_SAB_API_KEY_SOURCE:-}" ]]; then
-        ARRSTACK_SAB_API_KEY_SOURCE="provided"
+      if [[ -z "${ARR_SAB_API_KEY_SOURCE:-}" ]]; then
+        ARR_SAB_API_KEY_SOURCE="provided"
       fi
       ;;
     placeholder)
-      ARRSTACK_SAB_API_KEY_SOURCE="placeholder"
+      ARR_SAB_API_KEY_SOURCE="placeholder"
       ;;
     empty)
-      ARRSTACK_SAB_API_KEY_SOURCE="empty"
+      ARR_SAB_API_KEY_SOURCE="empty"
       ;;
   esac
 
@@ -586,7 +631,7 @@ fi
   fi
   QBT_AUTH_WHITELIST="$(normalize_csv "$qbt_whitelist_raw")"
   local tmp
-  tmp="$(arrstack_mktemp_file "${ARR_ENV_FILE}.XXXXXX.tmp")" || die "Failed to create temp file for ${ARR_ENV_FILE}"
+  tmp="$(arr_mktemp_file "${ARR_ENV_FILE}.XXXXXX.tmp")" || die "Failed to create temp file for ${ARR_ENV_FILE}"
 
   {
     printf '%s\n' '# Core settings'
@@ -722,9 +767,11 @@ fi
     write_env_kv "SABNZBD_IMAGE" "$SABNZBD_IMAGE"
     write_env_kv "CONFIGARR_IMAGE" "$CONFIGARR_IMAGE"
     write_env_kv "CADDY_IMAGE" "$CADDY_IMAGE"
+    write_env_kv "LOCALDNS_IMAGE" "$LOCALDNS_IMAGE"
   } >"$tmp"
 
   mv "$tmp" "$ARR_ENV_FILE"
+  ensure_secret_file_mode "$ARR_ENV_FILE"
 
 }
 
@@ -740,7 +787,7 @@ append_sabnzbd_service_body() {
   # shellcheck disable=SC2034  # reserved for future per-network tweaks
 
   local sab_timeout_for_health
-  arrstack_resolve_positive_int sab_timeout_for_health "${SABNZBD_TIMEOUT:-}" 60
+  arr_resolve_positive_int sab_timeout_for_health "${SABNZBD_TIMEOUT:-}" 60
   local health_start_period_seconds=60
   if ((sab_timeout_for_health > health_start_period_seconds)); then
     health_start_period_seconds="$sab_timeout_for_health"
@@ -780,16 +827,16 @@ YAML
 
 # Generates docker-compose.yml tuned for split VPN (qBittorrent-only tunnel)
 write_compose_split_mode() {
-  msg "🐳 Writing docker-compose.yml"
+  step "🐳 Writing docker-compose.yml"
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
   local sab_internal_port
-  arrstack_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
+  arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
 
   LOCAL_DNS_SERVICE_ENABLED=0
 
-  tmp="$(arrstack_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
+  tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
 
   { 
@@ -1075,7 +1122,7 @@ YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
-    arrstack_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
+    arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: ${SABNZBD_IMAGE}
@@ -1161,7 +1208,7 @@ write_compose() {
     return
   fi
 
-  msg "🐳 Writing docker-compose.yml"
+  step "🐳 Writing docker-compose.yml"
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
@@ -1200,7 +1247,7 @@ write_compose() {
     fi
   fi
 
-  tmp="$(arrstack_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
+  tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
 
   {
@@ -1300,7 +1347,7 @@ YAML
   if ((include_local_dns)); then
     cat <<'YAML' >>"$tmp"
   local_dns:
-    image: "4km3/dnsmasq:2.90-r3"
+    image: "${LOCALDNS_IMAGE}"
     container_name: arr_local_dns
     profiles:
       - localdns
@@ -1525,7 +1572,7 @@ YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
-    arrstack_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
+    arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: "${SABNZBD_IMAGE}"
@@ -1814,7 +1861,7 @@ ensure_caddy_auth() {
     return 0
   fi
 
-  msg "🔐 Ensuring Caddy Basic Auth"
+  step "🔐 Ensuring Caddy Basic Auth"
 
   hydrate_caddy_auth_from_env_file
 
@@ -1956,7 +2003,7 @@ write_caddy_assets() {
     return 0
   fi
 
-  msg "🌐 Writing Caddy reverse proxy config"
+  step "🌐 Writing Caddy reverse proxy config"
 
   local caddy_root="${ARR_DOCKER_DIR}/caddy"
   local data_dir="${caddy_root}/data"
@@ -2114,7 +2161,7 @@ write_caddy_assets() {
 
 # Copies the shared Gluetun helper script into the stack workspace
 sync_gluetun_library() {
-  msg "📚 Syncing Gluetun helper library"
+  step "📚 Syncing Gluetun helper library"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -2124,7 +2171,7 @@ sync_gluetun_library() {
 
 # Syncs VPN auto-reconnect scripts with executable permissions into the stack
 sync_vpn_auto_reconnect_assets() { 
-  msg "📡 Syncing VPN auto-reconnect helpers"
+  step "📡 Syncing VPN auto-reconnect helpers"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -2137,7 +2184,7 @@ sync_vpn_auto_reconnect_assets() {
 
 # Installs SABnzbd helper into the stack scripts directory
 write_sab_helper_script() { 
-  msg "🧰 Writing SABnzbd helper script"
+  step "🧰 Writing SABnzbd helper script"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -2149,7 +2196,7 @@ write_sab_helper_script() {
 
 # Installs qBittorrent helper shim into the stack scripts directory
 write_qbt_helper_script() {
-  msg "🧰 Writing qBittorrent helper script"
+  step "🧰 Writing qBittorrent helper script"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -2161,7 +2208,7 @@ write_qbt_helper_script() {
 
 # Reconciles qBittorrent configuration defaults while preserving user customizations
 write_qbt_config() {
-  msg "🧩 Writing qBittorrent config"
+  step "🧩 Writing qBittorrent config"
   local config_dir="${ARR_DOCKER_DIR}/qbittorrent"
   local runtime_dir="${config_dir}/qBittorrent"
   local conf_file="${config_dir}/qBittorrent.conf"
@@ -2343,7 +2390,7 @@ write_configarr_assets() {
     return 0
   fi
 
-  msg "🧾 Preparing Configarr assets"
+  step "🧾 Preparing Configarr assets"
 
   local configarr_root="${ARR_DOCKER_DIR}/configarr"
   local runtime_config="${configarr_root}/config.yml"
@@ -2878,9 +2925,9 @@ EOF
       msg "  Added SABnzbd placeholder to Configarr secrets"
     fi
 
-    if [[ "${ARRSTACK_SAB_API_KEY_STATE:-}" == "set" ]]; then
+    if [[ "${ARR_SAB_API_KEY_STATE:-}" == "set" ]]; then
       local sab_secret_result=""
-      if sab_secret_result="$(arrstack_update_secret_line "$runtime_secrets" "SABNZBD_API_KEY" "$SABNZBD_API_KEY" 0 2>/dev/null)"; then
+      if sab_secret_result="$(arr_update_secret_line "$runtime_secrets" "SABNZBD_API_KEY" "$SABNZBD_API_KEY" 0 2>/dev/null)"; then
         case "$sab_secret_result" in
           updated | created | appended)
             msg "  Configarr secrets: synced SABnzbd API key"

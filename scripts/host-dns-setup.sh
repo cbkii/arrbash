@@ -19,7 +19,7 @@ if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
 fi
 
-arrstack_escalate_privileges "$@" || exit $?
+arr_escalate_privileges "$@" || exit $?
 
 # -E included to preserve ERR trap behavior in function/subshell contexts.
 set -Eeuo pipefail
@@ -210,7 +210,7 @@ cat "${RESOLV}"
 
 # ---- Start/Restart local_dns (dnsmasq) container ----
 msg "Starting local_dns container"
-arrstack_resolve_compose_cmd "${HOST_DNS_VERBOSE}"
+arr_resolve_compose_cmd "${HOST_DNS_VERBOSE}"
 "${DOCKER_COMPOSE_CMD[@]}" up -d local_dns
 
 msg "Verifying port 53 is bound by dnsmasq"
@@ -233,7 +233,7 @@ dig +short @"${LAN_IP}" "qbittorrent.${SUFFIX}"
 DIG_RC=$?
 msg "Testing HTTPS (Caddy) -> qbittorrent.${SUFFIX} (forced resolve)"
 caddy_https_port="${CADDY_HTTPS_PORT:-443}"
-arrstack_resolve_port caddy_https_port "$caddy_https_port" 443
+arr_resolve_port caddy_https_port "$caddy_https_port" 443
 curl -kI --max-time 5 --resolve "qbittorrent.${SUFFIX}:${caddy_https_port}:${LAN_IP}" "https://qbittorrent.${SUFFIX}/"
 CURL_RC=$?
 set -e

@@ -1,17 +1,17 @@
 # shellcheck shell=bash
 
 # Collects status notes for summary output when values are preserved
-arrstack_record_preserve_note() {
+arr_record_preserve_note() {
   local note="$1"
 
   if [[ -z "$note" ]]; then
     return 0
   fi
 
-  if [[ -z "${ARRSTACK_PRESERVE_NOTES:-}" ]]; then
-    ARRSTACK_PRESERVE_NOTES="$note"
+  if [[ -z "${ARR_PRESERVE_NOTES:-}" ]]; then
+    ARR_PRESERVE_NOTES="$note"
   else
-    ARRSTACK_PRESERVE_NOTES="$(printf '%s\n%s' "${ARRSTACK_PRESERVE_NOTES}" "$note")"
+    ARR_PRESERVE_NOTES="$(printf '%s\n%s' "${ARR_PRESERVE_NOTES}" "$note")"
   fi
 }
 
@@ -27,9 +27,9 @@ hydrate_sab_api_key_from_config() {
   local config_dir="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/docker-data}/sab/config"
   local ini_path="${config_dir}/sabnzbd.ini"
 
-  if [[ -d "$config_dir" && "${ARRSTACK_SAB_CONFIG_PRESERVED:-0}" != "1" ]]; then
-    ARRSTACK_SAB_CONFIG_PRESERVED=1
-    arrstack_record_preserve_note "Preserved existing SABnzbd config at ${config_dir}" || true
+  if [[ -d "$config_dir" && "${ARR_SAB_CONFIG_PRESERVED:-0}" != "1" ]]; then
+    ARR_SAB_CONFIG_PRESERVED=1
+    arr_record_preserve_note "Preserved existing SABnzbd config at ${config_dir}" || true
   fi
 
   if [[ ! -f "$ini_path" ]]; then
@@ -68,19 +68,19 @@ hydrate_sab_api_key_from_config() {
   fi
 
   if ((placeholder)) && [[ "$current_value" != "$api_key_value" ]]; then
-    if [[ -z "${ARRSTACK_SAB_INI_BACKUP:-}" ]]; then
+    if [[ -z "${ARR_SAB_INI_BACKUP:-}" ]]; then
       local timestamp backup_path
       timestamp="$(date +%Y%m%d-%H%M%S)"
       backup_path="${ini_path}.bak.${timestamp}"
       if cp -a "$ini_path" "$backup_path" 2>/dev/null; then
-        ARRSTACK_SAB_INI_BACKUP="$backup_path"
-        arrstack_record_preserve_note "Backed up sabnzbd.ini to ${backup_path##*/}"
+        ARR_SAB_INI_BACKUP="$backup_path"
+        arr_record_preserve_note "Backed up sabnzbd.ini to ${backup_path##*/}"
       fi
     fi
 
     SABNZBD_API_KEY="$api_key_value"
-    arrstack_record_preserve_note "Hydrated SABnzbd API key from sabnzbd.ini"
-    ARRSTACK_SAB_API_KEY_SOURCE="hydrated"
+    arr_record_preserve_note "Hydrated SABnzbd API key from sabnzbd.ini"
+    ARR_SAB_API_KEY_SOURCE="hydrated"
   fi
 
   return 0
@@ -99,7 +99,7 @@ hydrate_qbt_host_port_from_env_file() {
   if [[ -n "$existing_host_port" ]]; then
     local trimmed="${existing_host_port//[[:space:]]/}"
     if [[ "$trimmed" =~ ^[0-9]+$ ]]; then
-      ARRSTACK_QBT_HOST_PORT_ENV="$trimmed"
+      ARR_QBT_HOST_PORT_ENV="$trimmed"
     fi
   fi
 }
@@ -124,7 +124,7 @@ hydrate_qbt_webui_port_from_config() {
   configured_port="$(grep -E '^WebUI\\\\Port=' "$candidate" | tail -n1 | cut -d= -f2 | tr -d '[:space:]' || printf '')"
 
   if [[ -n "$configured_port" && "$configured_port" =~ ^[0-9]+$ ]]; then
-    ARRSTACK_QBT_INT_PORT_CONFIG="$configured_port"
+    ARR_QBT_INT_PORT_CONFIG="$configured_port"
   fi
 }
 
@@ -146,14 +146,14 @@ hydrate_user_credentials_from_env_file() {
   if [[ -n "$existing_user" && "$existing_user" != "$default_user" ]]; then
     if [[ -z "${QBT_USER:-}" || "${QBT_USER}" == "$default_user" ]]; then
       QBT_USER="$existing_user"
-      arrstack_record_preserve_note "Preserved qBittorrent username from existing .env"
+      arr_record_preserve_note "Preserved qBittorrent username from existing .env"
     fi
   fi
 
   if [[ -n "$existing_pass" && "$existing_pass" != "$default_pass" ]]; then
     if [[ -z "${QBT_PASS:-}" || "${QBT_PASS}" == "$default_pass" ]]; then
       QBT_PASS="$existing_pass"
-      arrstack_record_preserve_note "Preserved qBittorrent password from existing .env"
+      arr_record_preserve_note "Preserved qBittorrent password from existing .env"
     fi
   fi
 }
