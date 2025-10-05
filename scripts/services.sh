@@ -691,7 +691,7 @@ validate_images() {
       tag_part="${image##*:}"
     fi
 
-    if [[ -z "$tag_part" || "$repo_part" == "$image" || "$tag_part" =~ [[:space:]] || "$tag_part" == */* ]]; then
+    if [[ -z "$tag_part" || "$repo_part" == "$image" || "$tag_part" =~ [[:space:]] || "$tag_part" =~ .*/.* ]]; then
       warn "  ❌ ${var_name} is missing a valid tag. Set ${var_name}=repository:tag in ${ARR_ENV_FILE} or ${ARR_USERCONF_PATH}."
       invalid_images+=("$var_name")
       failed_images+=("${image:-<empty>}")
