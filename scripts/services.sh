@@ -612,7 +612,7 @@ validate_caddy_config() {
   rm -f "$logfile"
 }
 
-# Uses docker manifest inspect to verify image availability
+# Checks for Docker image existence using 'inspect'
 check_image_exists() {
   local image="$1"
 
