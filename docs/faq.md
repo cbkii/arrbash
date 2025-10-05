@@ -8,7 +8,7 @@ Quick answers to common beginner questions about arrbash.
 Any 64-bit Debian Bookworm host with roughly 4 CPU cores and 4 GB RAM works. Raspberry Pi 5 is a popular option but not required.
 
 ## Which Proton plan should I buy?
-Use Proton VPN Plus or Unlimited. Those plans support port forwarding, which qBittorrent needs for good performance.
+Use Proton VPN Plus or Unlimited if you want inbound peers—those plans include the optional port forwarding feature. The stack still runs without a lease, but speeds improve when Proton assigns you a forwarded port on a P2P server.
 
 ## Can I skip the DNS helper?
 Yes, but you must add host entries manually or set DNS per device. Following [Networking](networking.md) keeps the experience consistent.

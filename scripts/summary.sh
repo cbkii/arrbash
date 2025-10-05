@@ -14,20 +14,28 @@ summary_format_epoch() {
 show_summary() {
 
   if arr_run_failure_flag_exists; then
-    local failure_reason failure_code
+    local failure_reason failure_code failure_key
     failure_reason="$(arr_read_run_failure_reason 2>/dev/null || printf 'VPN not running.')"
     failure_code="$(arr_read_run_failure_code 2>/dev/null || printf '')"
+    failure_key="$(arr_read_run_failure_reason_key 2>/dev/null || printf '')"
     msg "❌ Setup FAILED"
     warn "$failure_reason"
-    case "$failure_code" in
+    msg "Next steps:"
+    case "${failure_key:-$failure_code}" in
       VPN_NOT_RUNNING)
-        warn "See docs/troubleshooting.md (Gluetun recovery) for next steps."
+        msg "  1. Inspect Gluetun logs: docker logs --tail=200 gluetun"
+        msg "  2. Verify VPN credentials and network access in ${ARR_USERCONF_PATH}."
+        msg "  3. Restart with: ./arrstack.sh start"
         ;;
       PF_NOT_ACQUIRED)
-        warn "See docs/networking.md (Proton port forwarding) to restore the forwarded port."
+        msg "  1. Review Proton PF log: ${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_LOG_FILE:-port-forwarding.log}"
+        msg "  2. Confirm your Proton server supports port forwarding or rotate regions."
+        msg "  3. Retry the lease with: arr.vpn.port.sync"
         ;;
       *)
-        warn "Check ${ARR_STACK_DIR}/logs for additional detail."
+        msg "  1. Check ${ARR_STACK_DIR}/logs for detailed error messages."
+        msg "  2. Address the issue noted above."
+        msg "  3. Re-run ./arrstack.sh start"
         ;;
     esac
     return 0
@@ -91,6 +99,19 @@ QBT_INFO
   esac
   msg "qBittorrent ports: container ${QBT_INT_PORT} ${container_suffix}, host ${QBT_PORT} ${host_suffix}"
 
+  case "${ARR_PF_STATUS:-}" in
+    acquired)
+      msg "Port forwarding ready: ${ARR_PF_NOTICE:-Forwarded port acquired.}"
+      ;;
+    not_acquired)
+      warn "Port forwarding not acquired. This is optional and depends on your VPN provider/plan/server. ${ARR_PF_NOTICE:-Check your VPN plan or region.} Services are running without a forwarded port; inspect PF logs if you need inbound peers."
+      ;;
+  esac
+
+  if [[ "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" == "1" && "${TIMEZONE:-}" == "UTC" ]]; then
+    warn "TIMEZONE auto-detected as UTC. Update TIMEZONE in ${ARR_USERCONF_PATH} to match your locale."
+  fi
+
   if [[ "${ARR_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
     warn "Stack configuration has duplicate host port assignments:"
     if [[ -n "${ARR_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
@@ -125,16 +146,35 @@ QBT_INFO
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    msg "Direct LAN URLs (EXPOSE_DIRECT_PORTS=1):"
-    printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
-    printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
-    printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
-    printf '  %-11s → http://%s:%s\n' "Prowlarr" "$ip_hint" "$PROWLARR_PORT"
-    printf '  %-11s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
-    printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
+    warn "LAN services are exposed on http://${ip_hint}:PORT (EXPOSE_DIRECT_PORTS=1). Restrict access to trusted networks."
+    msg "Service           → URL"
+    msg "---------------------------"
+    printf '  %-15s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
+    printf '  %-15s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
+    printf '  %-15s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
+    printf '  %-15s → http://%s:%s\n' "Prowlarr" "$ip_hint" "$PROWLARR_PORT"
+    printf '  %-15s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
+    printf '  %-15s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
   else
     msg "Direct LAN URLs are not published (EXPOSE_DIRECT_PORTS=0)."
     msg "Access services from the host network (docker compose exec/port-forward) or add your own reverse proxy."
+  fi
+
+  if [[ "${ARR_PORT_CHECKS_SKIPPED:-0}" == "1" ]]; then
+    warn "Host port checks were skipped. Verify these bindings manually:"
+    if [[ -n "${ARR_PORT_CHECKS_EXPECTED:-}" ]]; then
+      while IFS= read -r manual_port; do
+        [[ -z "$manual_port" ]] && continue
+        warn "  - ${manual_port}"
+      done < <(printf '%s\n' "${ARR_PORT_CHECKS_EXPECTED}")
+    fi
+  fi
+
+  if ((ARR_HOST_RESTARTS_ATTEMPTED > 0)); then
+    msg "Host restart recap: attempted ${ARR_HOST_RESTARTS_ATTEMPTED}, succeeded ${ARR_HOST_RESTARTS_SUCCEEDED}."
+    if ((ARR_HOST_RESTARTS_ATTEMPTED > ARR_HOST_RESTARTS_SUCCEEDED)); then
+      warn "Restart Docker manually to apply resolver configuration changes."
+    fi
   fi
 
   if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then

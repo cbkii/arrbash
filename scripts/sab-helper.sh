@@ -35,6 +35,25 @@ fi
 # shellcheck source=scripts/common.sh
 . "$COMMON_HELPER"
 
+DEFAULTS_HELPER="${STACK_DIR}/scripts/defaults.sh"
+if [[ ! -f "$DEFAULTS_HELPER" ]]; then
+  if [[ -n "${REPO_ROOT:-}" ]] && resolve_helper_path "${REPO_ROOT}/scripts/defaults.sh" >/dev/null; then
+    DEFAULTS_HELPER="${REPO_ROOT}/scripts/defaults.sh"
+  elif resolve_helper_path "${STACK_DIR_DEFAULT}/scripts/defaults.sh" >/dev/null; then
+    DEFAULTS_HELPER="${STACK_DIR_DEFAULT}/scripts/defaults.sh"
+  else
+    DEFAULTS_HELPER=""
+  fi
+fi
+
+if [[ -n "$DEFAULTS_HELPER" ]]; then
+  # shellcheck source=scripts/defaults.sh
+  . "$DEFAULTS_HELPER"
+  if declare -f arr_setup_defaults >/dev/null 2>&1; then
+    arr_setup_defaults
+  fi
+fi
+
 if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
   # shellcheck disable=SC1091
   # shellcheck source=arrconf/userr.conf.defaults.sh
@@ -55,6 +74,10 @@ fi
 if [[ -n "$CONFIG_HELPER" ]]; then
   # shellcheck source=scripts/config.sh
   . "$CONFIG_HELPER"
+fi
+
+if ! declare -p ARR_CURL_DEFAULT_ARGS >/dev/null 2>&1; then
+  ARR_CURL_DEFAULT_ARGS=()
 fi
 
 ENV_FILE="${ARR_ENV_FILE:-${STACK_DIR}/.env}"
@@ -160,7 +183,7 @@ sab_api() {
   fi
 
   local response
-  if ! response=$(curl -fsSL --connect-timeout "$timeout" "${base}/api${args}" 2>/dev/null); then
+  if ! response=$(curl "${ARR_CURL_DEFAULT_ARGS[@]-}" -fsSL --connect-timeout "$timeout" "${base}/api${args}" 2>/dev/null); then
     log_error "[sab] API request failed (${base})"
     return 1
   fi
@@ -177,7 +200,7 @@ sab_version() {
   local base="$(sab_base_url)"
   local output=""
 
-  if ! output=$(curl -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
+  if ! output=$(curl "${ARR_CURL_DEFAULT_ARGS[@]-}" -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
     return 1
   fi
 
@@ -249,7 +272,7 @@ sab_add_nzb_file() {
 
   local base="$(sab_base_url)"
   local response
-  if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" \
+  if ! response=$(curl "${ARR_CURL_DEFAULT_ARGS[@]-}" -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" \
       -F "apikey=${SABNZBD_API_KEY}" \
       -F "output=json" \
       -F "mode=addfile" \
@@ -277,7 +300,7 @@ sab_add_nzb_url() {
 
   local base="$(sab_base_url)"
   local response
-  if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" --get \
+  if ! response=$(curl "${ARR_CURL_DEFAULT_ARGS[@]-}" -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" --get \
       --data-urlencode "apikey=${SABNZBD_API_KEY}" \
       --data-urlencode "mode=addurl" \
       --data-urlencode "name=${url}" \

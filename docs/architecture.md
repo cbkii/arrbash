@@ -31,7 +31,7 @@ Generated files should not be edited manually; adjust `userr.conf` and rerun the
 1. **Preflight** – checks dependencies, confirms Docker availability, validates Proton credentials, and ensures required ports are free before writing files.
 2. **Defaults and overrides** – sources `arrconf/userr.conf.defaults.sh`, applies environment variables, then your `${ARR_BASE}/userr.conf` values.
 3. **File rendering** – creates directories with safe permissions, hydrates preserved secrets from existing `.env`, and writes compose/env/proxy files in atomic steps.
-4. **Service start** – launches Gluetun first, waits for port forwarding, then starts the remaining containers and optional extras.
+4. **Service start** – launches Gluetun first, confirms VPN connectivity, then best-effort checks for Proton port forwarding before starting the remaining containers and optional extras.
 5. **Summary** – prints URLs, credentials, and reminders such as updating *Arr download client hosts when split tunnel is active.
 
 Understanding this flow helps when troubleshooting: re-running the installer replays the entire pipeline and reconciles drift automatically.

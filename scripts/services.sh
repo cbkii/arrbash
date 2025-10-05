@@ -1,5 +1,132 @@
 # shellcheck shell=bash
 
+: "${ARR_HOST_RESTARTS_ATTEMPTED:=0}"
+: "${ARR_HOST_RESTARTS_SUCCEEDED:=0}"
+: "${ARR_PF_FAILURE_REASON:=}"
+: "${ARR_PF_STATUS:=not_requested}"
+: "${ARR_PF_NOTICE:=}"
+: "${ARR_PF_WAIT_TIMEOUT_DEFAULT:=60}"
+: "${ARR_PF_WAIT_INTERVAL_DEFAULT:=5}"
+: "${ARR_GLUETUN_TUNNEL_IFACE_NAMES:=tun0 wg0}"
+: "${ARR_GLUETUN_TUNNEL_IFACE_REGEX:=tun[0-9]+|wg[0-9]+}"
+
+# shellcheck disable=SC2120
+arr_gluetun_tunnel_iface_label() {
+  local delim="${1:-/}"
+  local -a ifaces=()
+
+  # shellcheck disable=SC2206
+  ifaces=( ${ARR_GLUETUN_TUNNEL_IFACE_NAMES:-tun0 wg0} )
+
+  local label=""
+  local iface
+  for iface in "${ifaces[@]}"; do
+    if [[ -z "$iface" ]]; then
+      continue
+    fi
+    if [[ -n "$label" ]]; then
+      label+="${delim}${iface}"
+    else
+      label="$iface"
+    fi
+  done
+
+  if [[ -z "$label" ]]; then
+    label="tun0${delim}wg0"
+  fi
+
+  printf '%s' "$label"
+}
+
+arr_pf_state_read_field_sed() {
+  local field="$1"
+  local file="$2"
+  local default_value="$3"
+
+  if [[ ! -f "$file" ]]; then
+    printf '%s' "$default_value"
+    return 0
+  fi
+
+  local pattern=""
+  case "$field" in
+    port)
+      pattern='s/.*"port"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p'
+      ;;
+    status)
+      pattern='s/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+      ;;
+    message)
+      pattern='s/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+      ;;
+    *)
+      printf '%s' "$default_value"
+      return 0
+      ;;
+  esac
+
+  local value=""
+  value="$(sed -n "$pattern" "$file" 2>/dev/null | head -n1 || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$default_value"
+  fi
+}
+
+arr_pf_state_read_field() {
+  local field="$1"
+  local file="$2"
+  local default_value="$3"
+  local have_jq="${4:-0}"
+
+  if [[ ! -f "$file" ]]; then
+    printf '%s' "$default_value"
+    return 0
+  fi
+
+  if [[ "$have_jq" == "1" ]]; then
+    local jq_expr=""
+    case "$field" in
+      port)
+        jq_expr='.port // 0'
+        ;;
+      status)
+        jq_expr='.status // ""'
+        ;;
+      message)
+        jq_expr='.message // ""'
+        ;;
+      *)
+        jq_expr='null'
+        ;;
+    esac
+
+    if [[ "$jq_expr" != 'null' ]]; then
+      local jq_value=""
+      jq_value="$(jq -r "$jq_expr" "$file" 2>/dev/null || true)"
+      if [[ -n "$jq_value" && "$jq_value" != "null" ]]; then
+        printf '%s' "$jq_value"
+        return 0
+      fi
+    fi
+  fi
+
+  arr_pf_state_read_field_sed "$field" "$file" "$default_value"
+}
+
+arr_docker_logs_if_present() {
+  local name="$1"
+  shift || true
+
+  if docker ps -a --format '{{.Names}}' | grep -Fx "$name" 2>/dev/null; then
+    docker logs "$@" "$name"
+    return $?
+  fi
+
+  return 0
+}
+
 # Confirms manual VueTorrent install has required assets before activation
 vuetorrent_manual_is_complete() {
   local dir="$1"
@@ -92,6 +219,7 @@ install_vuetorrent() {
   fi
 
   local -a curl_args=(
+    "${ARR_CURL_DEFAULT_ARGS[@]}"
     --fail
     --location
     --silent
@@ -484,22 +612,6 @@ validate_caddy_config() {
   rm -f "$logfile"
 }
 
-# Rewrites .env image variables when fallback tags are selected
-update_env_image_var() {
-  local var_name="$1"
-  local new_value="$2"
-
-  if [[ -z "$var_name" || -z "$new_value" ]]; then
-    return
-  fi
-
-  printf -v "$var_name" '%s' "$new_value"
-
-  if [[ -f "${ARR_ENV_FILE}" ]] && grep -q "^${var_name}=" "${ARR_ENV_FILE}"; then
-    portable_sed "s|^${var_name}=.*|${var_name}=${new_value}|" "${ARR_ENV_FILE}"
-  fi
-}
-
 # Uses docker manifest inspect to verify image availability
 check_image_exists() {
   local image="$1"
@@ -564,7 +676,7 @@ validate_images() {
   fi
 
   local failed_images=()
-  local -A downgrade_applied=()
+  local invalid_images=()
 
   for var_name in "${image_vars[@]}"; do
     local image="${!var_name:-}"
@@ -572,31 +684,33 @@ validate_images() {
 
     msg "  Checking $image..."
 
+    local repo_part="$image"
+    local tag_part=""
+    if [[ "$image" == *:* ]]; then
+      repo_part="${image%:*}"
+      tag_part="${image##*:}"
+    fi
+
+    if [[ -z "$tag_part" || "$repo_part" == "$image" || "$tag_part" =~ [[:space:]] || "$tag_part" == */* ]]; then
+      warn "  ❌ ${var_name} is missing a valid tag. Set ${var_name}=repository:tag in ${ARR_ENV_FILE} or ${ARR_USERCONF_PATH}."
+      invalid_images+=("$var_name")
+      failed_images+=("${image:-<empty>}")
+      continue
+    fi
+
+    if [[ "$image" =~ [[:space:]] ]]; then
+      warn "  ❌ ${var_name} contains whitespace; update the tag in ${ARR_ENV_FILE} or ${ARR_USERCONF_PATH}."
+      invalid_images+=("$var_name")
+      failed_images+=("$image")
+      continue
+    fi
+
     if check_image_exists "$image"; then
       msg "  ✅ Valid: $image"
       continue
     fi
 
-    local base_image="$image"
-    local tag=""
-    if [[ "$image" == *:* ]]; then
-      base_image="${image%:*}"
-      tag="${image##*:}"
-    fi
-
-    if [[ "$tag" != "latest" && "$base_image" == lscr.io/linuxserver/* && "${ARR_ALLOW_TAG_DOWNGRADE:-0}" == "1" ]]; then
-      local latest_image="${base_image}:latest"
-      msg "    Trying opt-in fallback: $latest_image"
-
-      if check_image_exists "$latest_image"; then
-        msg "    ✅ Using fallback: $latest_image"
-        downgrade_applied["$var_name"]="$latest_image"
-        update_env_image_var "$var_name" "$latest_image"
-        continue
-      fi
-    fi
-
-    warn "  ❌ Could not validate: $image"
+    warn "  ❌ Could not validate image: $image"
     failed_images+=("$image")
   done
 
@@ -606,19 +720,12 @@ validate_images() {
     for img in "${failed_images[@]}"; do
       warn "  - $img"
     done
-    if [[ "${ARR_ALLOW_TAG_DOWNGRADE:-0}" != "1" ]]; then
-      warn "Set ARR_ALLOW_TAG_DOWNGRADE=1 to permit temporary :latest fallback for LinuxServer images."
+    if ((${#invalid_images[@]} > 0)); then
+      warn "One or more variables are missing explicit tags: ${invalid_images[*]}"
     fi
-    warn "Check the image names and tags in .env or ${ARR_USERCONF_PATH}"
+    warn "Review the image tags in ${ARR_ENV_FILE} or ${ARR_USERCONF_PATH} and set a valid repository:tag value."
     warn "================================================"
     return 1
-  fi
-
-  if ((${#downgrade_applied[@]} > 0)); then
-    local key
-    for key in "${!downgrade_applied[@]}"; do
-      msg "  ⤵️  ${key} downgraded to ${downgrade_applied[$key]} (ARR_ALLOW_TAG_DOWNGRADE=1)"
-    done
   fi
 
   return 0
@@ -677,9 +784,36 @@ sync_qbt_password_from_logs() {
 # Checks if a default route exists via a VPN tunnel interface (configurable pattern)
 arr_gluetun_tunnel_route_present() {
   local name="${1:-gluetun}"
-  local iface_pattern="${2:-dev (tun[0-9]+|wg[0-9]+)}"
+  local iface_regex="${ARR_GLUETUN_TUNNEL_IFACE_REGEX:-tun[0-9]+|wg[0-9]+}"
+  local iface_pattern="${2:-dev (${iface_regex})}"
 
   docker exec "$name" sh -c "ip -4 route show default 2>/dev/null | grep -Eq '$iface_pattern'" >/dev/null 2>&1
+}
+
+arr_gluetun_tunnel_device_present() {
+  local name="${1:-gluetun}"
+  local -a ifaces=()
+
+  # shellcheck disable=SC2206
+  ifaces=( ${ARR_GLUETUN_TUNNEL_IFACE_NAMES:-tun0 wg0} )
+
+  local checks=()
+  local iface
+  for iface in "${ifaces[@]}"; do
+    if [[ -n "$iface" ]]; then
+      checks+=("ip link show ${iface} >/dev/null 2>&1")
+    fi
+  done
+
+  if [[ ${#checks[@]} -eq 0 ]]; then
+    return 1
+  fi
+
+  local joined
+  local IFS=' || '
+  joined="$(printf '%s' "${checks[*]}")"
+
+  docker exec "$name" sh -c "$joined" >/dev/null 2>&1
 }
 
 arr_gluetun_connectivity_probe() {
@@ -714,6 +848,10 @@ arr_wait_for_gluetun_ready() {
   local name="${1:-gluetun}"
   local max_wait="${2:-150}"
   local check_interval="${3:-5}"
+  local tunnel_label
+
+  # shellcheck disable=SC2119
+  tunnel_label="$(arr_gluetun_tunnel_iface_label)"
 
   ARR_GLUETUN_FAILURE_REASON=""
 
@@ -728,8 +866,10 @@ arr_wait_for_gluetun_ready() {
   local last_state=""
   local last_health=""
   local reported_no_healthcheck=0
-  local tunnel_announced=0
-  local tunnel_warned=0
+  local tunnel_device_announced=0
+  local tunnel_device_warned=0
+  local route_announced=0
+  local route_warned=0
   local connectivity_warned=0
 
   while ((elapsed < max_wait)); do
@@ -822,15 +962,36 @@ arr_wait_for_gluetun_ready() {
     fi
     last_health="$health_status"
 
-    if arr_gluetun_tunnel_route_present "$name"; then
-      if ((tunnel_announced == 0)); then
-        msg "  ✅ VPN tunnel interface (tun0/wg0) present"
-        tunnel_announced=1
+    if arr_gluetun_tunnel_device_present "$name"; then
+      if ((tunnel_device_announced == 0)); then
+        msg "  ✅ VPN tunnel device (${tunnel_label}) detected"
+        tunnel_device_announced=1
       fi
     else
-      if ((tunnel_warned == 0)); then
-        warn "  Waiting for VPN tunnel interface (tun0/wg0) inside Gluetun..."
-        tunnel_warned=1
+      if ((tunnel_device_warned == 0)); then
+        warn "  Waiting for VPN tunnel device (${tunnel_label}) inside Gluetun..."
+        tunnel_device_warned=1
+      fi
+
+      local remaining=$((max_wait - elapsed))
+      local sleep_for=$check_interval
+      if ((remaining < sleep_for)); then
+        sleep_for=$remaining
+      fi
+      sleep "$sleep_for"
+      elapsed=$((elapsed + sleep_for))
+      continue
+    fi
+
+    if arr_gluetun_tunnel_route_present "$name"; then
+      if ((route_announced == 0)); then
+        msg "  ✅ VPN default route bound to tunnel interface"
+        route_announced=1
+      fi
+    else
+      if ((route_warned == 0)); then
+        warn "  Waiting for VPN default route via ${tunnel_label}..."
+        route_warned=1
       fi
 
       local remaining=$((max_wait - elapsed))
@@ -865,6 +1026,103 @@ arr_wait_for_gluetun_ready() {
 
   ARR_GLUETUN_FAILURE_REASON="VPN connectivity not verified within ${max_wait}s"
   warn "  Gluetun did not become ready within ${max_wait}s."
+  return 1
+}
+
+arr_wait_for_pf_ready() {
+  local name="${1:-gluetun}"
+  local max_wait="${2:-${ARR_PF_WAIT_TIMEOUT_DEFAULT}}"
+  local check_interval="${3:-${ARR_PF_WAIT_INTERVAL_DEFAULT}}"
+
+  ARR_PF_FAILURE_REASON=""
+  ARR_PF_STATUS="waiting"
+  ARR_PF_NOTICE=""
+  export ARR_PF_STATUS ARR_PF_NOTICE
+
+  local state_file="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}"
+  local port_file="${ARR_DOCKER_DIR}/gluetun/forwarded_port"
+
+  msg "[pf] Waiting for Proton port forwarding lease (timeout ${max_wait}s)..."
+
+  local elapsed=0
+  local warned_pending=0
+  local have_jq=0
+
+  if command -v jq >/dev/null 2>&1; then
+    have_jq=1
+  fi
+
+  while ((elapsed < max_wait)); do
+    local status="" port="" message=""
+
+    if [[ -f "$state_file" ]]; then
+      port="$(arr_pf_state_read_field port "$state_file" "0" "$have_jq")"
+      status="$(arr_pf_state_read_field status "$state_file" "" "$have_jq")"
+      message="$(arr_pf_state_read_field message "$state_file" "" "$have_jq")"
+
+      if [[ "$status" == "acquired" && "$port" =~ ^[0-9]+$ && "$port" -gt 0 ]]; then
+        msg "[pf] Forwarded port acquired: ${port}"
+        ARR_PF_STATUS="acquired"
+        ARR_PF_NOTICE="Forwarded port ${port}"
+        export ARR_PF_STATUS ARR_PF_NOTICE
+        return 0
+      fi
+
+      case "$status" in
+        timeout | failed | error)
+          ARR_PF_FAILURE_REASON="${status}${message:+ - ${message}}"
+          ARR_PF_STATUS="not_acquired"
+          ARR_PF_NOTICE="${ARR_PF_FAILURE_REASON}"
+          export ARR_PF_STATUS ARR_PF_NOTICE
+          return 1
+          ;;
+        pending | "")
+          if ((warned_pending == 0)); then
+            warn "[pf] Waiting for Proton API to assign a port..."
+            warned_pending=1
+          fi
+          ;;
+        *)
+          :
+          ;;
+      esac
+    fi
+
+    if [[ -z "$port" && -f "$port_file" ]]; then
+      local file_port=""
+      file_port="$(tr -d '\r\n' <"$port_file" 2>/dev/null || printf '0')"
+      if [[ "$file_port" =~ ^[0-9]+$ && "$file_port" -gt 0 ]]; then
+        msg "[pf] Forwarded port acquired: ${file_port}"
+        ARR_PF_STATUS="acquired"
+        ARR_PF_NOTICE="Forwarded port ${file_port}"
+        export ARR_PF_STATUS ARR_PF_NOTICE
+        return 0
+      fi
+    fi
+
+    local container_port=""
+    container_port="$(docker exec "$name" sh -c 'cat /gluetun/forwarded_port 2>/dev/null' 2>/dev/null || printf '')"
+    if [[ "$container_port" =~ ^[0-9]+$ && "$container_port" -gt 0 ]]; then
+      msg "[pf] Forwarded port acquired: ${container_port}"
+      ARR_PF_STATUS="acquired"
+      ARR_PF_NOTICE="Forwarded port ${container_port}"
+      export ARR_PF_STATUS ARR_PF_NOTICE
+      return 0
+    fi
+
+    local remaining=$((max_wait - elapsed))
+    local sleep_for=$check_interval
+    if ((remaining < sleep_for)); then
+      sleep_for=$remaining
+    fi
+    sleep "$sleep_for"
+    elapsed=$((elapsed + sleep_for))
+  done
+
+  ARR_PF_FAILURE_REASON="port forwarding lease not acquired within ${max_wait}s"
+  ARR_PF_STATUS="not_acquired"
+  ARR_PF_NOTICE="${ARR_PF_FAILURE_REASON}"
+  export ARR_PF_STATUS ARR_PF_NOTICE
   return 1
 }
 
@@ -1005,12 +1263,20 @@ show_service_status() {
 
   if [[ -f "${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}" ]]; then
     local pf_state="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}"
+    local pf_have_jq=0
+    if command -v jq >/dev/null 2>&1; then
+      pf_have_jq=1
+    fi
     local pf_status
-    pf_status="$(grep -Eo '"status"[[:space:]]*:[[:space:]]*"[^"]+"' "$pf_state" 2>/dev/null | head -n1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true)"
     local pf_port
-    pf_port="$(grep -Eo '"port"[[:space:]]*:[[:space:]]*[0-9]+' "$pf_state" 2>/dev/null | head -n1 | sed 's/.*"port"[[:space:]]*:[[:space:]]*//' || true)"
+    pf_status="$(arr_pf_state_read_field status "$pf_state" "" "$pf_have_jq")"
+    pf_port="$(arr_pf_state_read_field port "$pf_state" "0" "$pf_have_jq")"
     if [[ -n "$pf_status" ]]; then
-      msg "[pf] Current PF status: ${pf_status} (port=${pf_port:-0})"
+      local display_port="0"
+      if [[ "$pf_port" =~ ^[0-9]+$ && "$pf_port" -gt 0 ]]; then
+        display_port="$pf_port"
+      fi
+      msg "[pf] Current PF status: ${pf_status} (port=${display_port})"
     fi
   fi
 }
@@ -1019,6 +1285,11 @@ show_service_status() {
 ensure_docker_userland_proxy_disabled() {
   if [[ "${LOCAL_DNS_STATE:-inactive}" != "active" ]]; then
     msg "[dns] Skipping userland-proxy update (local DNS inactive)"
+    return 0
+  fi
+
+  if [[ "${LOCAL_DNS_SERVICE_ENABLED:-0}" != "1" ]]; then
+    msg "[dns] Skipping userland-proxy update (LOCAL_DNS_SERVICE_ENABLED=0)"
     return 0
   fi
 
@@ -1168,6 +1439,7 @@ PY
   fi
 
   if ((restart_allowed)); then
+    ARR_HOST_RESTARTS_ATTEMPTED=$((ARR_HOST_RESTARTS_ATTEMPTED + 1))
     if command -v systemctl >/dev/null 2>&1; then
       if ! systemctl restart docker >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo systemctl restart docker' manually."
@@ -1177,12 +1449,14 @@ PY
         warn "[dns] Docker failed to report healthy after restart; inspect 'journalctl -xeu docker'."
         return 1
       fi
+      ARR_HOST_RESTARTS_SUCCEEDED=$((ARR_HOST_RESTARTS_SUCCEEDED + 1))
       msg "[dns] Docker daemon restarted to apply userland-proxy change"
     elif command -v service >/dev/null 2>&1; then
       if ! service docker restart >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo service docker restart' manually."
         return 1
       fi
+      ARR_HOST_RESTARTS_SUCCEEDED=$((ARR_HOST_RESTARTS_SUCCEEDED + 1))
       msg "[dns] Docker daemon restarted to apply userland-proxy change"
     else
       warn "[dns] Docker restart command not found; restart the daemon manually to apply changes."
@@ -1205,6 +1479,13 @@ start_stack() {
 
   safe_cleanup
 
+  ARR_HOST_RESTARTS_ATTEMPTED=0
+  ARR_HOST_RESTARTS_SUCCEEDED=0
+  ARR_PF_FAILURE_REASON=""
+  ARR_PF_STATUS="not_requested"
+  ARR_PF_NOTICE=""
+  export ARR_PF_STATUS ARR_PF_NOTICE
+
   if ! ensure_docker_userland_proxy_disabled; then
     return 1
   fi
@@ -1216,30 +1497,18 @@ start_stack() {
   install_vuetorrent
 
   msg "Starting Gluetun VPN container..."
-  local gluetun_output=""
-  if ! gluetun_output="$(compose up -d gluetun 2>&1)"; then
+  if ! compose up -d gluetun; then
     warn "Failed to start Gluetun via docker compose"
-    if [[ -n "$gluetun_output" ]]; then
-      while IFS= read -r line; do
-        printf '  %s\n' "$line"
-      done <<<"$gluetun_output"
-    fi
-    docker logs --tail=60 gluetun 2>&1 | sed 's/^/    /' || true
-    arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING"
+    arr_docker_logs_if_present gluetun --tail=60 2>&1 | sed 's/^/    /' || true
+    arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING" "VPN_NOT_RUNNING"
     return 1
-  fi
-
-  if [[ -n "$gluetun_output" ]]; then
-    while IFS= read -r line; do
-      printf '  %s\n' "$line"
-    done <<<"$gluetun_output"
   fi
 
   if ! arr_wait_for_gluetun_ready gluetun 150 5; then
     local failure_reason
     failure_reason="${ARR_GLUETUN_FAILURE_REASON:-Gluetun did not become ready}"
-    docker logs --tail=120 gluetun 2>&1 | sed 's/^/    /' || true
-    arr_write_run_failure "VPN not running: ${failure_reason}." "VPN_NOT_RUNNING"
+    arr_docker_logs_if_present gluetun --tail=120 2>&1 | sed 's/^/    /' || true
+    arr_write_run_failure "VPN not running: ${failure_reason}." "VPN_NOT_RUNNING" "VPN_NOT_RUNNING"
     return 1
   fi
 
@@ -1274,6 +1543,25 @@ start_stack() {
     fi
   fi
 
+  if [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
+    local pf_wait_timeout pf_wait_interval
+    arr_resolve_positive_int pf_wait_timeout "${ARR_PF_WAIT_TIMEOUT:-}" "${ARR_PF_WAIT_TIMEOUT_DEFAULT}" "Invalid ARR_PF_WAIT_TIMEOUT, defaulting to ${ARR_PF_WAIT_TIMEOUT_DEFAULT}s" warn
+    arr_resolve_positive_int pf_wait_interval "${ARR_PF_WAIT_INTERVAL:-}" "${ARR_PF_WAIT_INTERVAL_DEFAULT}" "Invalid ARR_PF_WAIT_INTERVAL, defaulting to ${ARR_PF_WAIT_INTERVAL_DEFAULT}s" warn
+
+    if ! arr_wait_for_pf_ready gluetun "$pf_wait_timeout" "$pf_wait_interval"; then
+      local pf_reason="${ARR_PF_FAILURE_REASON:-Proton port forwarding not ready}"
+      warn "[pf] ${pf_reason}. Port forwarding is optional and depends on your VPN provider/plan/server. Continuing without a forwarded port."
+    else
+      ARR_PF_STATUS="${ARR_PF_STATUS:-acquired}"
+      ARR_PF_NOTICE="${ARR_PF_NOTICE:-Forwarded port detected}"
+      export ARR_PF_STATUS ARR_PF_NOTICE
+    fi
+  else
+    ARR_PF_STATUS="not_requested"
+    ARR_PF_NOTICE=""
+    export ARR_PF_STATUS ARR_PF_NOTICE
+  fi
+
   start_vpn_auto_reconnect_if_enabled
   service_start_sabnzbd
 
@@ -1295,24 +1583,12 @@ start_stack() {
 
   for service in "${services[@]}"; do
     msg "Starting $service..."
-    local start_output=""
-
-    if start_output="$(compose up -d "$service" 2>&1)"; then
-      if [[ -n "$start_output" ]]; then
-        while IFS= read -r line; do
-          printf '  %s\n' "$line"
-        done <<<"$start_output"
-      fi
+    if compose up -d "$service"; then
       if [[ "$service" == "qbittorrent" ]]; then
         qb_started=1
       fi
     else
       warn "Failed to start $service"
-      if [[ -n "$start_output" ]]; then
-        while IFS= read -r line; do
-          printf '  %s\n' "$line"
-        done <<<"$start_output"
-      fi
       failed_services+=("$service")
       continue
     fi
@@ -1361,4 +1637,11 @@ start_stack() {
 
   msg "Services started - they may take a minute to be fully ready"
   show_service_status
+
+  if ((ARR_HOST_RESTARTS_ATTEMPTED > 0)); then
+    msg "Host restart recap: attempted ${ARR_HOST_RESTARTS_ATTEMPTED}, succeeded ${ARR_HOST_RESTARTS_SUCCEEDED}."
+    if ((ARR_HOST_RESTARTS_ATTEMPTED > ARR_HOST_RESTARTS_SUCCEEDED)); then
+      warn "Docker daemon restart did not complete; restart it manually to apply resolver changes."
+    fi
+  fi
 }

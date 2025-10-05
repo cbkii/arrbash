@@ -807,6 +807,7 @@ arr_clear_run_failure() {
 arr_write_run_failure() {
   local message="$1"
   local code="${2:-}"
+  local reason="${3:-}"
   local flag
 
   if ! flag="$(arr_run_failure_flag_path 2>/dev/null)"; then
@@ -815,14 +816,26 @@ arr_write_run_failure() {
 
   ensure_dir_mode "$(dirname "$flag")" "$DATA_DIR_MODE"
 
+  local effective_reason="$reason"
+  if [[ -z "$effective_reason" && -n "$code" ]]; then
+    effective_reason="$code"
+  fi
+
   {
     if [[ -n "$code" ]]; then
       printf 'code=%s\n' "$code"
+    fi
+    if [[ -n "$effective_reason" ]]; then
+      printf 'reason=%s\n' "$effective_reason"
     fi
     printf 'message=%s\n' "$message"
   } >"$flag"
 
   ensure_nonsecret_file_mode "$flag"
+
+  if declare -f arrstack_verify_hardened_path >/dev/null 2>&1; then
+    arrstack_verify_hardened_path "$flag"
+  fi
 }
 
 arr_run_failure_flag_exists() {
@@ -868,6 +881,21 @@ arr_read_run_failure_code() {
   code="$(grep -m1 '^code=' "$flag" 2>/dev/null | cut -d= -f2- || true)"
   [[ -z "$code" ]] && return 1
   printf '%s\n' "$code"
+}
+
+arr_read_run_failure_reason_key() {
+  local flag
+
+  if ! flag="$(arr_run_failure_flag_path 2>/dev/null)"; then
+    return 1
+  fi
+
+  [[ -f "$flag" ]] || return 1
+
+  local reason
+  reason="$(grep -m1 '^reason=' "$flag" 2>/dev/null | cut -d= -f2- || true)"
+  [[ -z "$reason" ]] && return 1
+  printf '%s\n' "$reason"
 }
 
 # Resolves whether colorized output should be emitted right now
@@ -973,6 +1001,26 @@ verify_tempfile_permission_guards() {
   fi
 
   return "$status"
+}
+
+arrstack_verify_hardened_path() {
+  local target="$1"
+
+  if [[ "${ARR_DEBUG_VERIFY_PERMS:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  if [[ -z "$target" || ! -e "$target" ]]; then
+    warn "[debug] arrstack_verify_hardened_path skipped (missing path: ${target:-<unset>})"
+    return 0
+  fi
+
+  local perms owner group
+  perms="$(stat -c '%a' "$target" 2>/dev/null || printf '---')"
+  owner="$(stat -c '%U' "$target" 2>/dev/null || printf 'unknown')"
+  group="$(stat -c '%G' "$target" 2>/dev/null || printf 'unknown')"
+
+  msg "[debug] Verified permissions for ${target}: mode=${perms} owner=${owner}:${group}"
 }
 
 # Sets up logging streams and symlinks before installer output begins

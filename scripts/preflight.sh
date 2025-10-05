@@ -7,17 +7,17 @@ install_missing() {
   require_dependencies docker
 
   if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
-    die "Docker daemon is not running or not accessible"
+    die "Docker daemon is not running or not accessible. Start it with 'sudo systemctl start docker' and rerun."
   fi
 
   DOCKER_COMPOSE_CMD=()
   ARR_COMPOSE_VERSION=""
   arr_resolve_compose_cmd
   if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
-    die "Docker Compose v2+ is required but not found"
+    die "Docker Compose v2+ is required but not found. Install the docker compose plugin (e.g. 'sudo apt install docker-compose-plugin') and rerun."
   fi
 
-  require_dependencies curl jq openssl
+  require_dependencies curl jq openssl envsubst
 
   if ! command -v certutil >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
@@ -306,6 +306,35 @@ port_conflict_guidance() {
   warn "      • Updating LAN_IP or port overrides in ${ARR_USERCONF_PATH}"
 }
 
+record_manual_port_expectations() {
+  local _requirements_name="$1"
+  # shellcheck disable=SC2178
+  local -n _requirements_ref="$_requirements_name"
+
+  if ((${#_requirements_ref[@]} == 0)); then
+    ARR_PORT_CHECKS_EXPECTED=""
+    return
+  fi
+
+  local entry proto port label expected
+  local -a formatted=()
+
+  for entry in "${_requirements_ref[@]}"; do
+    IFS='|' read -r proto port label expected <<<"$entry"
+    local display_label="$label"
+    if [[ -z "$display_label" ]]; then
+      display_label="${proto^^} ${port}"
+    fi
+    if [[ -z "$expected" || "$expected" == "*" ]]; then
+      formatted+=("${display_label} (${proto^^} ${port})")
+    else
+      formatted+=("${display_label} (${proto^^} ${port} @ ${expected})")
+    fi
+  done
+
+  ARR_PORT_CHECKS_EXPECTED="$(printf '%s\n' "${formatted[@]}")"
+}
+
 : "${ARR_PORT_CONFLICT_AUTO_FIX:=1}"
 _arr_port_conflict_quickfix_attempted=0
 
@@ -340,6 +369,9 @@ simple_port_check() {
   local mode_raw="${ARR_PORT_CHECK_MODE:-enforce}"
   local mode="${mode_raw,,}"
 
+  ARR_PORT_CHECKS_SKIPPED=0
+  ARR_PORT_CHECKS_EXPECTED=""
+
   case "$mode" in
     enforce | warn | skip) ;;
     "")
@@ -351,9 +383,19 @@ simple_port_check() {
       ;;
   esac
 
+  local -a base_requirements=()
+  collect_port_requirements base_requirements
+
   if [[ "$mode" == "skip" ]]; then
     warn "    Port availability checks skipped (ARR_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
+    ARR_PORT_CHECKS_SKIPPED=1
+    record_manual_port_expectations base_requirements
     return 0
+  fi
+
+  if ((${#base_requirements[@]} == 0)); then
+    msg "    No host port reservations required for the selected configuration."
+    return
   fi
 
   local quickfix_used=0
@@ -361,13 +403,7 @@ simple_port_check() {
   ARR_INTERNAL_PORT_CONFLICT_DETAIL=""
 
   while :; do
-    local -a requirements=()
-    collect_port_requirements requirements
-
-    if ((${#requirements[@]} == 0)); then
-      msg "    No host port reservations required for the selected configuration."
-      return
-    fi
+    local -a requirements=("${base_requirements[@]}")
 
     local -a internal_conflicts=()
     detect_internal_port_conflicts requirements internal_conflicts
@@ -430,6 +466,8 @@ simple_port_check() {
             warn "    Unable to inspect ports automatically (missing ss/lsof/netstat)."
             warn "    Skipping port availability checks; ensure required ports are free manually."
             tool_missing_reported=1
+            ARR_PORT_CHECKS_SKIPPED=1
+            record_manual_port_expectations base_requirements
           fi
           ;;
       esac

@@ -28,6 +28,11 @@ arr_setup_defaults() {
     ARR_STACK_DIR="${ARR_STACK_DIR:-${PWD}/arrstack}"
   fi
 
+  if [[ -z "${ARR_CURL_DEFAULT_ARGS_INITIALIZED:-}" ]]; then
+    ARR_CURL_DEFAULT_ARGS=(--connect-timeout 10 --max-time 20 --retry 2 --retry-delay 2)
+    ARR_CURL_DEFAULT_ARGS_INITIALIZED=1
+  fi
+
   if [[ -n "${previous_stack_dir}" && "${previous_stack_dir}" != "${ARR_STACK_DIR}" ]]; then
     local previous_env_file="${previous_stack_dir}/.env"
     if [[ "${ARR_ENV_FILE:-}" == "${previous_env_file}" ]]; then

@@ -32,6 +32,9 @@ ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE:-${HOME}/srv}/userr.conf}"
 _expected_base="${ARR_BASE:-${HOME}/srv}"
 _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_expected_base}")"
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
+ARR_USERCONF_PATH="${_canon_userconf}"
+
+_arr_timezone_before="${TIMEZONE:-}"
 
 # Returns 0 if the given variable name is readonly, 1 otherwise
 arr_var_is_readonly() {
@@ -102,14 +105,14 @@ if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   fi
 fi
 
-if [[ -f "${_canon_userconf}" ]]; then
+if [[ -f "${ARR_USERCONF_PATH}" ]]; then
   _arr_userr_conf_errlog="$(mktemp)"
   # Save current ERR trap (if any), then disable while sourcing user config
   _prev_err_trap="$(trap -p ERR 2>/dev/null || true)"
   trap - ERR
   set +e
   # shellcheck source=/dev/null
-  . "${_canon_userconf}" 2>"${_arr_userr_conf_errlog}"
+  . "${ARR_USERCONF_PATH}" 2>"${_arr_userr_conf_errlog}"
   _arr_userr_conf_status=$?
   set -e
   # Restore previous ERR trap exactly as it was
@@ -124,7 +127,7 @@ if [[ -f "${_canon_userconf}" ]]; then
     if [[ -s "${_arr_userr_conf_errlog}" ]] && ! grep -v "readonly variable" "${_arr_userr_conf_errlog}" >/dev/null; then
       :
     else
-      printf '[arrstack] Failed to source user config (status=%s): %s\n' "${_arr_userr_conf_status}" "${_canon_userconf}" >&2
+      printf '[arrstack] Failed to source user config (status=%s): %s\n' "${_arr_userr_conf_status}" "${ARR_USERCONF_PATH}" >&2
       # Replay captured stderr to aid debugging
       cat "${_arr_userr_conf_errlog}" >&2 || :
       rm -f "${_arr_userr_conf_errlog}"
@@ -150,10 +153,40 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
 done
 unset _arr_env_var
 
+_arr_userconf_timezone_override=0
+if [[ -n "${TIMEZONE:-}" ]]; then
+  if [[ "${TIMEZONE}" != "${_arr_timezone_before:-}" ]]; then
+    _arr_userconf_timezone_override=1
+  elif [[ -f "${ARR_USERCONF_PATH}" ]]; then
+    if grep -Eq '^[[:space:]]*(export[[:space:]]+)?TIMEZONE[[:space:]]*=' "${ARR_USERCONF_PATH}" 2>/dev/null; then
+      _arr_userconf_timezone_override=1
+    fi
+  fi
+fi
+
+if ((_arr_userconf_timezone_override)); then
+  ARR_TIMEZONE_AUTO_SOURCE="provided"
+  ARR_TIMEZONE_AUTO_FALLBACK=0
+  ARR_TIMEZONE_DETECTED_VALUE=""
+else
+  if [[ -z "${TIMEZONE:-}" ]]; then
+    if declare -f arr_detect_timezone >/dev/null 2>&1; then
+      TIMEZONE="$(arr_detect_timezone)"
+      ARR_TIMEZONE_DETECTED_VALUE="${TIMEZONE:-}"
+      ARR_TIMEZONE_AUTO_SOURCE="detected"
+    fi
+  fi
+fi
+
+if [[ -z "${ARR_TIMEZONE_DETECTED_VALUE:-}" && "${ARR_TIMEZONE_AUTO_SOURCE:-}" == "detected" ]]; then
+  ARR_TIMEZONE_DETECTED_VALUE="${TIMEZONE:-}"
+fi
+export ARR_TIMEZONE_DETECTED_VALUE
+
 unset _arr_env_override_order _arr_env_overrides
 
-ARR_USERCONF_PATH="${_canon_userconf}"
 unset _canon_userconf _canon_base _expected_base
+unset _arr_timezone_before _arr_userconf_timezone_override
 
 if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly REPO_ROOT ARR_USERCONF_PATH
