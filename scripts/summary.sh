@@ -108,7 +108,7 @@ QBT_INFO
       ;;
   esac
 
-  if [[ "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" == "1" && "${TIMEZONE:-}" == "UTC" && "${ARR_TIMEZONE_DETECTION_METHOD:-auto}" != "user" ]]; then
+  if [[ "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" == "1" && "${TIMEZONE:-}" == "UTC" && "${ARR_TIMEZONE_AUTO_SOURCE:-auto}" != "user" ]]; then
     warn "TIMEZONE was auto-detected as UTC (likely due to detection failure). If you are not in the UTC timezone, update TIMEZONE in ${ARR_USERCONF_PATH} to match your locale."
   fi
 
