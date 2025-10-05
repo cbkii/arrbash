@@ -1355,7 +1355,9 @@ start_stack() {
 
   service_health_sabnzbd
 
-  arr_schedule_delayed_api_sync || true
+  if ! arr_schedule_delayed_api_sync; then
+    warn "arr_schedule_delayed_api_sync failed; API sync may be delayed or incomplete."
+  fi
 
   msg "Services started - they may take a minute to be fully ready"
   show_service_status
