@@ -23,6 +23,48 @@ arr_err_trap() {
 trap 'arr_err_trap' ERR
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+
+_arr_realpath_echo() {
+  local p="$1"
+
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -e -- "${p}" 2>/dev/null && return 0
+  fi
+
+  if command -v readlink >/dev/null 2>&1; then
+    readlink -f -- "${p}" 2>/dev/null && return 0
+  fi
+
+  printf '%s\n' "${p}"
+}
+
+arr_find_userconf_override() {
+  local target="userr.conf" repo_root="" parent="" first=""
+
+  if [[ -n "${ARR_USERCONF_PATH:-}" && -f "${ARR_USERCONF_PATH}" ]]; then
+    _arr_realpath_echo "${ARR_USERCONF_PATH}"
+    return 0
+  fi
+
+  if [[ -n "${REPO_ROOT:-}" ]]; then
+    repo_root="$(cd -- "${REPO_ROOT}" 2>/dev/null && pwd -P)" || return 1
+    parent="$(cd -- "${repo_root}/.." 2>/dev/null && pwd -P)" || parent=".."
+  else
+    parent="$(cd -- ".." 2>/dev/null && pwd -P)" || parent=".."
+    repo_root=""
+  fi
+
+  [[ -d "${parent}" ]] || return 1
+
+  first="$(find -L "${parent}" \
+    ${repo_root:+-path "${repo_root}"} ${repo_root:+-prune} -o \
+    -type f -name "${target}" -print -quit 2>/dev/null)" || true
+
+  [[ -n "${first}" ]] || return 1
+
+  _arr_realpath_echo "${first}"
+}
+
 if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
@@ -33,10 +75,34 @@ STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
 STACK_TAG="[${STACK}]"
 
 # Resolve and optionally constrain user config
-ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE:-${HOME}/srv}/userr.conf}"
+ARR_USERCONF_OVERRIDE_PATH="${ARR_USERCONF_OVERRIDE_PATH:-}"
+_arr_userconf_source="default"
+_arr_userconf_candidate="${ARR_USERCONF_PATH:-}"
+
+if [[ -n "${_arr_userconf_candidate}" ]]; then
+  _arr_userconf_source="explicit"
+else
+  if _arr_userconf_override_candidate="$(arr_find_userconf_override 2>/dev/null || true)" && [[ -n "${_arr_userconf_override_candidate}" ]]; then
+    _arr_userconf_candidate="${_arr_userconf_override_candidate}"
+    _arr_userconf_source="override"
+    ARR_USERCONF_OVERRIDE_PATH="${_arr_userconf_override_candidate}"
+  fi
+
+  if [[ -z "${_arr_userconf_candidate}" ]]; then
+    _arr_userconf_candidate="${ARR_BASE:-${HOME}/srv}/userr.conf"
+    _arr_userconf_source="default"
+  fi
+fi
+
+ARR_USERCONF_PATH="${_arr_userconf_candidate}"
 _expected_base="${ARR_BASE:-${HOME}/srv}"
 _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_expected_base}")"
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
+ARR_USERCONF_PATH="${_canon_userconf}"
+
+if [[ "${_arr_userconf_source}" == "override" ]]; then
+  ARR_USERCONF_OVERRIDE_PATH="${_canon_userconf}"
+fi
 
 # Returns 0 if the given variable name is readonly, 1 otherwise
 arr_var_is_readonly() {
@@ -97,7 +163,7 @@ done
 unset _arr_env_var
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
-  if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
+  if [[ "${_arr_userconf_source}" != "override" && "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
     if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
       printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
       exit 1
@@ -147,7 +213,7 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
     # Validate variable name format before assignment
     if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
       printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
-      export "${_arr_env_var}"
+      export "${_arr_env_var?}"
     else
       printf '%s WARN: Skipping invalid environment variable name: %s\n' "${STACK_TAG}" "${_arr_env_var}" >&2
     fi
@@ -158,6 +224,7 @@ unset _arr_env_var
 unset _arr_env_override_order _arr_env_overrides
 
 ARR_USERCONF_PATH="${_canon_userconf}"
+unset _arr_userconf_candidate _arr_userconf_override_candidate _arr_userconf_source
 unset _canon_userconf _canon_base _expected_base
 
 if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then

@@ -542,6 +542,24 @@ preflight() {
 
   msg "  Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
 
+  local userconf_override_path=""
+  local default_userconf="${ARR_BASE:-${HOME}/srv}/userr.conf"
+  local default_userconf_canon
+  default_userconf_canon="$(readlink -f "$default_userconf" 2>/dev/null || printf '%s' "$default_userconf")"
+
+  if userconf_override_path="$(arr_find_userconf_override)" && [[ -n "$userconf_override_path" ]]; then
+    if [[ "$userconf_override_path" != "$default_userconf_canon" ]]; then
+      # shellcheck disable=SC2034  # consumed by scripts/config.sh
+      ARR_USERCONF_OVERRIDE_PATH="$userconf_override_path"
+    else
+      # shellcheck disable=SC2034  # consumed by scripts/config.sh
+      ARR_USERCONF_OVERRIDE_PATH=""
+    fi
+  else
+    # shellcheck disable=SC2034  # consumed by scripts/config.sh
+    ARR_USERCONF_OVERRIDE_PATH=""
+  fi
+
   if [[ ! -f "${ARRCONF_DIR}/proton.auth" ]]; then
     die "Missing ${ARRCONF_DIR}/proton.auth - create it with PROTON_USER and PROTON_PASS"
   fi
