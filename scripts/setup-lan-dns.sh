@@ -61,8 +61,8 @@ fuzzy_remove_entries() {
     {
       line = tolower($0)
       if (marker_lower != "" && match(line, "(^|[^a-zA-Z0-9_-])" marker_lower "([^a-zA-Z0-9_-]|$)")) {
-   next
- }
+        next
+      }
         next
       }
       print $0
