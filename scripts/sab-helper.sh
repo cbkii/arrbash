@@ -160,7 +160,7 @@ sab_api() {
   fi
 
   local response
-  if ! response=$(curl -fsSL --connect-timeout "$timeout" "${base}/api${args}" 2>/dev/null); then
+  if ! response=$(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsSL --connect-timeout "$timeout" "${base}/api${args}" 2>/dev/null); then
     log_error "[sab] API request failed (${base})"
     return 1
   fi
@@ -177,7 +177,7 @@ sab_version() {
   local base="$(sab_base_url)"
   local output=""
 
-  if ! output=$(curl -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
+  if ! output=$(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
     return 1
   fi
 
@@ -249,7 +249,7 @@ sab_add_nzb_file() {
 
   local base="$(sab_base_url)"
   local response
-  if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" \
+  if ! response=$(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" \
       -F "apikey=${SABNZBD_API_KEY}" \
       -F "output=json" \
       -F "mode=addfile" \
@@ -277,7 +277,7 @@ sab_add_nzb_url() {
 
   local base="$(sab_base_url)"
   local response
-  if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" --get \
+  if ! response=$(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" --get \
       --data-urlencode "apikey=${SABNZBD_API_KEY}" \
       --data-urlencode "mode=addurl" \
       --data-urlencode "name=${url}" \

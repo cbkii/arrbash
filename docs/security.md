@@ -17,8 +17,9 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 
 ## Network exposure
 - Bind the stack to a private `LAN_IP` and avoid forwarding raw service ports through your router. Use Caddy with strong credentials if you require remote access.
+- `EXPOSE_DIRECT_PORTS` now defaults to `0`; enabling it always prints a warning banner (even with `--yes`) so you can double-check LAN IP and qBittorrent credentials. Rotate the defaults immediately—installations warn when qBittorrent still uses the shipping login.
 - When local DNS is enabled, ensure only trusted clients point at the Pi. Keep a fallback public resolver in DHCP to avoid outages if the Pi is offline.
-- Enabling local DNS may merge `/etc/docker/daemon.json` to disable the Docker userland proxy. The installer creates a `.bak` alongside the file—plan a short downtime (let active downloads finish) so you can restart Docker, and use `scripts/host-dns-rollback.sh` to restore the previous config if needed.
+- Enabling local DNS may merge `/etc/docker/daemon.json` to disable the Docker userland proxy. The installer prompts for consent, creates a `.bak` alongside the file, and skips the change entirely if you decline or `LOCAL_DNS_SERVICE_ENABLED=0`. Plan a short downtime (let active downloads finish) so you can restart Docker when you do approve the merge, and use `scripts/host-dns-rollback.sh` to restore the previous config if needed.
 - Verify open ports regularly:
   ```bash
   sudo ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191|:80|:443|:53'
@@ -38,3 +39,6 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 - [Networking](networking.md) – Caddy, DNS, and VPN context.
 - [Operations](operations.md) – rotation commands.
 - [Troubleshooting](troubleshooting.md) – recovery steps.
+
+## Platform notes
+- Raspberry Pi 4/5 on 64-bit Raspberry Pi OS is supported; prefix privileged helpers with `sudo` if `pkexec` is unavailable.

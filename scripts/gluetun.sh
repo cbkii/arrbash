@@ -519,7 +519,7 @@ gluetun_control_get() {
     return 1
   fi
 
-  local -a curl_args=(-fsS --max-time 8)
+  local -a curl_args=("${ARR_CURL_DEFAULT_ARGS[@]}" -fsS --max-time 8)
   if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
     curl_args+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
   fi
@@ -815,7 +815,7 @@ gluetun_update_openvpn_status() {
   local api_base
   api_base="$(_gluetun_control_base)"
 
-  local -a curl_args=(-fsS --max-time 8 -X PUT -H 'Content-Type: application/json')
+  local -a curl_args=("${ARR_CURL_DEFAULT_ARGS[@]}" -fsS --max-time 8 -X PUT -H 'Content-Type: application/json')
   if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
     curl_args+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
   fi

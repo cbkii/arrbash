@@ -8,7 +8,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 - Optional extras: Caddy HTTPS proxy, local DNS resolver, Configarr sync, VueTorrent WebUI.
 
 ## Prerequisites
-- 64-bit Debian 12 (Bookworm) or equivalent with a static LAN IP, 4 CPU cores, and 4 GB RAM.
+- 64-bit Debian 12 (Bookworm) or equivalent with a static LAN IP, 4 CPU cores, and 4 GB RAM. Raspberry Pi 4/5 on 64-bit Raspberry Pi OS works as well; run commands with `sudo` if `pkexec` is unavailable.
 - Proton VPN Plus or Unlimited subscription for port forwarding support.
 
 ## Quick start
@@ -17,6 +17,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    sudo apt update && sudo apt install docker.io docker-compose-plugin git curl jq openssl
    ```
    > The installer expects these dependencies to be present already; it does not install Docker, Compose, or CLI tools on your behalf.
+  > If you turn on Local DNS, the installer backs up Docker’s settings file, updates it, and you’ll need to restart Docker afterwards.
 2. **Clone arrbash and enter the directory.**
    ```bash
    mkdir -p ~/srv && cd ~/srv
@@ -38,7 +39,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    ```bash
    ./arrstack.sh --yes         # omit --yes for interactive mode
    ```
-   The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`.
+   The script renders `.env` and `docker-compose.yml`, waits for Gluetun (and Proton port forwarding when required), and only then starts qBittorrent and the *Arr services. Rerun it anytime after editing `userr.conf`.
 6. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration
@@ -48,7 +49,8 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
   - `ARR_BASE`: base directory for generated files (defaults to `~/srv`).
   - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: map to your storage paths.
   - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent; leave `0` for full VPN mode.
-  - `ENABLE_CADDY`, `ENABLE_LOCAL_DNS`, `ENABLE_CONFIGARR`: toggle optional HTTPS/DNS/Configarr services.
+  - `EXPOSE_DIRECT_PORTS`: now defaults to `0` to keep services behind the Docker network; set to `1` only after confirming LAN IP and credentials.
+  - `ENABLE_CADDY`, `ENABLE_LOCAL_DNS`, `ENABLE_CONFIGARR`: toggle optional HTTPS/DNS/Configarr services. When `ENABLE_LOCAL_DNS=1`, the installer asks for permission before merging Docker’s `daemon.json`; use `./scripts/host-dns-rollback.sh` to revert.
 - Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arrstack.sh --rotate-api-key` or `./arrstack.sh --rotate-caddy-auth`.
 - Show available flags at any time:
   ```bash
@@ -64,6 +66,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 ## First-run checklist
 - Confirm `LAN_IP` points at your host (run `hostname -I | awk '{print $1}'` if unsure).
 - Rotate qBittorrent credentials and update `QBT_USER`/`QBT_PASS` in `userr.conf`.
+- Review the summary for warnings about LAN exposure, timezone fallbacks, or skipped port checks.
 - Verify Proton port forwarding is active (summary should show a forwarded port or follow the Gluetun recovery steps if it fails).
 - Decide whether local DNS or direct LAN exposure is appropriate for your environment.
 - Spot-check published ports with `ss -tulpn` to ensure only expected services listen on the LAN.

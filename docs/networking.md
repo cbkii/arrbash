@@ -20,13 +20,15 @@ Use these controls to choose how traffic flows, manage Proton VPN forwarding, an
 4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_PORT}` when running split tunnel (the
    host defaults to port **8082** unless you preserved a legacy value).
 
-> When `EXPOSE_DIRECT_PORTS=1` is enabled the installer prints the published LAN URLs and asks for confirmation. Use `hostname -I | awk '{print $1}'` to confirm your host address before accepting, or pass `--yes` when you intentionally expose the ports.
+> When `EXPOSE_DIRECT_PORTS=1` is enabled the installer prints the published LAN URLs and asks for confirmation (even with `--yes`). Use `hostname -I | awk '{print $1}'` to confirm your host address before accepting.
 
 Revert by setting `SPLIT_VPN=0` and rerunning the installer.
 
-## Proton port forwarding
-- Gluetun acquires the Proton forwarded port after the VPN is healthy. The installer writes hooks in `docker-data/gluetun` and spawns an async worker so other services can start without waiting.
-- Worker state lives in `docker-data/gluetun/pf-state.json`; logs stream to `docker-data/gluetun/port-forwarding.log`.
+## Startup gating and Proton port forwarding
+- `./arrstack.sh` waits up to ~2 minutes for Gluetun to report `running` (and `healthy` when the container provides a healthcheck), confirm a tunnel interface exists (`tun0` or `wg0`), and complete a connectivity probe from inside Gluetun. qBittorrent and the *Arr services never start until this gate passes.
+- When Proton port forwarding is enabled, the installer performs a short best-effort wait (~60 seconds) for a lease. If nothing arrives in that window, services still start and the logs/summary remind you that forwarding depends on your VPN provider, plan, and chosen server.
+- ProtonVPN’s forwarding feature is limited to paid Plus/Unlimited plans on specific P2P-friendly exit servers, and other VPN providers may not support forwarding at all.
+- Successful runs still launch the async worker in `docker-data/gluetun`; state lives in `pf-state.json` and logs in `port-forwarding.log`.
 - Helper aliases (available after sourcing `.aliasarr`) expose status:
   ```bash
   arr.vpn.port.state   # JSON snapshot
@@ -68,7 +70,7 @@ diagnose why DNS might not be running yet.
 | `split-disabled` | Split VPN mode disables the dnsmasq container by design. | Switch back to full-tunnel mode if you need the resolver. |
 | `active` | The resolver container is included in `docker-compose.yml`. | Point clients at the host’s LAN IP as their DNS server. |
 
-`LOCAL_DNS_STATE_REASON` contains the human-readable explanation that matches the table above, so helpers can echo it directly.
+`LOCAL_DNS_STATE_REASON` contains the human-readable explanation that matches the table above, so helpers can echo it directly. `LOCAL_DNS_SERVICE_ENABLED=0` means the resolver container was intentionally skipped (for example split VPN mode or a retained port conflict), so host daemon merges and restarts are bypassed automatically.
 
 ## Local HTTPS via Caddy (optional)
 1. Set `ENABLE_CADDY=1` in `userr.conf` (or run `./arrstack.sh --enable-caddy --yes`).
@@ -97,3 +99,12 @@ diagnose why DNS might not be running yet.
 - [Operations](operations.md) – script details and command summaries.
 - [Security](security.md) – exposure and certificate handling guidance.
 - [Troubleshooting](troubleshooting.md) – DNS, HTTPS, or VPN recovery steps.
+
+## When port checks are skipped
+If preflight reports that port validation was skipped (for example Docker was unavailable), manually verify the published ports before exposing the stack:
+
+```bash
+ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191|:80|:443|:53'
+```
+
+Compare the output to the summary table—only enable router forwards or `EXPOSE_DIRECT_PORTS=1` after confirming no unexpected listeners are present.

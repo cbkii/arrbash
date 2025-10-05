@@ -21,7 +21,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
     `LOCALHOST_IP=127.0.0.1`
   - `LAN_DOMAIN_SUFFIX`: optional suffix for hostnames (default `home.arpa`). Needed for local DNS or Caddy.
   - `SPLIT_VPN`: set `1` to run only qBittorrent inside Gluetun, or `0` to tunnel everything.
-  - `EXPOSE_DIRECT_PORTS`: leave at `1` for LAN-friendly URLs, or set `0` to keep services internal to Docker networking.
+  - `EXPOSE_DIRECT_PORTS`: defaults to `0` to keep services on the internal Docker network. Set to `1` only after confirming `LAN_IP` and rotating credentials—the installer prints a warning banner even in `--yes` mode.
   - `DNS_DISTRIBUTION_MODE`: choose `router` (default) to update DHCP Option 6, or `per-device` when pointing clients at the resolver manually.
   - `ARR_PORT_CHECK_MODE`: `enforce` (default) fails fast on conflicts, `warn` prints notices, and `skip` disables port validation (use sparingly).
 - **Paths & storage**
@@ -34,7 +34,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `QBT_AUTH_WHITELIST`: CIDRs that bypass the qBittorrent login (auto-populated with loopback and your LAN subnet).
 - **Optional services**
   - `ENABLE_CADDY`: `1` enables the HTTPS proxy on `CADDY_HTTP_PORT`/`CADDY_HTTPS_PORT` (defaults 80/443). Adjust those port variables if another web server is present.
-  - `ENABLE_LOCAL_DNS`: `1` runs the dnsmasq container for LAN hostnames; combine with `DNS_DISTRIBUTION_MODE` to control how clients learn the resolver. The installer records the runtime result in `LOCAL_DNS_STATE`/`LOCAL_DNS_STATE_REASON` so you can tell whether DNS actually started.
+  - `ENABLE_LOCAL_DNS`: `1` runs the dnsmasq container for LAN hostnames; combine with `DNS_DISTRIBUTION_MODE` to control how clients learn the resolver. When enabled the installer computes `LOCAL_DNS_SERVICE_ENABLED` to indicate whether the resolver was rendered (for example port 53 availability) and still records the runtime result in `LOCAL_DNS_STATE`/`LOCAL_DNS_STATE_REASON`.
   - `ENABLE_CONFIGARR`: `1` keeps Configarr managing Sonarr/Radarr settings.
   - `SPLIT_VPN` and optional toggles such as `ENABLE_CADDY` can also be set per run with `./arrstack.sh` flags.
 - **VPN automation**
@@ -44,6 +44,26 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 - **Permission profiles**
   - `ARR_PERMISSION_PROFILE`: `strict` (default) keeps secrets at `600` and data at `700`. Switch to `collab` when multiple accounts need write access; set `PGID` to the shared group.
   - Optional overrides: `ARR_UMASK_OVERRIDE`, `ARR_DATA_DIR_MODE_OVERRIDE`, `ARR_NONSECRET_FILE_MODE_OVERRIDE`, `ARR_SECRET_FILE_MODE_OVERRIDE` for advanced tuning.
+  - `TIMEZONE`: auto-detected from `/etc/timezone` or `/etc/localtime`. Leave unset to adopt the host value; the installer falls back to `UTC` and records the fallback so the summary can warn you to set an explicit zone when detection fails.
+
+## Container image tags
+
+Every container tag is taken directly from configuration. The installer will not rewrite or retag images automatically; set the desired tag (for example `linuxserver/qbittorrent:5.1.2`) in `userr.conf` or your exported environment. If a tag is empty or obviously invalid the run fails fast so you can correct it.
+
+Minimum tested compatible tags (validated 2024-05-30):
+
+| Image | Recommended tag |
+| --- | --- |
+| `qmcgaw/gluetun` | `v3.40.0` |
+| `linuxserver/qbittorrent` | `5.1.2` |
+| `linuxserver/sonarr` | `4.0.15.2941` |
+| `linuxserver/radarr` | `6.0.1.10258` |
+| `linuxserver/prowlarr` | `2.0.5.5160` |
+| `linuxserver/bazarr` | `1.5.3` |
+| `linuxserver/sabnzbd` | `4.5.3` |
+| `caddy` | `2.10.2` |
+
+Set the tag explicitly when you need a newer or older version and rerun the installer to reconcile.
 
 ## Working with overrides
 1. Edit `~/srv/userr.conf` (or the path set in `ARR_BASE`).

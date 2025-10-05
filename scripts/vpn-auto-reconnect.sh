@@ -1007,7 +1007,7 @@ vpn_auto_reconnect_fetch_transfer_info() {
     vpn_auto_reconnect_login_qbt || return 1
   fi
 
-  local -a curl_cmd=(curl -fsS --max-time 10 -c "$cookie" -b "$cookie" "$url")
+  local -a curl_cmd=(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsS --max-time 10 -c "$cookie" -b "$cookie" "$url")
   local response=""
   if ! response="$("${curl_cmd[@]}" 2>/dev/null)"; then
     if vpn_auto_reconnect_login_qbt; then
@@ -1030,7 +1030,7 @@ vpn_auto_reconnect_login_qbt() {
   if [[ -z "$user" || -z "$pass" ]]; then
     return 1
   fi
-  curl -fsS --max-time 10 -c "$cookie" --data-urlencode "username=${user}" --data-urlencode "password=${pass}" "$url" >/dev/null 2>&1
+  curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsS --max-time 10 -c "$cookie" --data-urlencode "username=${user}" --data-urlencode "password=${pass}" "$url" >/dev/null 2>&1
 }
 
 # Classifies torrent activity level to avoid reconnects during active transfers
@@ -1041,7 +1041,7 @@ vpn_auto_reconnect_detect_activity() {
   cookie="$(vpn_auto_reconnect_cookie_file)"
   ensure_dir_mode "$(dirname -- "$cookie")" "$DATA_DIR_MODE"
   local url="${base%/}/api/v2/log/main?last_known_id=0&normal=1"
-  local -a curl_cmd=(curl -fsS --max-time 10 -c "$cookie" -b "$cookie" "$url")
+  local -a curl_cmd=(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsS --max-time 10 -c "$cookie" -b "$cookie" "$url")
   local response
   if ! response="$("${curl_cmd[@]}" 2>/dev/null)"; then
     if vpn_auto_reconnect_login_qbt; then
@@ -1185,7 +1185,7 @@ vpn_auto_reconnect_wait_for_health() {
   local curl_available=1
   local -a curl_cmd=()
   if command -v curl >/dev/null 2>&1; then
-    curl_cmd=(curl -fsS --max-time 5)
+    curl_cmd=(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsS --max-time 5)
     if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
       curl_cmd+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
     fi

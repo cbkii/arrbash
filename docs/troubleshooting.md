@@ -33,6 +33,31 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   `dnsmasq` should own the socket. Roll back with `./scripts/host-dns-rollback.sh` when finished testing.
 
 ## VPN and torrent issues
+### Installer reports VPN gating failure
+- Check the recorded reason:
+  ```bash
+  cat ${ARR_STACK_DIR:-$HOME/srv/arrstack}/.arrstack/run.failed
+  ```
+- Ensure the Gluetun container is `running` (and `healthy` when applicable):
+  ```bash
+  docker compose ps gluetun
+  docker logs gluetun --tail=200
+  ```
+- Confirm a tunnel device exists and can reach the internet:
+  ```bash
+  docker exec gluetun ip addr show tun0 || docker exec gluetun ip addr show wg0
+  docker exec gluetun curl -I https://api.protonvpn.ch --connect-timeout 10 --max-time 20
+  ```
+- Rerun `./arrstack.sh --yes` after correcting credentials or network access.
+
+### Proton forwarded port not acquired in time
+- The installer waits about a minute for a lease but continues even if Proton has no slots available; check the summary warning for the recorded reason.
+- Inspect Gluetun logs for API status:
+  ```bash
+  docker logs gluetun | grep -i 'port forwarding'
+  ```
+- Retry once Proton reports an available slot, or switch to a PF-capable server in `userr.conf` and rerun the installer if you need inbound peers.
+
 ### qBittorrent unreachable after enabling `SPLIT_VPN=1`
 - In split mode only qBittorrent is published automatically. Set `EXPOSE_DIRECT_PORTS=1` or provide your own proxy.
 - Verify:
@@ -119,6 +144,10 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   docker compose up -d
   ```
 - Confirm all services report `running` with `docker compose ps`.
+- If the installer skipped port checks (for example due to missing Docker access), manually inspect listeners before retrying:
+  ```bash
+  ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191|:80|:443|:53'
+  ```
 
 ### Unsure which component failed
 - Run the bundled diagnostics:

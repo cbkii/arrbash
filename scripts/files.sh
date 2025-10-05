@@ -58,6 +58,16 @@ arr_prompt_direct_port_exposure() {
     ip_hint="<set LAN_IP (hostname -I | awk \"{print \\\$1}\")>"
   fi
 
+  warn "LAN exposure enabled: services will listen on http://${ip_hint}:PORT for anyone on your LAN."
+  warn "Review firewall/NAT rules before continuing."
+  if [[ -z "$lan_ip" || "$lan_ip" == "0.0.0.0" ]]; then
+    warn "Detect LAN IP with: hostname -I | awk '{print \$1}'"
+  fi
+
+  if [[ "${QBT_USER}" == "admin" && "${QBT_PASS}" == "adminadmin" ]]; then
+    warn "qBittorrent is using default credentials (admin/adminadmin). Rotate them before exposing the WebUI."
+  fi
+
   msg "EXPOSE_DIRECT_PORTS=1 will publish the following LAN URLs:"
   printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
   printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
@@ -772,6 +782,7 @@ fi
 
   mv "$tmp" "$ARR_ENV_FILE"
   ensure_secret_file_mode "$ARR_ENV_FILE"
+  arrstack_verify_hardened_path "$ARR_ENV_FILE"
 
 }
 
@@ -836,6 +847,7 @@ write_compose_split_mode() {
 
   LOCAL_DNS_STATE="split-disabled"
   LOCAL_DNS_STATE_REASON="Local DNS disabled in split mode (SPLIT_VPN=1)"
+  LOCAL_DNS_SERVICE_ENABLED=0
 
   tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
@@ -1198,6 +1210,7 @@ YAML
 
   mv "$tmp" "$compose_path"
   ensure_nonsecret_file_mode "$compose_path"
+  arrstack_verify_hardened_path "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
@@ -1216,6 +1229,7 @@ write_compose() {
 
   LOCAL_DNS_STATE="inactive"
   LOCAL_DNS_STATE_REASON="Local DNS container disabled (ENABLE_LOCAL_DNS=0)"
+  LOCAL_DNS_SERVICE_ENABLED=0
   local include_caddy=0
   local include_local_dns=0
   local -a upstream_dns_servers=()
@@ -1239,12 +1253,14 @@ write_compose() {
       LOCAL_DNS_STATE="blocked"
       LOCAL_DNS_STATE_REASON="Local DNS disabled automatically (port 53 already in use)"
       warn "Port 53 is already in use (likely systemd-resolved). Local DNS will be disabled (LOCAL_DNS_STATE=blocked)."
+      LOCAL_DNS_SERVICE_ENABLED=0
     fi
   fi
 
   if ((include_local_dns)); then
     LOCAL_DNS_STATE="active"
     LOCAL_DNS_STATE_REASON="Local DNS container enabled"
+    LOCAL_DNS_SERVICE_ENABLED=1
     if [[ -z "${LAN_IP:-}" || "${LAN_IP}" == "0.0.0.0" ]]; then
       warn "Local DNS will bind to all interfaces (0.0.0.0:53)"
     fi
@@ -1681,6 +1697,7 @@ YAML
 
   mv "$tmp" "$compose_path"
   ensure_nonsecret_file_mode "$compose_path"
+  arrstack_verify_hardened_path "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
@@ -2224,6 +2241,7 @@ write_qbt_config() {
     msg "  Migrating legacy config from ${legacy_conf}"
     mv "$legacy_conf" "$conf_file"
     ensure_secret_file_mode "$conf_file"
+    arrstack_verify_hardened_path "$conf_file"
   fi
 
   if [[ -f "$legacy_conf" ]]; then

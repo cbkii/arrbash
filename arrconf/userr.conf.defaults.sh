@@ -56,7 +56,17 @@ PUID="${PUID:-$(id -u)}"
 PGID="${PGID:-$(id -g)}"
 
 # Location
-TIMEZONE="${TIMEZONE:-Australia/Sydney}"
+ARR_TIMEZONE_AUTO_SOURCE="${ARR_TIMEZONE_AUTO_SOURCE:-default}"
+ARR_TIMEZONE_AUTO_FALLBACK="${ARR_TIMEZONE_AUTO_FALLBACK:-0}"
+if [[ -z "${TIMEZONE:-}" ]]; then
+  TIMEZONE="$(arr_detect_timezone)"
+  ARR_TIMEZONE_AUTO_SOURCE="detected"
+else
+  ARR_TIMEZONE_AUTO_SOURCE="provided"
+  if [[ "$TIMEZONE" == "UTC" && "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" != "0" ]]; then
+    ARR_TIMEZONE_AUTO_FALLBACK=1
+  fi
+fi
 LAN_IP="${LAN_IP:-}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
 SERVER_COUNTRIES="${SERVER_COUNTRIES:-Netherlands}"
@@ -73,6 +83,41 @@ if ! declare -f arr_trim_whitespace >/dev/null 2>&1; then
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
     printf '%s' "$value"
+  }
+fi
+
+if ! declare -f arr_detect_timezone >/dev/null 2>&1; then
+  arr_detect_timezone() {
+    local detected=""
+
+    if [[ -f /etc/timezone ]]; then
+      detected="$(tr -d '\r\n' </etc/timezone 2>/dev/null | awk 'NF {print $0; exit}')"
+    fi
+
+    if [[ -z "$detected" && -L /etc/localtime ]]; then
+      local tz_link
+      tz_link="$(readlink -f /etc/localtime 2>/dev/null || printf '')"
+      if [[ "$tz_link" == */zoneinfo/* ]]; then
+        detected="${tz_link##*/zoneinfo/}"
+      fi
+    fi
+
+    if [[ -z "$detected" && -r /etc/localtime ]]; then
+      local tzinfo_path=""
+      tzinfo_path="$(find /usr/share/zoneinfo -samefile /etc/localtime -print -quit 2>/dev/null || printf '')"
+      if [[ -n "$tzinfo_path" ]]; then
+        detected="${tzinfo_path##*/zoneinfo/}"
+      fi
+    fi
+
+    if [[ -z "$detected" ]]; then
+      ARR_TIMEZONE_AUTO_FALLBACK=1
+      detected="UTC"
+    else
+      ARR_TIMEZONE_AUTO_FALLBACK=0
+    fi
+
+    printf '%s' "$detected"
   }
 fi
 
@@ -233,7 +278,7 @@ SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT:-15}"
 ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT:-sabnzbd}"
 
 # Expose application ports directly on the host alongside Caddy's reverse proxy
-EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-1}"
+EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-0}"
 
 # qBittorrent credentials (override after first login)
 QBT_USER="${QBT_USER:-admin}"
