@@ -51,7 +51,7 @@ configure_local_dns_entries() {
     if ((exit_code == 3)); then
       warn "Local DNS helper refused to update hosts because LAN_IP is 0.0.0.0; provide a valid address and rerun."
     else
-      warn "Local DNS helper was unable to update host mappings; rerun arrstack.sh with sudo to grant access"
+      warn "Local DNS helper was unable to update host mappings; rerun arr.sh with sudo to grant access"
     fi
     return 0
   fi
@@ -73,7 +73,7 @@ run_host_dns_setup() {
 
   if [[ -z "${LAN_IP:-}" || "${LAN_IP}" == "0.0.0.0" ]]; then
     warn "Cannot run --setup-host-dns automatically: LAN_IP is ${LAN_IP:-<unset>}"
-    warn "Set LAN_IP to a specific address and rerun arrstack.sh --setup-host-dns once available."
+    warn "Set LAN_IP to a specific address and rerun arr.sh --setup-host-dns once available."
     return 0
   fi
 

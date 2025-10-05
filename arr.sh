@@ -14,7 +14,8 @@ arr_err_trap() {
   trap - ERR
   local src="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
   local line="${BASH_LINENO[0]:-${LINENO}}"
-  printf '[arrstack] error at %s:%s (status=%s)\n' "${src}" "${line}" "${rc}" >&2
+  local label="[${STACK:-arr}]"
+  printf '%s error at %s:%s (status=%s)\n' "${label}" "${src}" "${line}" "${rc}" >&2
   exit "${rc}"
 }
 
@@ -27,6 +28,10 @@ if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
 fi
 
+STACK="${STACK:-arr}"
+STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
+STACK_TAG="[${STACK}]"
+
 # Resolve and optionally constrain user config
 ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE:-${HOME}/srv}/userr.conf}"
 _expected_base="${ARR_BASE:-${HOME}/srv}"
@@ -37,9 +42,9 @@ _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s'
 arr_var_is_readonly() {
   local varname=$1 out
   # Ensure it's a variable that exists (not a function); bail if missing.
-  out=$(declare -p -- "$varname" 2>/dev/null) || return 1
+  out=$(declare -p -- "${varname}" 2>/dev/null) || return 1
   # Bash prints like: "declare -r name=…", "declare -rx name=…", "declare -ar name=…"
-  [[ $out == declare\ -*r* ]] && return 0
+  [[ ${out} == declare\ -*r* ]] && return 0
   return 1
 }
 
@@ -68,7 +73,7 @@ fi
 unset -v _arr_env_override_seen _arr_env_rest 2>/dev/null || :
 
 for _arr_env_var in "${_arr_env_override_order[@]}"; do
-  if [[ "$(declare -p -- "$_arr_env_var" 2>/dev/null)" == "declare -x "* ]]; then
+  if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
     if [[ ${!_arr_env_var+x} ]]; then
       _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
     else
@@ -85,7 +90,7 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
         readonly "${_arr_env_var}" 2>/dev/null || :
       fi
     else
-      printf '[arrstack] WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${_arr_env_var}" >&2
+      printf '%s WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${STACK_TAG}" "${_arr_env_var}" >&2
     fi
   fi
 done
@@ -94,10 +99,10 @@ unset _arr_env_var
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
     if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
-      printf '[arrstack] user config path outside base (%s): %s (strict mode)\n' "${_canon_base}" "${_canon_userconf}" >&2
+      printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
       exit 1
     else
-      printf '[arrstack] WARN: user config outside expected base (%s): %s\n' "${_canon_base}" "${_canon_userconf}" >&2
+      printf '%s WARN: user config outside expected base (%s): %s\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
     fi
   fi
 fi
@@ -124,7 +129,7 @@ if [[ -f "${_canon_userconf}" ]]; then
     if [[ -s "${_arr_userr_conf_errlog}" ]] && ! grep -v "readonly variable" "${_arr_userr_conf_errlog}" >/dev/null; then
       :
     else
-      printf '[arrstack] Failed to source user config (status=%s): %s\n' "${_arr_userr_conf_status}" "${_canon_userconf}" >&2
+      printf '%s Failed to source user config (status=%s): %s\n' "${STACK_TAG}" "${_arr_userr_conf_status}" "${_canon_userconf}" >&2
       # Replay captured stderr to aid debugging
       cat "${_arr_userr_conf_errlog}" >&2 || :
       rm -f "${_arr_userr_conf_errlog}"
@@ -144,7 +149,7 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
       printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
       export "${_arr_env_var}"
     else
-      printf '[arrstack] WARN: Skipping invalid environment variable name: %s\n' "${_arr_env_var}" >&2
+      printf '%s WARN: Skipping invalid environment variable name: %s\n' "${STACK_TAG}" "${_arr_env_var}" >&2
     fi
   fi
 done
@@ -185,10 +190,10 @@ for module in "${modules[@]}"; do
   f="${SCRIPT_LIB_DIR}/${module}"
   if [[ ! -f "${f}" ]]; then
     if [[ "${ARR_ALLOW_MISSING_MODULES:-0}" == "1" ]]; then
-      printf '[arrstack] WARN: missing module (continuing due to ARR_ALLOW_MISSING_MODULES=1): %s\n' "${f}" >&2
+      printf '%s WARN: missing module (continuing due to ARR_ALLOW_MISSING_MODULES=1): %s\n' "${STACK_TAG}" "${f}" >&2
       continue
     fi
-    printf '[arrstack] missing required module: %s\n' "${f}" >&2
+    printf '%s missing required module: %s\n' "${STACK_TAG}" "${f}" >&2
     exit 1
   fi
   # shellcheck source=/dev/null
@@ -200,7 +205,7 @@ arr_setup_defaults
 # Prints CLI contract; keep aligned with docs/operations.md flag list
 help() {
   cat <<'USAGE'
-Usage: ./arrstack.sh [options]
+Usage: ./arr.sh [options]
 
 Options:
   --yes                 Run non-interactively and assume yes to prompts

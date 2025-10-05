@@ -159,7 +159,7 @@ NO_CADDY_SPLIT
 
 Reverse proxy disabled (ENABLE_CADDY=0).
 Access the services via the direct LAN URLs above.
-Set ENABLE_CADDY=1 in ${ARR_USERCONF_PATH} and rerun ./arrstack.sh to publish HTTPS hostnames signed by the internal CA.
+Set ENABLE_CADDY=1 in ${ARR_USERCONF_PATH} and rerun ./arr.sh to publish HTTPS hostnames signed by the internal CA.
 NO_CADDY
     fi
     if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
@@ -454,7 +454,7 @@ POLICY
     fi
 
     if [[ "${API_KEYS_SYNCED_PLACEHOLDERS:-0}" == "1" || "${secrets_have_placeholders}" == "1" ]]; then
-      warn "Configarr secrets still contain placeholder API keys. Run ./arrstack.sh --sync-api-keys after Sonarr/Radarr/Prowlarr finish initial setup."
+      warn "Configarr secrets still contain placeholder API keys. Run ./arr.sh --sync-api-keys after Sonarr/Radarr/Prowlarr finish initial setup."
     fi
   fi
 

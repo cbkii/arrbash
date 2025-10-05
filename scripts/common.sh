@@ -1,5 +1,7 @@
 # shellcheck shell=bash
 
+: "${STACK:=arr}"
+: "${STACK_UPPER:=${STACK^^}}"
 : "${CYAN:=}"
 : "${YELLOW:=}"
 : "${RESET:=}"
@@ -10,6 +12,9 @@
 : "${NONSECRET_FILE_MODE:=600}"
 : "${DATA_DIR_MODE:=700}"
 : "${LOCK_FILE_MODE:=640}"
+
+# shellcheck disable=SC2034  # exported for other modules
+STACK_LABEL="[${STACK}]"
 
 # Derives runtime color output preference respecting NO_COLOR/force overrides
 arr_resolve_color_output() {
@@ -781,7 +786,7 @@ arr_run_state_dir() {
     return 1
   fi
 
-  printf '%s/.arrstack\n' "$base"
+  printf '%s/.%s\n' "$base" "$STACK"
 }
 
 arr_run_failure_flag_path() {
@@ -982,7 +987,7 @@ init_logging() {
 
   local timestamp
   timestamp="$(date +%Y%m%d-%H%M%S)"
-  LOG_FILE="${log_dir}/arrstack-${timestamp}.log"
+  LOG_FILE="${log_dir}/${STACK}-${timestamp}.log"
 
   : >"$LOG_FILE"
   ensure_nonsecret_file_mode "$LOG_FILE"
@@ -990,7 +995,7 @@ init_logging() {
   local latest_link="${log_dir}/latest.log"
   ln -sf "$LOG_FILE" "$latest_link"
 
-  local install_log="${ARR_INSTALL_LOG:-${log_dir}/arrstack-install.log}"
+  local install_log="${ARR_INSTALL_LOG:-${log_dir}/${STACK}-install.log}"
   local install_hint=""
   if [[ -n "$install_log" ]]; then
     local install_dir
@@ -1026,7 +1031,7 @@ acquire_lock() {
     fi
   fi
 
-  local lockfile="${lock_dir}/.arrstack.lock"
+  local lockfile="${lock_dir}/.${STACK}.lock"
 
   while ! (
     set -C

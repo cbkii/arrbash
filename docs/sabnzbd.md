@@ -1,10 +1,10 @@
 # SABnzbd Integration
 
-This document expands on the optional SABnzbd support shipped with arrbash. It covers
+This document expands on the optional SABnzbd support shipped with the stack. It covers
 networking behaviour, environment overrides, helper tooling, and the preservation
 logic that keeps your API key and configuration safe across reruns.
 
-> **Quick toggle:** Run `./arrstack.sh --enable-sab --yes` to enable SABnzbd for a single
+> **Quick toggle:** Run `./arr.sh --enable-sab --yes` to enable SABnzbd for a single
 > install without editing `${ARR_BASE}/userr.conf`.
 
 ## Network Modes
@@ -24,7 +24,7 @@ inside Gluetun).
 
 The preservation layer parses `${ARR_DOCKER_DIR}/sab/config/sabnzbd.ini` on reruns.
 When `api_key = ...` is present and `.env` still contains the
-`REPLACE_WITH_SABNZBD_API_KEY` placeholder, arrbash:
+`REPLACE_WITH_SABNZBD_API_KEY` placeholder, the stack:
 
 1. Takes a timestamped backup of `sabnzbd.ini` (`sabnzbd.ini.bak-YYYYmmdd-HHMMSS`).
 2. Hydrates `SABNZBD_API_KEY` in-memory and records a preservation note for the
@@ -37,7 +37,7 @@ file contains a `SABNZBD_API_KEY` entry. Hydrated keys replace the
 `REPLACE_WITH_SABNZBD_API_KEY` placeholder automatically; existing non-placeholder
 values are left untouched.
 
-If you manually rotate the API key, rerun `./arrstack.sh --yes` after SAB has
+If you manually rotate the API key, rerun `./arr.sh --yes` after SAB has
 written the change; the installer will detect and capture the new value.
 
 ## Healthcheck Improvements
@@ -79,7 +79,7 @@ SABNZBD_HOST="sabnzbd"     # qBittorrent now listens on 8082 inside Gluetun
 > another value that does not clash with your qBittorrent container port.
 
 > **Caddy note:** When SAB runs directly on the LAN (`SABNZBD_USE_VPN=0`) and
-> you enable the Caddy reverse proxy, arrbash publishes
+> you enable the Caddy reverse proxy, the stack publishes
 > `https://sabnzbd.${LAN_DOMAIN_SUFFIX}` automatically. VPN mode skips LAN port
 > exposure, so you must access SAB through Gluetun in that configuration.
 
@@ -96,7 +96,7 @@ SABNZBD_HOST="sabnzbd"     # qBittorrent now listens on 8082 inside Gluetun
 ./scripts/sab-helper.sh add-url <https://example/nzb>
 ```
 
-After `./arrstack.sh --refresh-aliases`, the shell also exposes `sab-logs`,
+After `./arr.sh --refresh-aliases`, the shell also exposes `sab-logs`,
 `sab-shell`, and `open-sab` convenience aliases.
 
 If SAB is disabled the helper prints a warning and exits gracefully. Ensure

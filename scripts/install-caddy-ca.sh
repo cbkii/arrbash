@@ -107,7 +107,7 @@ install_debian_ca() {
   fi
 
   local target_dir="/usr/local/share/ca-certificates"
-  local target_cert="${target_dir}/arrstack-caddy-ca.crt"
+  local target_cert="${target_dir}/${STACK}-caddy-ca.crt"
 
   mkdir -p "$target_dir"
   install -m 0644 "$ROOT_CERT" "$target_cert"

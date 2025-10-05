@@ -9,7 +9,7 @@ STACK_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 CA_ROOT="${ARR_DOCKER_DIR:-${HOME}/srv/docker-data}/caddy/data/caddy/pki/authorities/local"
 CA_FILE="${CA_ROOT}/root.crt"
-DEST_FILE="${1:-${HOME}/arrstack-ca.crt}"
+DEST_FILE="${1:-${HOME}/${STACK}-ca.crt}"
 
 if [[ ! -f "$CA_FILE" ]]; then
   log_warn "Caddy internal CA not found at ${CA_FILE}"

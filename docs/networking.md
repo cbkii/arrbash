@@ -15,7 +15,7 @@ Use these controls to choose how traffic flows, manage Proton VPN forwarding, an
 2. (Optional, Recommended) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/etc. publish LAN ports in split mode.
 3. Rerun the installer:
 ```bash
-   ./arrstack.sh --yes
+   ./arr.sh --yes
    ```
 4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_PORT}` when running split tunnel (the
    host defaults to port **8082** unless you preserved a legacy value).
@@ -35,9 +35,9 @@ Revert by setting `SPLIT_VPN=0` and rerunning the installer.
   ```
 - Rotate the Gluetun API key anytime with:
   ```bash
-  ./arrstack.sh --rotate-api-key --yes
+  ./arr.sh --rotate-api-key --yes
   ```
-- Use `./arrstack.sh --sync-api-keys` to re-copy Sonarr/Radarr/Prowlarr API keys into Configarr when required.
+- Use `./arr.sh --sync-api-keys` to re-copy Sonarr/Radarr/Prowlarr API keys into Configarr when required.
 
 ## Local DNS (optional)
 1. Set `ENABLE_LOCAL_DNS=1` and choose `LAN_DOMAIN_SUFFIX` (default `home.arpa`).
@@ -71,7 +71,7 @@ diagnose why DNS might not be running yet.
 `LOCAL_DNS_STATE_REASON` contains the human-readable explanation that matches the table above, so helpers can echo it directly.
 
 ## Local HTTPS via Caddy (optional)
-1. Set `ENABLE_CADDY=1` in `userr.conf` (or run `./arrstack.sh --enable-caddy --yes`).
+1. Set `ENABLE_CADDY=1` in `userr.conf` (or run `./arr.sh --enable-caddy --yes`).
 2. Rerun the installer; it renders `Caddyfile`, validates it with `caddy validate`, and publishes HTTPS on ports 80/443.
 3. Fetch the public root certificate once:
    ```bash

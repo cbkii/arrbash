@@ -320,7 +320,7 @@ install_aliases() {
   local repo_escaped
   repo_escaped="$(arr_shell_escape_double_quotes "${REPO_ROOT}")"
   local alias_line
-  alias_line=$(printf "alias arrstack='cd \"%s\" && ./arrstack.sh'" "${repo_escaped}")
+  alias_line=$(printf "alias %s='cd \"%s\" && ./arr.sh'" "${STACK}" "${repo_escaped}")
   local source_line="# source ${ARR_STACK_DIR}/.aliasarr  # Optional helper functions"
 
   if [[ -w "$bashrc" ]]; then
@@ -328,7 +328,7 @@ install_aliases() {
       {
         printf '\n# ARR Stack helper aliases\n'
         printf '%s\n' "$alias_line"
-        printf "alias arrstack-logs='docker logs -f gluetun'\n"
+        printf "alias %s-logs='docker logs -f gluetun'\n" "$STACK"
         printf '%s\n' "$source_line"
       } >>"$bashrc"
       msg "Added aliases to ${bashrc}"

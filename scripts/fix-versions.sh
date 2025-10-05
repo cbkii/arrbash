@@ -61,4 +61,4 @@ for base_image in "${USE_LATEST[@]}"; do
 done
 
 log_info "✅ Version fixes complete"
-log_info "Run './arrstack.sh --yes' to apply changes"
+log_info "Run './arr.sh --yes' to apply changes"

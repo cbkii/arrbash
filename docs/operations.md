@@ -5,23 +5,25 @@
 Use these commands to run the installer safely, rotate credentials, and call helper scripts.
 
 ## Installer basics
-- `./arrstack.sh` is idempotent. Rerun it after editing `${ARR_BASE:-$HOME/srv}/userr.conf`; the script regenerates `.env`, `docker-compose.yml`, the Caddyfile, and helper assets before starting containers.
+- `./arr.sh` is idempotent. Rerun it after editing `${ARR_BASE:-$HOME/srv}/userr.conf`; the script regenerates `.env`, `docker-compose.yml`, the Caddyfile, and helper assets before starting containers.
 - Key flags (combine as needed):
+
   ```bash
-  ./arrstack.sh --yes                 # non-interactive mode
-  ./arrstack.sh --enable-caddy        # temporary toggle for ENABLE_CADDY=1
-  ./arrstack.sh --enable-sab          # temporary toggle for SABNZBD_ENABLED=1
-  ./arrstack.sh --rotate-api-key      # issue a new Gluetun API key
-  ./arrstack.sh --rotate-caddy-auth   # generate new Caddy basic auth credentials
-  ./arrstack.sh --sync-api-keys       # resync Sonarr/Radarr/Prowlarr keys into Configarr
-  ./arrstack.sh --no-auto-api-sync    # skip automatic Configarr sync for one run
-  ./arrstack.sh --setup-host-dns      # run the host DNS takeover helper during install
-  ./arrstack.sh --refresh-aliases     # rebuild .aliasarr
+  ./arr.sh --yes                 # non-interactive mode
+  ./arr.sh --enable-caddy        # temporary toggle for ENABLE_CADDY=1
+  ./arr.sh --enable-sab          # temporary toggle for SABNZBD_ENABLED=1
+  ./arr.sh --rotate-api-key      # issue a new Gluetun API key
+  ./arr.sh --rotate-caddy-auth   # generate new Caddy basic auth credentials
+  ./arr.sh --sync-api-keys       # resync Sonarr/Radarr/Prowlarr keys into Configarr
+  ./arr.sh --no-auto-api-sync    # skip automatic Configarr sync for one run
+  ./arr.sh --setup-host-dns      # run the host DNS takeover helper during install
+  ./arr.sh --refresh-aliases     # rebuild .aliasarr
   ```
+
 - The installer validates dependencies, checks port availability, and prints a summary before starting services. Cancel with `Ctrl+C` if something looks wrong and adjust `userr.conf` or your host configuration.
 
 ## Helper aliases
-After running `./arrstack.sh` at least once, load the generated aliases in new shells:
+After running `./arr.sh` at least once, load the generated aliases in new shells:
 ```bash
 source "${ARR_STACK_DIR:-$(pwd)}/.aliasarr"
 ```
@@ -50,7 +52,7 @@ Run these from the repository root:
 
 ## Routine maintenance
 1. Edit `${ARR_BASE}/userr.conf` with new paths, credentials, or toggles.
-2. Rerun `./arrstack.sh --yes` and review the summary for updated URLs and credentials.
+2. Rerun `./arr.sh --yes` and review the summary for updated URLs and credentials.
 3. Load `.aliasarr` and verify services:
    ```bash
    docker compose ps

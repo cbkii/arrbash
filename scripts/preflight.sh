@@ -301,7 +301,7 @@ port_in_use_with_details() {
 port_conflict_guidance() {
   warn "    Resolve the conflicts by stopping or reconfiguring the services listed above."
   warn "    Common fixes include:"
-  warn "      • Stopping existing arrstack containers: ${DOCKER_COMPOSE_CMD[*]} down"
+  warn "      • Stopping existing ${STACK} containers: ${DOCKER_COMPOSE_CMD[*]} down"
   warn "      • Freeing the port from host services (e.g. sudo systemctl stop <service>)"
   warn "      • Updating LAN_IP or port overrides in ${ARR_USERCONF_PATH}"
 }
@@ -309,7 +309,7 @@ port_conflict_guidance() {
 : "${ARR_PORT_CONFLICT_AUTO_FIX:=1}"
 _arr_port_conflict_quickfix_attempted=0
 
-# Tries stopping existing arrstack containers once to clear port conflicts
+# Tries stopping existing ${STACK} containers once to clear port conflicts
 attempt_port_conflict_quickfix() {
   if [[ "${ARR_PORT_CONFLICT_AUTO_FIX}" != "1" ]]; then
     return 1
@@ -328,7 +328,7 @@ attempt_port_conflict_quickfix() {
   fi
 
   _arr_port_conflict_quickfix_attempted=1
-  msg "    Attempting automatic quick fix: stopping existing arrstack containers"
+  msg "    Attempting automatic quick fix: stopping existing ${STACK} containers"
   safe_cleanup
   return 0
 }
@@ -401,7 +401,7 @@ simple_port_check() {
           warn "      - ${detail_line}"
         done
         warn "    Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
-        die "Resolve internal stack port conflicts (duplicate host bindings) and rerun ./arrstack.sh"
+        die "Resolve internal stack port conflicts (duplicate host bindings) and rerun ./arr.sh"
       fi
     fi
 
@@ -478,7 +478,7 @@ simple_port_check() {
       return 0
     fi
 
-    die "Resolve port conflicts and rerun ./arrstack.sh"
+    die "Resolve port conflicts and rerun ./arr.sh"
   done
 }
 

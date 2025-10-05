@@ -279,10 +279,10 @@ arr_schedule_delayed_api_sync() {
   local delay="${1:-${API_SYNC_DELAY:-60}}"
   local script_dir="${ARR_STACK_DIR}/scripts"
   local script_path="${script_dir}/delayed-sync.sh"
-  local arr_script="${REPO_ROOT}/arrstack.sh"
+  local arr_script="${REPO_ROOT}/arr.sh"
 
   if [[ ! -x "$arr_script" ]]; then
-    warn "Unable to schedule API key sync; arrstack.sh not found at ${arr_script}"
+    warn "Unable to schedule API key sync; arr.sh not found at ${arr_script}"
     return 0
   fi
 
@@ -294,7 +294,7 @@ set -Eeuo pipefail
 
 STACK_DIR="${1:?missing stack directory}"
 DELAY="${2:-60}"
-ARR_SCRIPT="${3:?missing arrstack script path}"
+ARR_SCRIPT="${3:?missing stack script path}"
 
 log() {
   printf '%s\n' "[delayed-sync] $*" >&2

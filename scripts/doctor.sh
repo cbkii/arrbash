@@ -325,7 +325,7 @@ check_network_security() {
       local -a bindings=()
       mapfile -t bindings < <(port_bind_addresses tcp "$port")
       if ((${#bindings[@]} > 0)); then
-        echo "[doctor][warn] Port ${port}/TCP is in use while ENABLE_CADDY=0 (${bindings[*]}). If you expected the proxy, set ENABLE_CADDY=1 and rerun ./arrstack.sh."
+        echo "[doctor][warn] Port ${port}/TCP is in use while ENABLE_CADDY=0 (${bindings[*]}). If you expected the proxy, set ENABLE_CADDY=1 and rerun ./arr.sh."
       fi
     done
   fi

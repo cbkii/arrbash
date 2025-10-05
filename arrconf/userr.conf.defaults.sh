@@ -26,14 +26,17 @@ if ! declare -f arr_var_is_readonly >/dev/null 2>&1; then
 fi
 
 # Base paths
+STACK="${STACK:-arr}"
+STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
+export STACK STACK_UPPER
 ARR_BASE="${ARR_BASE:-${HOME}/srv}"
-ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_BASE}/arrstack}"
+ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_BASE}/${STACK}}"
 ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_BASE}/docker-data}"
 ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
 ARRCONF_DIR="${ARRCONF_DIR:-${REPO_ROOT:-${PWD}}/arrconf}"
 ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE}/userr.conf}"
 ARR_LOG_DIR="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
-ARR_INSTALL_LOG="${ARR_INSTALL_LOG:-${ARR_LOG_DIR}/arrstack-install.log}"
+ARR_INSTALL_LOG="${ARR_INSTALL_LOG:-${ARR_LOG_DIR}/${STACK}-install.log}"
 ARR_COLOR_OUTPUT="${ARR_COLOR_OUTPUT:-1}"
 
 # File/dir permissions (strict keeps secrets 600/700, collab enables group read/write 660/770)
@@ -228,7 +231,7 @@ SABNZBD_ENABLED="${SABNZBD_ENABLED:-0}"
 SABNZBD_USE_VPN="${SABNZBD_USE_VPN:-0}"
 SABNZBD_HOST="${SABNZBD_HOST:-${LOCALHOST_IP}}"
 SABNZBD_API_KEY="${SABNZBD_API_KEY:-}"
-SABNZBD_CATEGORY="${SABNZBD_CATEGORY:-arrbash}"
+SABNZBD_CATEGORY="${SABNZBD_CATEGORY:-${STACK}}"
 SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT:-15}"
 ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT:-sabnzbd}"
 
@@ -294,6 +297,7 @@ REFRESH_ALIASES="${REFRESH_ALIASES:-0}"
 # -----------------------------------------------------------------------------
 
 ARR_USERCONF_TEMPLATE_VARS=(
+  STACK
   ARR_USERCONF_PATH
   ARR_LOG_DIR
   ARR_INSTALL_LOG
@@ -444,6 +448,9 @@ arr_export_userconf_template_vars() {
 
   for var in "${ARR_USERCONF_TEMPLATE_VARS[@]}"; do
     case "$var" in
+      STACK)
+        value="${STACK}"
+        ;;
       ARR_USERCONF_PATH)
         # shellcheck disable=SC2016  # keep literal reference for template output
         value='${ARR_BASE}/userr.conf'
@@ -454,7 +461,7 @@ arr_export_userconf_template_vars() {
         ;;
       ARR_INSTALL_LOG)
         # shellcheck disable=SC2016  # keep literal reference for template output
-        value='${ARR_LOG_DIR}/arrstack-install.log'
+        value='${ARR_LOG_DIR}/${STACK}-install.log'
         ;;
       *)
         value="${!var-}"
@@ -513,12 +520,13 @@ arr_render_userconf_template() {
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
 # --- Stack paths ---
+STACK="${STACK}"                    # Project identifier used for directories, logs, and labels
 ARR_BASE="${HOME}/srv"                 # Root directory for generated stack files
-ARR_STACK_DIR="${ARR_BASE}/arrstack"  # Location for docker-compose.yml, scripts, and aliases
+ARR_STACK_DIR="${ARR_BASE}/${STACK}"  # Location for docker-compose.yml, scripts, and aliases
 ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
 ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
 # ARR_USERCONF_PATH="${ARR_USERCONF_PATH}"  # Optional: relocate this file outside ${ARR_BASE}
-# ARRCONF_DIR="${HOME}/.config/arrstack"  # Optional: relocate Proton creds outside the repo
+# ARRCONF_DIR="${HOME}/.config/${STACK}"  # Optional: relocate Proton creds outside the repo
 
 # --- Logging and output ---
 ARR_LOG_DIR="${ARR_LOG_DIR}"           # Directory for runtime/service logs (default: ${ARR_LOG_DIR})
@@ -551,7 +559,7 @@ SERVER_COUNTRIES="${SERVER_COUNTRIES}"              # ProtonVPN exit country lis
 PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES}"  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT}"            # Host port that exposes the Gluetun control API (default: ${GLUETUN_CONTROL_PORT})
 ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}"                   # Advanced: enable the optional dnsmasq container (0/1, default: ${ENABLE_LOCAL_DNS})
-ENABLE_CADDY="${ENABLE_CADDY}"                       # Optional Caddy reverse proxy (run ./arrstack.sh --enable-caddy or set 1 to add HTTPS hostnames)
+ENABLE_CADDY="${ENABLE_CADDY}"                       # Optional Caddy reverse proxy (run ./arr.sh --enable-caddy or set 1 to add HTTPS hostnames)
 CADDY_HTTP_PORT="${CADDY_HTTP_PORT}"           # Host port published for plain HTTP healthz/apps (default: ${CADDY_HTTP_PORT})
 CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT}"         # Host port published for HTTPS proxy endpoints (default: ${CADDY_HTTPS_PORT})
 # SPLIT_VPN=1 → Only qbittorrent behind VPN; other services run outside it.
