@@ -1007,7 +1007,7 @@ vpn_auto_reconnect_fetch_transfer_info() {
     vpn_auto_reconnect_login_qbt || return 1
   fi
 
-  local -a curl_cmd=(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsS --max-time 10 -c "$cookie" -b "$cookie" "$url")
+  local -a curl_cmd=(curl "${ARR_CURL_DEFAULT_ARGS[@]}" -fsS -c "$cookie" -b "$cookie" "$url")
   local response=""
   if ! response="$("${curl_cmd[@]}" 2>/dev/null)"; then
     if vpn_auto_reconnect_login_qbt; then
