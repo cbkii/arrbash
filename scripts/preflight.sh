@@ -14,7 +14,17 @@ install_missing() {
   ARR_COMPOSE_VERSION=""
   arr_resolve_compose_cmd
   if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
-    die "Docker Compose v2+ is required but not found. Install the docker compose plugin (e.g. 'sudo apt install docker-compose-plugin') and rerun."
+    if command -v apt-get >/dev/null 2>&1; then
+      die "Docker Compose v2+ is required but not found. Install the docker compose plugin: sudo apt-get install docker-compose-plugin"
+    elif command -v yum >/dev/null 2>&1; then
+      die "Docker Compose v2+ is required but not found. Install the docker compose plugin: sudo yum install docker-compose-plugin"
+    elif command -v dnf >/dev/null 2>&1; then
+      die "Docker Compose v2+ is required but not found. Install the docker compose plugin: sudo dnf install docker-compose-plugin"
+    elif command -v brew >/dev/null 2>&1; then
+      die "Docker Compose v2+ is required but not found. Install Docker Compose: brew install docker-compose"
+    else
+      die "Docker Compose v2+ is required but not found. See https://docs.docker.com/compose/install/ for installation instructions."
+    fi
   fi
 
   require_dependencies curl jq openssl envsubst
