@@ -7,6 +7,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
 ## Installer basics
 - `./arr.sh` is idempotent. Rerun it after editing `${ARR_BASE:-$HOME/srv}/userr.conf`; the script regenerates `.env`, `docker-compose.yml`, the Caddyfile, and helper assets before starting containers.
 - Key flags (combine as needed):
+
   ```bash
   ./arr.sh --yes                 # non-interactive mode
   ./arr.sh --enable-caddy        # temporary toggle for ENABLE_CADDY=1
@@ -18,6 +19,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ./arr.sh --setup-host-dns      # run the host DNS takeover helper during install
   ./arr.sh --refresh-aliases     # rebuild .aliasarr
   ```
+
 - The installer validates dependencies, checks port availability, and prints a summary before starting services. Cancel with `Ctrl+C` if something looks wrong and adjust `userr.conf` or your host configuration.
 
 ## Helper aliases
