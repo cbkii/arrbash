@@ -108,8 +108,8 @@ QBT_INFO
       ;;
   esac
 
-  if [[ "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" == "1" && "${TIMEZONE:-}" == "UTC" ]]; then
-    warn "TIMEZONE auto-detected as UTC. Update TIMEZONE in ${ARR_USERCONF_PATH} to match your locale."
+  if [[ "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" == "1" && "${TIMEZONE:-}" == "UTC" && "${ARR_TIMEZONE_DETECTION_METHOD:-auto}" != "user" ]]; then
+    warn "TIMEZONE was auto-detected as UTC (likely due to detection failure). If you are not in the UTC timezone, update TIMEZONE in ${ARR_USERCONF_PATH} to match your locale."
   fi
 
   if [[ "${ARR_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
