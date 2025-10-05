@@ -609,20 +609,16 @@ preflight() {
 
   msg "  Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
 
-  local userconf_override_path=""
   local default_userconf="${ARR_BASE:-${HOME}/srv}/userr.conf"
   local default_userconf_canon
-  default_userconf_canon="$(readlink -f "$default_userconf" 2>/dev/null || printf '%s' "$default_userconf")"
+  default_userconf_canon="$(arr_canonical_path "$default_userconf")"
 
-  if userconf_override_path="$(arr_find_userconf_override)" && [[ -n "$userconf_override_path" ]]; then
-    if [[ "$userconf_override_path" != "$default_userconf_canon" ]]; then
-      # shellcheck disable=SC2034  # consumed by scripts/config.sh
-      ARR_USERCONF_OVERRIDE_PATH="$userconf_override_path"
-    else
-      # shellcheck disable=SC2034  # consumed by scripts/config.sh
-      ARR_USERCONF_OVERRIDE_PATH=""
-    fi
-  else
+  if [[ -z "${ARR_USERCONF_PATH:-}" ]]; then
+    local _pf_userconf_source="default"
+    arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _pf_userconf_source
+  fi
+
+  if [[ -n "${ARR_USERCONF_OVERRIDE_PATH:-}" && "${ARR_USERCONF_OVERRIDE_PATH}" == "${default_userconf_canon}" ]]; then
     # shellcheck disable=SC2034  # consumed by scripts/config.sh
     ARR_USERCONF_OVERRIDE_PATH=""
   fi

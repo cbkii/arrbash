@@ -8,14 +8,19 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 # shellcheck source=scripts/common.sh
 . "${REPO_ROOT}/scripts/common.sh"
 
+# shellcheck source=scripts/userconf.sh
+. "${REPO_ROOT}/scripts/userconf.sh"
+
 if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
   # shellcheck disable=SC1091
   # shellcheck source=arrconf/userr.conf.defaults.sh
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
 fi
 
-ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE:-${HOME}/srv}/userr.conf}"
-ARR_USERCONF_SOURCE="${ARR_USERCONF_PATH}"
+ARR_USERCONF_OVERRIDE_PATH="${ARR_USERCONF_OVERRIDE_PATH:-}"
+_doctor_userconf_source="default"
+
+arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _doctor_userconf_source
 
 if [[ -f "${ARR_USERCONF_PATH}" ]]; then
   # shellcheck disable=SC1091
@@ -23,10 +28,7 @@ if [[ -f "${ARR_USERCONF_PATH}" ]]; then
   . "${ARR_USERCONF_PATH}"
 fi
 
-if [[ "${ARR_USERCONF_PATH}" == "${ARR_USERCONF_SOURCE}" ]]; then
-  ARR_USERCONF_PATH="${ARR_BASE:-${HOME}/srv}/userr.conf"
-fi
-unset ARR_USERCONF_SOURCE
+unset _doctor_userconf_source
 
 # Uses ss to determine if a port is bound at a conflicting address
 port_in_use_with_ss() {
