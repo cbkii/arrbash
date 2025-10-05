@@ -18,7 +18,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 ## Network exposure
 - Bind the stack to a private `LAN_IP` and avoid forwarding raw service ports through your router. Use Caddy with strong credentials if you require remote access.
 - When local DNS is enabled, ensure only trusted clients point at the Pi. Keep a fallback public resolver in DHCP to avoid outages if the Pi is offline.
-- Enabling local DNS may merge `/etc/docker/daemon.json` to disable the Docker userland proxy. The installer creates a `.bak` alongside the file—plan a short downtime (let active downloads finish) so you can restart Docker, and use `scripts/host-dns-rollback.sh` to restore the previous config if needed.
+- Enabling local DNS backs up `/etc/docker/daemon.json`, merges in `{ "userland-proxy": false }`, and requires a Docker restart before the change applies (use `scripts/host-dns-rollback.sh` to undo it).
 - Verify open ports regularly:
   ```bash
   sudo ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191|:80|:443|:53'

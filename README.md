@@ -55,6 +55,17 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
   ```bash
   ./arr.sh --help
   ```
+
+### Minimum tested container versions (2024-08-25)
+- `qmcgaw/gluetun:v3.40.0`
+- `lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415`
+- `lscr.io/linuxserver/sonarr:4.0.15.2941-ls291`
+- `lscr.io/linuxserver/radarr:5.27.5.10198-ls283`
+- `ghcr.io/flaresolverr/flaresolverr:v3.3.21`
+- `caddy:2.8.4`
+- `4km3/dnsmasq:2.90-r3`
+
+> LinuxServer.io apps that default to `:latest` (Prowlarr, Bazarr, SABnzbd, Configarr) remain unpinned; override them in `userr.conf` if you need to lock a tag.
 ## Next steps
 - Read [Configuration](./docs/configuration.md) for variable precedence and permission profiles.
 - Follow [Networking](./docs/networking.md) before enabling split VPN, local DNS, or HTTPS.

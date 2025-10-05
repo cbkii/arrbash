@@ -703,9 +703,27 @@ sync_qbt_password_from_logs() {
 # Checks if a default route exists via a VPN tunnel interface (configurable pattern)
 arr_gluetun_tunnel_route_present() {
   local name="${1:-gluetun}"
-  local iface_pattern="${2:-dev (tun[0-9]+|wg[0-9]+)}"
+  local iface_pattern="${2:-tun[0-9]+|wg[0-9]+}"
 
-  docker exec "$name" sh -c "ip -4 route show default 2>/dev/null | grep -Eq '$iface_pattern'" >/dev/null 2>&1
+  docker exec "$name" sh -eu -c '
+    pattern=$1
+    route_pattern="dev (${pattern})"
+    link_pattern="[[:space:]](${pattern}):"
+
+    if ip -4 route show default 2>/dev/null | grep -Eq "$route_pattern"; then
+      exit 0
+    fi
+
+    if ip -6 route show default 2>/dev/null | grep -Eq "$route_pattern"; then
+      exit 0
+    fi
+
+    if ip -o link show 2>/dev/null | grep -Eq "$link_pattern"; then
+      exit 0
+    fi
+
+    exit 1
+  ' _ "$iface_pattern" >/dev/null 2>&1
 }
 
 arr_gluetun_connectivity_probe() {
@@ -723,15 +741,54 @@ arr_gluetun_connectivity_probe() {
     urls=("$@")
   fi
 
-  local url=""
   ARR_GLUETUN_CONNECTIVITY_LAST_URL=""
+  ARR_GLUETUN_CONNECTIVITY_FAILURE_REASON=""
 
-  for url in "${urls[@]}"; do
-    if docker exec "$name" sh -c "curl -fsS --connect-timeout 5 --max-time 8 '$url' >/dev/null" >/dev/null 2>&1; then
-      ARR_GLUETUN_CONNECTIVITY_LAST_URL="$url"
-      return 0
-    fi
-  done
+  local probe_output=""
+  local probe_status=0
+
+  if probe_output="$(
+    docker exec "$name" sh -eu -c '
+      if [ "$#" -eq 0 ]; then
+        set -- "https://api.ipify.org" "https://ipconfig.io/ip" "https://1.1.1.1/cdn-cgi/trace"
+      fi
+
+      have_curl=1
+      have_wget=1
+      command -v curl >/dev/null 2>&1 || have_curl=0
+      command -v wget >/dev/null 2>&1 || have_wget=0
+
+      if [ "$have_curl" -eq 0 ] && [ "$have_wget" -eq 0 ]; then
+        exit 3
+      fi
+
+      for url in "$@"; do
+        if [ "$have_curl" -eq 1 ]; then
+          if curl -fsS --connect-timeout 5 --max-time 8 "$url" >/dev/null 2>&1; then
+            printf %s "$url"
+            exit 0
+          fi
+        fi
+        if [ "$have_wget" -eq 1 ]; then
+          if wget -q -T 8 -O- "$url" >/dev/null 2>&1; then
+            printf %s "$url"
+            exit 0
+          fi
+        fi
+      done
+
+      exit 1
+    ' _ "${urls[@]}"
+  )"; then
+    ARR_GLUETUN_CONNECTIVITY_LAST_URL="${probe_output}"
+    return 0
+  fi
+
+  probe_status=$?
+  if ((probe_status == 3)); then
+    ARR_GLUETUN_CONNECTIVITY_FAILURE_REASON="curl/wget unavailable inside Gluetun"
+    return 3
+  fi
 
   return 1
 }
@@ -742,6 +799,7 @@ arr_wait_for_gluetun_ready() {
   local check_interval="${3:-5}"
 
   ARR_GLUETUN_FAILURE_REASON=""
+  ARR_GLUETUN_CONNECTIVITY_FAILURE_REASON=""
 
   if ! command -v docker >/dev/null 2>&1; then
     ARR_GLUETUN_FAILURE_REASON="docker binary not available"
@@ -873,6 +931,13 @@ arr_wait_for_gluetun_ready() {
       local probe_url="${ARR_GLUETUN_CONNECTIVITY_LAST_URL:-unknown}"
       msg "  ✅ VPN connectivity confirmed via ${probe_url}"
       return 0
+    fi
+
+    local connectivity_rc=$?
+    if ((connectivity_rc == 3)); then
+      ARR_GLUETUN_FAILURE_REASON="${ARR_GLUETUN_CONNECTIVITY_FAILURE_REASON:-Gluetun connectivity probe missing curl/wget}"
+      warn "  Gluetun connectivity probe cannot run (missing curl/wget inside container)."
+      return 1
     fi
 
     if ((connectivity_warned == 0)); then
@@ -1135,7 +1200,7 @@ PY
   fi
 
   local tmp
-  if ! tmp="$(mktemp)"; then
+  if ! tmp="$(arr_mktemp_file "${conf}.XXXXXX.tmp")"; then
     warn "[dns] Failed to create temporary file for ${conf}"
     return 1
   fi
