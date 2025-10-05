@@ -1042,6 +1042,10 @@ arr_wait_for_pf_ready() {
   local state_file="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}"
   local port_file="${ARR_DOCKER_DIR}/gluetun/forwarded_port"
 
+  if [[ -f "$state_file" ]]; then
+    rm -f "$state_file" 2>/dev/null || true
+  fi
+
   msg "[pf] Waiting for Proton port forwarding lease (timeout ${max_wait}s)..."
 
   local elapsed=0
