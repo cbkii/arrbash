@@ -43,15 +43,25 @@ install_missing() {
 
 # Locates the first userr.conf override relative to the repo parent
 preflight_find_userconf_override() {
-  local target_name="userr.conf" search_root=""
+  local target_name="userr.conf" search_root=".." repo_root="" canonical=""
 
   if [[ -n "${REPO_ROOT:-}" ]]; then
-    search_root="${REPO_ROOT%/}/.."
+    if repo_root="$(cd "${REPO_ROOT}" 2>/dev/null && pwd -P)"; then
+      if search_root="$(cd "${repo_root}/.." 2>/dev/null && pwd -P)"; then
+        :
+      else
+        search_root=".."
+      fi
+    fi
   else
-    search_root=".."
+    if search_root="$(cd ".." 2>/dev/null && pwd -P)"; then
+      :
+    else
+      search_root=".."
+    fi
   fi
 
-  local current_path="${ARR_USERCONF_PATH:-}" canonical=""
+  local current_path="${ARR_USERCONF_PATH:-}"
   if [[ -n "$current_path" && -f "$current_path" ]]; then
     canonical="$(readlink -f "$current_path" 2>/dev/null || printf '%s' "$current_path")"
     printf '%s\n' "$canonical"
@@ -62,13 +72,38 @@ preflight_find_userconf_override() {
     return 1
   fi
 
-  local first_match=""
-  first_match="$(find "$search_root" -type f -name "$target_name" -print -quit 2>/dev/null || true)"
-  if [[ -n "$first_match" ]]; then
-    canonical="$(readlink -f "$first_match" 2>/dev/null || printf '%s' "$first_match")"
+  local root_candidate="${search_root%/}/$target_name"
+  if [[ -f "$root_candidate" ]]; then
+    canonical="$(readlink -f "$root_candidate" 2>/dev/null || printf '%s' "$root_candidate")"
     printf '%s\n' "$canonical"
     return 0
   fi
+
+  local -a sibling_dirs=()
+  local entry=""
+  while IFS= read -r -d '' entry; do
+    if [[ -n "$repo_root" ]] && [[ "$entry" == "$repo_root" ]]; then
+      continue
+    fi
+    sibling_dirs+=("$entry")
+  done < <(find "$search_root" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null | LC_ALL=C sort -z)
+
+  for entry in "${sibling_dirs[@]}"; do
+    local candidate="${entry%/}/$target_name"
+    if [[ -f "$candidate" ]]; then
+      canonical="$(readlink -f "$candidate" 2>/dev/null || printf '%s' "$candidate")"
+      printf '%s\n' "$canonical"
+      return 0
+    fi
+
+    local found=""
+    found="$(find "$entry" -type f -name "$target_name" -print -quit 2>/dev/null || true)"
+    if [[ -n "$found" ]]; then
+      canonical="$(readlink -f "$found" 2>/dev/null || printf '%s' "$found")"
+      printf '%s\n' "$canonical"
+      return 0
+    fi
+  done
 
   return 1
 }
