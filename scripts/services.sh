@@ -1026,7 +1026,7 @@ ensure_docker_userland_proxy_disabled() {
   local conf_dir
   conf_dir="$(dirname "$conf")"
 
-  local merge_tool_preference="${ARR_DAEMON_JSON_TOOL:-}" 
+  local merge_tool_preference="${ARR_DAEMON_JSON_TOOL:-}"
   local merge_tool=""
   if [[ "$merge_tool_preference" == "python" ]] && command -v python3 >/dev/null 2>&1; then
     merge_tool="python"
