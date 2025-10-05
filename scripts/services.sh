@@ -1346,7 +1346,9 @@ start_stack() {
   msg "Starting Gluetun VPN container..."
   if ! compose up -d gluetun; then
     warn "Failed to start Gluetun via docker compose"
-    docker logs --tail=60 gluetun 2>&1 | sed 's/^/    /' || true
+    if docker ps -a --format '{{.Names}}' | grep -q "^gluetun$"; then
+      docker logs --tail=60 gluetun 2>&1 | sed 's/^/    /' || true
+    fi
     arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING" "VPN_NOT_RUNNING"
     return 1
   fi
@@ -1391,7 +1393,11 @@ start_stack() {
   fi
 
   if [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
-    if ! arr_wait_for_pf_ready gluetun 60 5; then
+    local pf_wait_timeout pf_wait_interval
+    arr_resolve_positive_int pf_wait_timeout "${ARR_PF_WAIT_TIMEOUT:-}" 60 "Invalid ARR_PF_WAIT_TIMEOUT, defaulting to 60s" warn
+    arr_resolve_positive_int pf_wait_interval "${ARR_PF_WAIT_INTERVAL:-}" 5 "Invalid ARR_PF_WAIT_INTERVAL, defaulting to 5s" warn
+
+    if ! arr_wait_for_pf_ready gluetun "$pf_wait_timeout" "$pf_wait_interval"; then
       local pf_reason="${ARR_PF_FAILURE_REASON:-Proton port forwarding not ready}"
       warn "[pf] ${pf_reason}. Port forwarding is optional and depends on your VPN provider/plan/server. Continuing without a forwarded port."
     else

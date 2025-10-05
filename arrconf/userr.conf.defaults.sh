@@ -55,24 +55,6 @@ SUBS_DIR="${SUBS_DIR:-}"
 PUID="${PUID:-$(id -u)}"
 PGID="${PGID:-$(id -g)}"
 
-# Location
-ARR_TIMEZONE_AUTO_SOURCE="${ARR_TIMEZONE_AUTO_SOURCE:-default}"
-ARR_TIMEZONE_AUTO_FALLBACK="${ARR_TIMEZONE_AUTO_FALLBACK:-0}"
-if [[ -z "${TIMEZONE:-}" ]]; then
-  TIMEZONE="$(arr_detect_timezone)"
-  ARR_TIMEZONE_AUTO_SOURCE="detected"
-else
-  ARR_TIMEZONE_AUTO_SOURCE="provided"
-  if [[ "$TIMEZONE" == "UTC" && "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" != "0" ]]; then
-    ARR_TIMEZONE_AUTO_FALLBACK=1
-  fi
-fi
-LAN_IP="${LAN_IP:-}"
-LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
-SERVER_COUNTRIES="${SERVER_COUNTRIES:-Netherlands}"
-# SERVER_NAMES=""  # Optionally pin Proton server hostnames if PF keeps returning 0 (comma-separated list)
-PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES:-}"
-
 # Domain suffix used by optional DNS/Caddy hostnames (default to RFC 8375 recommendation)
 LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX:-home.arpa}"
 
@@ -120,6 +102,24 @@ if ! declare -f arr_detect_timezone >/dev/null 2>&1; then
     printf '%s' "$detected"
   }
 fi
+
+# Location
+ARR_TIMEZONE_AUTO_SOURCE="${ARR_TIMEZONE_AUTO_SOURCE:-default}"
+ARR_TIMEZONE_AUTO_FALLBACK="${ARR_TIMEZONE_AUTO_FALLBACK:-0}"
+if [[ -z "${TIMEZONE:-}" ]]; then
+  TIMEZONE="$(arr_detect_timezone)"
+  ARR_TIMEZONE_AUTO_SOURCE="detected"
+else
+  ARR_TIMEZONE_AUTO_SOURCE="provided"
+  if [[ "$TIMEZONE" == "UTC" && "${ARR_TIMEZONE_AUTO_FALLBACK:-0}" != "0" ]]; then
+    ARR_TIMEZONE_AUTO_FALLBACK=1
+  fi
+fi
+LAN_IP="${LAN_IP:-}"
+LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
+SERVER_COUNTRIES="${SERVER_COUNTRIES:-Netherlands}"
+# SERVER_NAMES=""  # Optionally pin Proton server hostnames if PF keeps returning 0 (comma-separated list)
+PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES:-}"
 
 if ! declare -f arr_parse_csv >/dev/null 2>&1; then
   arr_parse_csv() {
