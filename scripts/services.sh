@@ -674,10 +674,12 @@ sync_qbt_password_from_logs() {
   warn "  Unable to automatically determine the qBittorrent password. Update QBT_PASS in .env manually."
 }
 
+# Checks if a default route exists via a VPN tunnel interface (configurable pattern)
 arr_gluetun_tunnel_route_present() {
   local name="${1:-gluetun}"
+  local iface_pattern="${2:-dev (tun[0-9]+|wg[0-9]+)}"
 
-  docker exec "$name" sh -c "ip -4 route show default 2>/dev/null | grep -Eq 'dev (tun0|wg0)'" >/dev/null 2>&1
+  docker exec "$name" sh -c "ip -4 route show default 2>/dev/null | grep -Eq '$iface_pattern'" >/dev/null 2>&1
 }
 
 arr_gluetun_connectivity_probe() {
