@@ -698,11 +698,6 @@ validate_images() {
       continue
     fi
 
-    if [[ "$image" =~ [[:space:]] ]]; then
-      warn "  ❌ ${var_name} contains whitespace; update the tag in ${ARR_ENV_FILE} or ${ARR_USERCONF_PATH}."
-      invalid_images+=("$var_name")
-      failed_images+=("$image")
-      continue
     fi
 
     if check_image_exists "$image"; then
