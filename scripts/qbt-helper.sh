@@ -56,7 +56,10 @@ resolve_docker_data() {
   if [[ -n "${ARR_DOCKER_DIR:-}" ]]; then
     candidates+=("$ARR_DOCKER_DIR")
   fi
-  candidates+=("${HOME}/srv/docker-data" "${STACK_DIR}/docker-data")
+  if [[ -n "${ARR_DATA_ROOT:-}" ]]; then
+    candidates+=("${ARR_DATA_ROOT%/}/docker-data")
+  fi
+  candidates+=("${STACK_DIR}/docker-data")
 
   local path
   for path in "${candidates[@]}"; do

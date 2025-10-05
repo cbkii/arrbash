@@ -7,7 +7,7 @@ STACK_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=scripts/common.sh
 . "${STACK_DIR}/scripts/common.sh"
 
-CA_ROOT="${ARR_DOCKER_DIR:-${HOME}/srv/docker-data}/caddy/data/caddy/pki/authorities/local"
+CA_ROOT="$(arr_docker_data_root)/caddy/data/caddy/pki/authorities/local"
 CA_FILE="${CA_ROOT}/root.crt"
 DEST_FILE="${1:-${HOME}/${STACK}-ca.crt}"
 

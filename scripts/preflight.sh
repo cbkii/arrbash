@@ -609,7 +609,7 @@ preflight() {
 
   msg "  Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
 
-  local default_userconf="${ARR_BASE:-${HOME}/srv}/userr.conf"
+  local default_userconf="${ARR_BASE:-${ARR_DATA_ROOT}}/userr.conf"
   local default_userconf_canon
   default_userconf_canon="$(arr_canonical_path "$default_userconf")"
 

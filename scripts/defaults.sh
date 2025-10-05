@@ -23,9 +23,14 @@ fi
 # Seeds global defaults, handling collaborative profile toggles and legacy overrides
 arr_setup_defaults() {
   local previous_stack_dir="${ARR_STACK_DIR:-}"
-  if [[ -z "${ARR_DOCKER_DIR}" && -d "${HOME}/srv/docker-data" ]]; then
-    ARR_DOCKER_DIR="${HOME}/srv/docker-data"
-    ARR_STACK_DIR="${ARR_STACK_DIR:-${PWD}/${STACK}}"
+  local default_docker_root=""
+  if [[ -n "${ARR_DATA_ROOT:-}" ]]; then
+    default_docker_root="${ARR_DATA_ROOT%/}/docker-data"
+  fi
+
+  if [[ -z "${ARR_DOCKER_DIR}" && -n "${default_docker_root}" && -d "${default_docker_root}" ]]; then
+    ARR_DOCKER_DIR="${default_docker_root}"
+    ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_BASE:-${ARR_DATA_ROOT}}/${STACK}}"
   fi
 
   if [[ -n "${previous_stack_dir}" && "${previous_stack_dir}" != "${ARR_STACK_DIR}" ]]; then

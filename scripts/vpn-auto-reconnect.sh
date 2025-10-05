@@ -35,7 +35,7 @@ vpn_auto_gluetun_root() {
     if [[ -n "${ARR_STACK_DIR:-}" ]]; then
       base="${ARR_STACK_DIR%/}/docker-data"
     else
-      base="${HOME:-.}/srv/docker-data"
+      base="${ARR_DATA_ROOT%/}/docker-data"
     fi
   fi
   printf '%s/gluetun' "${base%/}"

@@ -18,11 +18,11 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    ```
    > The installer expects these dependencies to be present already; it does not install Docker, Compose, or CLI tools on your behalf.
 2. **Clone arrbash and enter the directory.**
-   ```bash
-   mkdir -p ~/srv && cd ~/srv
-   git clone https://github.com/cbkii/arrbash.git
-   cd arrbash
-   ```
+    ```bash
+    mkdir -p ~/srv && cd ~/srv
+    git clone https://github.com/cbkii/arrbash.git
+    cd arrbash
+    ```
 3. **Add Proton credentials.**
    ```bash
    cp arrconf/proton.auth.example arrconf/proton.auth
@@ -42,11 +42,12 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 6. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration
-- `userr.conf` defaults to `${ARR_BASE:-$HOME/srv}/userr.conf`; keep it outside version control. If multiple overrides live alongside the repo, the installer loads the first file named `userr.conf` it finds above the repo.
+- `ARR_DATA_ROOT`: top-level data directory for the stack (defaults to `~/srv`). Override it via the environment or `userr.conf` before running `./arr.sh`.
+- `userr.conf` defaults to `${ARR_BASE:-$ARR_DATA_ROOT}/userr.conf`; keep it outside version control. If multiple overrides live alongside the repo, the installer loads the first file named `userr.conf` it finds above the repo.
 - Review these core values:
   - `LAN_IP`: private address of the host; required before ports are exposed.
 - `STACK`: project label used for generated paths and logs (defaults to `arr` via `STACK="${STACK:-arr}"`).
-- `ARR_BASE`: base directory for generated files (defaults to `~/srv`).
+- `ARR_BASE`: base directory for generated files (defaults to `ARR_DATA_ROOT`).
   - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: map to your storage paths.
   - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent; leave `0` for full VPN mode.
   - `ENABLE_CADDY`, `ENABLE_LOCAL_DNS`, `ENABLE_CONFIGARR`: toggle optional HTTPS/DNS/Configarr services.

@@ -22,7 +22,7 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
 ## Update workflow
 1. Back up your data:
    ```bash
-   cd "${ARR_BASE:-$HOME/srv}"
+   cd "${ARR_BASE:-$ARR_DATA_ROOT}"
    STACK="${STACK:-arr}"
    tar -czf "${STACK}-backup-$(date +%Y%m%d).tar.gz" "$(basename "${ARR_STACK_DIR:-${STACK}}")" docker-data
    ```
