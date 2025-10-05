@@ -79,7 +79,7 @@ run_one_time_migrations() {
   fi
 
   if [[ "${ARR_PERMISSION_PROFILE}" == "collab" && "${COLLAB_GROUP_WRITE_ENABLED:-0}" == "1" ]]; then
-    local collab_marker="${ARR_DOCKER_DIR}/.arrstack-collab-v1"
+    local collab_marker="${ARR_DOCKER_DIR}/.${STACK}-collab-v1"
     if [[ -d "${ARR_DOCKER_DIR}" && ! -e "${collab_marker}" ]]; then
       local collab_migrations=0
       local collab_failures=0

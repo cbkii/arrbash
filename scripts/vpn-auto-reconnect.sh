@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# VPN auto-reconnect helpers sourced by arrstack components
+# VPN auto-reconnect helpers sourced by stack components
 #
 # AUTO-RECONNECT OVERVIEW
 #   Classification rules:

@@ -55,13 +55,13 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
 - Ensure Gluetun accepts API requests (`docker-data/gluetun/auth/config.toml` is created automatically for versions ≥3.40).
 - Rotate the API key if authentication fails:
   ```bash
-  ./arrstack.sh --rotate-api-key --yes
+  ./arr.sh --rotate-api-key --yes
   ```
 
 ### Gluetun recovery
 - When the installer prints “Setup FAILED” for VPN readiness, start with `docker logs gluetun` to identify handshake or authentication errors.
-- Remove `${ARR_DOCKER_DIR}/gluetun/auth/config.toml` if your Proton credentials changed and rerun `./arrstack.sh` to regenerate it.
-- Re-run `./arrstack.sh --yes` after adjusting `userr.conf` (for example choosing a PF-capable server) so the installer retries from a clean state.
+- Remove `${ARR_DOCKER_DIR}/gluetun/auth/config.toml` if your Proton credentials changed and rerun `./arr.sh` to regenerate it.
+- Re-run `./arr.sh --yes` after adjusting `userr.conf` (for example choosing a PF-capable server) so the installer retries from a clean state.
 - Use `arr.vpn.port.sync` once Gluetun is healthy to confirm a forwarded port is assigned.
 
 ### VPN auto-reconnect inactive
@@ -96,7 +96,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
 ### Configarr still complains about API keys
 - Run the sync helper after Sonarr/Radarr/Prowlarr generate their `config.xml` files:
   ```bash
-  ./arrstack.sh --sync-api-keys --yes
+  ./arr.sh --sync-api-keys --yes
   ```
 - Verify secrets:
   ```bash
@@ -107,7 +107,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
 ### Installer reports port conflicts
 - Stop any conflicting services or containers, then rerun:
   ```bash
-  ./arrstack.sh --yes
+  ./arr.sh --yes
   ```
 - Use the printed conflict summary to identify the owning process and adjust `userr.conf` if you must reassign ports.
 

@@ -328,7 +328,7 @@ arr_effective_project_name() {
   fi
 
   if [[ -z "$project" ]]; then
-    project="arrstack"
+    project="${STACK}"
   fi
 
   printf '%s\n' "$project"
@@ -357,7 +357,7 @@ safe_cleanup() {
   done
 
   local project_label
-  project_label="$(arr_effective_project_name 2>/dev/null || printf 'arrstack')"
+  project_label="$(arr_effective_project_name 2>/dev/null || printf '%s' "${STACK}")"
 
   docker ps -a --filter "label=com.docker.compose.project=${project_label}" --format "{{.ID}}" \
     | xargs -r docker rm -f 2>/dev/null || true
@@ -371,12 +371,12 @@ preflight_compose_interpolation() {
   local warn_log="${log_dir}/compose-interpolation.log"
 
   if ! compose -f "$file" config >/dev/null 2>"$warn_log"; then
-    echo "[arrstack] docker compose config failed; see ${warn_log}" >&2
+    printf '%s docker compose config failed; see %s\n' "$STACK_LABEL" "$warn_log" >&2
     exit 1
   fi
 
   if grep -qE 'variable is not set' "$warn_log" 2>/dev/null; then
-    echo "[arrstack] unresolved Compose variables detected:" >&2
+    printf '%s unresolved Compose variables detected:\n' "$STACK_LABEL" >&2
     grep -E 'variable is not set' "$warn_log" >&2 || true
     exit 1
   fi
@@ -395,22 +395,22 @@ validate_compose_or_die() {
   local configdump="${log_dir}/compose-config.json"
 
   if ! compose -f "$file" config -q 2>"$errlog"; then
-    echo "[arrstack] Compose validation failed; see $errlog"
+    printf '%s Compose validation failed; see %s\n' "$STACK_LABEL" "$errlog"
     local line
     line="$(grep -oE 'line ([0-9]+)' "$errlog" | awk '{print $2}' | tail -1 || true)"
     if [[ -n "$line" && -r "$file" ]]; then
       local start=$((line - 5))
       local end=$((line + 5))
       ((start < 1)) && start=1
-      echo "[arrstack] Error context from docker-compose.yml:"
+      printf '%s Error context from docker-compose.yml:\n' "$STACK_LABEL"
       nl -ba "$file" | sed -n "${start},${end}p"
     fi
 
     while IFS= read -r service; do
       [[ -z "$service" ]] && continue
-      echo "[arrstack] Checking service: $service"
+      printf '%s Checking service: %s\n' "$STACK_LABEL" "$service"
       if ! compose -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
-        echo "[arrstack] Service $service has configuration errors:"
+        printf '%s Service %s has configuration errors:\n' "$STACK_LABEL" "$service"
         cat "${errlog}.${service}" 2>/dev/null || true
       else
         rm -f "${errlog}.${service}" 2>/dev/null || true
@@ -421,7 +421,7 @@ validate_compose_or_die() {
   fi
 
   if ! compose -f "$file" config --format=json >"$configdump" 2>"${errlog}.json"; then
-    echo "[arrstack] Failed to generate JSON config dump at $configdump" >&2
+    printf '%s Failed to generate JSON config dump at %s\n' "$STACK_LABEL" "$configdump" >&2
     cat "${errlog}.json" 2>/dev/null >&2 || true
     rm -f "$configdump"
   fi
@@ -1098,7 +1098,7 @@ PY
   fi
 
   local backup
-  backup="${conf}.arrstack.$(date +%Y%m%d-%H%M%S).bak"
+  backup="${conf}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
   if [[ -f "$conf" ]]; then
     if ! cp -p "$conf" "$backup"; then
       warn "[dns] Failed to create backup at ${backup}"

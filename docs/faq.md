@@ -2,7 +2,7 @@
 
 # Frequently asked questions
 
-Quick answers to common beginner questions about arrbash.
+Quick answers to common beginner questions about the stack.
 
 ## Do I need a Raspberry Pi 5?
 Any 64-bit Debian Bookworm host with roughly 4 CPU cores and 4 GB RAM works. Raspberry Pi 5 is a popular option but not required.
@@ -23,7 +23,7 @@ Set `PGID` to the group that owns your shared downloads or media storage (for ex
 Read [Version management](version-management.md). Adjust tags in `${ARR_BASE}/userr.conf`, rerun the installer, and confirm containers start cleanly.
 
 ## Can I rerun the installer safely?
-Yes. `./arrstack.sh` is idempotent—rerun it anytime after editing `${ARR_BASE}/userr.conf`. Review the printed summary before containers restart.
+Yes. `./arr.sh` is idempotent—rerun it anytime after editing `${ARR_BASE}/userr.conf`. Review the printed summary before containers restart.
 
 ## Can I expose services to the Internet?
 Use Caddy with strong basic auth if you need remote access. Avoid forwarding raw service ports; keep the stack behind Proton VPN whenever possible. Review [Security](security.md) first.

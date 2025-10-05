@@ -5,16 +5,17 @@
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
 # --- Stack paths ---
+STACK="${STACK:-arr}"               # Project identifier used for directories, logs, and labels (defaults to arr)
 ARR_BASE="${HOME}/srv"                 # Root directory for generated stack files
-ARR_STACK_DIR="${ARR_BASE}/arrstack"  # Location for docker-compose.yml, scripts, and aliases
+ARR_STACK_DIR="${ARR_BASE}/${STACK}"  # Location for docker-compose.yml, scripts, and aliases
 ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
 ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
 # ARR_USERCONF_PATH="${ARR_BASE}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
-# ARRCONF_DIR="${HOME}/.config/arrstack"  # Optional: relocate Proton creds outside the repo
+# ARRCONF_DIR="${HOME}/.config/${STACK}"  # Optional: relocate Proton creds outside the repo
 
 # --- Logging and output ---
 ARR_LOG_DIR="${ARR_STACK_DIR}/logs"           # Directory for runtime/service logs (default: ${ARR_STACK_DIR}/logs)
-ARR_INSTALL_LOG="${ARR_LOG_DIR}/arrstack-install.log"   # Installer run log location (default: ${ARR_LOG_DIR}/arrstack-install.log)
+ARR_INSTALL_LOG="${ARR_LOG_DIR}/${STACK}-install.log"   # Installer run log location (default: ${ARR_LOG_DIR}/${STACK}-install.log)
 ARR_COLOR_OUTPUT="1"       # 1 keeps colorful CLI output, set 0 to disable ANSI colors
 
 # --- Permissions ---
@@ -43,7 +44,7 @@ SERVER_COUNTRIES="Netherlands"              # ProtonVPN exit country list (defau
 PVPN_ROTATE_COUNTRIES=""  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_CONTROL_PORT="8000"            # Host port that exposes the Gluetun control API (default: 8000)
 ENABLE_LOCAL_DNS="0"                   # Advanced: enable the optional dnsmasq container (0/1, default: 0)
-ENABLE_CADDY="0"                       # Optional Caddy reverse proxy (run ./arrstack.sh --enable-caddy or set 1 to add HTTPS hostnames)
+ENABLE_CADDY="0"                       # Optional Caddy reverse proxy (run ./arr.sh --enable-caddy or set 1 to add HTTPS hostnames)
 CADDY_HTTP_PORT="80"           # Host port published for plain HTTP healthz/apps (default: 80)
 CADDY_HTTPS_PORT="443"         # Host port published for HTTPS proxy endpoints (default: 443)
 # SPLIT_VPN=1 → Only qbittorrent behind VPN; other services run outside it.
@@ -72,7 +73,7 @@ SABNZBD_ENABLED="0"             # 1 enables SABnzbd container/helper integration
 SABNZBD_USE_VPN="0"             # 1 routes SABnzbd through Gluetun (default: 0)
 SABNZBD_HOST="127.0.0.1"           # Host used by sab-helper (default: 127.0.0.1)
 SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"             # Hydrated automatically from sabnzbd.ini when available
-SABNZBD_CATEGORY="arrbash"           # Category applied to helper-submitted jobs (default: arrbash)
+SABNZBD_CATEGORY="${STACK}"          # Category applied to helper-submitted jobs (default: STACK value)
 SABNZBD_TIMEOUT="15"             # Helper API timeout in seconds (default: 15)
 ARRBASH_USENET_CLIENT="sabnzbd" # Active Usenet client label (future abstraction)
 

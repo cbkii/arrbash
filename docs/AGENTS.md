@@ -14,7 +14,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
 ## Repository Overview
 
-- Entry script: `arrstack.sh` — orchestrates setup on Debian hosts, handles flags like `--yes`, `--rotate-caddy-auth`, `--setup-host-dns`, etc.
+- Entry script: `arr.sh` — orchestrates setup on Debian hosts, handles flags like `--yes`, `--rotate-caddy-auth`, `--setup-host-dns`, etc.
 - Config directory: `arrconf/` — contains `proton.auth.example`, `userr.conf.example`, and the defaults used to render it.
 - Scripts directory: `scripts/` — contains helper scripts like DNS-setup/rollback, version-fixing, others.
 - Example env file: `.env.example`
@@ -45,7 +45,7 @@ When assigned a task, follow:
    - Lint example config/template files for missing placeholders or misnamed vars.
    - If any `.env.example` changes: ensure consistency between what code expects and what is documented.
 4. **Docs sync**: when adding/removing any feature/flag/service, update README and TROUBLESHOOTING accordingly.
-5. **Test help-interfaces**: ensure `./arrstack.sh --help` reflects current flags/options.
+5. **Test help-interfaces**: ensure `./arr.sh --help` reflects current flags/options.
 
 ---
 
@@ -55,7 +55,7 @@ Because you don’t run the full stack inside Codex, your validation is limited 
 
 - `shellcheck` over all shell scripts.
 - Any version checking or YAML/Env variable consistency scripts (e.g. `scripts/fix-versions.sh`) to confirm no missing fallbacks.
-- Help output tests (i.e. `./arrstack.sh --help`) to succeed without side-effects.
+- Help output tests (i.e. `./arr.sh --help`) to succeed without side-effects.
 
 If these checks exist in scripts, run them; if not, propose creating them.
 

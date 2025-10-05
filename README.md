@@ -36,7 +36,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    ```
 5. **Run the installer.**
    ```bash
-   ./arrstack.sh --yes         # omit --yes for interactive mode
+   ./arr.sh --yes         # omit --yes for interactive mode
    ```
    The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`.
 6. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
@@ -45,14 +45,15 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 - `userr.conf` lives at `${ARR_BASE:-$HOME/srv}/userr.conf`; keep it outside version control.
 - Review these core values:
   - `LAN_IP`: private address of the host; required before ports are exposed.
-  - `ARR_BASE`: base directory for generated files (defaults to `~/srv`).
+- `STACK`: project label used for generated paths and logs (defaults to `arr` via `STACK="${STACK:-arr}"`).
+- `ARR_BASE`: base directory for generated files (defaults to `~/srv`).
   - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: map to your storage paths.
   - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent; leave `0` for full VPN mode.
   - `ENABLE_CADDY`, `ENABLE_LOCAL_DNS`, `ENABLE_CONFIGARR`: toggle optional HTTPS/DNS/Configarr services.
-- Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arrstack.sh --rotate-api-key` or `./arrstack.sh --rotate-caddy-auth`.
+- Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arr.sh --rotate-api-key` or `./arr.sh --rotate-caddy-auth`.
 - Show available flags at any time:
   ```bash
-  ./arrstack.sh --help
+  ./arr.sh --help
   ```
 ## Next steps
 - Read [Configuration](./docs/configuration.md) for variable precedence and permission profiles.
@@ -79,7 +80,7 @@ SABNZBD_ENABLED=1
 # Optional overrides (see docs/sabnzbd.md for the full matrix)
 SABNZBD_PORT=8080          # Host port for the WebUI (qBittorrent now defaults to 8082)
 SABNZBD_HOST="${LOCALHOST_IP}"  # Host sab-helper uses (defaults to LOCALHOST_IP)
-SABNZBD_CATEGORY="arrbash" # Category assigned to helper-submitted jobs
+SABNZBD_CATEGORY="${STACK}" # Category assigned to helper-submitted jobs
 SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
 # Set SABNZBD_IMAGE=lscr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
 ```
@@ -90,7 +91,7 @@ After your first SABnzbd login, paste the API key into the WebUI once; reruns wi
 To enable SABnzbd for a single installer run without editing `userr.conf`, pass `--enable-sab`:
 
 ```bash
-./arrstack.sh --enable-sab --yes
+./arr.sh --enable-sab --yes
 ```
 
 Refer to [docs/sabnzbd.md](docs/sabnzbd.md) for networking scenarios, API key preservation,
@@ -99,7 +100,7 @@ and helper usage tips.
 Run:
 
 ```bash
-./arrstack.sh --yes
+./arr.sh --yes
 ```
 
 Helper:
@@ -111,7 +112,7 @@ scripts/sab-helper.sh add-file /path/to/file.nzb
 
 VPN note:
 By default SAB runs outside the VPN (TLS to Usenet servers). Enable `SABNZBD_USE_VPN=1` for full tunnelling through Gluetun.
-If Gluetun is disabled, arrbash logs a warning and runs SAB directly so downloads continue.
+If Gluetun is disabled, the stack logs a warning and runs SAB directly so downloads continue.
 
 ## Documentation index
 - [Architecture](./docs/architecture.md) – container map, generated files, and installer flow.
@@ -124,7 +125,7 @@ If Gluetun is disabled, arrbash logs a warning and runs SAB directly so download
 - [FAQ](./docs/faq.md) and [Glossary](./docs/glossary.md) – quick answers and terminology.
 
 ## Support & contributions
-Open an issue or PR for bugs or documentation gaps. Review `./arrstack.sh --help` and the docs before filing reports to confirm behaviour.
+Open an issue or PR for bugs or documentation gaps. Review `./arr.sh --help` and the docs before filing reports to confirm behaviour.
 
 ## License
 [MIT](./LICENSE)

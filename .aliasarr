@@ -451,7 +451,7 @@ _arr_gluetun_api() {
   local host="$(_arr_gluetun_host)"
 
   if [ -z "$key" ]; then
-    echo "Error: GLUETUN_API_KEY not found. Run: ./arrstack.sh --rotate-api-key" >&2
+    echo "Error: GLUETUN_API_KEY not found. Run: ./arr.sh --rotate-api-key" >&2
     return 1
   fi
 

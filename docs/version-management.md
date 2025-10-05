@@ -2,7 +2,7 @@
 
 # Version management
 
-Track container tags safely so arrbash installs stay reproducible.
+Track container tags safely so `$STACK` installs stay reproducible (defaults to `arr`).
 
 ## Why
 The stack pins each image to a tested tag. Registries occasionally remove old manifests; the helper scripts swap to `:latest` automatically for LinuxServer images when necessary.
@@ -23,12 +23,13 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
 1. Back up your data:
    ```bash
    cd "${ARR_BASE:-$HOME/srv}"
-   tar -czf "arrbash-backup-$(date +%Y%m%d).tar.gz" "$(basename "${ARR_STACK_DIR:-arrstack}")" docker-data
+   STACK="${STACK:-arr}"
+   tar -czf "${STACK}-backup-$(date +%Y%m%d).tar.gz" "$(basename "${ARR_STACK_DIR:-${STACK}}")" docker-data
    ```
 2. Edit `${ARR_BASE}/userr.conf` to change any `*_IMAGE` values.
 3. Apply changes:
    ```bash
-   ./arrstack.sh --yes
+   ./arr.sh --yes
    ```
    The installer validates images and swaps LinuxServer pins to `:latest` if a tag is missing.
 4. Confirm runtime:
@@ -43,7 +44,7 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
    ```
 2. Rerun the installer:
    ```bash
-   ./arrstack.sh --yes
+   ./arr.sh --yes
    ```
 3. Pin to a new tag later if you need a specific release.
 

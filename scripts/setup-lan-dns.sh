@@ -55,7 +55,7 @@ fuzzy_remove_entries() {
     skip { next }
     {
       line = tolower($0)
-      if (index(line, "arrstack-managed") > 0) {
+      if (index(line, "${STACK}-managed") > 0) {
         next
       }
       print $0
@@ -195,7 +195,7 @@ configure_docker_dns() {
 
   if [[ -f "${daemon_json}" ]]; then
     local backup
-    backup="${daemon_json}.arrstack.$(date +%Y%m%d-%H%M%S).bak"
+    backup="${daemon_json}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
     if cp "${daemon_json}" "${backup}" 2>/dev/null; then
       log "Backed up existing ${daemon_json} to ${backup}"
     else
@@ -305,8 +305,8 @@ main() {
     fi
   fi
 
-  local begin_marker="# >>> arrstack-managed hosts >>>"
-  local end_marker="# <<< arrstack-managed hosts <<<"
+  local begin_marker="# >>> ${STACK}-managed hosts >>>"
+  local end_marker="# <<< ${STACK}-managed hosts <<<"
 
   local sanitized
   sanitized="$(fuzzy_remove_entries "${hosts_file}" "${begin_marker}" "${end_marker}")"
@@ -318,7 +318,7 @@ main() {
   for service in "${services[@]}"; do
     host_line+=" ${service}.${domain_suffix}"
   done
-  host_line+=" # arrstack-managed ${domain_suffix}"
+  host_line+=" # ${STACK}-managed ${domain_suffix}"
 
   local newline=$'\n'
   local new_content
@@ -329,7 +329,7 @@ main() {
   fi
 
   rewrite_hosts_file "${hosts_file}" "${new_content}"
-  log "Updated ${hosts_file} with arrstack-managed host entries"
+  log "Updated ${hosts_file} with ${STACK}-managed host entries"
 
   configure_docker_dns "${lan_ip}" || true
 }

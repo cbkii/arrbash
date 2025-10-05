@@ -18,7 +18,7 @@ This stack renders configuration from a small set of scripts, then launches Dock
 The installer publishes LAN ports when `EXPOSE_DIRECT_PORTS=1`. When disabled, access services via Docker networks or the optional proxy.
 
 ## Generated files
-`./arrstack.sh` writes artefacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:
+`./arr.sh` writes artefacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:
 - `.env` – rendered from defaults plus `${ARR_BASE}/userr.conf`; reused across runs.
 - `docker-compose.yml` – defines service profiles, networks, and health checks.
 - `Caddyfile` – created when Caddy is enabled and validated with `caddy validate` before use.

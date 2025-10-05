@@ -25,7 +25,7 @@ arr_setup_defaults() {
   local previous_stack_dir="${ARR_STACK_DIR:-}"
   if [[ -z "${ARR_DOCKER_DIR}" && -d "${HOME}/srv/docker-data" ]]; then
     ARR_DOCKER_DIR="${HOME}/srv/docker-data"
-    ARR_STACK_DIR="${ARR_STACK_DIR:-${PWD}/arrstack}"
+    ARR_STACK_DIR="${ARR_STACK_DIR:-${PWD}/${STACK}}"
   fi
 
   if [[ -n "${previous_stack_dir}" && "${previous_stack_dir}" != "${ARR_STACK_DIR}" ]]; then

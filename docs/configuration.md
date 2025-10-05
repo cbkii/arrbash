@@ -2,11 +2,11 @@
 
 # Configuration guide
 
-Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arrstack.sh` snapshots exported environment variables, marks them read-only before sourcing your config, and reapplies them afterwards so they continue to win over anything set inside `userr.conf` or the defaults.
+Edit `${ARR_BASE:-$HOME/srv}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and supporting files. `./arr.sh` snapshots exported environment variables, marks them read-only before sourcing your config, and reapplies them afterwards so they continue to win over anything set inside `userr.conf` or the defaults.
 
 ## Configuration layers
-1. **Shell environment** – anything exported before running `./arrstack.sh` overrides every other source (use for CI or one-off toggles). Values are made read-only while `userr.conf` loads and reasserted afterwards, except for internal read-only variables and normalized paths such as `ARR_USERCONF_PATH`, which may be canonicalised to an absolute path during startup.
-2. **CLI flags** – run-scoped toggles (for example `./arrstack.sh --enable-caddy`) apply after the read-only guard. Use them to temporarily override `userr.conf` without editing the file. Environment exports still win if both are present.
+1. **Shell environment** – anything exported before running `./arr.sh` overrides every other source (use for CI or one-off toggles). Values are made read-only while `userr.conf` loads and reasserted afterwards, except for internal read-only variables and normalized paths such as `ARR_USERCONF_PATH`, which may be canonicalised to an absolute path during startup.
+2. **CLI flags** – run-scoped toggles (for example `./arr.sh --enable-caddy`) apply after the read-only guard. Use them to temporarily override `userr.conf` without editing the file. Environment exports still win if both are present.
 3. **`${ARR_BASE}/userr.conf`** – your persistent copy (defaults to `~/srv/userr.conf`). Keep it out of version control and rerun the installer after every edit.
 4. **`arrconf/userr.conf.defaults.sh`** – project defaults committed in the repo.
 
@@ -36,7 +36,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `ENABLE_CADDY`: `1` enables the HTTPS proxy on `CADDY_HTTP_PORT`/`CADDY_HTTPS_PORT` (defaults 80/443). Adjust those port variables if another web server is present.
   - `ENABLE_LOCAL_DNS`: `1` runs the dnsmasq container for LAN hostnames; combine with `DNS_DISTRIBUTION_MODE` to control how clients learn the resolver. The installer records the runtime result in `LOCAL_DNS_STATE`/`LOCAL_DNS_STATE_REASON` so you can tell whether DNS actually started.
   - `ENABLE_CONFIGARR`: `1` keeps Configarr managing Sonarr/Radarr settings.
-  - `SPLIT_VPN` and optional toggles such as `ENABLE_CADDY` can also be set per run with `./arrstack.sh` flags.
+  - `SPLIT_VPN` and optional toggles such as `ENABLE_CADDY` can also be set per run with `./arr.sh` flags.
 - **VPN automation**
   - `VPN_AUTO_RECONNECT_ENABLED`: monitor qBittorrent throughput and rotate Proton servers automatically.
   - `VPN_SPEED_THRESHOLD_KBPS`, `VPN_CHECK_INTERVAL_MINUTES`, `VPN_CONSECUTIVE_CHECKS`: tune when reconnects trigger.
@@ -49,14 +49,14 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 1. Edit `~/srv/userr.conf` (or the path set in `ARR_BASE`).
 2. Save the file and rerun:
    ```bash
-   ./arrstack.sh --yes
+   ./arr.sh --yes
    ```
 3. Review the printed summary. Generated files (`.env`, `docker-compose.yml`, `Caddyfile`) should never be edited directly.
 
 ## Verify
 - Show resolved values without applying changes:
   ```bash
-  ./arrstack.sh --yes
+  ./arr.sh --yes
   ```
   Cancel before container startup if the preview looks wrong.
 - Confirm preserved secrets remain in sync:

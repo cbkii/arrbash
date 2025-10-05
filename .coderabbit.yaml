@@ -18,7 +18,7 @@ reviews:
 
   # Only review what matters for this repo.
   path_filters:
-    - "arrstack.sh"
+    - "arr.sh"
     - "scripts/**/*.sh"
     - "arrconf/**/*.sh"
     - "dev/**/*.sh"
@@ -32,7 +32,7 @@ reviews:
 
   # File/path-specific guidance for arrbash.
   path_instructions:
-    - path: "arrstack.sh"
+    - path: "arr.sh"
       instructions: >
         Treat as the primary installer/orchestrator. Check idempotency, strict mode correctness
         (set -Eeuo pipefail + IFS), errexit-safe conditionals, safe trap usage, and restoration
