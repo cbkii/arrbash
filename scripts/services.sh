@@ -624,27 +624,53 @@ validate_images() {
   return 0
 }
 
-# Starts individual compose service and prints any non-empty output
+# Returns 0 when the compose-managed service is currently running
+compose_service_is_running() {
+  local service="$1"
+  local project
+
+  project="$(arr_effective_project_name 2>/dev/null || printf 'arrstack')"
+
+  docker ps \
+    --filter "label=com.docker.compose.project=${project}" \
+    --filter "label=com.docker.compose.service=${service}" \
+    --filter "status=running" \
+    --format '{{.ID}}' \
+    | grep -q .
+}
+
+# Starts individual compose service and streams docker compose output
 compose_up_service() {
   local service="$1"
-  local output=""
+  local was_running=0
+
+  if compose_service_is_running "$service"; then
+    was_running=1
+  fi
 
   msg "  Starting $service..."
-  if output="$(compose up -d "$service" 2>&1)"; then
-    if [[ "$output" == *"is up-to-date"* ]]; then
-      msg "  $service is up-to-date"
-    elif [[ -n "$output" ]]; then
-      while IFS= read -r line; do
-        printf '    %s\n' "$line"
-      done <<<"$output"
+  if compose up -d "$service"; then
+    local running_after=0
+    if compose_service_is_running "$service"; then
+      running_after=1
+    else
+      sleep 1
+      if compose_service_is_running "$service"; then
+        running_after=1
+      fi
+    fi
+
+    if ((running_after)); then
+      if ((was_running)); then
+        msg "  $service already running (no changes needed)"
+      else
+        msg "  $service started"
+      fi
+    else
+      warn "  $service not running after docker compose up; inspect container logs"
     fi
   else
     warn "  Failed to start $service"
-    if [[ -n "$output" ]]; then
-      while IFS= read -r line; do
-        printf '    %s\n' "$line"
-      done <<<"$output"
-    fi
   fi
   sleep 2
 }
@@ -1216,24 +1242,13 @@ start_stack() {
   install_vuetorrent
 
   msg "Starting Gluetun VPN container..."
-  local gluetun_output=""
-  if ! gluetun_output="$(compose up -d gluetun 2>&1)"; then
+  if ! compose up -d gluetun; then
     warn "Failed to start Gluetun via docker compose"
-    if [[ -n "$gluetun_output" ]]; then
-      while IFS= read -r line; do
-        printf '  %s\n' "$line"
-      done <<<"$gluetun_output"
-    fi
     docker logs --tail=60 gluetun 2>&1 | sed 's/^/    /' || true
     arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING"
     return 1
   fi
-
-  if [[ -n "$gluetun_output" ]]; then
-    while IFS= read -r line; do
-      printf '  %s\n' "$line"
-    done <<<"$gluetun_output"
-  fi
+  msg "Gluetun container started"
 
   if ! arr_wait_for_gluetun_ready gluetun 150 5; then
     local failure_reason
@@ -1295,24 +1310,13 @@ start_stack() {
 
   for service in "${services[@]}"; do
     msg "Starting $service..."
-    local start_output=""
 
-    if start_output="$(compose up -d "$service" 2>&1)"; then
-      if [[ -n "$start_output" ]]; then
-        while IFS= read -r line; do
-          printf '  %s\n' "$line"
-        done <<<"$start_output"
-      fi
+    if compose up -d "$service"; then
       if [[ "$service" == "qbittorrent" ]]; then
         qb_started=1
       fi
     else
       warn "Failed to start $service"
-      if [[ -n "$start_output" ]]; then
-        while IFS= read -r line; do
-          printf '  %s\n' "$line"
-        done <<<"$start_output"
-      fi
       failed_services+=("$service")
       continue
     fi
