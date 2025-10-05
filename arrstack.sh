@@ -158,7 +158,7 @@ if [[ -n "${TIMEZONE:-}" ]]; then
   if [[ "${TIMEZONE}" != "${_arr_timezone_before:-}" ]]; then
     _arr_userconf_timezone_override=1
   elif [[ -f "${ARR_USERCONF_PATH}" ]]; then
-    if grep -Eq '^[[:space:]]*(export[[:space:]]+)?TIMEZONE[[:space:]]*=' "${ARR_USERCONF_PATH}" 2>/dev/null; then
+    if grep -Eq '^[[:space:]]*(export|readonly|typeset|declare)?([[:space:]]+-[[:alnum:]]+)*[[:space:]]*TIMEZONE[[:space:]]*=' "${ARR_USERCONF_PATH}" 2>/dev/null; then
       _arr_userconf_timezone_override=1
     fi
   fi
