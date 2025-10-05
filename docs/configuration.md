@@ -23,7 +23,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `SPLIT_VPN`: set `1` to run only qBittorrent inside Gluetun, or `0` to tunnel everything.
   - `EXPOSE_DIRECT_PORTS`: leave at `1` for LAN-friendly URLs, or set `0` to keep services internal to Docker networking.
   - `DNS_DISTRIBUTION_MODE`: choose `router` (default) to update DHCP Option 6, or `per-device` when pointing clients at the resolver manually.
-  - `ARRSTACK_PORT_CHECK_MODE`: `enforce` (default) fails fast on conflicts, `warn` prints notices, and `skip` disables port validation (use sparingly).
+  - `ARR_PORT_CHECK_MODE`: `enforce` (default) fails fast on conflicts, `warn` prints notices, and `skip` disables port validation (use sparingly).
 - **Paths & storage**
   - `ARR_BASE`: root directory for generated files and Docker data (default `~/srv`).
   - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: map to your storage volumes.

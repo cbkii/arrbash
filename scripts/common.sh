@@ -3,15 +3,16 @@
 : "${CYAN:=}"
 : "${YELLOW:=}"
 : "${RESET:=}"
+: "${BOLD:=}"
 : "${ARR_COLOR_OUTPUT:=1}"
-: "${ARRSTACK_COMPOSE_VERSION:=}"
+: "${ARR_COMPOSE_VERSION:=}"
 : "${SECRET_FILE_MODE:=600}"
 : "${NONSECRET_FILE_MODE:=600}"
 : "${DATA_DIR_MODE:=700}"
 : "${LOCK_FILE_MODE:=640}"
 
 # Derives runtime color output preference respecting NO_COLOR/force overrides
-arrstack_resolve_color_output() {
+arr_resolve_color_output() {
   if [[ -n "${NO_COLOR:-}" ]]; then
     ARR_COLOR_OUTPUT=0
     return
@@ -35,7 +36,7 @@ arrstack_resolve_color_output() {
   esac
 }
 
-arrstack_resolve_color_output
+arr_resolve_color_output
 
 # Checks command availability without emitting output (used for optional deps)
 have_command() { 
@@ -49,7 +50,7 @@ validate_port() {
 }
 
 # Normalises a port value, falling back to a default and warning when invalid
-arrstack_resolve_port() {
+arr_resolve_port() {
   local __resultvar="$1"
   local raw="${2-}"
   local default="${3-}"
@@ -76,7 +77,7 @@ arrstack_resolve_port() {
 }
 
 # Coerces a positive integer, defaulting and warning when invalid or <= 0
-arrstack_resolve_positive_int() {
+arr_resolve_positive_int() {
   local __resultvar="$1"
   local raw="${2-}"
   local default="${3-}"
@@ -110,12 +111,12 @@ arrstack_resolve_positive_int() {
 }
 
 # Detects docker compose command once per shell and memoizes result for callers
-arrstack_resolve_compose_cmd() {
+arr_resolve_compose_cmd() {
   local verbose="${1:-0}"
 
   if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
     if [[ "$verbose" == "1" ]]; then
-      local version_display="${ARRSTACK_COMPOSE_VERSION:-}"
+      local version_display="${ARR_COMPOSE_VERSION:-}"
       msg "Using cached Docker Compose command: ${DOCKER_COMPOSE_CMD[*]}${version_display:+ (version ${version_display})}"
     fi
     return 0
@@ -153,7 +154,7 @@ arrstack_resolve_compose_cmd() {
   fi
 
   DOCKER_COMPOSE_CMD=("${candidate[@]}")
-  ARRSTACK_COMPOSE_VERSION="$version"
+  ARR_COMPOSE_VERSION="$version"
 
   if [[ "$verbose" == "1" ]]; then
     msg "Resolved Docker Compose command: ${DOCKER_COMPOSE_CMD[*]}${version:+ (version ${version})}"
@@ -161,7 +162,7 @@ arrstack_resolve_compose_cmd() {
 }
 
 # Provides canonical docker-data root resolution with consistent fallbacks
-arrstack_docker_data_root() {
+arr_docker_data_root() {
   local base="${ARR_DOCKER_DIR:-}"
 
   if [[ -n "$base" ]]; then
@@ -184,23 +185,23 @@ arrstack_docker_data_root() {
 }
 
 # Resolves the Gluetun data directory under the docker-data root
-arrstack_gluetun_dir() {
-  printf '%s/gluetun' "$(arrstack_docker_data_root)"
+arr_gluetun_dir() {
+  printf '%s/gluetun' "$(arr_docker_data_root)"
 }
 
 # Resolves the VPN auto-reconnect working directory under Gluetun assets
-arrstack_gluetun_auto_reconnect_dir() {
-  printf '%s/auto-reconnect' "$(arrstack_gluetun_dir)"
+arr_gluetun_auto_reconnect_dir() {
+  printf '%s/auto-reconnect' "$(arr_gluetun_dir)"
 }
 
 # Escapes text for single-quoted shells; optional flatten mode serializes newlines
-arrstack_shell_escape_single_quotes() {
+arr_shell_escape_single_quotes() {
   local input="${1-}"
   local mode="${2-}"
   local escaped
   escaped="$(printf '%s' "$input" | sed "s/'/'\\\\''/g")"
 
-  if [ "$mode" = "flat" ] || [ "${ARRSTACK_ESCAPE_FLATTEN:-0}" = "1" ]; then
+  if [ "$mode" = "flat" ] || [ "${ARR_ESCAPE_FLATTEN:-0}" = "1" ]; then
     # Flatten: real newline -> literal \n (two characters). Only opt-in.
     printf '%s' "$escaped" | tr '\n' '\\n'
   else
@@ -209,13 +210,13 @@ arrstack_shell_escape_single_quotes() {
 }
 
 # Escapes text for double-quoted shells; optional flatten mode serializes newlines
-arrstack_shell_escape_double_quotes() {
+arr_shell_escape_double_quotes() {
   local input="${1-}"
   local mode="${2-}"
   local escaped
   escaped="$(printf '%s' "$input" | sed -e 's/[\\$`\"]/\\&/g')"
 
-  if [ "$mode" = "flat" ] || [ "${ARRSTACK_ESCAPE_FLATTEN:-0}" = "1" ]; then
+  if [ "$mode" = "flat" ] || [ "${ARR_ESCAPE_FLATTEN:-0}" = "1" ]; then
     printf '%s' "$escaped" | tr '\n' '\\n'
   else
     printf '%s' "$escaped"
@@ -287,7 +288,7 @@ safe_kill() {
 }
 
 # Appends structured log lines to current install log sinks without failing the caller
-arrstack_json_log() {
+arr_json_log() {
   local json_line="$1"
 
   if [[ -z "$json_line" ]]; then
@@ -362,7 +363,7 @@ ensure_dir() {
   fi
 
   local rc=$?
-  if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
+  if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
     if [[ $EUID -ne 0 ]]; then
       if command -v sudo >/dev/null 2>&1; then
         if sudo mkdir -p "$dir" 2>/dev/null || sudo mkdir -p "$dir"; then
@@ -394,7 +395,7 @@ ensure_dir_mode() {
     return 0
   fi
 
-  if [[ "${ARRSTACK_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
+  if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
     if [[ $EUID -ne 0 ]]; then
       if command -v sudo >/dev/null 2>&1; then
         if sudo chmod "$mode" "$dir" 2>/dev/null; then
@@ -410,7 +411,7 @@ ensure_dir_mode() {
 }
 
 # Fetches numeric permission mode; returns non-zero if target missing
-arrstack_stat_mode() {
+arr_stat_mode() {
   local target="$1"
 
   if [[ ! -e "$target" ]]; then
@@ -421,11 +422,11 @@ arrstack_stat_mode() {
 }
 
 # Detects unsafe group-write permissions so installer can warn collaborators
-arrstack_is_group_writable() {
+arr_is_group_writable() {
   local target="$1"
 
   local mode
-  mode="$(arrstack_stat_mode "$target" || true)"
+  mode="$(arr_stat_mode "$target" || true)"
 
   if [[ -z "$mode" ]]; then
     return 1
@@ -446,7 +447,7 @@ arrstack_is_group_writable() {
 }
 
 # De-duplicates collaboration warnings before appending to summary buffer
-arrstack_append_collab_warning() {
+arr_append_collab_warning() {
   local entry="$1"
 
   if [[ -z "$entry" ]]; then
@@ -468,7 +469,7 @@ arrstack_append_collab_warning() {
 }
 
 # Emits a collaboration warning only once even if triggered repeatedly
-arrstack_warn_collab_once() {
+arr_warn_collab_once() {
   local message="$1"
 
   if [[ -z "$message" ]]; then
@@ -477,7 +478,7 @@ arrstack_warn_collab_once() {
 
   local previous="${COLLAB_PERMISSION_WARNINGS:-}"
 
-  arrstack_append_collab_warning "$message"
+  arr_append_collab_warning "$message"
 
   if [[ "${COLLAB_PERMISSION_WARNINGS:-}" != "$previous" ]]; then
     warn "$message"
@@ -512,7 +513,7 @@ ensure_data_dir_mode() {
 }
 
 # Creates a temp file with optional template/mode, returning its path for atomic writes
-arrstack_mktemp_file() {
+arr_mktemp_file() {
   local template="${1-}"
   local mode="${2:-600}"
   local tmp=""
@@ -531,7 +532,7 @@ arrstack_mktemp_file() {
 }
 
 # Creates a temp directory with hardened mode for transient assets
-arrstack_mktemp_dir() {
+arr_mktemp_dir() {
   local template="${1-}"
   local mode="${2:-700}"
   local tmp=""
@@ -550,8 +551,8 @@ arrstack_mktemp_dir() {
 }
 
 # Re-execs script with elevated privileges via sudo/pkexec/su, preserving argv when possible
-arrstack_escalate_privileges() {
-  if [[ "${ARRSTACK_ESCALATED:-0}" == "1" ]]; then
+arr_escalate_privileges() {
+  if [[ "${ARR_ESCALATED:-0}" == "1" ]]; then
     return 0
   fi
 
@@ -571,17 +572,17 @@ arrstack_escalate_privileges() {
 
   if command -v sudo >/dev/null 2>&1; then
     if sudo -n true >/dev/null 2>&1; then
-      export ARRSTACK_ESCALATED=1
+      export ARR_ESCALATED=1
       # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
-      unset ARRSTACK_ESCALATED
+      unset ARR_ESCALATED
       return 0
     else
       printf '[%s] escalating privileges with sudo; you may be prompted for your password…\n' "$(basename "${_script_path}")" >&2
-      export ARRSTACK_ESCALATED=1
+      export ARR_ESCALATED=1
       # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
-      unset ARRSTACK_ESCALATED
+      unset ARR_ESCALATED
       return 0
     fi
   fi
@@ -589,15 +590,15 @@ arrstack_escalate_privileges() {
   if command -v pkexec >/dev/null 2>&1; then
     printf '[%s] escalating privileges with pkexec; you may be prompted for authentication…\n' "$(basename "${_script_path}")" >&2
     if command -v bash >/dev/null 2>&1; then
-      export ARRSTACK_ESCALATED=1
+      export ARR_ESCALATED=1
       # shellcheck disable=SC2093
       exec pkexec /bin/bash -c 'exec "$@"' bash "${_script_path}" "$@"
-      unset ARRSTACK_ESCALATED
+      unset ARR_ESCALATED
     else
-      export ARRSTACK_ESCALATED=1
+      export ARR_ESCALATED=1
       # shellcheck disable=SC2093
       exec pkexec /bin/sh -c 'exec "$@"' sh "${_script_path}" "$@"
-      unset ARRSTACK_ESCALATED
+      unset ARR_ESCALATED
     fi
     return 0
   fi
@@ -612,18 +613,18 @@ arrstack_escalate_privileges() {
     else
       _cmd_source="${0:-}"
     fi
-    _cmd="$(arrstack_shell_escape_single_quotes "${_cmd_source}")"
+    _cmd="$(arr_shell_escape_single_quotes "${_cmd_source}")"
     _cmd="'${_cmd}'"
 
     for _arg in "$@"; do
-      _escaped="$(arrstack_shell_escape_single_quotes "${_arg}")"
+      _escaped="$(arr_shell_escape_single_quotes "${_arg}")"
       _cmd="${_cmd} '${_escaped}'"
     done
 
-    export ARRSTACK_ESCALATED=1
+    export ARR_ESCALATED=1
     # shellcheck disable=SC2093
     exec su - root -c "exec ${_cmd}"
-    unset ARRSTACK_ESCALATED
+    unset ARR_ESCALATED
     return 0
   fi
 
@@ -773,9 +774,105 @@ compose() {
   fi
 }
 
+arr_run_state_dir() {
+  local base="${ARR_STACK_DIR:-}"
+
+  if [[ -z "$base" ]]; then
+    return 1
+  fi
+
+  printf '%s/.arrstack\n' "$base"
+}
+
+arr_run_failure_flag_path() {
+  local run_dir
+
+  if ! run_dir="$(arr_run_state_dir 2>/dev/null)"; then
+    return 1
+  fi
+
+  printf '%s/run.failed\n' "$run_dir"
+}
+
+arr_clear_run_failure() {
+  local flag
+
+  if ! flag="$(arr_run_failure_flag_path 2>/dev/null)"; then
+    return 0
+  fi
+
+  rm -f "$flag" 2>/dev/null || true
+}
+
+arr_write_run_failure() {
+  local message="$1"
+  local code="${2:-}"
+  local flag
+
+  if ! flag="$(arr_run_failure_flag_path 2>/dev/null)"; then
+    return 1
+  fi
+
+  ensure_dir_mode "$(dirname "$flag")" "$DATA_DIR_MODE"
+
+  {
+    if [[ -n "$code" ]]; then
+      printf 'code=%s\n' "$code"
+    fi
+    printf 'message=%s\n' "$message"
+  } >"$flag"
+
+  ensure_nonsecret_file_mode "$flag"
+}
+
+arr_run_failure_flag_exists() {
+  local flag
+
+  if ! flag="$(arr_run_failure_flag_path 2>/dev/null)"; then
+    return 1
+  fi
+
+  [[ -f "$flag" ]]
+}
+
+arr_read_run_failure_reason() {
+  local flag
+
+  if ! flag="$(arr_run_failure_flag_path 2>/dev/null)"; then
+    return 1
+  fi
+
+  [[ -f "$flag" ]] || return 1
+
+  local message
+  message="$(grep -m1 '^message=' "$flag" 2>/dev/null | cut -d= -f2- || true)"
+
+  if [[ -n "$message" ]]; then
+    printf '%s\n' "$message"
+    return 0
+  fi
+
+  cat "$flag"
+}
+
+arr_read_run_failure_code() {
+  local flag
+
+  if ! flag="$(arr_run_failure_flag_path 2>/dev/null)"; then
+    return 1
+  fi
+
+  [[ -f "$flag" ]] || return 1
+
+  local code
+  code="$(grep -m1 '^code=' "$flag" 2>/dev/null | cut -d= -f2- || true)"
+  [[ -z "$code" ]] && return 1
+  printf '%s\n' "$code"
+}
+
 # Resolves whether colorized output should be emitted right now
 msg_color_supported() {
-  arrstack_resolve_color_output
+  arr_resolve_color_output
 
   if [[ "${ARR_COLOR_OUTPUT}" == 0 ]]; then
     return 1
@@ -785,23 +882,23 @@ msg_color_supported() {
 }
 
 # Provides consistent timestamp used across log_* helpers
-arrstack_timestamp() {
+arr_timestamp() {
   date '+%H:%M:%S'
 }
 
 # Emits timestamped informational log to stdout
 log_info() {
-  printf '[%s] %s\n' "$(arrstack_timestamp)" "$*"
+  printf '[%s] %s\n' "$(arr_timestamp)" "$*"
 }
 
 # Emits timestamped warning log to stderr
 log_warn() {
-  printf '[%s] WARNING: %s\n' "$(arrstack_timestamp)" "$*" >&2
+  printf '[%s] WARNING: %s\n' "$(arr_timestamp)" "$*" >&2
 }
 
 # Emits timestamped error log to stderr
 log_error() {
-  printf '[%s] ERROR: %s\n' "$(arrstack_timestamp)" "$*" >&2
+  printf '[%s] ERROR: %s\n' "$(arr_timestamp)" "$*" >&2
 }
 
 # User-facing info message with optional color
@@ -813,12 +910,21 @@ msg() {
   fi
 }
 
+# User-facing step banner with bold/bright styling
+step() {
+  if msg_color_supported; then
+    printf '%b🧿 %s%b\n' "${BOLD}${CYAN}" "$*" "$RESET"
+  else
+    printf '🧿 %s\n' "$*"
+  fi
+}
+
 # User-facing warning message with optional color
 warn() {
   if msg_color_supported; then
-    printf '%bWARN: %s%b\n' "$YELLOW" "$*" "$RESET" >&2
+    printf '%b⚠️ %s%b\n' "$YELLOW" "$*" "$RESET" >&2
   else
-    printf 'WARN: %s\n' "$*" >&2
+    printf '⚠️ %s\n' "$*" >&2
   fi
 }
 
@@ -826,6 +932,47 @@ warn() {
 die() {
   log_error "$@"
   exit 1
+}
+
+# Verifies that every temporary mv is followed by an ensure_*_file_mode guard
+verify_tempfile_permission_guards() {
+  local repo_root="${1:-}"
+
+  if [[ -z "$repo_root" ]]; then
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  fi
+
+  if ! have_command rg; then
+    warn "ripgrep not found; skipping permission guard verification."
+    return 0
+  fi
+
+  (
+    cd "$repo_root" || exit 2
+
+    local violations=0
+    local rel_path=""
+    local line=""
+    local snippet=""
+
+    while IFS=: read -r rel_path line _; do
+      [[ -f "$rel_path" ]] || continue
+      snippet="$(sed -n "$((line + 1)),$((line + 8))p" "$rel_path")"
+      if [[ "$snippet" != *ensure_*_file_mode* ]]; then
+        warn "Missing ensure_*_file_mode after mv \"\$tmp\" in ${rel_path}:${line}"
+        violations=1
+      fi
+    done < <(rg --line-number 'mv "\$tmp"' --glob '*.sh' || true)
+
+    exit "$violations"
+  )
+
+  local status=$?
+  if [[ "$status" -eq 2 ]]; then
+    die "Unable to enter ${repo_root} to verify permission guards"
+  fi
+
+  return "$status"
 }
 
 # Sets up logging streams and symlinks before installer output begins
@@ -894,8 +1041,8 @@ acquire_lock() {
 
   chmod "$LOCK_FILE_MODE" "$lockfile" 2>/dev/null || true
 
-  ARRSTACK_LOCKFILE="$lockfile"
-  trap 'rm -f -- "$ARRSTACK_LOCKFILE"' EXIT INT TERM HUP QUIT
+  ARR_LOCKFILE="$lockfile"
+  trap 'rm -f -- "$ARR_LOCKFILE"' EXIT INT TERM HUP QUIT
 }
 
 # Safely writes content to target by staging through a temp file with correct mode
@@ -905,7 +1052,7 @@ atomic_write() {
   local mode="${3:-600}"
   local tmp
 
-  tmp="$(arrstack_mktemp_file "${target}.XXXXXX.tmp" '')" || die "Failed to create temp file for ${target}"
+  tmp="$(arr_mktemp_file "${target}.XXXXXX.tmp" '')" || die "Failed to create temp file for ${target}"
 
   if ! printf '%s\n' "$content" >"$tmp" 2>/dev/null; then
     rm -f "$tmp"
@@ -1017,9 +1164,9 @@ collect_upstream_dns_servers() {
   fi
 
   if [[ -z "$csv" ]]; then
-    if declare -p ARRSTACK_UPSTREAM_DNS_CHAIN >/dev/null 2>&1; then
+    if declare -p ARR_UPSTREAM_DNS_CHAIN >/dev/null 2>&1; then
       local entry
-      for entry in "${ARRSTACK_UPSTREAM_DNS_CHAIN[@]}"; do
+      for entry in "${ARR_UPSTREAM_DNS_CHAIN[@]}"; do
         csv+="${csv:+,}${entry}"
       done
     fi
@@ -1107,7 +1254,7 @@ portable_sed() {
   local file="$2"
   local tmp
 
-  tmp="$(arrstack_mktemp_file "${file}.XXXXXX.tmp")" || die "Failed to create temp file for sed"
+  tmp="$(arr_mktemp_file "${file}.XXXXXX.tmp")" || die "Failed to create temp file for sed"
 
   local perms=""
   if [ -e "$file" ]; then
@@ -1142,7 +1289,7 @@ escape_sed_replacement() {
 # Reverses docker compose escaping to recover raw env values (handles $$ expansion)
 unescape_env_value_from_compose() {
   local value="${1-}"
-  local sentinel=$'\001__ARRSTACK_DOLLAR__\002'
+  local sentinel=$'\001__ARR_DOLLAR__\002'
 
   value="${value//$'\r'/}" # Normalize line endings
 
@@ -1188,7 +1335,7 @@ set_qbt_conf_value() {
   local value="$3"
 
   local tmp
-  if ! tmp="$(arrstack_mktemp_file "${file}.XXXX" "$SECRET_FILE_MODE")"; then
+  if ! tmp="$(arr_mktemp_file "${file}.XXXX" "$SECRET_FILE_MODE")"; then
     return 1
   fi
 

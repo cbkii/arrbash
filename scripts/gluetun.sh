@@ -58,8 +58,8 @@ gluetun_version_requires_auth_config() {
 
 # Resolves the Gluetun data directory regardless of stack invocation context
 _pf_gluetun_root() {
-  if declare -f arrstack_gluetun_dir >/dev/null 2>&1; then
-    arrstack_gluetun_dir
+  if declare -f arr_gluetun_dir >/dev/null 2>&1; then
+    arr_gluetun_dir
     return
   fi
 

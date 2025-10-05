@@ -10,32 +10,36 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 ## Prerequisites
 - 64-bit Debian 12 (Bookworm) or equivalent with a static LAN IP, 4 CPU cores, and 4 GB RAM.
 - Proton VPN Plus or Unlimited subscription for port forwarding support.
-- Docker Engine with the Compose plugin, plus `git`, `curl`, `jq`, and `openssl` installed.
 
 ## Quick start
-1. **Clone arrbash and enter the directory.**
+1. **Install dependencies.**
+   ```bash
+   sudo apt update && sudo apt install docker.io docker-compose-plugin git curl jq openssl
+   ```
+   > The installer expects these dependencies to be present already; it does not install Docker, Compose, or CLI tools on your behalf.
+2. **Clone arrbash and enter the directory.**
    ```bash
    mkdir -p ~/srv && cd ~/srv
    git clone https://github.com/cbkii/arrbash.git
    cd arrbash
    ```
-2. **Add Proton credentials.**
+3. **Add Proton credentials.**
    ```bash
    cp arrconf/proton.auth.example arrconf/proton.auth
    nano arrconf/proton.auth    # set PROTON_USER and PROTON_PASS (the script appends +pmp)
    chmod 600 arrconf/proton.auth
    ```
-3. **Create your overrides.**
+4. **Create your overrides.**
    ```bash
    cp arrconf/userr.conf.example ../userr.conf
    nano ../userr.conf          # set LAN_IP, DOWNLOADS_DIR, COMPLETED_DIR, MEDIA_DIR
    ```
-4. **Run the installer.**
+5. **Run the installer.**
    ```bash
    ./arrstack.sh --yes         # omit --yes for interactive mode
    ```
    The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`.
-5. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
+6. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration
 - `userr.conf` lives at `${ARR_BASE:-$HOME/srv}/userr.conf`; keep it outside version control.
@@ -56,6 +60,13 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 - Keep [Operations](./docs/operations.md) nearby for helper scripts, rotation commands, and rerun guidance.
 - Review [Security](./docs/security.md) prior to exposing services beyond your LAN.
 - Bookmark [Troubleshooting](./docs/troubleshooting.md) for recovery steps.
+
+## First-run checklist
+- Confirm `LAN_IP` points at your host (run `hostname -I | awk '{print $1}'` if unsure).
+- Rotate qBittorrent credentials and update `QBT_USER`/`QBT_PASS` in `userr.conf`.
+- Verify Proton port forwarding is active (summary should show a forwarded port or follow the Gluetun recovery steps if it fails).
+- Decide whether local DNS or direct LAN exposure is appropriate for your environment.
+- Spot-check published ports with `ss -tulpn` to ensure only expected services listen on the LAN.
 
 ### SABnzbd (Usenet Downloader)
 

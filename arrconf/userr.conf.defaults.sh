@@ -6,8 +6,8 @@
 # Override these in ${ARR_BASE}/userr.conf (git-ignored; defaults to ${HOME}/srv/userr.conf).
 
 # Guard helpers for shells that source these defaults alongside other scripts
-if ! declare -f arrstack_var_is_readonly >/dev/null 2>&1; then
-  arrstack_var_is_readonly() {
+if ! declare -f arr_var_is_readonly >/dev/null 2>&1; then
+  arr_var_is_readonly() {
     local var="$1"
     local declaration=""
 
@@ -37,7 +37,7 @@ ARR_INSTALL_LOG="${ARR_INSTALL_LOG:-${ARR_LOG_DIR}/arrstack-install.log}"
 ARR_COLOR_OUTPUT="${ARR_COLOR_OUTPUT:-1}"
 
 # File/dir permissions (strict keeps secrets 600/700, collab enables group read/write 660/770)
-if ! arrstack_var_is_readonly ARR_PERMISSION_PROFILE; then
+if ! arr_var_is_readonly ARR_PERMISSION_PROFILE; then
   ARR_PERMISSION_PROFILE="${ARR_PERMISSION_PROFILE:-strict}"
 fi
 
@@ -67,8 +67,8 @@ PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES:-}"
 LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX:-home.arpa}"
 
 # Helper utilities for defaults that may also be sourced by other scripts
-if ! declare -f arrstack_trim_whitespace >/dev/null 2>&1; then
-  arrstack_trim_whitespace() {
+if ! declare -f arr_trim_whitespace >/dev/null 2>&1; then
+  arr_trim_whitespace() {
     local value="$1"
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
@@ -76,23 +76,23 @@ if ! declare -f arrstack_trim_whitespace >/dev/null 2>&1; then
   }
 fi
 
-if ! declare -f arrstack_parse_csv >/dev/null 2>&1; then
-  arrstack_parse_csv() {
+if ! declare -f arr_parse_csv >/dev/null 2>&1; then
+  arr_parse_csv() {
     local raw="$1"
     local item
 
     local IFS=','
-    read -r -a _arrstack_csv_items <<<"$raw"
-    for item in "${_arrstack_csv_items[@]}"; do
-      item="$(arrstack_trim_whitespace "$item")"
+    read -r -a _arr_csv_items <<<"$raw"
+    for item in "${_arr_csv_items[@]}"; do
+      item="$(arr_trim_whitespace "$item")"
       [[ -z "$item" ]] && continue
       printf '%s\n' "$item"
     done
   }
 fi
 
-if ! declare -f arrstack_join_by >/dev/null 2>&1; then
-  arrstack_join_by() {
+if ! declare -f arr_join_by >/dev/null 2>&1; then
+  arr_join_by() {
     local delimiter="$1"
     shift || true
     local first=1
@@ -109,44 +109,44 @@ if ! declare -f arrstack_join_by >/dev/null 2>&1; then
 fi
 
 # Upstream DNS resolvers for fallback (support legacy *_1/*_2 and new list form)
-ARRSTACK_DEFAULT_UPSTREAM_DNS=("1.1.1.1" "1.0.0.1")
+ARR_DEFAULT_UPSTREAM_DNS=("1.1.1.1" "1.0.0.1")
 
-arrstack__dns_candidates=()
+arr_dns_candidates=()
 
 if [[ -n "${UPSTREAM_DNS_1:-}" ]]; then
-  arrstack__dns_candidates+=("$(arrstack_trim_whitespace "$UPSTREAM_DNS_1")")
+  arr_dns_candidates+=("$(arr_trim_whitespace "$UPSTREAM_DNS_1")")
 fi
 
 if [[ -n "${UPSTREAM_DNS_2:-}" ]]; then
-  arrstack__dns_candidates+=("$(arrstack_trim_whitespace "$UPSTREAM_DNS_2")")
+  arr_dns_candidates+=("$(arr_trim_whitespace "$UPSTREAM_DNS_2")")
 fi
 
 if [[ -n "${UPSTREAM_DNS_SERVERS:-}" ]]; then
   while IFS= read -r server; do
-    arrstack__dns_candidates+=("$server")
-  done < <(arrstack_parse_csv "$UPSTREAM_DNS_SERVERS")
+    arr_dns_candidates+=("$server")
+  done < <(arr_parse_csv "$UPSTREAM_DNS_SERVERS")
 fi
 
-if ((${#arrstack__dns_candidates[@]} == 0)); then
-  arrstack__dns_candidates=("${ARRSTACK_DEFAULT_UPSTREAM_DNS[@]}")
+if ((${#arr_dns_candidates[@]} == 0)); then
+  arr_dns_candidates=("${ARR_DEFAULT_UPSTREAM_DNS[@]}")
 fi
 
-mapfile -t ARRSTACK_UPSTREAM_DNS_CHAIN < <(
-  printf '%s\n' "${arrstack__dns_candidates[@]}" | awk 'NF && !seen[$0]++'
+mapfile -t ARR_UPSTREAM_DNS_CHAIN < <(
+  printf '%s\n' "${arr_dns_candidates[@]}" | awk 'NF && !seen[$0]++'
 )
 
-if ((${#ARRSTACK_UPSTREAM_DNS_CHAIN[@]} == 0)); then
-  ARRSTACK_UPSTREAM_DNS_CHAIN=("${ARRSTACK_DEFAULT_UPSTREAM_DNS[@]}")
+if ((${#ARR_UPSTREAM_DNS_CHAIN[@]} == 0)); then
+  ARR_UPSTREAM_DNS_CHAIN=("${ARR_DEFAULT_UPSTREAM_DNS[@]}")
 fi
 
-UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS:-$(arrstack_join_by ',' "${ARRSTACK_UPSTREAM_DNS_CHAIN[@]}")}"
+UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS:-$(arr_join_by ',' "${ARR_UPSTREAM_DNS_CHAIN[@]}")}"
 
 if [[ -z "${UPSTREAM_DNS_1:-}" ]]; then
-  UPSTREAM_DNS_1="${ARRSTACK_UPSTREAM_DNS_CHAIN[0]}"
+  UPSTREAM_DNS_1="${ARR_UPSTREAM_DNS_CHAIN[0]}"
 fi
 
 if [[ -z "${UPSTREAM_DNS_2:-}" ]]; then
-  UPSTREAM_DNS_2="${ARRSTACK_UPSTREAM_DNS_CHAIN[1]:-}"
+  UPSTREAM_DNS_2="${ARR_UPSTREAM_DNS_CHAIN[1]:-}"
 fi
 
 # Enable internal local DNS resolver service
@@ -161,7 +161,7 @@ ENABLE_CONFIGARR="${ENABLE_CONFIGARR:-1}"
 DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-router}"
 
 # Host port preflight behaviour: enforce (default), warn, or skip
-ARRSTACK_PORT_CHECK_MODE="${ARRSTACK_PORT_CHECK_MODE:-enforce}"
+ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE:-enforce}"
 
 # Reverse proxy hostnames (Caddy defaults to LAN suffix when unset)
 CADDY_DOMAIN_SUFFIX="${CADDY_DOMAIN_SUFFIX:-${LAN_DOMAIN_SUFFIX}}"
@@ -260,6 +260,7 @@ FLARR_IMAGE="${FLARR_IMAGE:-ghcr.io/flaresolverr/flaresolverr:v3.3.21}"
 SABNZBD_IMAGE="${SABNZBD_IMAGE:-lscr.io/linuxserver/sabnzbd:latest}"
 CONFIGARR_IMAGE="${CONFIGARR_IMAGE:-ghcr.io/raydak-labs/configarr:latest}"
 CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.8.4}"
+LOCALDNS_IMAGE="${LOCALDNS_IMAGE:-4km3/dnsmasq:2.90-r3}"
 #
 # ConfigArr quality/profile defaults
 ARR_VIDEO_MIN_RES="${ARR_VIDEO_MIN_RES:-720p}"
@@ -292,7 +293,7 @@ REFRESH_ALIASES="${REFRESH_ALIASES:-0}"
 # User configuration example template
 # -----------------------------------------------------------------------------
 
-ARRSTACK_USERCONF_TEMPLATE_VARS=(
+ARR_USERCONF_TEMPLATE_VARS=(
   ARR_USERCONF_PATH
   ARR_LOG_DIR
   ARR_INSTALL_LOG
@@ -310,7 +311,7 @@ ARRSTACK_USERCONF_TEMPLATE_VARS=(
   SPLIT_VPN
   ENABLE_CONFIGARR
   DNS_DISTRIBUTION_MODE
-  ARRSTACK_PORT_CHECK_MODE
+  ARR_PORT_CHECK_MODE
   UPSTREAM_DNS_SERVERS
   UPSTREAM_DNS_1
   UPSTREAM_DNS_2
@@ -372,6 +373,7 @@ ARRSTACK_USERCONF_TEMPLATE_VARS=(
   SABNZBD_IMAGE
   CONFIGARR_IMAGE
   CADDY_IMAGE
+  LOCALDNS_IMAGE
   ARR_VIDEO_MIN_RES
   ARR_VIDEO_MAX_RES
   ARR_EP_MIN_MB
@@ -392,12 +394,13 @@ ARRSTACK_USERCONF_TEMPLATE_VARS=(
   ARR_MBMIN_DECIMALS
 )
 
-ARRSTACK_USERCONF_IMPLICIT_VARS=(
+ARR_USERCONF_IMPLICIT_VARS=(
   ARR_BASE
   ARR_STACK_DIR
   ARR_ENV_FILE
   ARR_DOCKER_DIR
   CADDY_IMAGE
+  LOCALDNS_IMAGE
   ARR_PERMISSION_PROFILE
   DOWNLOADS_DIR
   COMPLETED_DIR
@@ -417,7 +420,7 @@ ARRSTACK_USERCONF_IMPLICIT_VARS=(
 
 # Derived (non-user) environment keys written into .env by write_env; kept here
 # so tooling can validate compose interpolation without needing .env.example.
-ARRSTACK_DERIVED_ENV_VARS=(
+ARR_DERIVED_ENV_VARS=(
   VPN_TYPE
   DNS_HOST_ENTRY
   OPENVPN_USER
@@ -435,11 +438,11 @@ ARRSTACK_DERIVED_ENV_VARS=(
 # shellcheck disable=SC2034  # exported for template rendering via envsubst
 UPSTREAM_DNS_2_DISPLAY="${UPSTREAM_DNS_2:-<unset>}"
 
-arrstack_export_userconf_template_vars() {
+arr_export_userconf_template_vars() {
   local var=""
   local value=""
 
-  for var in "${ARRSTACK_USERCONF_TEMPLATE_VARS[@]}"; do
+  for var in "${ARR_USERCONF_TEMPLATE_VARS[@]}"; do
     case "$var" in
       ARR_USERCONF_PATH)
         # shellcheck disable=SC2016  # keep literal reference for template output
@@ -461,37 +464,37 @@ arrstack_export_userconf_template_vars() {
   done
 }
 
-arrstack_userconf_envsubst_spec() {
+arr_userconf_envsubst_spec() {
   local var=""
   local spec=""
 
-  for var in "${ARRSTACK_USERCONF_TEMPLATE_VARS[@]}"; do
+  for var in "${ARR_USERCONF_TEMPLATE_VARS[@]}"; do
     spec+=" \${${var}}"
   done
 
   printf '%s\n' "${spec# }"
 }
 
-arrstack_collect_all_expected_env_keys() {
+arr_collect_all_expected_env_keys() {
   local -A seen=()
   local -a ordered=()
   local var=""
 
-  for var in "${ARRSTACK_USERCONF_TEMPLATE_VARS[@]:-}"; do
+  for var in "${ARR_USERCONF_TEMPLATE_VARS[@]:-}"; do
     if [[ -n "$var" && -z "${seen[$var]:-}" ]]; then
       ordered+=("$var")
       seen["$var"]=1
     fi
   done
 
-  for var in "${ARRSTACK_USERCONF_IMPLICIT_VARS[@]:-}"; do
+  for var in "${ARR_USERCONF_IMPLICIT_VARS[@]:-}"; do
     if [[ -n "$var" && -z "${seen[$var]:-}" ]]; then
       ordered+=("$var")
       seen["$var"]=1
     fi
   done
 
-  for var in "${ARRSTACK_DERIVED_ENV_VARS[@]:-}"; do
+  for var in "${ARR_DERIVED_ENV_VARS[@]:-}"; do
     if [[ -n "$var" && -z "${seen[$var]:-}" ]]; then
       ordered+=("$var")
       seen["$var"]=1
@@ -501,11 +504,11 @@ arrstack_collect_all_expected_env_keys() {
   printf '%s\n' "${ordered[@]}"
 }
 
-arrstack_render_userconf_template() {
+arr_render_userconf_template() {
   cat <<'EOF'
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# Auto-generated by scripts/dev/sync-userconf-example.sh. Run that helper to refresh.
+# Keep arrconf/userr.conf.example in sync with any changes made here.
 # Copy to ${ARR_BASE}/userr.conf (default: ${HOME}/srv/userr.conf) and edit as needed.
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
@@ -556,7 +559,7 @@ CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT}"         # Host port published for HTTPS p
 SPLIT_VPN="${SPLIT_VPN}"
 ENABLE_CONFIGARR="${ENABLE_CONFIGARR}"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
 DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE}"         # router (DHCP Option 6) or per-device DNS settings (default: ${DNS_DISTRIBUTION_MODE})
-ARRSTACK_PORT_CHECK_MODE="${ARRSTACK_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing
+ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing
 UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS}"          # Comma-separated resolver list used by dnsmasq (default chain shown)
 UPSTREAM_DNS_1="${UPSTREAM_DNS_1}"               # Legacy primary resolver override (default derived: ${UPSTREAM_DNS_1})
 UPSTREAM_DNS_2="${UPSTREAM_DNS_2}"               # Legacy secondary resolver override (default derived: ${UPSTREAM_DNS_2_DISPLAY})
@@ -628,6 +631,7 @@ VPN_MAX_RETRY_MINUTES="${VPN_MAX_RETRY_MINUTES}"              # Retry budget bef
 # SABNZBD_IMAGE="${SABNZBD_IMAGE}"                    # Override the SABnzbd container tag
 # CONFIGARR_IMAGE="${CONFIGARR_IMAGE}"            # Override the Configarr container tag
 # CADDY_IMAGE="${CADDY_IMAGE}"                      # Override the Caddy reverse-proxy container tag
+# LOCALDNS_IMAGE="${LOCALDNS_IMAGE}"                # Override the dnsmasq container tag when local DNS is enabled
 
 # --- ConfigArr quality/profile defaults ---
 ARR_VIDEO_MIN_RES="${ARR_VIDEO_MIN_RES}"         # Minimum allowed resolution (default: ${ARR_VIDEO_MIN_RES})

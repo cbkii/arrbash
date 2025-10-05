@@ -12,7 +12,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 . "${REPO_ROOT}/scripts/network.sh"
 
 # Escalation insertion point: call this at top of scripts that need root
-arrstack_escalate_privileges "$@" || exit $?
+arr_escalate_privileges "$@" || exit $?
 
 set -Eeuo pipefail
 
@@ -68,7 +68,7 @@ rewrite_hosts_file() {
   local content="$2"
   local tmp
 
-  if ! tmp="$(arrstack_mktemp_file "${file}.XXXXXX")"; then
+  if ! tmp="$(arr_mktemp_file "${file}.XXXXXX")"; then
     die "Unable to create temporary file for ${file}"
   fi
   trap 'rm -f "${tmp}"' EXIT
@@ -188,7 +188,7 @@ configure_docker_dns() {
     return 1
   fi
 
-  if ! tmp="$(arrstack_mktemp_file "${daemon_json}.XXXXXX" 644)"; then
+  if ! tmp="$(arr_mktemp_file "${daemon_json}.XXXXXX" 644)"; then
     warn "Unable to create temporary file for ${daemon_json}; skipping Docker DNS configuration."
     return 1
   fi

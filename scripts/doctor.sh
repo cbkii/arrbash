@@ -216,8 +216,8 @@ resolve_caddy_ports() {
   local http_value="${CADDY_HTTP_PORT:-80}"
   local https_value="${CADDY_HTTPS_PORT:-443}"
 
-  arrstack_resolve_port http_value "$http_value" 80
-  arrstack_resolve_port https_value "$https_value" 443
+  arr_resolve_port http_value "$http_value" 80
+  arr_resolve_port https_value "$https_value" 443
 
   printf -v "$__http_name" '%s' "$http_value"
   printf -v "$__https_name" '%s' "$https_value"
@@ -500,7 +500,7 @@ doctor_check_sabnzbd() {
     doctor_fail "SABnzbd unreachable at ${sab_helper_url}"
   fi
 
-  local sab_api_state="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
+  local sab_api_state="${ARR_SAB_API_KEY_STATE:-empty}"
   case "$sab_api_state" in
     placeholder)
       doctor_warn "SABnzbd API key still placeholder; update Settings → General"
@@ -562,13 +562,13 @@ FLARR_INT_PORT="${FLARR_INT_PORT:-8191}"
 FLARR_PORT="${FLARR_PORT:-${FLARR_INT_PORT}}"
 SABNZBD_INT_PORT="${SABNZBD_INT_PORT:-8080}"
 
-if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
+if [[ "${ARR_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
   echo "[doctor][warn] Duplicate host port assignments detected in configuration:"
-  if [[ -n "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
+  if [[ -n "${ARR_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
     while IFS= read -r conflict_line; do
       [[ -z "$conflict_line" ]] && continue
       echo "  • ${conflict_line}"
-    done < <(printf '%s\n' "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL}")
+    done < <(printf '%s\n' "${ARR_INTERNAL_PORT_CONFLICT_DETAIL}")
   fi
 fi
 

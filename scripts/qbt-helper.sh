@@ -207,7 +207,7 @@ update_whitelist() {
   cfg=$(config_file_path)
   if [[ -f "$cfg" ]]; then
     local tmp
-    if ! tmp=$(arrstack_mktemp_file); then
+    if ! tmp=$(arr_mktemp_file); then
       die "Failed to create temporary whitelist file"
     fi
     awk '!(/^WebUI\\AuthSubnetWhitelistEnabled=/ || /^WebUI\\AuthSubnetWhitelist=/)' "$cfg" >"$tmp"
@@ -216,6 +216,7 @@ update_whitelist() {
       printf 'WebUI\\AuthSubnetWhitelist=%s\n' "$subnet"
     } >>"$tmp"
     mv "$tmp" "$cfg"
+    ensure_secret_file_mode "$cfg"
   else
     log_warn "Config file not found at $cfg; whitelist not updated"
   fi
@@ -240,7 +241,7 @@ ensure_qbt_config_setting() {
   fi
 
   local tmp
-  if ! tmp=$(arrstack_mktemp_file "${cfg}.XXXXXX.tmp" "$SECRET_FILE_MODE"); then
+  if ! tmp=$(arr_mktemp_file "${cfg}.XXXXXX.tmp" "$SECRET_FILE_MODE"); then
     log_warn "Failed to create temporary file while updating ${cfg}"
     return 1
   fi

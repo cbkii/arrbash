@@ -58,6 +58,12 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   ./arrstack.sh --rotate-api-key --yes
   ```
 
+### Gluetun recovery
+- When the installer prints “Setup FAILED” for VPN readiness, start with `docker logs gluetun` to identify handshake or authentication errors.
+- Remove `${ARR_DOCKER_DIR}/gluetun/auth/config.toml` if your Proton credentials changed and rerun `./arrstack.sh` to regenerate it.
+- Re-run `./arrstack.sh --yes` after adjusting `userr.conf` (for example choosing a PF-capable server) so the installer retries from a clean state.
+- Use `arr.vpn.port.sync` once Gluetun is healthy to confirm a forwarded port is assigned.
+
 ### VPN auto-reconnect inactive
 - Confirm the feature is enabled:
   ```bash
@@ -78,6 +84,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   docker exec qbittorrent test -f /config/vuetorrent/public/index.html
   ```
   Only one should succeed.
+- Manual mode fetches the latest VueTorrent release at runtime, prints the archive SHA256, and skips verification unless you set `VUETORRENT_SHA256`. Provide `VUETORRENT_DOWNLOAD_URL` when you need to install a specific build.
 
 ### Need the temporary qBittorrent password
 - Check the logs once:

@@ -13,6 +13,26 @@ summary_format_epoch() {
 # Presents post-install recap with access URLs, credentials, and PF status
 show_summary() {
 
+  if arr_run_failure_flag_exists; then
+    local failure_reason failure_code
+    failure_reason="$(arr_read_run_failure_reason 2>/dev/null || printf 'VPN not running.')"
+    failure_code="$(arr_read_run_failure_code 2>/dev/null || printf '')"
+    msg "❌ Setup FAILED"
+    warn "$failure_reason"
+    case "$failure_code" in
+      VPN_NOT_RUNNING)
+        warn "See docs/troubleshooting.md (Gluetun recovery) for next steps."
+        ;;
+      PF_NOT_ACQUIRED)
+        warn "See docs/networking.md (Proton port forwarding) to restore the forwarded port."
+        ;;
+      *)
+        warn "Check ${ARR_STACK_DIR}/logs and rerun with --verbose for additional detail."
+        ;;
+    esac
+    return 0
+  fi
+
   msg "🎉 Setup complete!!"
   warn "Check these details and revisit the README for any manual steps you may need to perform from here"
 
@@ -57,8 +77,8 @@ ${qbt_pass_msg}
 
 QBT_INFO
 
-  local qbt_container_status="${ARRSTACK_QBT_INT_PORT_STATUS:-default}"
-  local qbt_host_status="${ARRSTACK_QBT_HOST_PORT_STATUS:-default}"
+  local qbt_container_status="${ARR_QBT_INT_PORT_STATUS:-default}"
+  local qbt_host_status="${ARR_QBT_HOST_PORT_STATUS:-default}"
   local container_suffix=""
   local host_suffix=""
   case "$qbt_container_status" in
@@ -71,22 +91,22 @@ QBT_INFO
   esac
   msg "qBittorrent ports: container ${QBT_INT_PORT} ${container_suffix}, host ${QBT_PORT} ${host_suffix}"
 
-  if [[ "${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
+  if [[ "${ARR_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
     warn "Stack configuration has duplicate host port assignments:"
-    if [[ -n "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
+    if [[ -n "${ARR_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
       while IFS= read -r conflict_line; do
         [[ -z "$conflict_line" ]] && continue
         warn "  - ${conflict_line}"
-      done < <(printf '%s\n' "${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL}")
+      done < <(printf '%s\n' "${ARR_INTERNAL_PORT_CONFLICT_DETAIL}")
     fi
   fi
 
-  if [[ -n "${ARRSTACK_PRESERVE_NOTES:-}" ]]; then
+  if [[ -n "${ARR_PRESERVE_NOTES:-}" ]]; then
     msg "Credential preservation decisions:"
     while IFS= read -r preserve_note; do
       [[ -z "$preserve_note" ]] && continue
       msg "  - ${preserve_note}"
-    done < <(printf '%s\n' "${ARRSTACK_PRESERVE_NOTES}")
+    done < <(printf '%s\n' "${ARR_PRESERVE_NOTES}")
   fi
 
   local vt_summary_message="${VUETORRENT_STATUS_MESSAGE:-}"
@@ -105,22 +125,16 @@ QBT_INFO
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'DIRECT'
-Direct LAN URLs (ipdirect profile enabled):
-DIRECT
-    cat <<DIRECT_URLS
-  qBittorrent:  http://${ip_hint}:${QBT_PORT}
-  Sonarr:       http://${ip_hint}:${SONARR_PORT}
-  Radarr:       http://${ip_hint}:${RADARR_PORT}
-  Prowlarr:     http://${ip_hint}:${PROWLARR_PORT}
-  Bazarr:       http://${ip_hint}:${BAZARR_PORT}
-  FlareSolverr: http://${ip_hint}:${FLARR_PORT}
-DIRECT_URLS
+    msg "Direct LAN URLs (EXPOSE_DIRECT_PORTS=1):"
+    printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
+    printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
+    printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
+    printf '  %-11s → http://%s:%s\n' "Prowlarr" "$ip_hint" "$PROWLARR_PORT"
+    printf '  %-11s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
+    printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
   else
-    cat <<'DIRECT_DISABLED'
-Direct LAN URLs are not published (EXPOSE_DIRECT_PORTS=0).
-Access services from the host network (docker compose exec/port-forward) or add your own reverse proxy.
-DIRECT_DISABLED
+    msg "Direct LAN URLs are not published (EXPOSE_DIRECT_PORTS=0)."
+    msg "Access services from the host network (docker compose exec/port-forward) or add your own reverse proxy."
   fi
 
   if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
@@ -168,6 +182,7 @@ DNS_HTTP
 ⚠️  SECURITY WARNING
    LAN_IP is unset or 0.0.0.0 so services listen on all interfaces.
    Update ${ARR_USERCONF_PATH} with a specific LAN_IP to limit exposure.
+   Detect LAN IP with: hostname -I | awk "{print \$1}"
 
 WARNING
   fi
@@ -240,22 +255,22 @@ WARNING
         msg "[pf] Proton port forwarding disabled in configuration."
         ;;
       pending | "")
-        warn "⚠️  ProtonVPN port forwarding pending${pf_status_message:+ (${pf_status_message})}."
-        msg "   State file: ${pf_state_file}"
-        msg "   Log file:   ${pf_log_file}"
-        msg "   Follow progress with 'arr.vpn.port.watch' or retry via 'arr.vpn.port.sync'."
+        warn "PF not acquired yet${pf_status_message:+ (${pf_status_message})}."
+        msg "   Check state file: ${pf_state_file}"
+        msg "   Review log:   ${pf_log_file}"
+        msg "   Retry with:    arr.vpn.port.sync"
         ;;
       timeout | timeout-soft | failed)
-        warn "⚠️  ProtonVPN port forwarding ${pf_status_value}${pf_status_message:+ (${pf_status_message})}."
+        warn "PF not acquired (${pf_status_value}${pf_status_message:+, ${pf_status_message}})."
         msg "   Attempts: ${pf_attempts}, cycles: ${pf_cycles}"
-        msg "   State file: ${pf_state_file}"
-        msg "   Log file:   ${pf_log_file}"
-        msg "   Run 'arr.vpn.port.sync' after Gluetun stabilises to retry."
+        msg "   Check state file: ${pf_state_file}"
+        msg "   Review log:   ${pf_log_file}"
+        msg "   Retry with:    arr.vpn.port.sync (confirm server supports port forwarding)"
         ;;
       *)
-        warn "⚠️  ProtonVPN port forwarding status: ${pf_status_value:-unknown}${pf_status_message:+ (${pf_status_message})}."
-        msg "   State file: ${pf_state_file}"
-        msg "   Log file:   ${pf_log_file}"
+        warn "ProtonVPN port forwarding status: ${pf_status_value:-unknown}${pf_status_message:+ (${pf_status_message})}."
+        msg "   Check state file: ${pf_state_file}"
+        msg "   Review log:   ${pf_log_file}"
         ;;
     esac
   fi
@@ -454,7 +469,7 @@ POLICY
     if [[ -z "$sab_helper_host" || "$sab_helper_host" == "0.0.0.0" ]]; then
       sab_helper_host="${LOCALHOST_IP:-localhost}"
     fi
-    local sab_host_auto="${ARRSTACK_SAB_HOST_AUTO:-0}"
+    local sab_host_auto="${ARR_SAB_HOST_AUTO:-0}"
     if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
       msg "VPN Routed: yes"
     else
@@ -513,10 +528,10 @@ POLICY
     fi
     msg "Version: ${sab_version_display}"
 
-    local sab_api_state="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
+    local sab_api_state="${ARR_SAB_API_KEY_STATE:-empty}"
     case "$sab_api_state" in
       set)
-        case "${ARRSTACK_SAB_API_KEY_SOURCE:-}" in
+        case "${ARR_SAB_API_KEY_SOURCE:-}" in
           hydrated)
             msg "API Key: set (preserved from sabnzbd.ini)"
             ;;

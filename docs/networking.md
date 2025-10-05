@@ -12,13 +12,15 @@ Use these controls to choose how traffic flows, manage Proton VPN forwarding, an
 
 **Switching modes**
 1. Edit `${ARR_BASE}/userr.conf` and set `SPLIT_VPN` as needed.
-2. (Optional) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/etc. publish LAN ports in split mode.
+2. (Optional, Recommended) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/etc. publish LAN ports in split mode.
 3. Rerun the installer:
    ```bash
    ./arrstack.sh --yes
    ```
 4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_PORT}` when running split tunnel (the
    host defaults to port **8082** unless you preserved a legacy value).
+
+> When `EXPOSE_DIRECT_PORTS=1` is enabled the installer prints the published LAN URLs and asks for confirmation. Use `hostname -I | awk '{print $1}'` to confirm your host address before accepting, or pass `--yes` when you intentionally expose the ports.
 
 Revert by setting `SPLIT_VPN=0` and rerunning the installer.
 

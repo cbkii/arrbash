@@ -50,7 +50,7 @@ load_proton_credentials() {
 
 # Displays a human-readable summary of key settings with sensitive fields masked
 show_configuration_preview() {
-  msg "🔎 Configuration preview"
+  step "🔎 Configuration preview"
 
   if [[ -z "$PROTON_USER_VALUE" || -z "$PROTON_PASS_VALUE" ]]; then
     load_proton_credentials

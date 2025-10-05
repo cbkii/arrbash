@@ -4,7 +4,7 @@
 API_SYNC_DELAY=${API_SYNC_DELAY:-60}
 
 # Extracts API key from an Arr config.xml, tolerating partially initialised files
-arrstack_detect_api_key_from_config() {
+arr_detect_api_key_from_config() {
   local config_path="$1"
 
   if [[ -z "$config_path" || ! -f "$config_path" ]]; then
@@ -53,7 +53,7 @@ PY
 }
 
 # Writes or refreshes a Configarr secret entry while respecting placeholders and force flag
-arrstack_update_secret_line() {
+arr_update_secret_line() {
   local secrets_file="$1"
   local secret_key="$2"
   local new_value="$3"
@@ -148,7 +148,7 @@ arrstack_update_secret_line() {
 }
 
 # Pulls Sonarr/Radarr/Prowlarr API keys into secrets.yml, tracking sync status for summary output
-arrstack_sync_arr_api_keys() {
+arr_sync_arr_api_keys() {
   local force_sync="${1:-${FORCE_SYNC_API_KEYS:-0}}"
 
   API_KEYS_SYNCED_STATUS=""
@@ -210,7 +210,7 @@ arrstack_sync_arr_api_keys() {
     fi
 
     local api_key=""
-    if ! api_key="$(arrstack_detect_api_key_from_config "$config_path" 2>/dev/null)"; then
+    if ! api_key="$(arr_detect_api_key_from_config "$config_path" 2>/dev/null)"; then
       status_map[$service]="pending"
       pending_count=$((pending_count + 1))
       API_KEYS_SYNCED_PLACEHOLDERS=1
@@ -219,7 +219,7 @@ arrstack_sync_arr_api_keys() {
     fi
 
     local result=""
-    if result="$(arrstack_update_secret_line "$secrets_file" "$secret_key" "$api_key" "$force_sync" 2>/dev/null)"; then
+    if result="$(arr_update_secret_line "$secrets_file" "$secret_key" "$api_key" "$force_sync" 2>/dev/null)"; then
       case "$result" in
         updated | created | appended)
           status_map[$service]="updated"
@@ -271,7 +271,7 @@ arrstack_sync_arr_api_keys() {
   return 0
 }
 
-arrstack_schedule_delayed_api_sync() {
+arr_schedule_delayed_api_sync() {
   if [[ "${ENABLE_CONFIGARR:-0}" != "1" ]]; then
     return 0
   fi
@@ -279,10 +279,10 @@ arrstack_schedule_delayed_api_sync() {
   local delay="${1:-${API_SYNC_DELAY:-60}}"
   local script_dir="${ARR_STACK_DIR}/scripts"
   local script_path="${script_dir}/delayed-sync.sh"
-  local arrstack_script="${REPO_ROOT}/arrstack.sh"
+  local arr_script="${REPO_ROOT}/arrstack.sh"
 
-  if [[ ! -x "$arrstack_script" ]]; then
-    warn "Unable to schedule API key sync; arrstack.sh not found at ${arrstack_script}"
+  if [[ ! -x "$arr_script" ]]; then
+    warn "Unable to schedule API key sync; arrstack.sh not found at ${arr_script}"
     return 0
   fi
 
@@ -294,7 +294,7 @@ set -Eeuo pipefail
 
 STACK_DIR="${1:?missing stack directory}"
 DELAY="${2:-60}"
-ARRSTACK_SCRIPT="${3:?missing arrstack script path}"
+ARR_SCRIPT="${3:?missing arrstack script path}"
 
 log() {
   printf '%s\n' "[delayed-sync] $*" >&2
@@ -311,7 +311,7 @@ fi
 export ASSUME_YES=1
 export DISABLE_AUTO_API_KEY_SYNC=1
 
-if "${ARRSTACK_SCRIPT}" --sync-api-keys --no-auto-api-sync --yes; then
+if "${ARR_SCRIPT}" --sync-api-keys --no-auto-api-sync --yes; then
   log "Configarr API key sync completed successfully."
 else
   status=$?
@@ -323,9 +323,9 @@ SCRIPT
   chmod 755 "$script_path"
 
   if [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" != "1" ]]; then
-    export ARRSTACK_SCHEDULED_API_SYNC_DELAY="$delay"
+    export ARR_SCHEDULED_API_SYNC_DELAY="$delay"
     msg "Scheduling delayed API key sync in ${delay} seconds"
-    nohup bash "$script_path" "$ARR_STACK_DIR" "$delay" "$arrstack_script" >/dev/null 2>&1 &
+    nohup bash "$script_path" "$ARR_STACK_DIR" "$delay" "$arr_script" >/dev/null 2>&1 &
   fi
 
   return 0

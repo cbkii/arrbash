@@ -103,11 +103,11 @@ sab_check_env() {
   fi
 
   local timeout
-  arrstack_resolve_positive_int timeout "${SABNZBD_TIMEOUT:-}" 15 "" log_warn
+  arr_resolve_positive_int timeout "${SABNZBD_TIMEOUT:-}" 15 "" log_warn
   SABNZBD_TIMEOUT="$timeout"
 
   local sab_port
-  arrstack_resolve_port sab_port "${SABNZBD_PORT:-}" "${SABNZBD_INT_PORT:-8080}" "" log_warn
+  arr_resolve_port sab_port "${SABNZBD_PORT:-}" "${SABNZBD_INT_PORT:-8080}" "" log_warn
   SABNZBD_PORT="$sab_port"
 
   local sab_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"

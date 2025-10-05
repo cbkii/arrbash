@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 
-if ! declare -f arrstack_var_is_readonly >/dev/null 2>&1; then
-  arrstack_var_is_readonly() {
+if ! declare -f arr_var_is_readonly >/dev/null 2>&1; then
+  arr_var_is_readonly() {
     # Determines if a shell variable is readonly to avoid clobbering host overrides
     local var="$1"
     local declaration=""
@@ -21,7 +21,7 @@ if ! declare -f arrstack_var_is_readonly >/dev/null 2>&1; then
 fi
 
 # Seeds global defaults, handling collaborative profile toggles and legacy overrides
-arrstack_setup_defaults() {
+arr_setup_defaults() {
   local previous_stack_dir="${ARR_STACK_DIR:-}"
   if [[ -z "${ARR_DOCKER_DIR}" && -d "${HOME}/srv/docker-data" ]]; then
     ARR_DOCKER_DIR="${HOME}/srv/docker-data"
@@ -90,9 +90,9 @@ arrstack_setup_defaults() {
   : "$PROTON_USER_VALUE" "$PROTON_PASS_VALUE" "$OPENVPN_USER_VALUE" "$PROTON_USER_PMP_ADDED"
 
   DOCKER_COMPOSE_CMD=()
-  ARRSTACK_LOCKFILE=""
+  ARR_LOCKFILE=""
   LOG_FILE=""
-  : "${DOCKER_COMPOSE_CMD[*]}" "$ARRSTACK_LOCKFILE" "$LOG_FILE"
+  : "${DOCKER_COMPOSE_CMD[*]}" "$ARR_LOCKFILE" "$LOG_FILE"
 
   local requested_permission_profile="${ARR_PERMISSION_PROFILE:-}"
   local permission_profile="${requested_permission_profile:-strict}"
@@ -124,7 +124,7 @@ arrstack_setup_defaults() {
       ;;
   esac
 
-  if arrstack_var_is_readonly ARR_PERMISSION_PROFILE; then
+  if arr_var_is_readonly ARR_PERMISSION_PROFILE; then
     if [[ "${ARR_PERMISSION_PROFILE:-}" != "${permission_profile}" ]]; then
       die "ARR_PERMISSION_PROFILE is read-only with value '${ARR_PERMISSION_PROFILE:-}', expected '${permission_profile}'"
     fi
@@ -203,5 +203,6 @@ arrstack_setup_defaults() {
   CYAN='\033[0;36m'
   YELLOW='\033[0;33m'
   RESET='\033[0m'
-  : "$CYAN" "$YELLOW" "$RESET"
+  BOLD='\033[1m'
+  : "$CYAN" "$YELLOW" "$RESET" "$BOLD"
 }

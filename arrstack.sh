@@ -4,12 +4,12 @@
 set -Eeuo pipefail
 
 # Secure default file creation; allow opt-out for legacy setups
-if [[ "${ARRSTACK_DISABLE_UMASK:-0}" != "1" ]]; then
+if [[ "${ARR_DISABLE_UMASK:-0}" != "1" ]]; then
   umask 027
 fi
 
 # Reports failing location before exiting to speed triage of installer faults
-arrstack_err_trap() {
+arr_err_trap() {
   local rc=$?
   trap - ERR
   local src="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
@@ -19,7 +19,7 @@ arrstack_err_trap() {
 }
 
 # Install trap early so sourcing failures have context
-trap 'arrstack_err_trap' ERR
+trap 'arr_err_trap' ERR
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
@@ -34,7 +34,7 @@ _canon_base="$(readlink -f "${_expected_base}" 2>/dev/null || printf '%s' "${_ex
 _canon_userconf="$(readlink -f "${ARR_USERCONF_PATH}" 2>/dev/null || printf '%s' "${ARR_USERCONF_PATH}")"
 
 # Returns 0 if the given variable name is readonly, 1 otherwise
-arrstack_var_is_readonly() {
+arr_var_is_readonly() {
   local varname=$1 out
   # Ensure it's a variable that exists (not a function); bail if missing.
   out=$(declare -p -- "$varname" 2>/dev/null) || return 1
@@ -43,53 +43,53 @@ arrstack_var_is_readonly() {
   return 1
 }
 
-declare -a _arrstack_env_override_order=()
-declare -A _arrstack_env_overrides=()
-declare -A _arrstack_env_override_seen=()
-if declare -f arrstack_collect_all_expected_env_keys >/dev/null 2>&1; then
-  while IFS= read -r _arrstack_env_var; do
-    [[ -n "${_arrstack_env_var}" ]] || continue
-    if [[ -z "${_arrstack_env_override_seen[${_arrstack_env_var}]+x}" ]]; then
-      _arrstack_env_override_order+=("${_arrstack_env_var}")
-      _arrstack_env_override_seen["${_arrstack_env_var}"]=1
+declare -a _arr_env_override_order=()
+declare -A _arr_env_overrides=()
+declare -A _arr_env_override_seen=()
+if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
+  while IFS= read -r _arr_env_var; do
+    [[ -n "${_arr_env_var}" ]] || continue
+    if [[ -z "${_arr_env_override_seen[${_arr_env_var}]+x}" ]]; then
+      _arr_env_override_order+=("${_arr_env_var}")
+      _arr_env_override_seen["${_arr_env_var}"]=1
     fi
-  done < <(arrstack_collect_all_expected_env_keys)
+  done < <(arr_collect_all_expected_env_keys)
 else
-  while read -r _arrstack_env_line; do
-    _arrstack_env_var="${_arrstack_env_line%%=*}"
-    if [[ "${_arrstack_env_var}" == ARR_* || "${_arrstack_env_var}" == ARRSTACK_* ]]; then
-      if [[ -z "${_arrstack_env_override_seen[${_arrstack_env_var}]+x}" ]]; then
-        _arrstack_env_override_order+=("${_arrstack_env_var}")
-        _arrstack_env_override_seen["${_arrstack_env_var}"]=1
+  while read -r _arr_env_line; do
+    _arr_env_var="${_arr_env_line%%=*}"
+    if [[ "${_arr_env_var}" == ARR_* ]]; then
+      if [[ -z "${_arr_env_override_seen[${_arr_env_var}]+x}" ]]; then
+        _arr_env_override_order+=("${_arr_env_var}")
+        _arr_env_override_seen["${_arr_env_var}"]=1
       fi
     fi
   done < <(env)
 fi
-unset -v _arrstack_env_override_seen _arrstack_env_rest 2>/dev/null || :
+unset -v _arr_env_override_seen _arr_env_rest 2>/dev/null || :
 
-for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
-  if [[ "$(declare -p -- "$_arrstack_env_var" 2>/dev/null)" == "declare -x "* ]]; then
-    if [[ ${!_arrstack_env_var+x} ]]; then
-      _arrstack_env_overrides["${_arrstack_env_var}"]="${!_arrstack_env_var}"
+for _arr_env_var in "${_arr_env_override_order[@]}"; do
+  if [[ "$(declare -p -- "$_arr_env_var" 2>/dev/null)" == "declare -x "* ]]; then
+    if [[ ${!_arr_env_var+x} ]]; then
+      _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
     else
-      _arrstack_env_overrides["${_arrstack_env_var}"]=""
+      _arr_env_overrides["${_arr_env_var}"]=""
     fi
   fi
 done
-unset _arrstack_env_var
+unset _arr_env_var
 
-for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
-  if [[ -v "_arrstack_env_overrides[${_arrstack_env_var}]" ]]; then
-    if [[ "${_arrstack_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      if ! arrstack_var_is_readonly "${_arrstack_env_var}"; then
-        readonly "${_arrstack_env_var}" 2>/dev/null || :
+for _arr_env_var in "${_arr_env_override_order[@]}"; do
+  if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+    if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      if ! arr_var_is_readonly "${_arr_env_var}"; then
+        readonly "${_arr_env_var}" 2>/dev/null || :
       fi
     else
-      printf '[arrstack] WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${_arrstack_env_var}" >&2
+      printf '[arrstack] WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${_arr_env_var}" >&2
     fi
   fi
 done
-unset _arrstack_env_var
+unset _arr_env_var
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
@@ -103,14 +103,14 @@ if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
 fi
 
 if [[ -f "${_canon_userconf}" ]]; then
-  _arrstack_userr_conf_errlog="$(mktemp)"
+  _arr_userr_conf_errlog="$(mktemp)"
   # Save current ERR trap (if any), then disable while sourcing user config
   _prev_err_trap="$(trap -p ERR 2>/dev/null || true)"
   trap - ERR
   set +e
   # shellcheck source=/dev/null
-  . "${_canon_userconf}" 2>"${_arrstack_userr_conf_errlog}"
-  _arrstack_userr_conf_status=$?
+  . "${_canon_userconf}" 2>"${_arr_userr_conf_errlog}"
+  _arr_userr_conf_status=$?
   set -e
   # Restore previous ERR trap exactly as it was
   if [[ -n "${_prev_err_trap}" ]]; then
@@ -120,47 +120,47 @@ if [[ -f "${_canon_userconf}" ]]; then
   fi
   unset _prev_err_trap
 
-  if ((_arrstack_userr_conf_status != 0)); then
-    if [[ -s "${_arrstack_userr_conf_errlog}" ]] && ! grep -v "readonly variable" "${_arrstack_userr_conf_errlog}" >/dev/null; then
+  if ((_arr_userr_conf_status != 0)); then
+    if [[ -s "${_arr_userr_conf_errlog}" ]] && ! grep -v "readonly variable" "${_arr_userr_conf_errlog}" >/dev/null; then
       :
     else
-      printf '[arrstack] Failed to source user config (status=%s): %s\n' "${_arrstack_userr_conf_status}" "${_canon_userconf}" >&2
+      printf '[arrstack] Failed to source user config (status=%s): %s\n' "${_arr_userr_conf_status}" "${_canon_userconf}" >&2
       # Replay captured stderr to aid debugging
-      cat "${_arrstack_userr_conf_errlog}" >&2 || :
-      rm -f "${_arrstack_userr_conf_errlog}"
-      exit "${_arrstack_userr_conf_status}"
+      cat "${_arr_userr_conf_errlog}" >&2 || :
+      rm -f "${_arr_userr_conf_errlog}"
+      exit "${_arr_userr_conf_status}"
     fi
   fi
-  rm -f "${_arrstack_userr_conf_errlog}"
-  unset _arrstack_userr_conf_status _arrstack_userr_conf_errlog
+  rm -f "${_arr_userr_conf_errlog}"
+  unset _arr_userr_conf_status _arr_userr_conf_errlog
 fi
-for _arrstack_env_var in "${_arrstack_env_override_order[@]}"; do
-  if [[ -v "_arrstack_env_overrides[${_arrstack_env_var}]" ]]; then
-    if arrstack_var_is_readonly "${_arrstack_env_var}"; then
+for _arr_env_var in "${_arr_env_override_order[@]}"; do
+  if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+    if arr_var_is_readonly "${_arr_env_var}"; then
       continue
     fi
     # Validate variable name format before assignment
-    if [[ "${_arrstack_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      printf -v "${_arrstack_env_var}" '%s' "${_arrstack_env_overrides[${_arrstack_env_var}]}"
-      export "${_arrstack_env_var}"
+    if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
+      export "${_arr_env_var}"
     else
-      printf '[arrstack] WARN: Skipping invalid environment variable name: %s\n' "${_arrstack_env_var}" >&2
+      printf '[arrstack] WARN: Skipping invalid environment variable name: %s\n' "${_arr_env_var}" >&2
     fi
   fi
 done
-unset _arrstack_env_var
+unset _arr_env_var
 
-unset _arrstack_env_override_order _arrstack_env_overrides
+unset _arr_env_override_order _arr_env_overrides
 
 ARR_USERCONF_PATH="${_canon_userconf}"
 unset _canon_userconf _canon_base _expected_base
 
-if [[ "${ARRSTACK_HARDEN_READONLY:-0}" == "1" ]]; then
+if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly REPO_ROOT ARR_USERCONF_PATH
 fi
 
 SCRIPT_LIB_DIR="${REPO_ROOT}/scripts"
-if [[ "${ARRSTACK_HARDEN_READONLY:-0}" == "1" ]]; then
+if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly SCRIPT_LIB_DIR
 fi
 modules=(
@@ -184,8 +184,8 @@ modules=(
 for module in "${modules[@]}"; do
   f="${SCRIPT_LIB_DIR}/${module}"
   if [[ ! -f "${f}" ]]; then
-    if [[ "${ARRSTACK_ALLOW_MISSING_MODULES:-0}" == "1" ]]; then
-      printf '[arrstack] WARN: missing module (continuing due to ARRSTACK_ALLOW_MISSING_MODULES=1): %s\n' "${f}" >&2
+    if [[ "${ARR_ALLOW_MISSING_MODULES:-0}" == "1" ]]; then
+      printf '[arrstack] WARN: missing module (continuing due to ARR_ALLOW_MISSING_MODULES=1): %s\n' "${f}" >&2
       continue
     fi
     printf '[arrstack] missing required module: %s\n' "${f}" >&2
@@ -195,7 +195,7 @@ for module in "${modules[@]}"; do
   . "${f}"
 done
 
-arrstack_setup_defaults
+arr_setup_defaults
 
 # Prints CLI contract; keep aligned with docs/operations.md flag list
 help() {
@@ -336,29 +336,29 @@ main() {
 
   # shellcheck disable=SC2034 # values consumed by scripts/summary.sh
   if [[ "${FORCE_SYNC_API_KEYS:-0}" == "1" ]]; then
-    arrstack_sync_arr_api_keys 1 || true
+    arr_sync_arr_api_keys 1 || true
   elif [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" == "1" ]]; then
     API_KEYS_SYNCED_STATUS="disabled"
     API_KEYS_SYNCED_MESSAGE="Configarr API key sync skipped (--no-auto-api-sync)."
     if [[ -f "${ARR_DOCKER_DIR}/configarr/secrets.yml" ]] && grep -Fq 'REPLACE_WITH_' "${ARR_DOCKER_DIR}/configarr/secrets.yml" 2>/dev/null; then
       API_KEYS_SYNCED_PLACEHOLDERS=1
     fi
-  elif [[ -n "${ARRSTACK_SCHEDULED_API_SYNC_DELAY:-}" ]]; then
+  elif [[ -n "${ARR_SCHEDULED_API_SYNC_DELAY:-}" ]]; then
     API_KEYS_SYNCED_STATUS="scheduled"
-    API_KEYS_SYNCED_MESSAGE="Configarr API key sync scheduled to run in ${ARRSTACK_SCHEDULED_API_SYNC_DELAY} seconds."
+    API_KEYS_SYNCED_MESSAGE="Configarr API key sync scheduled to run in ${ARR_SCHEDULED_API_SYNC_DELAY} seconds."
   else
-    arrstack_sync_arr_api_keys 0 || true
+    arr_sync_arr_api_keys 0 || true
   fi
 
-  export ARRSTACK_SAB_API_KEY_STATE="${ARRSTACK_SAB_API_KEY_STATE:-empty}"
-  export ARRSTACK_SAB_API_KEY_SOURCE="${ARRSTACK_SAB_API_KEY_SOURCE:-}"
+  export ARR_SAB_API_KEY_STATE="${ARR_SAB_API_KEY_STATE:-empty}"
+  export ARR_SAB_API_KEY_SOURCE="${ARR_SAB_API_KEY_SOURCE:-}"
 
   if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
     local doctor_script="${REPO_ROOT}/scripts/doctor.sh"
     if [[ -x "${doctor_script}" ]]; then
       msg "🩺 Running LAN diagnostics"
-      export ARRSTACK_INTERNAL_PORT_CONFLICTS="${ARRSTACK_INTERNAL_PORT_CONFLICTS:-0}"
-      export ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL="${ARRSTACK_INTERNAL_PORT_CONFLICT_DETAIL:-}"
+      export ARR_INTERNAL_PORT_CONFLICTS="${ARR_INTERNAL_PORT_CONFLICTS:-0}"
+      export ARR_INTERNAL_PORT_CONFLICT_DETAIL="${ARR_INTERNAL_PORT_CONFLICT_DETAIL:-}"
       if ! LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}" \
         LAN_IP="${LAN_IP}" \
         ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}" \
@@ -381,6 +381,6 @@ main() {
   show_summary
 }
 
-if [[ "${ARRSTACK_NO_MAIN:-0}" != "1" ]]; then
+if [[ "${ARR_NO_MAIN:-0}" != "1" ]]; then
   main "$@"
 fi

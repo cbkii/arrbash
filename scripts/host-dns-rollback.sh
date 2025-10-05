@@ -7,7 +7,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 # shellcheck source=scripts/common.sh
 . "${REPO_ROOT}/scripts/common.sh"
 
-arrstack_escalate_privileges "$@" || exit $?
+arr_escalate_privileges "$@" || exit $?
 
 set -Eeuo pipefail
 
@@ -20,7 +20,7 @@ REAL="/run/systemd/resolve/resolv.conf"
 
 msg "Stopping local_dns (dnsmasq) container (optional)"
 if have_command docker || have_command docker-compose; then
-  arrstack_resolve_compose_cmd "${HOST_DNS_VERBOSE}"
+  arr_resolve_compose_cmd "${HOST_DNS_VERBOSE}"
   "${DOCKER_COMPOSE_CMD[@]}" stop local_dns || true
 else
   warn "Docker not available; skipping local_dns stop"
