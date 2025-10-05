@@ -1197,7 +1197,7 @@ PY
 
 # Orchestrates service startup: cleanup, validation, image pulls, health waits, summaries
 start_stack() {
-  step "🚀 Starting services"
+  step "Starting service stack"
 
   cd "${ARR_STACK_DIR}" || die "Failed to change to ${ARR_STACK_DIR}"
 
