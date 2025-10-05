@@ -1395,6 +1395,13 @@ start_stack() {
   fi
 
   if [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
+    if [[ "${PF_ASYNC_ENABLE:-1}" != "1" ]]; then
+      ARR_PF_STATUS="not_requested"
+      ARR_PF_NOTICE=""
+      export ARR_PF_STATUS ARR_PF_NOTICE
+      msg "[pf] Port forwarding wait skipped (PF_ASYNC_ENABLE=0)."
+      return 0
+    fi
     local pf_wait_timeout pf_wait_interval
     arr_resolve_positive_int pf_wait_timeout "${ARR_PF_WAIT_TIMEOUT:-}" "${ARR_PF_WAIT_TIMEOUT_DEFAULT}" "Invalid ARR_PF_WAIT_TIMEOUT, defaulting to ${ARR_PF_WAIT_TIMEOUT_DEFAULT}s" warn
     arr_resolve_positive_int pf_wait_interval "${ARR_PF_WAIT_INTERVAL:-}" "${ARR_PF_WAIT_INTERVAL_DEFAULT}" "Invalid ARR_PF_WAIT_INTERVAL, defaulting to ${ARR_PF_WAIT_INTERVAL_DEFAULT}s" warn
