@@ -4,24 +4,15 @@
 # Copy to ${ARR_BASE}/userr.conf (default: ${HOME}/srv/userr.conf) and edit as needed.
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
-# --- Stack paths ---
+# --- Quick start — who & when ---
 STACK="${STACK:-arr}"               # Project identifier used for directories, logs, and labels (defaults to arr)
+TIMEZONE="Australia/Sydney"            # Timezone for container logs and schedules (default: Australia/Sydney)
+PUID="$(id -u)"                        # Numeric user ID containers should run as
+PGID="$(id -g)"                        # Numeric group ID with write access (match your media group when using collab)
+
+# --- Essential paths ---
 ARR_BASE="${HOME}/srv"                 # Root directory for generated stack files
 ARR_STACK_DIR="${ARR_BASE}/${STACK}"  # Location for docker-compose.yml, scripts, and aliases
-ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
-ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
-# ARR_USERCONF_PATH="${ARR_BASE}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
-# ARRCONF_DIR="${HOME}/.config/${STACK}"  # Optional: relocate Proton creds outside the repo
-
-# --- Logging and output ---
-ARR_LOG_DIR="${ARR_STACK_DIR}/logs"           # Directory for runtime/service logs (default: ${ARR_STACK_DIR}/logs)
-ARR_INSTALL_LOG="${ARR_LOG_DIR}/${STACK}-install.log"   # Installer run log location (default: ${ARR_LOG_DIR}/${STACK}-install.log)
-ARR_COLOR_OUTPUT="1"       # 1 keeps colorful CLI output, set 0 to disable ANSI colors
-
-# --- Permissions ---
-ARR_PERMISSION_PROFILE="strict"        # strict keeps secrets 600/700, collab enables group read/write (660/770)
-
-# --- Downloads and media ---
 DOWNLOADS_DIR="${HOME}/Downloads"      # Active qBittorrent download folder
 COMPLETED_DIR="${DOWNLOADS_DIR}/completed"  # Destination for completed downloads
 MEDIA_DIR="/media/mediasmb"            # Root of the media library share
@@ -29,79 +20,50 @@ TV_DIR="${MEDIA_DIR}/Shows"            # Sonarr TV library path
 MOVIES_DIR="${MEDIA_DIR}/Movies"       # Radarr movie library path
 # SUBS_DIR="${MEDIA_DIR}/subs"         # Optional Bazarr subtitles directory
 
-# --- User identity ---
-PUID="$(id -u)"                        # Numeric user ID containers should run as
-PGID="$(id -g)"                        # Numeric group ID with write access (match your media group when using collab)
-TIMEZONE="Australia/Sydney"            # Timezone for container logs and schedules (default: Australia/Sydney)
-
-# --- Networking ---
+# --- Network basics (local machine) ---
 LAN_IP=""                              # Bind services to one LAN IP (set a DHCP reservation or static IP before install)
 LOCALHOST_IP="127.0.0.1"               # Loopback used by the Gluetun control API
-LAN_DOMAIN_SUFFIX="home.arpa"          # Suffix appended to service hostnames (default: home.arpa)
-CADDY_DOMAIN_SUFFIX="home.arpa"  # Override Caddy hostname suffix independently of LAN DNS (default: home.arpa)
-SERVER_COUNTRIES="Netherlands"              # ProtonVPN exit country list (default: Netherlands)
-# SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) if PF stays at 0
-PVPN_ROTATE_COUNTRIES=""  # Optional rotation order for arr.vpn switch (default: empty/disabled)
-GLUETUN_CONTROL_PORT="8000"            # Host port that exposes the Gluetun control API (default: 8000)
-ENABLE_LOCAL_DNS="0"                   # Advanced: enable the optional dnsmasq container (0/1, default: 0)
-ENABLE_CADDY="0"                       # Optional Caddy reverse proxy (run ./arr.sh --enable-caddy or set 1 to add HTTPS hostnames)
-CADDY_HTTP_PORT="80"           # Host port published for plain HTTP healthz/apps (default: 80)
-CADDY_HTTPS_PORT="443"         # Host port published for HTTPS proxy endpoints (default: 443)
-# SPLIT_VPN=1 → Only qbittorrent behind VPN; other services run outside it.
-# Disables Caddy & Local DNS (initial implementation).
-SPLIT_VPN="0"
-ENABLE_CONFIGARR="1"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
-DNS_DISTRIBUTION_MODE="router"         # router (DHCP Option 6) or per-device DNS settings (default: router)
-ARR_PORT_CHECK_MODE="enforce"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing
-UPSTREAM_DNS_SERVERS="1.1.1.1,1.0.0.1"          # Comma-separated resolver list used by dnsmasq (default chain shown)
-UPSTREAM_DNS_1="1.1.1.1"               # Legacy primary resolver override (default derived: 1.1.1.1)
-UPSTREAM_DNS_2="1.0.0.1"               # Legacy secondary resolver override (default derived: 1.0.0.1)
-CADDY_LAN_CIDRS="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"  # Clients allowed to skip Caddy auth (default: 127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16)
 EXPOSE_DIRECT_PORTS="1"                # Keep 1 so WebUIs publish on http://${LAN_IP}:PORT (requires LAN_IP set to your private IPv4)
 
-# --- Credentials ---
+# --- Core credentials (change on first run) ---
 QBT_USER="admin"                       # Initial qBittorrent username (change after first login)
 QBT_PASS="adminadmin"                  # Initial qBittorrent password (update immediately after install)
-GLUETUN_API_KEY=""                     # Pre-seed a Gluetun API key or leave empty to auto-generate
-QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"  # Vuetorrent WebUI mod (set empty to disable)
-QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"  # CIDRs allowed to bypass the qBittorrent login prompt (default: 127.0.0.1/32,::1/128)
-CADDY_BASIC_AUTH_USER="user"           # Username clients outside CADDY_LAN_CIDRS must use (default: user)
-CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password (regen when empty)
 
-# --- SABnzbd (Usenet downloader) ---
-SABNZBD_ENABLED="0"             # 1 enables SABnzbd container/helper integration (default: 0)
-SABNZBD_USE_VPN="0"             # 1 routes SABnzbd through Gluetun (default: 0)
-SABNZBD_HOST="127.0.0.1"           # Host used by sab-helper (default: 127.0.0.1)
-SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"             # Hydrated automatically from sabnzbd.ini when available
-SABNZBD_CATEGORY="${STACK}"          # Category applied to helper-submitted jobs (default: STACK value)
-SABNZBD_TIMEOUT="15"             # Helper API timeout in seconds (default: 15)
-ARRBASH_USENET_CLIENT="sabnzbd" # Active Usenet client label (future abstraction)
+# --- Service toggles (on/off) ---
+ENABLE_LOCAL_DNS="0"                   # Advanced: enable the optional dnsmasq container (0/1, default: 0)
+ENABLE_CADDY="0"                       # Optional Caddy reverse proxy (run ./arr.sh --enable-caddy or set 1 to add HTTPS hostnames)
+ENABLE_CONFIGARR="1"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
 
-# --- Service ports ---
-QBT_INT_PORT="8082"             # Internal qBittorrent WebUI port; match the container WEBUI_PORT env if you change it
+# --- Ports (user-facing) ---
 QBT_PORT="8082"              # qBittorrent WebUI port exposed on the LAN (default: 8082)
+QBT_INT_PORT="8082"             # Internal qBittorrent WebUI port; match the container WEBUI_PORT env if you change it
 SONARR_PORT="8989"                     # Sonarr WebUI port exposed on the LAN (default: 8989)
 RADARR_PORT="7878"                     # Radarr WebUI port exposed on the LAN (default: 7878)
 PROWLARR_PORT="9696"                   # Prowlarr WebUI port exposed on the LAN (default: 9696)
 BAZARR_PORT="6767"                     # Bazarr WebUI port exposed on the LAN (default: 6767)
 FLARR_PORT="8191"               # FlareSolverr service port exposed on the LAN (default: 8191)
-SABNZBD_INT_PORT="8080"           # Internal SABnzbd WebUI port; match the container PORT env if you change it
 SABNZBD_PORT="8080"                 # Host port for SAB WebUI when direct (default: 8080)
+CADDY_HTTP_PORT="80"           # Host port published for plain HTTP healthz/apps (default: 80)
+CADDY_HTTPS_PORT="443"         # Host port published for HTTPS proxy endpoints (default: 443)
+GLUETUN_CONTROL_PORT="8000"            # Host port that exposes the Gluetun control API (default: 8000)
 
-# --- ProtonVPN port-forward timing (advanced) ---
-PF_MAX_TOTAL_WAIT="60"          # Max seconds to wait for a forwarded port before failing (legacy sync mode)
-PF_POLL_INTERVAL="5"            # Seconds between Proton API checks while waiting (legacy sync mode)
-PF_CYCLE_AFTER="30"                # Seconds before retrying with a new Proton server (legacy sync mode)
-GLUETUN_PF_STRICT="0"        # 1 treats Proton PF timeouts as hard failures; 0 soft-fails (default: 0)
-PF_ASYNC_ENABLE="1"              # 1 to run the async worker automatically after Gluetun starts (default: 1)
-PF_ASYNC_INITIAL_QUICK_WAIT="10"  # Quick polling window before cycling servers (default: 10s)
-PF_ASYNC_TOTAL_BUDGET="240"  # Total seconds the async worker will spend before timing out (default: 240s)
-PF_ASYNC_POLL_INTERVAL="5"      # Seconds between async worker status checks (default: 5s)
-PF_ASYNC_CYCLE_INTERVAL="40"    # Minimum seconds between OpenVPN cycles (default: 40s)
-PF_ASYNC_MAX_CYCLES="3"      # Max OpenVPN cycles per async run (default: 3)
-PF_ASYNC_STATE_FILE="pf-state.json"      # Relative name of the async worker state file (default: pf-state.json)
-PF_ASYNC_LOG_FILE="port-forwarding.log"          # Relative name of the async worker log file (default: port-forwarding.log)
-PF_ENABLE_CYCLE="1"            # 0 skips OpenVPN cycling while waiting on PF (default: 1)
+# --- DNS & domains (if enabled) ---
+LAN_DOMAIN_SUFFIX="home.arpa"          # Suffix appended to service hostnames (default: home.arpa)
+CADDY_DOMAIN_SUFFIX="home.arpa"  # Override Caddy hostname suffix independently of LAN DNS (default: home.arpa)
+DNS_DISTRIBUTION_MODE="router"         # router (DHCP Option 6) or per-device DNS settings (default: router)
+UPSTREAM_DNS_SERVERS="1.1.1.1,1.0.0.1"          # Comma-separated resolver list used by dnsmasq (default chain shown)
+UPSTREAM_DNS_1="1.1.1.1"               # Legacy primary resolver override (default derived: 1.1.1.1)
+UPSTREAM_DNS_2="1.0.0.1"               # Legacy secondary resolver override (default derived: 1.0.0.1)
+CADDY_LAN_CIDRS="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"  # Clients allowed to skip Caddy auth (default: 127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16)
+
+# --- VPN basics (connectivity) ---
+# SPLIT_VPN=1 → Only qbittorrent behind VPN; other services run outside it.
+# Disables Caddy & Local DNS (initial implementation).
+SPLIT_VPN="0"
+SERVER_COUNTRIES="Netherlands"              # ProtonVPN exit country list (default: Netherlands)
+# SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) if PF stays at 0
+PVPN_ROTATE_COUNTRIES=""  # Optional rotation order for arr.vpn switch (default: empty/disabled)
+GLUETUN_API_KEY=""                     # Pre-seed a Gluetun API key or leave empty to auto-generate
 
 # --- VPN auto-reconnect (optional) ---
 VPN_AUTO_RECONNECT_ENABLED="0"    # 1 enables the background monitor (default: 0)
@@ -113,20 +75,32 @@ VPN_ALLOWED_HOURS_END=""              # Optional rotation window end hour (defau
 VPN_COOLDOWN_MINUTES="60"                # Cooldown after successful reconnects (default: 60)
 VPN_MAX_RETRY_MINUTES="20"              # Retry budget before auto-disabling (default: 20)
 
-# --- Container images (advanced) ---
-# GLUETUN_IMAGE="qmcgaw/gluetun:v3.40.0"                     # Override the Gluetun container tag
-# QBITTORRENT_IMAGE="lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415"  # Override the qBittorrent container tag
-# SONARR_IMAGE="lscr.io/linuxserver/sonarr:4.0.15.2941-ls291"         # Override the Sonarr container tag
-# RADARR_IMAGE="lscr.io/linuxserver/radarr:5.27.5.10198-ls283"        # Override the Radarr container tag
-# PROWLARR_IMAGE="lscr.io/linuxserver/prowlarr:latest"                # Override the Prowlarr container tag
-# BAZARR_IMAGE="lscr.io/linuxserver/bazarr:latest"                    # Override the Bazarr container tag
-# FLARR_IMAGE="ghcr.io/flaresolverr/flaresolverr:v3.3.21"      # Override the FlareSolverr container tag
-# SABNZBD_IMAGE="lscr.io/linuxserver/sabnzbd:latest"                    # Override the SABnzbd container tag
-# CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"            # Override the Configarr container tag
-# CADDY_IMAGE="caddy:2.8.4"                      # Override the Caddy reverse-proxy container tag
-# LOCALDNS_IMAGE="4km3/dnsmasq:2.90-r3"                # Override the dnsmasq container tag when local DNS is enabled
+# --- PF timing (advanced; optional, never blocking) ---
+PF_MAX_TOTAL_WAIT="60"          # Max seconds to wait for a forwarded port before failing (legacy sync mode)
+PF_POLL_INTERVAL="5"            # Seconds between Proton API checks while waiting (legacy sync mode)
+PF_CYCLE_AFTER="30"                # Seconds before retrying with a new Proton server (legacy sync mode)
+GLUETUN_PF_STRICT="0"        # 1 treats Proton PF timeouts as hard failures; 0 soft-fails (default: 0)
+PF_ENABLE_CYCLE="1"            # 0 skips OpenVPN cycling while waiting on PF (default: 1)
+PF_ASYNC_ENABLE="1"              # 1 to run the async worker automatically after Gluetun starts (default: 1)
+PF_ASYNC_INITIAL_QUICK_WAIT="10"  # Quick polling window before cycling servers (default: 10s)
+PF_ASYNC_TOTAL_BUDGET="240"  # Total seconds the async worker will spend before timing out (default: 240s)
+PF_ASYNC_POLL_INTERVAL="5"      # Seconds between async worker status checks (default: 5s)
+PF_ASYNC_CYCLE_INTERVAL="40"    # Minimum seconds between OpenVPN cycles (default: 40s)
+PF_ASYNC_MAX_CYCLES="3"      # Max OpenVPN cycles per async run (default: 3)
+PF_ASYNC_STATE_FILE="pf-state.json"      # Relative name of the async worker state file (default: pf-state.json)
+PF_ASYNC_LOG_FILE="port-forwarding.log"          # Relative name of the async worker log file (default: port-forwarding.log)
 
-# --- ConfigArr quality/profile defaults ---
+# --- SABnzbd (Usenet) ---
+SABNZBD_ENABLED="0"             # 1 enables SABnzbd container/helper integration (default: 0)
+SABNZBD_USE_VPN="0"             # 1 routes SABnzbd through Gluetun (default: 0)
+SABNZBD_HOST="127.0.0.1"           # Host used by sab-helper (default: 127.0.0.1)
+SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"             # Hydrated automatically from sabnzbd.ini when available
+SABNZBD_CATEGORY="${STACK}"          # Category applied to helper-submitted jobs (default: STACK value)
+SABNZBD_TIMEOUT="15"             # Helper API timeout in seconds (default: 15)
+ARRBASH_USENET_CLIENT="sabnzbd" # Active Usenet client label (future abstraction)
+SABNZBD_INT_PORT="8080"           # Internal SABnzbd WebUI port; match the container PORT env if you change it
+
+# --- *Arr & automation defaults (ConfigArr) ---
 ARR_VIDEO_MIN_RES="720p"         # Minimum allowed resolution (default: 720p)
 ARR_VIDEO_MAX_RES="1080p"         # Maximum allowed resolution (default: 1080p)
 ARR_EP_MIN_MB="250"                 # Minimum episode size in MB (default: 250)
@@ -146,9 +120,37 @@ SONARR_TRASH_TEMPLATE="sonarr-v4-quality-profile-web-1080p" # TRaSH template slu
 RADARR_TRASH_TEMPLATE="radarr-v5-quality-profile-hd-bluray-web" # TRaSH template slug ConfigArr applies to Radarr (default: radarr-v5-quality-profile-hd-bluray-web)
 ARR_MBMIN_DECIMALS="1"       # Decimals precision for minimum size rules (default: 1)
 
-# --- Behaviour toggles ---
+# --- Images (advanced users; specify tags in config) ---
+# GLUETUN_IMAGE="qmcgaw/gluetun:v3.40.0"                     # Override the Gluetun container tag
+# QBITTORRENT_IMAGE="lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415"  # Override the qBittorrent container tag
+# SONARR_IMAGE="lscr.io/linuxserver/sonarr:4.0.15.2941-ls291"         # Override the Sonarr container tag
+# RADARR_IMAGE="lscr.io/linuxserver/radarr:5.27.5.10198-ls283"        # Override the Radarr container tag
+# PROWLARR_IMAGE="lscr.io/linuxserver/prowlarr:latest"                # Override the Prowlarr container tag
+# BAZARR_IMAGE="lscr.io/linuxserver/bazarr:latest"                    # Override the Bazarr container tag
+# FLARR_IMAGE="ghcr.io/flaresolverr/flaresolverr:v3.3.21"      # Override the FlareSolverr container tag
+# SABNZBD_IMAGE="lscr.io/linuxserver/sabnzbd:latest"                    # Override the SABnzbd container tag
+# CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"            # Override the Configarr container tag
+# CADDY_IMAGE="caddy:2.8.4"                      # Override the Caddy reverse-proxy container tag
+# LOCALDNS_IMAGE="4km3/dnsmasq:2.90-r3"                # Override the dnsmasq container tag when local DNS is enabled
+
+# --- Behaviour & safety toggles ---
 # ASSUME_YES="0"                         # Skip confirmation prompts when scripting installs
+ARR_PORT_CHECK_MODE="enforce"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing
 # FORCE_ROTATE_API_KEY="0"               # Force regeneration of the Gluetun API key on next run
 # FORCE_REGEN_CADDY_AUTH="0"             # Rotate the Caddy username/password on next run
 # SETUP_HOST_DNS="0"                      # Automate host DNS takeover helper (or call with --setup-host-dns)
 # REFRESH_ALIASES="0"                     # Regenerate helper aliases without running the installer
+QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"  # Vuetorrent WebUI mod (set empty to disable)
+QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"  # CIDRs allowed to bypass the qBittorrent login prompt (default: 127.0.0.1/32,::1/128)
+CADDY_BASIC_AUTH_USER="user"           # Username clients outside CADDY_LAN_CIDRS must use (default: user)
+CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password (regen when empty)
+ARR_COLOR_OUTPUT="1"       # 1 keeps colorful CLI output, set 0 to disable ANSI colors
+ARR_PERMISSION_PROFILE="strict"        # strict keeps secrets 600/700, collab enables group read/write (660/770)
+
+# --- Internal/resolution paths (rarely touched) ---
+ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
+ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
+# ARR_USERCONF_PATH="${ARR_BASE}/userr.conf"  # Optional: relocate this file outside ${ARR_BASE}
+# ARRCONF_DIR="${HOME}/.config/${STACK}"  # Optional: relocate Proton creds outside the repo
+ARR_LOG_DIR="${ARR_STACK_DIR}/logs"           # Directory for runtime/service logs (default: ${ARR_STACK_DIR}/logs)
+ARR_INSTALL_LOG="${ARR_LOG_DIR}/${STACK}-install.log"   # Installer run log location (default: ${ARR_LOG_DIR}/${STACK}-install.log)
