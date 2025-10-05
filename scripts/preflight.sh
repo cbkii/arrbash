@@ -41,6 +41,38 @@ install_missing() {
   fi
 }
 
+# Locates the first userr.conf override relative to the repo parent
+preflight_find_userconf_override() {
+  local target_name="userr.conf" search_root=""
+
+  if [[ -n "${REPO_ROOT:-}" ]]; then
+    search_root="${REPO_ROOT%/}/.."
+  else
+    search_root=".."
+  fi
+
+  local current_path="${ARR_USERCONF_PATH:-}" canonical=""
+  if [[ -n "$current_path" && -f "$current_path" ]]; then
+    canonical="$(readlink -f "$current_path" 2>/dev/null || printf '%s' "$current_path")"
+    printf '%s\n' "$canonical"
+    return 0
+  fi
+
+  if [[ ! -d "$search_root" ]]; then
+    return 1
+  fi
+
+  local first_match=""
+  first_match="$(find "$search_root" -type f -name "$target_name" -print -quit 2>/dev/null || true)"
+  if [[ -n "$first_match" ]]; then
+    canonical="$(readlink -f "$first_match" 2>/dev/null || printf '%s' "$first_match")"
+    printf '%s\n' "$canonical"
+    return 0
+  fi
+
+  return 1
+}
+
 # Builds list of host ports the stack expects based on current configuration
 collect_port_requirements() {
   local _requirements_name="$1"
@@ -541,6 +573,15 @@ preflight() {
   acquire_lock
 
   msg "  Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
+
+  local userconf_override_path=""
+  if userconf_override_path="$(preflight_find_userconf_override)" && [[ -n "$userconf_override_path" ]]; then
+    # shellcheck disable=SC2034  # consumed by scripts/config.sh
+    ARR_USERCONF_OVERRIDE_PATH="$userconf_override_path"
+  else
+    # shellcheck disable=SC2034  # consumed by scripts/config.sh
+    ARR_USERCONF_OVERRIDE_PATH=""
+  fi
 
   if [[ ! -f "${ARRCONF_DIR}/proton.auth" ]]; then
     die "Missing ${ARRCONF_DIR}/proton.auth - create it with PROTON_USER and PROTON_PASS"

@@ -132,6 +132,11 @@ show_configuration_preview() {
   fi
   qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_final")"
 
+  local userconf_edit_target="${ARR_USERCONF_PATH}"
+  if [[ -n "${ARR_USERCONF_OVERRIDE_PATH:-}" ]]; then
+    userconf_edit_target="${ARR_USERCONF_OVERRIDE_PATH}"
+  fi
+
   cat <<CONFIG
 ------------------------------------------------------------
 ARR Stack configuration preview
@@ -176,7 +181,7 @@ Files that will be created/updated
   • Environment file: ${ARR_ENV_FILE}
   • Compose file: ${ARR_STACK_DIR}/docker-compose.yml
 
-If anything looks incorrect, edit ${ARR_USERCONF_PATH} before continuing.
+If anything looks incorrect, edit ${userconf_edit_target} before continuing.
 ------------------------------------------------------------
 CONFIG
 
