@@ -34,7 +34,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `QBT_AUTH_WHITELIST`: CIDRs that bypass the qBittorrent login (auto-populated with loopback and your LAN subnet).
 - **Optional services**
   - `ENABLE_CADDY`: `1` enables the HTTPS proxy on `CADDY_HTTP_PORT`/`CADDY_HTTPS_PORT` (defaults 80/443). Adjust those port variables if another web server is present.
-  - `ENABLE_LOCAL_DNS`: `1` runs the dnsmasq container for LAN hostnames; combine with `DNS_DISTRIBUTION_MODE` to control how clients learn the resolver.
+  - `ENABLE_LOCAL_DNS`: `1` runs the dnsmasq container for LAN hostnames; combine with `DNS_DISTRIBUTION_MODE` to control how clients learn the resolver. The installer records the runtime result in `LOCAL_DNS_STATE`/`LOCAL_DNS_STATE_REASON` so you can tell whether DNS actually started.
   - `ENABLE_CONFIGARR`: `1` keeps Configarr managing Sonarr/Radarr settings.
   - `SPLIT_VPN` and optional toggles such as `ENABLE_CADDY` can also be set per run with `./arrstack.sh` flags.
 - **VPN automation**

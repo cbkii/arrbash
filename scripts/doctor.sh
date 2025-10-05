@@ -542,7 +542,8 @@ SUFFIX="${LAN_DOMAIN_SUFFIX:-}"
 LAN_IP="${LAN_IP:-}"
 DNS_IP="${LAN_IP:-127.0.0.1}"
 ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS:-0}"
-LOCAL_DNS_SERVICE_ENABLED="${LOCAL_DNS_SERVICE_ENABLED:-1}"
+LOCAL_DNS_STATE="${LOCAL_DNS_STATE:-inactive}"
+LOCAL_DNS_STATE_REASON="${LOCAL_DNS_STATE_REASON:-Local DNS disabled}"
 ENABLE_CADDY="${ENABLE_CADDY:-0}"
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-0}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
@@ -610,10 +611,10 @@ check_docker_dns_configuration
 printf '[doctor] DNS distribution mode: %s\n' "${DNS_DISTRIBUTION_MODE}"
 
 if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
-  if [[ "${LOCAL_DNS_SERVICE_ENABLED}" == "1" ]]; then
+  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
     echo "[doctor] Local DNS container: enabled"
   else
-    echo "[doctor][warn] Local DNS requested but the container is disabled."
+    echo "[doctor][warn] Local DNS requested but not active: ${LOCAL_DNS_STATE_REASON}."
   fi
 else
   echo "[doctor][info] Local DNS disabled in configuration."
@@ -656,7 +657,7 @@ else
     echo "[doctor][info] Skipping Caddy port checks (ENABLE_CADDY=0)."
   fi
 
-  if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED}" == "1" ]]; then
+  if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
     report_port "Local DNS" udp "${LAN_IP}" 53
     report_port "Local DNS" tcp "${LAN_IP}" 53
   else
@@ -670,7 +671,7 @@ if [[ -n "${LOCALHOST_IP}" ]]; then
   report_port "Gluetun control" tcp "${LOCALHOST_IP}" "${GLUETUN_CONTROL_PORT}"
 fi
 
-if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_SERVICE_ENABLED}" == "1" ]]; then
+if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
   if [[ "${ENABLE_CADDY}" != "1" ]]; then
     echo "[doctor][info] Skipping LAN hostname resolution checks (ENABLE_CADDY=0)."
   else
