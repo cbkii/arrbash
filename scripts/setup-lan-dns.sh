@@ -50,24 +50,24 @@ fuzzy_remove_entries() {
 
   local -r managed_marker="${STACK}-managed"
 
-  awk -v begin="${begin_marker}" -v end="${end_marker}" -v marker="${managed_marker}" '
+  awk -v begin="$begin_marker" -v end="$end_marker" -v marker="$managed_marker" '
     BEGIN {
       skip = 0
       marker_lower = tolower(marker)
     }
     $0 == begin { skip = 1; next }
-    $0 == end { skip = 0; next }
+    $0 == end   { skip = 0; next }
     skip { next }
+
     {
       line = tolower($0)
-      if (marker_lower != "" && match(line, "(^|[^a-zA-Z0-9_-])" marker_lower "([^a-zA-Z0-9_-]|$)")) {
+      if (marker_lower != "" &&
+          match(line, "(^|[^A-Za-z0-9_-])" marker_lower "([^A-Za-z0-9_-]|$)")) {
         next
       }
-        next
-      }
-      print $0
+      print
     }
-  ' "${file}"
+  ' -- "${file}"
 }
 
 rewrite_hosts_file() {
