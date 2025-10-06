@@ -21,9 +21,7 @@ if [[ -z "${ARR_DATA_ROOT:-}" ]]; then
   fi
 fi
 
-if [[ -z "${ARR_BASE:-}" ]]; then
-  ARR_BASE="${ARR_DATA_ROOT}"
-fi
+ARR_DATA_ROOT="${ARR_DATA_ROOT%/}"
 
 # shellcheck disable=SC2034  # exported for other modules
 STACK_LABEL="[${STACK}]"
@@ -192,7 +190,7 @@ arr_docker_data_root() {
     return
   fi
 
-  local base_root="${ARR_BASE:-${ARR_DATA_ROOT:-}}"
+  local base_root="${ARR_DATA_ROOT:-}"
   if [[ -n "$base_root" ]]; then
     printf '%s/docker-data' "${base_root%/}"
     return

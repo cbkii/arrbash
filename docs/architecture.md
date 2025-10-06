@@ -19,7 +19,7 @@ The installer publishes LAN ports when `EXPOSE_DIRECT_PORTS=1`. When disabled, a
 
 ## Generated files
 `./arr.sh` writes artefacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:
-- `.env` – rendered from defaults plus `${ARR_BASE}/userr.conf`; reused across runs.
+- `.env` – rendered from defaults plus `${ARRCONF_DIR}/userr.conf`; reused across runs.
 - `docker-compose.yml` – defines service profiles, networks, and health checks.
 - `Caddyfile` – created when Caddy is enabled and validated with `caddy validate` before use.
 - `.aliasarr` – helper alias definitions sourced in your shell.
@@ -29,7 +29,7 @@ Generated files should not be edited manually; adjust `userr.conf` and rerun the
 
 ## Installer flow
 1. **Preflight** – checks dependencies, confirms Docker availability, validates Proton credentials, and ensures required ports are free before writing files.
-2. **Defaults and overrides** – sources `arrconf/userr.conf.defaults.sh`, applies environment variables, then your `${ARR_BASE}/userr.conf` values.
+2. **Defaults and overrides** – sources `arrconf/userr.conf.defaults.sh`, applies environment variables, then your `${ARRCONF_DIR}/userr.conf` values.
 3. **File rendering** – creates directories with safe permissions, hydrates preserved secrets from existing `.env`, and writes compose/env/proxy files in atomic steps.
 4. **Service start** – launches Gluetun first, waits for port forwarding, then starts the remaining containers and optional extras.
 5. **Summary** – prints URLs, credentials, and reminders such as updating *Arr download client hosts when split tunnel is active.

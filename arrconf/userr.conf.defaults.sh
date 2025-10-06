@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Default configuration for ARR Stack
-# This file is sourced *before* ${ARR_BASE}/userr.conf.
+# This file is sourced *before* ${ARRCONF_DIR}/userr.conf.
 # Keep assignments idempotent and avoid relying on side effects so overrides
 # behave predictably when the user configuration runs afterwards.
-# Override these in ${ARR_BASE}/userr.conf (git-ignored; defaults to ${ARR_DATA_ROOT}/userr.conf where ARR_DATA_ROOT defaults to ~/srv).
+# Override these in ${ARRCONF_DIR}/userr.conf (git-ignored; defaults to ${ARR_DATA_ROOT}/${STACK}configs/userr.conf where ARR_DATA_ROOT defaults to ~/srv).
 
 # Guard helpers for shells that source these defaults alongside other scripts
 if ! declare -f arr_var_is_readonly >/dev/null 2>&1; then
@@ -38,12 +38,12 @@ if [[ -z "${ARR_DATA_ROOT:-}" ]]; then
   fi
 fi
 
-ARR_BASE="${ARR_BASE:-${ARR_DATA_ROOT}}"
-ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_BASE}/${STACK}}"
-ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_BASE}/docker-data}"
+ARR_DATA_ROOT="${ARR_DATA_ROOT%/}"
+ARRCONF_DIR="${ARRCONF_DIR:-${ARR_DATA_ROOT}/${STACK}configs}"
+ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_DATA_ROOT}/${STACK}}"
+ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_DATA_ROOT}/docker-data}"
 ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
-ARRCONF_DIR="${ARRCONF_DIR:-${REPO_ROOT:-${PWD}}/arrconf}"
-ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARR_BASE}/userr.conf}"
+ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
 ARR_LOG_DIR="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
 ARR_INSTALL_LOG="${ARR_INSTALL_LOG:-${ARR_LOG_DIR}/${STACK}-install.log}"
 ARR_COLOR_OUTPUT="${ARR_COLOR_OUTPUT:-1}"
@@ -58,10 +58,10 @@ DOWNLOADS_DIR="${DOWNLOADS_DIR:-${HOME}/Downloads}"
 COMPLETED_DIR="${COMPLETED_DIR:-${DOWNLOADS_DIR}/completed}"
 
 # Media library
-MEDIA_DIR="${MEDIA_DIR:-/media/mediasmb}"
+MEDIA_DIR="${MEDIA_DIR:-${ARR_DATA_ROOT}/media}"
 TV_DIR="${TV_DIR:-${MEDIA_DIR}/Shows}"
 MOVIES_DIR="${MOVIES_DIR:-${MEDIA_DIR}/Movies}"
-SUBS_DIR="${SUBS_DIR:-}"
+SUBS_DIR="${SUBS_DIR:-${MEDIA_DIR}/subs}"
 
 # Container identity (current user by default)
 PUID="${PUID:-$(id -u)}"
@@ -408,7 +408,7 @@ ARR_USERCONF_TEMPLATE_VARS=(
 )
 
 ARR_USERCONF_IMPLICIT_VARS=(
-  ARR_BASE
+  ARRCONF_DIR
   ARR_STACK_DIR
   ARR_ENV_FILE
   ARR_DOCKER_DIR
@@ -462,7 +462,7 @@ arr_export_userconf_template_vars() {
         ;;
       ARR_USERCONF_PATH)
         # shellcheck disable=SC2016  # keep literal reference for template output
-        value='${ARR_BASE}/userr.conf'
+        value='${ARRCONF_DIR}/userr.conf'
         ;;
       ARR_LOG_DIR)
         # shellcheck disable=SC2016  # keep literal reference for template output
@@ -525,18 +525,17 @@ arr_render_userconf_template() {
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 # Keep arrconf/userr.conf.example in sync with any changes made here.
-# Copy to ${ARR_BASE}/userr.conf (default: ${ARR_DATA_ROOT}/userr.conf) and edit as needed.
+# Make ONE copy named 'userr.conf', and edit as needed (default: '${ARR_DATA_ROOT}/${STACK}configs/userr.conf', must use path ≤4 deep below '$ARR_DATA_ROOT').
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
 # --- Stack paths ---
 STACK="${STACK}"                    # Project identifier used for directories, logs, and labels
 ARR_DATA_ROOT="${HOME}/srv"           # Default data root (matches historical ~/srv layout)
-ARR_BASE="${ARR_DATA_ROOT}"           # Root directory for generated stack files
-ARR_STACK_DIR="${ARR_BASE}/${STACK}"  # Location for docker-compose.yml, scripts, and aliases
+ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"  # Directory for secrets and config overrides
+ARR_STACK_DIR="${ARR_DATA_ROOT}/${STACK}"  # Location for docker-compose.yml, scripts, and aliases
 ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
-ARR_DOCKER_DIR="${ARR_BASE}/docker-data"  # Docker volumes and persistent data storage
-# ARR_USERCONF_PATH="${ARR_USERCONF_PATH}"  # Optional: relocate this file outside ${ARR_BASE}
-# ARRCONF_DIR="${HOME}/.config/${STACK}"  # Optional: relocate Proton creds outside the repo
+ARR_DOCKER_DIR="${ARR_DATA_ROOT}/docker-data"  # Docker volumes and persistent data storage
+ARR_USERCONF_PATH="${ARRCONF_DIR}/userr.conf"  # Optional: relocate this file outside ${ARR_DATA_ROOT}
 
 # --- Logging and output ---
 ARR_LOG_DIR="${ARR_LOG_DIR}"           # Directory for runtime/service logs (default: ${ARR_LOG_DIR})
@@ -549,7 +548,7 @@ ARR_PERMISSION_PROFILE="strict"        # strict keeps secrets 600/700, collab en
 # --- Downloads and media ---
 DOWNLOADS_DIR="${HOME}/Downloads"      # Active qBittorrent download folder
 COMPLETED_DIR="${DOWNLOADS_DIR}/completed"  # Destination for completed downloads
-MEDIA_DIR="/media/mediasmb"            # Root of the media library share
+MEDIA_DIR="${ARR_DATA_ROOT}/media"            # Root of the media library share under ARR_DATA_ROOT
 TV_DIR="${MEDIA_DIR}/Shows"            # Sonarr TV library path
 MOVIES_DIR="${MEDIA_DIR}/Movies"       # Radarr movie library path
 # SUBS_DIR="${MEDIA_DIR}/subs"         # Optional Bazarr subtitles directory

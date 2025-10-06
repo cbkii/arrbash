@@ -20,10 +20,10 @@ Copy `arrconf/proton.auth.example` to `arrconf/proton.auth` and fill in `PROTON_
 Set `PGID` to the group that owns your shared downloads or media storage (for example the `media` group). Without a matching group the installer keeps the stricter defaults to avoid exposing data to every root user.
 
 ## How do I update container versions?
-Read [Version management](version-management.md). Adjust tags in `${ARR_BASE}/userr.conf`, rerun the installer, and confirm containers start cleanly.
+Read [Version management](version-management.md). Adjust tags in `${ARRCONF_DIR}/userr.conf`, rerun the installer, and confirm containers start cleanly.
 
 ## Can I rerun the installer safely?
-Yes. `./arr.sh` is idempotent—rerun it anytime after editing `${ARR_BASE}/userr.conf`. Review the printed summary before containers restart.
+Yes. `./arr.sh` is idempotent—rerun it anytime after editing `${ARRCONF_DIR}/userr.conf`. Review the printed summary before containers restart.
 
 ## Can I expose services to the Internet?
 Use Caddy with strong basic auth if you need remote access. Avoid forwarding raw service ports; keep the stack behind Proton VPN whenever possible. Review [Security](security.md) first.

@@ -22,11 +22,11 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
 ## Update workflow
 1. Back up your data:
    ```bash
-   cd "${ARR_BASE:-$ARR_DATA_ROOT}"
+   cd "${ARR_DATA_ROOT}"
    STACK="${STACK:-arr}"
    tar -czf "${STACK}-backup-$(date +%Y%m%d).tar.gz" "$(basename "${ARR_STACK_DIR:-${STACK}}")" docker-data
    ```
-2. Edit `${ARR_BASE}/userr.conf` to change any `*_IMAGE` values.
+2. Edit `${ARRCONF_DIR}/userr.conf` to change any `*_IMAGE` values.
 3. Apply changes:
    ```bash
    ./arr.sh --yes

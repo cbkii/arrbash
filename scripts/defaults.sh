@@ -30,7 +30,7 @@ arr_setup_defaults() {
 
   if [[ -z "${ARR_DOCKER_DIR}" && -n "${default_docker_root}" && -d "${default_docker_root}" ]]; then
     ARR_DOCKER_DIR="${default_docker_root}"
-    ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_BASE:-${ARR_DATA_ROOT}}/${STACK}}"
+    ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_DATA_ROOT}/${STACK}}"
   fi
 
   if [[ -n "${previous_stack_dir}" && "${previous_stack_dir}" != "${ARR_STACK_DIR}" ]]; then

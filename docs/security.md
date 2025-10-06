@@ -10,7 +10,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 - Never commit `arrconf/proton.auth`, `.env`, or other generated files to version control. The installer keeps permissions tight automatically.
 
 ## Credential hygiene
-- Change qBittorrent credentials after first login and copy the values into `${ARR_BASE}/userr.conf` (`QBT_USER`, `QBT_PASS`). Rerun the installer so `.env` updates without manual edits.
+- Change qBittorrent credentials after first login and copy the values into `${ARRCONF_DIR}/userr.conf` (`QBT_USER`, `QBT_PASS`). Rerun the installer so `.env` updates without manual edits.
 - Rotate the Gluetun API key periodically with `./arr.sh --rotate-api-key --yes` and restart the stack.
 - Refresh Caddy basic auth with `./arr.sh --rotate-caddy-auth --yes` before sharing remote access.
 - Keep the exported Caddy certificate bundle limited to the public `root.crt`. Never expose `docker-data/caddy` or private keys.

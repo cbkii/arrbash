@@ -11,7 +11,7 @@ Use these controls to choose how traffic flows, manage Proton VPN forwarding, an
 | Split tunnel | `SPLIT_VPN=1` | Only qBittorrent runs inside Gluetun; other services stay on the LAN bridge. | Recommended for faster metadata, fewer rate limits, and easier troubleshooting. |
 
 **Switching modes**
-1. Edit `${ARR_BASE}/userr.conf` and set `SPLIT_VPN` as needed.
+1. Edit `${ARRCONF_DIR}/userr.conf` and set `SPLIT_VPN` as needed.
 2. (Optional, Recommended) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/etc. publish LAN ports in split mode.
 3. Rerun the installer:
 ```bash
