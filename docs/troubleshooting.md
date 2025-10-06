@@ -109,6 +109,8 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   ```bash
   ./arr.sh --yes
   ```
+- Set `ARR_PORT_CHECK_MODE=fix` if you want the installer to automatically stop known listeners (Docker proxies,
+  stale stack instances) before retrying and then continue in warn mode if conflicts remain.
 - Use the printed conflict summary to identify the owning process and adjust `userr.conf` if you must reassign ports.
 
 ### Containers stuck in `starting`

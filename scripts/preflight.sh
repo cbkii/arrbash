@@ -151,8 +151,23 @@ detect_internal_port_conflicts() {
 
   local key=""
   for key in "${!_label_map[@]}"; do
-    if [[ "${_label_map[$key]}" == *$'\n'* ]]; then
-      _collisions_ref+=("${key}|${_label_map[$key]}")
+    if [[ "${_label_map[$key]}" != *$'\n'* ]]; then
+      continue
+    fi
+
+    local label_block="${_label_map[$key]}"
+    local -A _seen_labels=()
+    local -a _unique_labels=()
+    while IFS= read -r _label_entry; do
+      [[ -z "${_label_entry}" ]] && continue
+      if [[ -z "${_seen_labels[$_label_entry]:-}" ]]; then
+        _seen_labels[$_label_entry]=1
+        _unique_labels+=("${_label_entry}")
+      fi
+    done <<<"${label_block}"
+
+    if ((${#_unique_labels[@]} > 1)); then
+      _collisions_ref+=("${key}|${label_block}")
     fi
   done
 }
@@ -179,7 +194,7 @@ port_in_use_with_details() {
     return 2
   fi
 
-  local output=""
+  local -a lines=()
   case "$tool" in
     ss)
       local -a args=()
@@ -188,110 +203,73 @@ port_in_use_with_details() {
         udp) args=(-H -lunp) ;;
         *) return 1 ;;
       esac
-      output="$(ss "${args[@]}" 2>/dev/null | awk -v port="$port" '
-        {
-          split($5, parts, ":")
-          candidate = parts[length(parts)]
-          if (candidate == port) {
-            print $0
-          }
-        }
-      ')"
+      mapfile -t lines < <(ss "${args[@]}" "sport = :${port}" 2>/dev/null || true)
       ;;
     lsof)
+      local -a cmd=(lsof -nP)
       case "$proto" in
-        tcp)
-          output="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
-          ;;
-        udp)
-          output="$(lsof -nP -iUDP:"$port" 2>/dev/null || true)"
-          ;;
-        *)
-          return 1
-          ;;
+        tcp) cmd+=(-iTCP:"$port" -sTCP:LISTEN) ;;
+        udp) cmd+=(-iUDP:"$port") ;;
+        *) return 1 ;;
       esac
+      mapfile -t lines < <("${cmd[@]}" 2>/dev/null || true)
       ;;
     netstat)
-      output="$(netstat -tunlp 2>/dev/null | awk -v port="$port" '
-        NR > 2 {
-          split($4, parts, ":")
-          candidate = parts[length(parts)]
-          if (candidate == port) {
-            print $0
-          }
-        }
-      ')"
+      mapfile -t lines < <(netstat -tunlp 2>/dev/null \
+        | awk -v port="$port" 'NR > 2 { split($4, parts, ":"); candidate = parts[length(parts)]; if (candidate == port) { print $0 } }' \
+        || true)
       ;;
   esac
 
-  if [[ -n "$output" ]]; then
-    local restore_extglob=0
-    if ! shopt -q extglob; then
-      shopt -s extglob
-      restore_extglob=1
-    fi
-    local wildcard_v4="0.0.0.0"
-    local wildcard_v6="::"
-    local conflict=0
-
-    local exp="${expected_addr//[\[\] ]/}"
-    if [[ -z "$exp" || "$exp" == "*" ]]; then
-      conflict=1
-    else
-      local exp_is_ipv6=0
-      if [[ "$exp" == *:* ]]; then
-        exp_is_ipv6=1
-      fi
-      while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        local candidate=""
-        # More precise patterns for IPv4 and IPv6 addresses followed by port
-        local ipv4_port_pattern="([0-9]{1,3}\.){3}[0-9]{1,3}:${port}"
-        local ipv6_port_pattern="(\[?[0-9A-Fa-f:]+\]?|::):${port}"
-        candidate="$(printf '%s\n' "$line" | grep -oE "$ipv4_port_pattern" | head -n1 || true)"
-        if [[ -z "$candidate" ]]; then
-          candidate="$(printf '%s\n' "$line" | grep -oE "$ipv6_port_pattern" | head -n1 || true)"
-        fi
-        if [[ -z "$candidate" ]]; then
-          continue
-        fi
-        candidate="${candidate%:"$port"}"
-        candidate="${candidate//[\[\]]/}"
-        if [[ "$candidate" == "*" ]]; then
-          if ((exp_is_ipv6)); then
-            candidate="$wildcard_v6"
-          else
-            candidate="$wildcard_v4"
-          fi
-        fi
-
-        if [[ "$candidate" == "$exp" ]]; then
-          conflict=1
-          break
-        fi
-        if ((exp_is_ipv6)); then
-          if [[ "$candidate" == "$wildcard_v6" ]]; then
-            conflict=1
-            break
-          fi
-        else
-          if [[ "$candidate" == "$wildcard_v4" ]]; then
-            conflict=1
-            break
-          fi
-        fi
-      done <<<"$output"
-    fi
-
-    if ((restore_extglob)); then
-      shopt -u extglob
-    fi
-
-    if ((conflict)); then
-      _details_ref="$output"
-      return 0
-    fi
+  if ((${#lines[@]} == 0)); then
     return 1
+  fi
+
+  local conflict=0
+  local line=""
+  local host=""
+  local normalized=""
+  local -a conflict_lines=()
+
+  for line in "${lines[@]}"; do
+    [[ -z "$line" ]] && continue
+
+    case "$tool" in
+      ss)
+        local addr_field
+        addr_field="$(awk '{print $5}' <<<"$line" 2>/dev/null || true)"
+        if [[ -z "$addr_field" ]]; then
+          addr_field="$(awk '{print $4}' <<<"$line" 2>/dev/null || true)"
+        fi
+        [[ -z "$addr_field" ]] && continue
+        host="${addr_field%:*}"
+        ;;
+      lsof)
+        [[ "$line" =~ ^COMMAND[[:space:]] ]] && continue
+        local name_field
+        name_field="$(awk '{print $9}' <<<"$line" 2>/dev/null || true)"
+        [[ -z "$name_field" ]] && continue
+        name_field="${name_field%%->*}"
+        host="${name_field%:*}"
+        ;;
+      netstat)
+        local addr_field
+        addr_field="$(awk '{print $4}' <<<"$line" 2>/dev/null || true)"
+        [[ -z "$addr_field" ]] && continue
+        host="${addr_field%:*}"
+        ;;
+    esac
+
+    normalized="$(normalize_bind_address "$host")"
+    if address_conflicts "$expected_addr" "$normalized"; then
+      conflict=1
+      conflict_lines+=("$line")
+    fi
+  done
+
+  if ((conflict)); then
+    _details_ref="$(printf '%s\n' "${conflict_lines[@]}")"
+    return 0
   fi
 
   return 1
@@ -311,7 +289,9 @@ _arr_port_conflict_quickfix_attempted=0
 
 # Tries stopping existing ${STACK} containers once to clear port conflicts
 attempt_port_conflict_quickfix() {
-  if [[ "${ARR_PORT_CONFLICT_AUTO_FIX}" != "1" ]]; then
+  local force="${1:-0}"
+
+  if [[ "$force" != "1" && "${ARR_PORT_CONFLICT_AUTO_FIX}" != "1" ]]; then
     return 1
   fi
 
@@ -333,15 +313,191 @@ attempt_port_conflict_quickfix() {
   return 0
 }
 
+# Attempts to terminate listeners occupying a conflicting port
+force_kill_port_listeners() {
+  local label="$1"
+  local proto="$2"
+  local port="$3"
+  local expected="$4"
+
+  local uppercase_proto="${proto^^}"
+  local -A seen=()
+  local -A names=()
+  local -a targets=()
+
+  if command -v ss >/dev/null 2>&1; then
+    local flag=""
+    case "$proto" in
+      tcp) flag="t" ;;
+      udp) flag="u" ;;
+    esac
+    if [[ -n "$flag" ]]; then
+      while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local addr_field
+        addr_field="$(awk '{print $5}' <<<"$line" 2>/dev/null || true)"
+        if [[ -z "$addr_field" ]]; then
+          addr_field="$(awk '{print $4}' <<<"$line" 2>/dev/null || true)"
+        fi
+        [[ -z "$addr_field" ]] && continue
+        local host="${addr_field%:*}"
+        host="$(normalize_bind_address "$host")"
+        if ! address_conflicts "$expected" "$host"; then
+          continue
+        fi
+        while IFS= read -r pid; do
+          [[ -z "$pid" ]] && continue
+          if [[ "$pid" =~ ^[0-9]+$ ]]; then
+            if [[ -z "${seen[$pid]:-}" ]]; then
+              seen[$pid]=1
+              names[$pid]=""
+              targets+=("$pid")
+            fi
+          fi
+        done < <(grep -oE 'pid=[0-9]+' <<<"$line" | cut -d= -f2)
+      done < <(ss -H -ln${flag}p "sport = :${port}" 2>/dev/null || true)
+    fi
+  fi
+
+  if ((${#targets[@]} == 0)) && command -v lsof >/dev/null 2>&1; then
+    local -a cmd=(lsof -nP)
+    case "$proto" in
+      tcp) cmd+=(-iTCP:"$port" -sTCP:LISTEN) ;;
+      udp) cmd+=(-iUDP:"$port") ;;
+    esac
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      [[ "$line" =~ ^COMMAND[[:space:]] ]] && continue
+      local pid
+      local proc_name
+      local addr
+      pid="$(awk '{print $2}' <<<"$line" 2>/dev/null || true)"
+      proc_name="$(awk '{print $1}' <<<"$line" 2>/dev/null || true)"
+      addr="$(awk '{print $9}' <<<"$line" 2>/dev/null || true)"
+      addr="${addr%%->*}"
+      local host="${addr%:*}"
+      if [[ -z "$host" ]]; then
+        host="*"
+      fi
+      host="$(normalize_bind_address "$host")"
+      if ! address_conflicts "$expected" "$host"; then
+        continue
+      fi
+      if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        if [[ -z "${seen[$pid]:-}" ]]; then
+          seen[$pid]=1
+          names[$pid]="$proc_name"
+          targets+=("$pid")
+        elif [[ -z "${names[$pid]:-}" && -n "$proc_name" ]]; then
+          names[$pid]="$proc_name"
+        fi
+      fi
+    done < <("${cmd[@]}" 2>/dev/null || true)
+  fi
+
+  if ((${#targets[@]} == 0)) && command -v netstat >/dev/null 2>&1; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local addr_field
+      addr_field="$(awk '{print $4}' <<<"$line" 2>/dev/null || true)"
+      [[ -z "$addr_field" ]] && continue
+      local host="${addr_field%:*}"
+      host="$(normalize_bind_address "$host")"
+      if ! address_conflicts "$expected" "$host"; then
+        continue
+      fi
+      local proc_field
+      proc_field="$(awk '{print $7}' <<<"$line" 2>/dev/null || true)"
+      local pid="${proc_field%%/*}"
+      local proc_name="${proc_field##*/}"
+      if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        if [[ -z "${seen[$pid]:-}" ]]; then
+          seen[$pid]=1
+          names[$pid]="$proc_name"
+          targets+=("$pid")
+        elif [[ -z "${names[$pid]:-}" && -n "$proc_name" ]]; then
+          names[$pid]="$proc_name"
+        fi
+      fi
+    done < <(netstat -tunlp 2>/dev/null \
+      | awk -v port="$port" 'NR > 2 { split($4, parts, ":"); candidate = parts[length(parts)]; if (candidate == port) { print $0 } }' \
+      || true)
+  fi
+
+  if ((${#targets[@]} == 0)); then
+    return 1
+  fi
+
+  local any_action=0
+  local pid=""
+  for pid in "${targets[@]}"; do
+    [[ -z "$pid" ]] && continue
+    if ! kill -0 "$pid" 2>/dev/null; then
+      continue
+    fi
+    local proc_name="${names[$pid]:-}"
+    if [[ -z "$proc_name" ]]; then
+      proc_name="$(ps -p "$pid" -o comm= 2>/dev/null | head -n1 || true)"
+    fi
+    if [[ -z "$proc_name" ]]; then
+      proc_name="process"
+    fi
+    warn "    [fix] Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
+    if kill "$pid" 2>/dev/null; then
+      any_action=1
+    else
+      warn "    [fix] Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
+    fi
+  done
+
+  if ((any_action)); then
+    sleep 2
+    for pid in "${targets[@]}"; do
+      [[ -z "$pid" ]] && continue
+      if kill -0 "$pid" 2>/dev/null; then
+        warn "    [fix] PID ${pid} still running; sending SIGKILL."
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    done
+    return 0
+  fi
+
+  return 1
+}
+
+# Iterates conflicting ports and attempts forced remediation
+attempt_force_clear_port_conflicts() {
+  local _conflicts_name="$1"
+  # shellcheck disable=SC2178
+  local -n _conflicts_ref="$_conflicts_name"
+
+  local action=0
+  local entry=""
+  for entry in "${_conflicts_ref[@]}"; do
+    IFS='|' read -r label proto port expected _details <<<"$entry"
+    if force_kill_port_listeners "$label" "$proto" "$port" "$expected"; then
+      action=1
+    fi
+  done
+
+  if ((action)); then
+    return 0
+  fi
+
+  return 1
+}
+
 # Ensures host ports required by the stack are free (or warns per mode)
 simple_port_check() {
   msg "  Checking required host ports"
 
   local mode_raw="${ARR_PORT_CHECK_MODE:-enforce}"
   local mode="${mode_raw,,}"
+  local fix_mode=0
+  local fix_actions_used=0
 
   case "$mode" in
-    enforce | warn | skip) ;;
+    enforce | warn | skip | fix) ;;
     "")
       mode="enforce"
       ;;
@@ -350,6 +506,10 @@ simple_port_check() {
       mode="enforce"
       ;;
   esac
+
+  if [[ "$mode" == "fix" ]]; then
+    fix_mode=1
+  fi
 
   if [[ "$mode" == "skip" ]]; then
     warn "    Port availability checks skipped (ARR_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
@@ -440,7 +600,9 @@ simple_port_check() {
     fi
 
     if ((${#conflicts[@]} == 0)); then
-      if ((quickfix_used)); then
+      if ((fix_actions_used)); then
+        msg "    All required ports are free after fix actions."
+      elif ((quickfix_used)); then
         msg "    All required ports are free after quick fix."
       else
         msg "    All required ports are free."
@@ -466,16 +628,42 @@ simple_port_check() {
     done
 
     port_conflict_guidance
-    if ((quickfix_used == 0)) && attempt_port_conflict_quickfix; then
-      quickfix_used=1
-      msg "    Retrying port availability check after quick fix..."
-      sleep 3
-      continue
+
+    if ((fix_mode)); then
+      local fix_applied=0
+      if attempt_port_conflict_quickfix 1; then
+        quickfix_used=1
+        fix_actions_used=1
+        fix_applied=1
+      fi
+      if attempt_force_clear_port_conflicts conflicts; then
+        fix_actions_used=1
+        fix_applied=1
+      fi
+      if ((fix_applied)); then
+        fix_mode=0
+        mode="warn"
+        msg "    Retrying port availability check after fix (continuing in warn mode)..."
+        sleep 3
+        continue
+      fi
+    else
+      if ((quickfix_used == 0)) && attempt_port_conflict_quickfix 0; then
+        quickfix_used=1
+        msg "    Retrying port availability check after quick fix..."
+        sleep 3
+        continue
+      fi
     fi
 
     if [[ "$mode" == "warn" ]]; then
       warn "    Continuing despite port conflicts (ARR_PORT_CHECK_MODE=warn). Services may fail to bind."
       return 0
+    fi
+
+    if [[ "$mode" == "fix" ]]; then
+      warn "    [fix] Automatic remediation was unable to clear all conflicting listeners."
+      die "Automatic port conflict remediation failed; resolve conflicts and rerun ./arr.sh"
     fi
 
     die "Resolve port conflicts and rerun ./arr.sh"

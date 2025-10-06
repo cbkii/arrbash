@@ -175,7 +175,7 @@ ENABLE_CONFIGARR="${ENABLE_CONFIGARR:-1}"
 #   per-device – leave router DNS untouched and set DNS=${LAN_IP} on important clients
 DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-router}"
 
-# Host port preflight behaviour: enforce (default), warn, or skip
+# Host port preflight behaviour: enforce (default), warn, skip, or fix (auto-remediate then warn)
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE:-enforce}"
 
 # Reverse proxy hostnames (Caddy defaults to LAN suffix when unset)
@@ -579,7 +579,7 @@ CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT}"         # Host port published for HTTPS p
 SPLIT_VPN="${SPLIT_VPN}"
 ENABLE_CONFIGARR="${ENABLE_CONFIGARR}"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
 DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE}"         # router (DHCP Option 6) or per-device DNS settings (default: ${DNS_DISTRIBUTION_MODE})
-ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing
+ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing, fix auto-clears blockers
 UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS}"          # Comma-separated resolver list used by dnsmasq (default chain shown)
 UPSTREAM_DNS_1="${UPSTREAM_DNS_1}"               # Legacy primary resolver override (default derived: ${UPSTREAM_DNS_1})
 UPSTREAM_DNS_2="${UPSTREAM_DNS_2}"               # Legacy secondary resolver override (default derived: ${UPSTREAM_DNS_2_DISPLAY})
