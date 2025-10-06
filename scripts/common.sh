@@ -2,6 +2,7 @@
 
 : "${STACK:=arr}"
 : "${STACK_UPPER:=${STACK^^}}"
+: "${BLUE:=}"
 : "${CYAN:=}"
 : "${YELLOW:=}"
 : "${RESET:=}"
@@ -934,9 +935,9 @@ msg() {
 # User-facing step banner with bold/bright styling
 step() {
   if msg_color_supported; then
-    printf '%b🧿 %s%b\n' "${BOLD}${CYAN}" "$*" "$RESET"
+    printf '%b🧱📣 %s%b\n' "${BOLD}${BLUE}" "$*" "$RESET"
   else
-    printf '🧿 %s\n' "$*"
+    printf '🧱📣 %s\n' "$*"
   fi
 }
 
