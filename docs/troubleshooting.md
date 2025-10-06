@@ -121,6 +121,8 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   docker compose up -d
   ```
 - Confirm all services report `running` with `docker compose ps`.
+- Extend Gluetun's grace period if Proton handshakes are slow. Set `GLUETUN_HEALTHCHECK_START_PERIOD`, `GLUETUN_HEALTHCHECK_INTERVAL`, `GLUETUN_HEALTHCHECK_TIMEOUT`, and `GLUETUN_HEALTHCHECK_RETRIES` in `userr.conf` (for example `start_period=120s`, `interval=10s`, `timeout=5s`, `retries=12`) so dependants wait for the built-in auto-reconnect loop. The installer writes them to `.env`, letting Compose substitute the values.
+- Remove legacy overrides such as `HEALTH_VPN_DURATION_INITIAL`/`HEALTH_VPN_DURATION_ADDITION`; upstream Gluetun releases currently ignore or mis-handle them and the stack no longer injects those variables.
 
 ### Unsure which component failed
 - Run the bundled diagnostics:

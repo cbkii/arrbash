@@ -200,6 +200,12 @@ PF_ASYNC_STATE_FILE="${PF_ASYNC_STATE_FILE:-pf-state.json}"
 PF_ASYNC_LOG_FILE="${PF_ASYNC_LOG_FILE:-port-forwarding.log}"
 PF_ENABLE_CYCLE="${PF_ENABLE_CYCLE:-1}"
 
+# Gluetun healthcheck timing (Compose duration strings, e.g. 90s)
+GLUETUN_HEALTHCHECK_START_PERIOD="${GLUETUN_HEALTHCHECK_START_PERIOD:-120s}"
+GLUETUN_HEALTHCHECK_INTERVAL="${GLUETUN_HEALTHCHECK_INTERVAL:-10s}"
+GLUETUN_HEALTHCHECK_TIMEOUT="${GLUETUN_HEALTHCHECK_TIMEOUT:-5s}"
+GLUETUN_HEALTHCHECK_RETRIES="${GLUETUN_HEALTHCHECK_RETRIES:-12}"
+
 # VPN auto-reconnect tuning
 VPN_AUTO_RECONNECT_ENABLED="${VPN_AUTO_RECONNECT_ENABLED:-0}"
 VPN_SPEED_THRESHOLD_KBPS="${VPN_SPEED_THRESHOLD_KBPS:-12}"
@@ -320,6 +326,10 @@ ARR_USERCONF_TEMPLATE_VARS=(
   SERVER_COUNTRIES
   PVPN_ROTATE_COUNTRIES
   GLUETUN_CONTROL_PORT
+  GLUETUN_HEALTHCHECK_START_PERIOD
+  GLUETUN_HEALTHCHECK_INTERVAL
+  GLUETUN_HEALTHCHECK_TIMEOUT
+  GLUETUN_HEALTHCHECK_RETRIES
   ENABLE_LOCAL_DNS
   ENABLE_CADDY
   CADDY_HTTP_PORT
@@ -570,6 +580,10 @@ SERVER_COUNTRIES="${SERVER_COUNTRIES}"              # ProtonVPN exit country lis
 # SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) if PF stays at 0
 PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES}"  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT}"            # Host port that exposes the Gluetun control API (default: ${GLUETUN_CONTROL_PORT})
+GLUETUN_HEALTHCHECK_START_PERIOD="${GLUETUN_HEALTHCHECK_START_PERIOD}"  # Compose start_period before health failures (default: ${GLUETUN_HEALTHCHECK_START_PERIOD})
+GLUETUN_HEALTHCHECK_INTERVAL="${GLUETUN_HEALTHCHECK_INTERVAL}"        # Compose interval between Gluetun health checks (default: ${GLUETUN_HEALTHCHECK_INTERVAL})
+GLUETUN_HEALTHCHECK_TIMEOUT="${GLUETUN_HEALTHCHECK_TIMEOUT}"          # Compose timeout per Gluetun health probe (default: ${GLUETUN_HEALTHCHECK_TIMEOUT})
+GLUETUN_HEALTHCHECK_RETRIES="${GLUETUN_HEALTHCHECK_RETRIES}"          # Compose retries before Gluetun marked unhealthy (default: ${GLUETUN_HEALTHCHECK_RETRIES})
 ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}"                   # Advanced: enable the optional dnsmasq container (0/1, default: ${ENABLE_LOCAL_DNS})
 ENABLE_CADDY="${ENABLE_CADDY}"                       # Optional Caddy reverse proxy (run ./arr.sh --enable-caddy or set 1 to add HTTPS hostnames)
 CADDY_HTTP_PORT="${CADDY_HTTP_PORT}"           # Host port published for plain HTTP healthz/apps (default: ${CADDY_HTTP_PORT})
