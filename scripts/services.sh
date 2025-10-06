@@ -518,7 +518,9 @@ check_image_exists() {
     else
       docker manifest inspect "$image" >/dev/null 2>&1 && return 0
     fi
-    sleep $((attempt * 2))
+    if (( attempt < 3 )); then
+      sleep $(( attempt * 2 ))
+    fi
   done
 
   if docker image inspect "$image" >/dev/null 2>&1; then
@@ -832,7 +834,8 @@ arr_wait_for_gluetun_ready() {
     if arr_read_fields "$inspect_output" state has_health health_status; then
       :
     else
-      warn "empty/invalid inspect output"
+      ARR_GLUETUN_FAILURE_REASON="docker inspect returned empty/invalid output for ${name}"
+      warn "  docker inspect returned empty/invalid output; aborting readiness wait."
       return 1
     fi
 
