@@ -89,6 +89,8 @@ VPN_ALLOWED_HOURS_START=""      # default: empty; optional rotation window start
 VPN_ALLOWED_HOURS_END=""      # default: empty; optional rotation window end hour
 VPN_COOLDOWN_MINUTES="60"      # default: 60; cooldown after reconnect
 VPN_MAX_RETRY_MINUTES="20"      # default: 20; retry budget before disabling
+VPN_ROTATION_MAX_PER_DAY="6"      # default: 6; max automatic reconnects per day (0=unlimited)
+VPN_ROTATION_JITTER_SECONDS="0"      # default: 0; random jitter added to reconnect timing
 
 # --- PF timing (advanced; optional, never blocking) ---
 PF_MAX_TOTAL_WAIT="60"      # default: 60; seconds to wait for forwarded port (legacy)
