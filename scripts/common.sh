@@ -62,12 +62,17 @@ have_command() {
 # Read space-separated fields safely regardless of caller IFS.
 # Usage: arr_read_fields "a b c" var1 var2 var3
 arr_read_fields() {
-  local __src="$1"
-  shift
+  local __src="$1"; shift
   local __oldifs="$IFS"
+  local __status
   IFS=' '
-  read -r "$@" <<<"$__src"
+  if read -r "$@" <<<"$__src"; then
+    __status=0
+  else
+    __status=$?
+  fi
   IFS="$__oldifs"
+  return $__status
 }
 
 # Ensures port is numeric and within 1-65535
