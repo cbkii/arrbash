@@ -1364,17 +1364,11 @@ YAML
         - >-
           set -eu;
           /gluetun-entrypoint healthcheck >/dev/null;
-          has_tunnel=0;
-          if ip -4 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)'; then
-            has_tunnel=1;
+          if ! (ip -4 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
+            ip -6 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
+            ip -o link show 2>/dev/null | grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'); then
+            exit 1;
           fi;
-          if [ "$has_tunnel" -eq 0 ] && ip -6 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)'; then
-            has_tunnel=1;
-          fi;
-          if [ "$has_tunnel" -eq 0 ] && ip -o link show 2>/dev/null | grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'; then
-            has_tunnel=1;
-          fi;
-          if [ "$has_tunnel" -eq 0 ]; then exit 1; fi;
           if command -v curl >/dev/null 2>&1; then
             curl -fsS --connect-timeout 5 --max-time 8 https://api.ipify.org >/dev/null || exit 1;
           elif command -v wget >/dev/null 2>&1; then
