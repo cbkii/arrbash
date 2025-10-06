@@ -317,7 +317,10 @@ VPN_AUTO_ALIAS
 
 install_aliases() {
   local alias_path="${ARR_STACK_DIR}/.aliasarr"
-  ensure_dir "$ARR_STACK_DIR"
+  if ! ensure_dir "$ARR_STACK_DIR"; then
+    warn "Unable to create stack directory at ${ARR_STACK_DIR}"
+    return 1
+  fi
   if [[ ! -f "$alias_path" && -f "${REPO_ROOT}/.aliasarr.configured" ]]; then
     cp "${REPO_ROOT}/.aliasarr.configured" "$alias_path"
     ensure_secret_file_mode "$alias_path"
