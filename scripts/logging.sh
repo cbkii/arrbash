@@ -43,7 +43,7 @@ arr_trace_start() {
 
   export ARR_TRACE_FILE="${ARR_TRACE_FILE:-$trace_file}"
 
-  local base_mask='([Pp]assword|[Tt]oken|[Ss]ecret|[Aa]pi[_-]?[Kk]ey)=[^[:space:]]+|Authorization:[[:space:]]*Basic[[:space:]]+[A-Za-z0-9+/=]+'
+  local base_mask='([Pp]assword|[Tt]oken|[Ss]ecret|[Aa]pi[_-]?[Kk]ey|[Aa]ccess[_-]?[Tt]oken|[Aa]uth|[Ss]ession|[Jj]wt)=[^[:space:]]+|Authorization:[[:space:]]*Basic[[:space:]]+[A-Za-z0-9+/=]+|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9\-._~+/]+=*|Cookie:[[:space:]]*[^;[:space:]]+'
   local mask="${ARR_TRACE_MASK_RE:+${ARR_TRACE_MASK_RE}|}${base_mask}"
 
   exec {__arr_trace_fd}> >(
