@@ -1424,7 +1424,7 @@ YAML
     healthcheck:
       test:
         - "CMD-SHELL"
-        - >
+        - >-
           if command -v drill >/dev/null 2>&1; then
             drill -Q example.com @${LOCALHOST_IP} >/dev/null 2>&1;
           elif command -v nslookup >/dev/null 2>&1; then
