@@ -109,7 +109,7 @@ json_encode_array() {
   fi
 
   if have_command python3; then
-    if ! printf '%s\0' "${values[@]}" | python3 - <<'PYTHON'
+    if ! printf '%s\0' "${values[@]}" | python3 - <<'PYTHON'; then
 import json, sys
 data = sys.stdin.buffer.read()
 # Remove trailing null if present (like jq -Rs 'split("\u0000")[:-1]')
@@ -119,7 +119,6 @@ if items and items[-1] == b'':
 # Decode bytes to str (assuming UTF-8, as bash does)
 print(json.dumps([x.decode('utf-8', 'replace') for x in items]))
 PYTHON
-    then
       return 1
     fi
     return 0

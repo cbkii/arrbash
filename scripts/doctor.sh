@@ -177,7 +177,7 @@ report_port() {
 }
 
 # Lists normalized bind addresses for a port using ss or lsof output
-port_bind_addresses() { 
+port_bind_addresses() {
   local proto="$1"
   local port="$2"
 
@@ -522,7 +522,7 @@ doctor_check_sabnzbd() {
       gluetun_disabled=1
     fi
     case "${VPN_SERVICE_PROVIDER:-protonvpn}" in
-      ''|none|disabled|off)
+      '' | none | disabled | off)
         gluetun_disabled=1
         ;;
     esac

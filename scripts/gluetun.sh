@@ -252,7 +252,7 @@ write_pf_state() {
 
   _pf_ensure_parent_dir "$state_file"
   printf '%s\n' "$json" >"$state_file" 2>/dev/null || true # ignore failures: non-fatal state persistence
-  chmod 600 "$state_file" 2>/dev/null || true # ignore failures: best-effort permission fix
+  chmod 600 "$state_file" 2>/dev/null || true              # ignore failures: best-effort permission fix
 
   if [[ "$port" -gt 0 ]]; then
     PF_ENSURED_PORT="$port"

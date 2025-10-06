@@ -250,12 +250,12 @@ sab_add_nzb_file() {
   local base="$(sab_base_url)"
   local response
   if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" \
-      -F "apikey=${SABNZBD_API_KEY}" \
-      -F "output=json" \
-      -F "mode=addfile" \
-      -F "cat=${SABNZBD_CATEGORY:-}" \
-      -F "name=@${file}" \
-      "${base}/api" 2>/dev/null); then
+    -F "apikey=${SABNZBD_API_KEY}" \
+    -F "output=json" \
+    -F "mode=addfile" \
+    -F "cat=${SABNZBD_CATEGORY:-}" \
+    -F "name=@${file}" \
+    "${base}/api" 2>/dev/null); then
     log_error "[sab] Failed to upload ${file}"
     return 1
   fi
@@ -278,12 +278,12 @@ sab_add_nzb_url() {
   local base="$(sab_base_url)"
   local response
   if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" --get \
-      --data-urlencode "apikey=${SABNZBD_API_KEY}" \
-      --data-urlencode "mode=addurl" \
-      --data-urlencode "name=${url}" \
-      --data-urlencode "cat=${SABNZBD_CATEGORY:-}" \
-      --data-urlencode "output=json" \
-      "${base}/api" 2>/dev/null); then
+    --data-urlencode "apikey=${SABNZBD_API_KEY}" \
+    --data-urlencode "mode=addurl" \
+    --data-urlencode "name=${url}" \
+    --data-urlencode "cat=${SABNZBD_CATEGORY:-}" \
+    --data-urlencode "output=json" \
+    "${base}/api" 2>/dev/null); then
     log_error "[sab] Failed to submit URL"
     return 1
   fi
@@ -373,7 +373,7 @@ main() {
       shift || true
       sab_postprocess "$@"
       ;;
-    -*|--*)
+    -* | --*)
       usage
       return 1
       ;;

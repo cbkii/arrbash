@@ -280,7 +280,7 @@ port_in_use_with_details() {
             break
           fi
         fi
-      done <<< "$output"
+      done <<<"$output"
     fi
 
     if ((restore_extglob)); then

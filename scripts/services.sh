@@ -836,12 +836,12 @@ arr_wait_for_gluetun_ready() {
             warn "  Gluetun is restarting; waiting for stability..."
           fi
           ;;
-        created|starting)
+        created | starting)
           if [[ "$last_state" != "$state" ]]; then
             msg "  Gluetun container reported state '${state}'. Waiting for it to run..."
           fi
           ;;
-        exited|dead|removing|paused)
+        exited | dead | removing | paused)
           ARR_GLUETUN_FAILURE_REASON="Gluetun state '${state}' (expected running)"
           warn "  Gluetun state is '${state}' (expected running)."
           return 1

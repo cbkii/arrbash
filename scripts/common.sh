@@ -54,7 +54,7 @@ arr_resolve_color_output() {
 arr_resolve_color_output
 
 # Checks command availability without emitting output (used for optional deps)
-have_command() { 
+have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
