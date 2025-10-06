@@ -206,9 +206,10 @@ arr_setup_defaults() {
   : "${FLARR_INT_PORT:=8191}"
   : "${SABNZBD_INT_PORT:=8080}"
 
-  CYAN='\033[0;36m'
+  BLUE='\033[0;36m'
+  CYAN='\033[1;36m'
   YELLOW='\033[0;33m'
   RESET='\033[0m'
   BOLD='\033[1m'
-  : "$CYAN" "$YELLOW" "$RESET" "$BOLD"
+  : "$BLUE" "$CYAN" "$YELLOW" "$RESET" "$BOLD"
 }
