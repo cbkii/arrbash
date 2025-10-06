@@ -16,6 +16,9 @@ arr_err_trap() {
   local line="${BASH_LINENO[0]:-${LINENO}}"
   local label="[${STACK:-arr}]"
   printf '%s error at %s:%s (status=%s)\n' "${label}" "${src}" "${line}" "${rc}" >&2
+  if [[ -n "${ARR_TRACE_FILE:-}" ]]; then
+    printf 'Trace log: %s\n' "${ARR_TRACE_FILE}" >&2
+  fi
   exit "${rc}"
 }
 
@@ -25,12 +28,18 @@ trap 'arr_err_trap' ERR
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
+LOG_LIB="${REPO_ROOT}/scripts/logging.sh"
 if [[ -f "${USERCONF_LIB}" ]]; then
   # shellcheck source=scripts/userconf.sh
   . "${USERCONF_LIB}"
 else
   printf '[arr] missing required module: %s\n' "${USERCONF_LIB}" >&2
   exit 1
+fi
+
+if [[ -f "${LOG_LIB}" ]]; then
+  # shellcheck source=scripts/logging.sh disable=SC1091
+  . "${LOG_LIB}"
 fi
 
 if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
@@ -249,6 +258,10 @@ main() {
   local IFS=$'\n\t'
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --trace)
+        ARR_TRACE=1
+        shift
+        ;;
       --yes)
         # shellcheck disable=SC2034 # used by scripts/preflight.sh
         ASSUME_YES=1
@@ -297,6 +310,10 @@ main() {
         ;;
     esac
   done
+
+  if [[ "${ARR_TRACE:-0}" == "1" ]] && declare -f arr_trace_start >/dev/null 2>&1; then
+    arr_trace_start
+  fi
 
   if [[ "${REFRESH_ALIASES:-0}" == "1" ]]; then
     refresh_aliases
