@@ -99,7 +99,7 @@ show_configuration_preview() {
   if [[ "${VPN_AUTO_RECONNECT_ENABLED:-0}" == "1" ]]; then
     local threshold_display="${VPN_SPEED_THRESHOLD_KBPS:-12}"
     local interval_display="${VPN_CHECK_INTERVAL_MINUTES:-20}"
-    local window_display="none"
+    local window_display="anytime"
     if [[ -n "${VPN_ALLOWED_HOURS_START:-}" && -n "${VPN_ALLOWED_HOURS_END:-}" ]]; then
       local start_fmt end_fmt
       start_fmt=$(printf '%02d' "${VPN_ALLOWED_HOURS_START:-0}" 2>/dev/null || printf '%02d' 0)
@@ -110,9 +110,11 @@ show_configuration_preview() {
     if [[ ! "$cap_display" =~ ^[0-9]+$ ]]; then
       cap_display=6
     fi
-    local cap_fragment="cap ${cap_display}/day"
+    local cap_fragment
     if ((cap_display == 0)); then
-      cap_fragment="cap unlimited"
+      cap_fragment="rotation cap unlimited"
+    else
+      cap_fragment="rotation cap ${cap_display}/day"
     fi
     local jitter_display="${VPN_ROTATION_JITTER_SECONDS:-0}"
     if [[ ! "$jitter_display" =~ ^[0-9]+$ ]]; then
@@ -132,9 +134,116 @@ show_configuration_preview() {
   fi
   qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_final")"
 
+  local server_names_display="${SERVER_NAMES:-}" 
+  if [[ -z "$server_names_display" ]]; then
+    server_names_display="(automatic selection)"
+  fi
+
+  local rotation_order_display="${PVPN_ROTATE_COUNTRIES:-}" 
+  if [[ -z "$rotation_order_display" ]]; then
+    rotation_order_display="(disabled)"
+  fi
+
   local userconf_edit_target="${ARR_USERCONF_PATH}"
   if [[ -n "${ARR_USERCONF_OVERRIDE_PATH:-}" ]]; then
     userconf_edit_target="${ARR_USERCONF_OVERRIDE_PATH}"
+  fi
+
+  local upstream_dns_display="${UPSTREAM_DNS_SERVERS:-}"
+  if [[ -z "$upstream_dns_display" ]]; then
+    local upstream_parts=()
+    if [[ -n "${UPSTREAM_DNS_1:-}" ]]; then
+      upstream_parts+=("${UPSTREAM_DNS_1}")
+    fi
+    if [[ -n "${UPSTREAM_DNS_2:-}" ]]; then
+      upstream_parts+=("${UPSTREAM_DNS_2}")
+    fi
+    if ((${#upstream_parts[@]} > 0)); then
+      upstream_dns_display="$(IFS=,; printf '%s' "${upstream_parts[*]}")"
+    else
+      upstream_dns_display="(docker defaults)"
+    fi
+  fi
+
+  local dns_suffix_display="${LAN_DOMAIN_SUFFIX:-home.arpa}"
+  local local_dns_summary="disabled (suffix ${dns_suffix_display})"
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
+    local_dns_summary="enabled (${dns_suffix_display}; mode ${DNS_DISTRIBUTION_MODE:-router}; upstream ${upstream_dns_display})"
+  fi
+
+  local caddy_domain_suffix="${CADDY_DOMAIN_SUFFIX:-${LAN_DOMAIN_SUFFIX:-}}"
+  local caddy_domain_display
+  if [[ -n "$caddy_domain_suffix" ]]; then
+    caddy_domain_display="$caddy_domain_suffix"
+  else
+    caddy_domain_display="(not set)"
+  fi
+
+  local caddy_summary="disabled (${caddy_domain_display})"
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+    caddy_summary="enabled (${caddy_domain_display}; HTTP ${CADDY_HTTP_PORT}; HTTPS ${CADDY_HTTPS_PORT})"
+  fi
+
+  local caddy_auth_user_display="${CADDY_BASIC_AUTH_USER:-(not set)}"
+  local caddy_auth_hash_display="(will be generated)"
+  if [[ -n "${CADDY_BASIC_AUTH_HASH:-}" ]]; then
+    caddy_auth_hash_display="present"
+  fi
+
+  local direct_ports_summary="disabled"
+  if [[ "${EXPOSE_DIRECT_PORTS:-1}" == "1" ]]; then
+    direct_ports_summary="enabled"
+  fi
+
+  local sab_host_display="${SABNZBD_HOST:-${LOCALHOST_IP:-127.0.0.1}}"
+  local sab_port_display="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8080}}"
+  local sab_vpn_display="LAN"
+  if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
+    sab_vpn_display="VPN"
+    sab_port_display="(not exposed; VPN mode)"
+  fi
+  local sab_category_display="${SABNZBD_CATEGORY:-${STACK}}"
+  local sab_timeout_display="${SABNZBD_TIMEOUT:-15}" 
+  local sabnzbd_summary="disabled"
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    sabnzbd_summary="enabled (${sab_vpn_display}; host ${sab_host_display}; port ${sab_port_display}; category ${sab_category_display}; timeout ${sab_timeout_display}s)"
+  fi
+
+  local sab_api_key_display="(not set; will sync from sabnzbd.ini)"
+  if [[ -n "${SABNZBD_API_KEY:-}" ]]; then
+    sab_api_key_display="$(obfuscate_sensitive "${SABNZBD_API_KEY}")"
+  fi
+
+  local configarr_summary="disabled"
+  if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
+    configarr_summary="enabled"
+  fi
+
+  local usenet_client_display="${ARRBASH_USENET_CLIENT:-(not set)}"
+
+  local caddy_lan_bypass_line=""
+  if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${CADDY_LAN_CIDRS:-}" ]]; then
+    printf -v caddy_lan_bypass_line '  • Caddy LAN bypass CIDRs: %s\n' "${CADDY_LAN_CIDRS}"
+  fi
+
+  local sab_port_line
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
+      printf -v sab_port_line '  • SABnzbd: (not exposed; VPN mode)\n'
+    else
+      printf -v sab_port_line '  • SABnzbd: %s\n' "${SABNZBD_PORT}"
+    fi
+  else
+    printf -v sab_port_line '  • SABnzbd: (disabled)\n'
+  fi
+
+  local caddy_http_line caddy_https_line
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+    printf -v caddy_http_line '  • Caddy HTTP: %s\n' "${CADDY_HTTP_PORT}"
+    printf -v caddy_https_line '  • Caddy HTTPS: %s\n' "${CADDY_HTTPS_PORT}"
+  else
+    printf -v caddy_http_line '  • Caddy HTTP: (disabled)\n'
+    printf -v caddy_https_line '  • Caddy HTTPS: (disabled)\n'
   fi
 
   cat <<CONFIG
@@ -144,6 +253,7 @@ ARR Stack configuration preview
 Paths
   • Stack directory: ${ARR_STACK_DIR}
   • Docker data root: ${ARR_DOCKER_DIR}
+  • Config directory: ${ARRCONF_DIR}
   • Downloads: ${DOWNLOADS_DIR}
   • Completed downloads: ${COMPLETED_DIR}
   • TV library: ${TV_DIR}
@@ -156,8 +266,18 @@ Network & system
   • Localhost IP override: ${LOCALHOST_IP}
   • VPN mode: ${vpn_mode_display}
   • Server countries: ${SERVER_COUNTRIES}
+  • Server names: ${server_names_display}
+  • Rotation order: ${rotation_order_display}
   • VPN auto-reconnect: ${vpn_auto_summary}
+  • VPN samples required: ${VPN_CONSECUTIVE_CHECKS:-3}
+  • VPN cooldown (minutes): ${VPN_COOLDOWN_MINUTES:-60}
+  • VPN retry budget (minutes): ${VPN_MAX_RETRY_MINUTES:-20}
   • User/Group IDs: ${PUID}/${PGID}
+  • Local DNS: ${local_dns_summary}
+  • Caddy reverse proxy: ${caddy_summary}
+  • Direct LAN ports: ${direct_ports_summary}
+  • LAN domain suffix: ${LAN_DOMAIN_SUFFIX:-home.arpa}
+  • Caddy domain suffix: ${caddy_domain_display}
 
 Credentials & secrets
   • Proton username: ${proton_user_display}
@@ -167,6 +287,9 @@ Credentials & secrets
   • qBittorrent username: ${QBT_USER}
   • qBittorrent password: ${qbt_pass_display}
   • qBittorrent auth whitelist: ${qbt_whitelist_final}
+  • SABnzbd API key: ${sab_api_key_display}
+  • Caddy Basic Auth user: ${caddy_auth_user_display}
+  • Caddy Basic Auth password hash: ${caddy_auth_hash_display}
 
 Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
@@ -176,7 +299,13 @@ Ports
   • Prowlarr: ${PROWLARR_PORT}
   • Bazarr: ${BAZARR_PORT}
   • FlareSolverr: ${FLARR_PORT}
+${sab_port_line}${caddy_http_line}${caddy_https_line}
 
+Services & automation
+  • ConfigArr: ${configarr_summary}
+  • SABnzbd: ${sabnzbd_summary}
+  • Usenet client label: ${usenet_client_display}
+$caddy_lan_bypass_line
 Files that will be created/updated
   • Environment file: ${ARR_ENV_FILE}
   • Compose file: ${ARR_STACK_DIR}/docker-compose.yml
