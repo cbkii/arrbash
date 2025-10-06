@@ -203,7 +203,7 @@ show_configuration_preview() {
     sab_port_display="(not exposed; VPN mode)"
   fi
   local sab_category_display="${SABNZBD_CATEGORY:-${STACK}}"
-  local sab_timeout_display="${SABNZBD_TIMEOUT:-15}" 
+  local sab_timeout_display="${SABNZBD_TIMEOUT:-15}"
   local sabnzbd_summary="disabled"
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     sabnzbd_summary="enabled (${sab_vpn_display}; host ${sab_host_display}; port ${sab_port_display}; category ${sab_category_display}; timeout ${sab_timeout_display}s)"
