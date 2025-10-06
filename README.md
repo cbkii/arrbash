@@ -96,7 +96,7 @@ SABNZBD_PORT=8080          # Host port for the WebUI (qBittorrent now defaults t
 SABNZBD_HOST="${LOCALHOST_IP}"  # Host sab-helper uses (defaults to LOCALHOST_IP)
 SABNZBD_CATEGORY="${STACK}" # Category assigned to helper-submitted jobs
 SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
-# Set SABNZBD_IMAGE=lscr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
+# Set SABNZBD_IMAGE=ghcr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
 ```
 
 After your first SABnzbd login, paste the API key into the WebUI once; reruns will hydrate
