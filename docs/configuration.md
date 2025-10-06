@@ -21,6 +21,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
     `LOCALHOST_IP=127.0.0.1`
   - `LAN_DOMAIN_SUFFIX`: optional suffix for hostnames (default `home.arpa`). Needed for local DNS or Caddy.
   - `SPLIT_VPN`: set `1` to run only qBittorrent inside Gluetun, or `0` to tunnel everything.
+  - `GLUETUN_HEALTHCHECK_START_PERIOD`, `GLUETUN_HEALTHCHECK_INTERVAL`, `GLUETUN_HEALTHCHECK_TIMEOUT`, `GLUETUN_HEALTHCHECK_RETRIES`: extend or shorten Gluetun's Compose healthcheck window if the VPN needs more retries (see [Containers stuck in `starting`](troubleshooting.md#containers-stuck-in-starting)).
   - `EXPOSE_DIRECT_PORTS`: leave at `1` for LAN-friendly URLs, or set `0` to keep services internal to Docker networking.
   - `DNS_DISTRIBUTION_MODE`: choose `router` (default) to update DHCP Option 6, or `per-device` when pointing clients at the resolver manually.
   - `ARR_PORT_CHECK_MODE`: `enforce` (default) fails fast on conflicts, `warn` prints notices, `skip` disables port validation (use sparingly), and `fix` attempts to stop conflicting listeners automatically before falling back to warn mode.

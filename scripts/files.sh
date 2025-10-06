@@ -680,6 +680,10 @@ write_env() {
     write_env_kv "VPN_SERVICE_PROVIDER" "protonvpn"
     write_env_kv "GLUETUN_API_KEY" "$GLUETUN_API_KEY"
     write_env_kv "GLUETUN_CONTROL_PORT" "$GLUETUN_CONTROL_PORT"
+    write_env_kv "GLUETUN_HEALTHCHECK_START_PERIOD" "$GLUETUN_HEALTHCHECK_START_PERIOD"
+    write_env_kv "GLUETUN_HEALTHCHECK_INTERVAL" "$GLUETUN_HEALTHCHECK_INTERVAL"
+    write_env_kv "GLUETUN_HEALTHCHECK_TIMEOUT" "$GLUETUN_HEALTHCHECK_TIMEOUT"
+    write_env_kv "GLUETUN_HEALTHCHECK_RETRIES" "$GLUETUN_HEALTHCHECK_RETRIES"
     write_env_kv "SERVER_COUNTRIES" "$SERVER_COUNTRIES"
     write_env_kv "GLUETUN_FIREWALL_INPUT_PORTS" "$firewall_ports_csv"
     write_env_kv "GLUETUN_FIREWALL_OUTBOUND_SUBNETS" "$gluetun_firewall_outbound"
@@ -882,9 +886,6 @@ YAML
       QBT_PASS: ${QBT_PASS}
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
-      HEALTH_VPN_DURATION_INITIAL: "30s"
-      HEALTH_VPN_DURATION_ADDITION: "10s"
-      HEALTH_SUCCESS_WAIT_DURATION: "10s"
       DNS_KEEP_NAMESERVER: "off"
       FIREWALL_OUTBOUND_SUBNETS: ${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}
       FIREWALL_INPUT_PORTS: ${GLUETUN_FIREWALL_INPUT_PORTS}
@@ -916,10 +917,10 @@ YAML
           else
             exit 1;
           fi
-      interval: 30s
-      timeout: 30s
-      retries: 10
-      start_period: 120s
+      interval: ${GLUETUN_HEALTHCHECK_INTERVAL}
+      timeout: ${GLUETUN_HEALTHCHECK_TIMEOUT}
+      retries: ${GLUETUN_HEALTHCHECK_RETRIES}
+      start_period: ${GLUETUN_HEALTHCHECK_START_PERIOD}
     restart: unless-stopped
     logging:
       driver: json-file
@@ -1320,9 +1321,6 @@ services:
       QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
-      HEALTH_VPN_DURATION_INITIAL: "30s"
-      HEALTH_VPN_DURATION_ADDITION: "10s"
-      HEALTH_SUCCESS_WAIT_DURATION: "10s"
       DNS_KEEP_NAMESERVER: "off"
       FIREWALL_OUTBOUND_SUBNETS: "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}"
       FIREWALL_INPUT_PORTS: "${GLUETUN_FIREWALL_INPUT_PORTS}"
@@ -1374,10 +1372,10 @@ YAML
           else
             exit 1;
           fi
-      interval: 30s
-      timeout: 30s
-      retries: 10
-      start_period: 120s
+      interval: ${GLUETUN_HEALTHCHECK_INTERVAL}
+      timeout: ${GLUETUN_HEALTHCHECK_TIMEOUT}
+      retries: ${GLUETUN_HEALTHCHECK_RETRIES}
+      start_period: ${GLUETUN_HEALTHCHECK_START_PERIOD}
     restart: unless-stopped
     logging:
       driver: json-file
