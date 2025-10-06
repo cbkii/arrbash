@@ -663,7 +663,8 @@ simple_port_check() {
 
     if [[ "$mode" == "fix" ]]; then
       warn "    [fix] Automatic remediation was unable to clear all conflicting listeners."
-      die "Automatic port conflict remediation failed; resolve conflicts and rerun ./arr.sh"
+      warn "    Continuing despite port conflicts (ARR_PORT_CHECK_MODE=fix). Services may fail to bind."
+      return 0
     fi
 
     die "Resolve port conflicts and rerun ./arr.sh"
