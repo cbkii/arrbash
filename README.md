@@ -25,30 +25,32 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
     ```
 3. **Add Proton credentials.**
    ```bash
-   cp arrconf/proton.auth.example arrconf/proton.auth
-   nano arrconf/proton.auth    # set PROTON_USER and PROTON_PASS (the script appends +pmp)
-   chmod 600 arrconf/proton.auth
+   mkdir -p ../arrconfigs
+   cp arrconf/proton.auth.example ../arrconfigs/proton.auth
+   nano ../arrconfigs/proton.auth    # set PROTON_USER and PROTON_PASS (the script appends +pmp)
+   chmod 600 ../arrconfigs/proton.auth
    ```
 4. **Create your overrides.**
    ```bash
-   cp arrconf/userr.conf.example ../userr.conf
-   nano ../userr.conf          # set LAN_IP, DOWNLOADS_DIR, COMPLETED_DIR, MEDIA_DIR
+   cp arrconf/userr.conf.example ../arrconfigs/userr.conf
+   nano ../arrconfigs/userr.conf     # set LAN_IP and point DOWNLOADS_DIR/COMPLETED_DIR/MEDIA_DIR to your storage
    ```
 5. **Run the installer.**
    ```bash
    ./arr.sh --yes         # omit --yes for interactive mode
    ```
-  The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`. The installer automatically searches the repo's parent directory and uses the first `userr.conf` it finds there (for example `../userr.conf` or `../arrconfigs/userr.conf`), so keep only the copy you want applied.
+  The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`. The installer first searches under `${ARR_DATA_ROOT}` (depth 4) and then the repo's parent directory for the first `userr.conf` it finds (for example `${ARR_DATA_ROOT}/arrconfigs/userr.conf` or `../userr.conf`), so keep only the copy you want applied.
 6. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration
 - `ARR_DATA_ROOT`: top-level data directory for the stack (defaults to `~/srv`). Override it via the environment or `userr.conf` before running `./arr.sh`.
-- `userr.conf` defaults to `${ARR_BASE:-$ARR_DATA_ROOT}/userr.conf`; keep it outside version control. If multiple overrides live alongside the repo, the installer loads the first file named `userr.conf` it finds above the repo.
+- `ARRCONF_DIR`: configuration directory for Proton credentials and overrides (defaults to `${ARR_DATA_ROOT}/${STACK}configs`).
+- `userr.conf` and `proton.auth` both default to `${ARRCONF_DIR}`; keep them outside version control. If multiple overrides exist, the installer looks under `${ARR_DATA_ROOT}` (depth 4) and then above the repo for the first `userr.conf` it finds.
 - Review these core values:
   - `LAN_IP`: private address of the host; required before ports are exposed.
 - `STACK`: project label used for generated paths and logs (defaults to `arr` via `STACK="${STACK:-arr}"`).
-- `ARR_BASE`: base directory for generated files (defaults to `ARR_DATA_ROOT`).
-  - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: map to your storage paths.
+- `ARR_DATA_ROOT` also determines generated stack paths and the default location of Proton credentials and overrides.
+  - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: defaults sit under `${ARR_DATA_ROOT}` (for example `${ARR_DATA_ROOT}/media`), but you should point each one at your actual storage volume in `userr.conf`.
   - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent; leave `0` for full VPN mode.
   - `ENABLE_CADDY`, `ENABLE_LOCAL_DNS`, `ENABLE_CONFIGARR`: toggle optional HTTPS/DNS/Configarr services.
 - Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arr.sh --rotate-api-key` or `./arr.sh --rotate-caddy-auth`.
@@ -85,7 +87,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 
 SABnzbd integration is optional.
 
-Enable in your user config (for example `${ARR_BASE}/userr.conf`):
+Enable in your user config (for example `${ARRCONF_DIR}/userr.conf`):
 
 ```bash
 SABNZBD_ENABLED=1

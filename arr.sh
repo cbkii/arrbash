@@ -48,7 +48,7 @@ _arr_userconf_source="default"
 
 arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _arr_userconf_source
 
-_expected_base="${ARR_BASE:-${ARR_DATA_ROOT}}"
+_expected_base="${ARR_DATA_ROOT}"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
 _canon_userconf="${ARR_USERCONF_PATH}"
 

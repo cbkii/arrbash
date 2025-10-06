@@ -67,7 +67,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
 ### VPN auto-reconnect inactive
 - Confirm the feature is enabled:
   ```bash
-  grep VPN_AUTO_RECONNECT_ENABLED ${ARR_BASE:-$ARR_DATA_ROOT}/userr.conf
+  grep VPN_AUTO_RECONNECT_ENABLED ${ARRCONF_DIR}/userr.conf
   ```
 - Clear pause/kill overrides:
   ```bash

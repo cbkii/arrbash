@@ -21,14 +21,38 @@ arr_canonical_path() {
   printf '%s\n' "${path}"
 }
 
-# Locate the first userr.conf override in the parent directory tree, excluding
-# the repository itself when REPO_ROOT is known. Returns the canonical absolute
-# path on success.
+# Returns the default user configuration path derived from ARRCONF_DIR, falling
+# back to ARR_DATA_ROOT when the config directory is unset.
+arr_default_userconf_path() {
+  local conf_dir="${ARRCONF_DIR:-${ARR_DATA_ROOT:-}}"
+
+  if [[ -z "${conf_dir:-}" ]]; then
+    return 1
+  fi
+
+  conf_dir="${conf_dir%/}"
+  printf '%s/userr.conf\n' "$conf_dir"
+}
+
+# Locate the first userr.conf override under ARR_DATA_ROOT (depth 4). If no override
+# is found, search the parent directory structure of the repository (excluding the
+# repository itself when REPO_ROOT is known) as a fallback. Returns the canonical absolute path on success.
 arr_find_userconf_override() {
   local target="userr.conf"
   local repo_root="${REPO_ROOT:-}"
   local parent=""
   local first=""
+
+  if [[ -n "${ARR_DATA_ROOT:-}" ]]; then
+    local search_root=""
+    if search_root="$(cd -- "${ARR_DATA_ROOT}" 2>/dev/null && pwd -P)"; then
+      first="$(find -L "${search_root}" -maxdepth 4 -type f -name "${target}" -print -quit 2>/dev/null)" || true
+      if [[ -n "${first}" ]]; then
+        arr_canonical_path "${first}"
+        return 0
+      fi
+    fi
+  fi
 
   if [[ -n "${repo_root}" ]]; then
     repo_root="$(cd -- "${repo_root}" 2>/dev/null && pwd -P)" || repo_root=""
@@ -55,7 +79,7 @@ arr_find_userconf_override() {
 
 # Resolve the effective userr.conf path, preferring an explicit ARR_USERCONF_PATH
 # when set, otherwise falling back to the first sibling override and finally the
-# default under ARR_BASE (or ARR_DATA_ROOT when unset). Sets the provided variable
+# default under ARRCONF_DIR (falls back to ARR_DATA_ROOT when unset). Sets the provided variable
 # names to the canonical path, discovered override, and source label.
 arr_resolve_userconf_paths() {
   local __path_var="$1"
@@ -73,7 +97,9 @@ arr_resolve_userconf_paths() {
       candidate="${override}"
       source="override"
     else
-      candidate="${ARR_BASE:-${ARR_DATA_ROOT}}/userr.conf"
+      if ! candidate="$(arr_default_userconf_path 2>/dev/null)"; then
+        candidate="userr.conf"
+      fi
       source="default"
       override=""
     fi

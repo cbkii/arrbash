@@ -290,7 +290,12 @@ write_env() {
   SPLIT_VPN="$split_vpn"
 
   local direct_ports_requested="${EXPOSE_DIRECT_PORTS:-0}"
-  local userconf_path="${ARR_USERCONF_PATH:-${ARR_BASE:-${ARR_DATA_ROOT}}/userr.conf}"
+  local userconf_path="${ARR_USERCONF_PATH:-}"
+  if [[ -z "${userconf_path}" ]]; then
+    if ! userconf_path="$(arr_default_userconf_path 2>/dev/null)"; then
+      userconf_path="userr.conf"
+    fi
+  fi
 
   if ((split_vpn == 1)); then
     if [[ "${ENABLE_CADDY:-0}" -ne 0 ]]; then
@@ -1241,7 +1246,12 @@ write_compose() {
   local include_caddy=0
   local include_local_dns=0
   local -a upstream_dns_servers=()
-  local userconf_path="${ARR_USERCONF_PATH:-${ARR_BASE:-${ARR_DATA_ROOT}}/userr.conf}"
+  local userconf_path="${ARR_USERCONF_PATH:-}"
+  if [[ -z "${userconf_path}" ]]; then
+    if ! userconf_path="$(arr_default_userconf_path 2>/dev/null)"; then
+      userconf_path="userr.conf"
+    fi
+  fi
 
   mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
 
@@ -2056,7 +2066,12 @@ write_caddy_assets() {
   local data_dir="${caddy_root}/data"
   local config_dir="${caddy_root}/config"
   local caddyfile="${caddy_root}/Caddyfile"
-  local userconf_path="${ARR_USERCONF_PATH:-${ARR_BASE:-${ARR_DATA_ROOT}}/userr.conf}"
+  local userconf_path="${ARR_USERCONF_PATH:-}"
+  if [[ -z "${userconf_path}" ]]; then
+    if ! userconf_path="$(arr_default_userconf_path 2>/dev/null)"; then
+      userconf_path="userr.conf"
+    fi
+  fi
 
   ensure_dir "$caddy_root"
   ensure_dir "$data_dir"

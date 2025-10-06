@@ -5,7 +5,7 @@ networking behaviour, environment overrides, helper tooling, and the preservatio
 logic that keeps your API key and configuration safe across reruns.
 
 > **Quick toggle:** Run `./arr.sh --enable-sab --yes` to enable SABnzbd for a single
-> install without editing `${ARR_BASE}/userr.conf`.
+> install without editing `${ARRCONF_DIR}/userr.conf`.
 
 ## Network Modes
 

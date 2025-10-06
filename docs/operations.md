@@ -5,7 +5,7 @@
 Use these commands to run the installer safely, rotate credentials, and call helper scripts.
 
 ## Installer basics
-- `./arr.sh` is idempotent. Rerun it after editing `${ARR_BASE:-$ARR_DATA_ROOT}/userr.conf`; the script regenerates `.env`, `docker-compose.yml`, the Caddyfile, and helper assets before starting containers.
+- `./arr.sh` is idempotent. Rerun it after editing `${ARRCONF_DIR}/userr.conf`; the script regenerates `.env`, `docker-compose.yml`, the Caddyfile, and helper assets before starting containers.
 - Key flags (combine as needed):
 
   ```bash
@@ -51,7 +51,7 @@ Run these from the repository root:
 | `scripts/fix-versions.sh` | Swap pinned LinuxServer tags to `latest` when a registry removes a manifest. |
 
 ## Routine maintenance
-1. Edit `${ARR_BASE}/userr.conf` with new paths, credentials, or toggles.
+1. Edit `${ARRCONF_DIR}/userr.conf` with new paths, credentials, or toggles.
 2. Rerun `./arr.sh --yes` and review the summary for updated URLs and credentials.
 3. Load `.aliasarr` and verify services:
    ```bash
