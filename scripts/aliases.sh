@@ -327,7 +327,7 @@ install_aliases() {
   fi
 
   local kind _ rc repo_escaped alias_line source_line
-  read -r kind _ <<<"$(detect_shell_kind)"
+  { local IFS=' '; read -r kind _ <<<"$(detect_shell_kind)"; }
   rc="${HOME}/.bashrc"
   [[ "$kind" == "zsh" ]] && rc="${HOME}/.zshrc"
   if ! touch "$rc" 2>/dev/null; then

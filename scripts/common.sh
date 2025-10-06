@@ -59,6 +59,22 @@ have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Read space-separated fields safely regardless of caller IFS.
+# Usage: arr_read_fields "a b c" var1 var2 var3
+arr_read_fields() {
+  local __src="$1"; shift
+  local __oldifs="$IFS"
+  local __status
+  IFS=' '
+  if read -r "$@" <<<"$__src"; then
+    __status=0
+  else
+    __status=$?
+  fi
+  IFS="$__oldifs"
+  return $__status
+}
+
 # Ensures port is numeric and within 1-65535
 validate_port() {
   local port="$1"
@@ -935,18 +951,18 @@ msg() {
 # User-facing step banner with bold/bright styling
 step() {
   if msg_color_supported; then
-    printf '%b🧱📣 %s%b\n' "${BOLD}${BLUE}" "$*" "$RESET"
+    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BOLD}${BLUE}" "$*" "$RESET"
   else
-    printf '🧱📣 %s\n' "$*"
+    printf '[STEP] %s\n' "$*"
   fi
 }
 
 # User-facing warning message with optional color
 warn() {
   if msg_color_supported; then
-    printf '%b⚠️ %s%b\n' "$YELLOW" "$*" "$RESET" >&2
+    printf '%b[‽]  %s%b\n' "$YELLOW" "$*" "$RESET" >&2
   else
-    printf '⚠️ %s\n' "$*" >&2
+    printf '[WARN]  %s\n' "$*" >&2
   fi
 }
 
