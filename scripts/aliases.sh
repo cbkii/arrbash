@@ -316,23 +316,43 @@ VPN_AUTO_ALIAS
 }
 
 install_aliases() {
-  local bashrc="${HOME}/.bashrc"
-  local repo_escaped
-  repo_escaped="$(arr_shell_escape_double_quotes "${REPO_ROOT}")"
-  local alias_line
-  alias_line=$(printf "alias %s='cd \"%s\" && ./arr.sh'" "${STACK}" "${repo_escaped}")
-  local source_line="# source ${ARR_STACK_DIR}/.aliasarr  # Optional helper functions"
+  local alias_path="${ARR_STACK_DIR}/.aliasarr"
+  ensure_dir "$ARR_STACK_DIR"
+  if [[ ! -f "$alias_path" && -f "${REPO_ROOT}/.aliasarr.configured" ]]; then
+    cp "${REPO_ROOT}/.aliasarr.configured" "$alias_path"
+    ensure_secret_file_mode "$alias_path"
+  fi
 
-  if [[ -w "$bashrc" ]]; then
-    if ! grep -Fq "$alias_line" "$bashrc" 2>/dev/null; then
+  local kind _ rc repo_escaped alias_line source_line
+  read -r kind _ <<<"$(detect_shell_kind)"
+  rc="${HOME}/.bashrc"
+  [[ "$kind" == "zsh" ]] && rc="${HOME}/.zshrc"
+  : "${rc:=${HOME}/.bashrc}"
+  if ! touch "$rc" 2>/dev/null; then
+    warn "Unable to update shell rc at ${rc}"
+  else
+    repo_escaped="$(arr_shell_escape_double_quotes "${REPO_ROOT}")"
+    alias_line=$(printf "alias %s='cd \"%s\" && ./arr.sh'" "${STACK}" "${repo_escaped}")
+    source_line="[ -f \"${alias_path}\" ] && source \"${alias_path}\""
+    local old_comment="# source ${ARR_STACK_DIR}/.aliasarr  # Optional helper functions"
+    if grep -Fq "$old_comment" "$rc" 2>/dev/null; then
+      perl -0pi -e "s/\\Q${old_comment}\\E/[ -f \\\"${alias_path}\\\" ] && source \\\"${alias_path}\\\"/g" "$rc" 2>/dev/null || true
+    fi
+    if ! grep -Fq "$source_line" "$rc" 2>/dev/null; then
       {
         printf '\n# ARR Stack helper aliases\n'
         printf '%s\n' "$alias_line"
         printf "alias %s-logs='docker logs -f gluetun'\n" "$STACK"
         printf '%s\n' "$source_line"
-      } >>"$bashrc"
-      msg "Added aliases to ${bashrc}"
+      } >>"$rc"
+      msg "Added helper aliases to ${rc}"
     fi
+  fi
+
+  if reload_shell_rc --force; then
+    msg "♻️ Shell configuration reloaded"
+  else
+    warn "Reload your shell configuration to activate ARR aliases"
   fi
 
   local diag_script="${ARR_STACK_DIR}/diagnose-vpn.sh"
