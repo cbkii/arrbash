@@ -1,8 +1,6 @@
 # SABnzbd Integration
 
-This document expands on the optional SABnzbd support shipped with the stack. It covers
-networking behaviour, environment overrides, helper tooling, and the preservation
-logic that keeps your API key and configuration safe across reruns.
+This document expands on the optional SABnzbd support shipped with the stack. It covers networking behaviour, environment overrides, helper tooling, and the preservation logic that keeps your API key and configuration safe across reruns.
 
 > **Quick toggle:** Run `./arr.sh --enable-sab --yes` to enable SABnzbd for a single
 > install without editing `${ARRCONF_DIR}/userr.conf`.
@@ -22,9 +20,7 @@ inside Gluetun).
 
 ## API Key Preservation
 
-The preservation layer parses `${ARR_DOCKER_DIR}/sab/config/sabnzbd.ini` on reruns.
-When `api_key = ...` is present and `.env` still contains the
-`REPLACE_WITH_SABNZBD_API_KEY` placeholder, the stack:
+The preservation layer parses `${ARR_DOCKER_DIR}/sab/config/sabnzbd.ini` on reruns. When `api_key = ...` is present and `.env` still contains the `REPLACE_WITH_SABNZBD_API_KEY` placeholder, the stack:
 
 1. Takes a timestamped backup of `sabnzbd.ini` (`sabnzbd.ini.bak-YYYYmmdd-HHMMSS`).
 2. Hydrates `SABNZBD_API_KEY` in-memory and records a preservation note for the
@@ -37,8 +33,7 @@ file contains a `SABNZBD_API_KEY` entry. Hydrated keys replace the
 `REPLACE_WITH_SABNZBD_API_KEY` placeholder automatically; existing non-placeholder
 values are left untouched.
 
-If you manually rotate the API key, rerun `./arr.sh --yes` after SAB has
-written the change; the installer will detect and capture the new value.
+If you manually rotate the API key, rerun `./arr.sh --yes` after SAB has written the change so the installer can capture the new value.
 
 ## Healthcheck Improvements
 
@@ -85,30 +80,10 @@ SABNZBD_HOST="sabnzbd"     # qBittorrent now listens on 8082 inside Gluetun
 
 ## Helper Script
 
-`scripts/sab-helper.sh` ships with the stack and is automatically copied to
-`${ARR_STACK_DIR}/scripts/sab-helper.sh` when SAB is enabled. Core commands:
-
-```bash
-./scripts/sab-helper.sh version   # Prints SAB version via the public API endpoint
-./scripts/sab-helper.sh status    # Summarises queue state and download speed
-./scripts/sab-helper.sh queue     # Raw queue JSON (requires API key)
-./scripts/sab-helper.sh add-file <path/to/file.nzb>
-./scripts/sab-helper.sh add-url <https://example/nzb>
-```
-
-After `./arr.sh --refresh-aliases`, the shell also exposes `sab-logs`,
-`sab-shell`, and `open-sab` convenience aliases.
-
-If SAB is disabled the helper prints a warning and exits gracefully. Ensure
-`SABNZBD_HOST`, `SABNZBD_PORT`, and `SABNZBD_API_KEY` are correct before using upload commands.
-The helper will still report the SAB version even when the API key is not yet
-configured, aligning with the new compose healthcheck.
+`scripts/sab-helper.sh` ships with the stack and is automatically copied to `${ARR_STACK_DIR}/scripts/sab-helper.sh` when SAB is enabled. Run it with `--help` for a full command list; the most common tasks are `status`, `add-file`, and `add-url`. After `./arr.sh --refresh-aliases`, the shell also exposes `sab-logs`, `sab-shell`, and `open-sab` convenience aliases. If SAB is disabled the helper prints a warning and exits gracefully. Ensure `SABNZBD_HOST`, `SABNZBD_PORT`, and `SABNZBD_API_KEY` are correct before using upload commands. The helper will still report the SAB version even when the API key is not yet configured, matching the compose healthcheck.
 
 ## Deferred Features
 
-`SABNZBD_CATEGORY` is passed through to helper uploads today but the stack does
-not yet manage SAB categories automatically. Future hardening work will also look
-at container resource limits (CPU, memory) and read-only filesystems; the compose
-output includes a commented NOTE as a reminder.
+`SABNZBD_CATEGORY` is passed through to helper uploads today but the stack does not yet manage SAB categories automatically. Future hardening work will also look at container resource limits (CPU, memory) and read-only filesystems; the compose output includes a commented note as a reminder.
 
 For troubleshooting tips or examples, visit the main [Operations guide](operations.md).

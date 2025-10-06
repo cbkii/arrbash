@@ -48,7 +48,7 @@ Revert by setting `SPLIT_VPN=0` and rerunning the installer.
    ```
    Revert later with `./scripts/host-dns-rollback.sh`.
 3. Rerun the installer. The `local_dns` container serves `*.home.arpa` records and forwards other queries upstream.
-4. Point clients at the Pi as their primary DNS server (DHCP Option 6 or per-device settings). Keep a trusted public resolver listed as secondary.
+4. Point clients at the arrbash host as their primary DNS server (DHCP Option 6 or per-device settings). Keep a trusted public resolver listed as secondary.
 
 Check status with:
 ```bash

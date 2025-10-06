@@ -11,7 +11,7 @@ Any 64-bit Debian Bookworm host with roughly 4 CPU cores and 4 GB RAM works. Ras
 Use Proton VPN Plus or Unlimited. Those plans support port forwarding, which qBittorrent needs for good performance.
 
 ## Can I skip the DNS helper?
-Yes, but you must add host entries manually or set DNS per device. Following [Networking](networking.md) keeps the experience consistent.
+Yes, but you must add host entries manually or set DNS per device. Following [Networking](networking.md) keeps the experience consistent and avoids guesswork later.
 
 ## Where do I put my Proton credentials?
 Copy `arrconf/proton.auth.example` to `arrconf/proton.auth` and fill in `PROTON_USER` and `PROTON_PASS`. The installer enforces safe permissions automatically.

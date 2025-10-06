@@ -19,7 +19,7 @@ Key terms referenced throughout the documentation.
 | **Port forwarding** | Proton VPN feature that assigns a TCP port so peers can reach qBittorrent through the VPN tunnel. |
 | **Private DNS / DoT** | Android feature for DNS-over-TLS. Leave it Off/Automatic so lookups stay inside your LAN. |
 
-If a term is unfamiliar, follow links in the other docs or run `man <term>` on Debian (for example, `man resolv.conf`).
+If a term is unfamiliar, follow links in the other docs or search the Debian manual pages (for example, `man resolv.conf`).
 
 ## Related topics
 - [Networking](networking.md)

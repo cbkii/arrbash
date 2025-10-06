@@ -6,7 +6,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
 
 ## DNS and HTTPS issues
 ### `ERR_NAME_NOT_RESOLVED`
-- Applies only when local DNS is enabled. Ensure clients point at the Pi first (DHCP Option 6 or per-device settings). See [Networking](networking.md) for setup guidance.
+- Applies only when local DNS is enabled. Ensure clients point at the arrbash host first (DHCP Option 6 or per-device settings). See [Networking](networking.md) for setup guidance.
 - Verify:
   ```bash
   nslookup qbittorrent.${LAN_DOMAIN_SUFFIX:-home.arpa}
