@@ -1003,7 +1003,12 @@ init_logging() {
   ensure_dir_mode "$log_dir" "$DATA_DIR_MODE"
 
   local timestamp
-  timestamp="$(date +%Y%m%d-%H%M%S)"
+  if [[ -n "${ARR_LOG_TIMESTAMP:-}" ]]; then
+    timestamp="${ARR_LOG_TIMESTAMP}"
+  else
+    timestamp="$(date +%Y%m%d-%H%M%S)"
+    export ARR_LOG_TIMESTAMP="$timestamp"
+  fi
   LOG_FILE="${log_dir}/${STACK}-${timestamp}.log"
 
   : >"$LOG_FILE"
