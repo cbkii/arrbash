@@ -55,10 +55,6 @@ SABNZBD_PORT="${SABNZBD_INT_PORT}"      # default: ${SABNZBD_INT_PORT} (8080); S
 CADDY_HTTP_PORT="80"      # default: 80; exposed HTTP port for health/apps
 CADDY_HTTPS_PORT="443"      # default: 443; exposed HTTPS port for proxy endpoints
 GLUETUN_CONTROL_PORT="8000"      # default: 8000; Gluetun control API port
-GLUETUN_HEALTHCHECK_START_PERIOD="120s"      # default: 120s; Compose start_period before Gluetun health failures
-GLUETUN_HEALTHCHECK_INTERVAL="10s"      # default: 10s; Compose interval between Gluetun health probes
-GLUETUN_HEALTHCHECK_TIMEOUT="5s"      # default: 5s; Compose timeout per Gluetun health probe
-GLUETUN_HEALTHCHECK_RETRIES="12"      # default: 12; Compose retries before Gluetun marked unhealthy
 
 # --- DNS & domains (if enabled) ---
 ENABLE_LOCAL_DNS="0"      # default: 0; enable optional dnsmasq container
@@ -83,6 +79,10 @@ SERVER_COUNTRIES="Netherlands"      # default: Netherlands; ProtonVPN exit count
 # SERVER_NAMES=""      # default: empty; optionally pin Proton hosts (comma-separated)
 PVPN_ROTATE_COUNTRIES="Singapore,Japan,Spain,Malaysia,Portugal,Romania,Switzerland,Luxembourg,Iceland,Australia"      # default: empty; rotation order for arr.vpn switch
 GLUETUN_API_KEY=""      # default: empty; pre-seed Gluetun API key
+# GLUETUN_HEALTHCHECK_START_PERIOD="120s"      # default: 120s; Compose start_period before Gluetun health failures
+# GLUETUN_HEALTHCHECK_INTERVAL="10s"      # default: 10s; Compose interval between Gluetun health probes
+# GLUETUN_HEALTHCHECK_TIMEOUT="10s"      # default: 10s; Compose timeout per Gluetun health probe
+# GLUETUN_HEALTHCHECK_RETRIES="12"      # default: 12; Compose retries before Gluetun marked unhealthy
 
 # --- VPN auto-reconnect (optional) ---
 VPN_AUTO_RECONNECT_ENABLED="0"      # default: 0; enable background VPN monitor
