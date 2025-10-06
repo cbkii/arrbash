@@ -38,7 +38,10 @@ if [[ -z "${ARR_DATA_ROOT:-}" ]]; then
   fi
 fi
 
-ARR_DATA_ROOT="${ARR_DATA_ROOT%/}"
+case "${ARR_DATA_ROOT}" in
+  /) ;;
+  */) ARR_DATA_ROOT="${ARR_DATA_ROOT%/}" ;;
+esac
 ARRCONF_DIR="${ARRCONF_DIR:-${ARR_DATA_ROOT}/${STACK}configs}"
 ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_DATA_ROOT}/${STACK}}"
 ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_DATA_ROOT}/docker-data}"
