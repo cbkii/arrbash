@@ -148,7 +148,7 @@ ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rul
 # CADDY_IMAGE="caddy:2.8.4"      # default: caddy:2.8.4; override Caddy tag
 # LOCALDNS_IMAGE="4km3/dnsmasq:2.90-r3"      # default: 4km3/dnsmasq:2.90-r3; override dnsmasq tag
 # QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"      # default: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest; Vuetorrent WebUI mod
-QBT_AUTH_WHITELIST="${LAN_IP},127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128; CIDRs that bypass qBittorrent login
+QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128; CIDRs that bypass qBittorrent login
 
 # --- Behaviour toggles ---
 # ASSUME_YES="0"      # default: 0; skip confirmation prompts when scripting installs
