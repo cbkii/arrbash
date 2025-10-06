@@ -134,7 +134,7 @@ show_configuration_preview() {
   fi
   qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_final")"
 
-  local server_names_display="${SERVER_NAMES:-}" 
+  local server_names_display="${SERVER_NAMES:-}"
   if [[ -z "$server_names_display" ]]; then
     server_names_display="(automatic selection)"
   fi
