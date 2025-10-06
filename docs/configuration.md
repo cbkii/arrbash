@@ -5,6 +5,7 @@
 Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `ARR_DATA_ROOT` defaults to `~/srv`, so all generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`); the chosen path appears in the preview table so you can confirm it.
 
 ## Configuration layers
+
 1. **Shell environment** – anything exported before running `./arr.sh` overrides every other source. Keep this for one-off tweaks or automation. Paths like `ARR_USERCONF_PATH` may be normalised to an absolute path while loading.
 2. **CLI flags** – run-scoped toggles (for example `./arr.sh --enable-caddy`) apply after the read-only guard. Use them for temporary changes; exported variables still win.
 3. **`${ARRCONF_DIR}/userr.conf`** – your saved settings (defaults to `${ARR_DATA_ROOT}/${STACK}configs/userr.conf`). Keep it outside version control and rerun the installer after every edit.
@@ -13,6 +14,7 @@ Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `d
 The installer prints a configuration table during preflight. Cancel with `Ctrl+C` if a value looks wrong, adjust `userr.conf`, and rerun.
 
 ## Core settings to review
+
 - **Network**
   - `LAN_IP`: set this to your host's private address before exposing ports.
   - `LOCALHOST_IP`: leave on loopback (`127.0.0.1`) so container healthchecks probe the right place.
@@ -43,21 +45,16 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `ARR_PERMISSION_PROFILE`: `strict` (default) keeps secrets at `600`, data at `700`, and uses `umask 0077`. `collab` enables group write; set `PGID` to your shared group.
   - Optional overrides: `ARR_UMASK_OVERRIDE`, `ARR_DATA_DIR_MODE_OVERRIDE`, `ARR_NONSECRET_FILE_MODE_OVERRIDE`, `ARR_SECRET_FILE_MODE_OVERRIDE` for advanced tuning.
 
-## Working with overrides
+## Working with overrides / Verify resolved values
+
 1. Edit `${ARRCONF_DIR}/userr.conf` (or the path from `ARR_USERCONF_PATH`).
 2. Save the file and rerun:
    ```bash
    ./arr.sh --yes
    ```
+   Cancel before container startup if the preview looks wrong.
 3. Review the summary. Generated files (`.env`, `docker-compose.yml`, `Caddyfile`) should never be edited directly.
-
-## Verify
-- Show resolved values without applying changes:
-  ```bash
-  ./arr.sh --yes
-  ```
-  Cancel before container startup if the preview looks wrong.
-- Confirm preserved secrets remain in sync:
+4. Confirm preserved secrets remain in sync:
   ```bash
   grep -E '^QBT_(USER|PASS)=' .env
   ```
