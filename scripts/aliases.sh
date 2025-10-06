@@ -340,7 +340,7 @@ install_aliases() {
     if grep -Fq "$old_comment" "$rc" 2>/dev/null; then
       perl -0pi -e "s/\\Q${old_comment}\\E/[ -f \\\"${alias_path}\\\" ] && source \\\"${alias_path}\\\"/g" "$rc" 2>/dev/null || true
     fi
-    if ! grep -Fq "$source_line" "$rc" 2>/dev/null; then
+    if ! grep -Fqx -- "$source_line" "$rc" 2>/dev/null; then
       {
         printf '\n# ARR Stack helper aliases\n'
         printf '%s\n' "$alias_line"
