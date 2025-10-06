@@ -71,7 +71,7 @@ PGID="${PGID:-$(id -g)}"
 TIMEZONE="${TIMEZONE:-Australia/Sydney}"
 LAN_IP="${LAN_IP:-}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
-SERVER_COUNTRIES="${SERVER_COUNTRIES:-Netherlands}"
+SERVER_COUNTRIES="${SERVER_COUNTRIES:-Netherlands,Singapore}"
 # SERVER_NAMES=""  # Optionally pin Proton server hostnames if PF keeps returning 0 (comma-separated list)
 PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES:-}"
 
