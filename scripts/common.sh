@@ -935,18 +935,18 @@ msg() {
 # User-facing step banner with bold/bright styling
 step() {
   if msg_color_supported; then
-    printf '%b🧱📣 %s%b\n' "${BOLD}${BLUE}" "$*" "$RESET"
+    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BOLD}${BLUE}" "$*" "$RESET"
   else
-    printf '🧱📣 %s\n' "$*"
+    printf '[STEP] %s\n' "$*"
   fi
 }
 
 # User-facing warning message with optional color
 warn() {
   if msg_color_supported; then
-    printf '%b⚠️ %s%b\n' "$YELLOW" "$*" "$RESET" >&2
+    printf '%b[‽]  %s%b\n' "$YELLOW" "$*" "$RESET" >&2
   else
-    printf '⚠️ %s\n' "$*" >&2
+    printf '[WARN]  %s\n' "$*" >&2
   fi
 }
 
