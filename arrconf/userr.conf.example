@@ -37,7 +37,7 @@ LOCALHOST_IP="127.0.0.1"      # default: 127.0.0.1; loopback used by Gluetun con
 EXPOSE_DIRECT_PORTS="1"      # default: 1; publish WebUIs on http://${LAN_IP}:PORT (LAN_IP required)
 
 # --- Ports (user-facing) ---
-ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (enforce/warn/skip)
+ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (enforce/warn/skip/fix with warn fallback)
 QBT_INT_PORT="8082"      # default: 8082; internal qBittorrent WebUI port
 QBT_PORT="${QBT_INT_PORT}"      # default: ${QBT_INT_PORT} (8082); qBittorrent WebUI LAN port
 SONARR_INT_PORT="8989"      # default: 8989; internal Sonarr WebUI port

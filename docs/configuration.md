@@ -23,7 +23,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `SPLIT_VPN`: set `1` to run only qBittorrent inside Gluetun, or `0` to tunnel everything.
   - `EXPOSE_DIRECT_PORTS`: leave at `1` for LAN-friendly URLs, or set `0` to keep services internal to Docker networking.
   - `DNS_DISTRIBUTION_MODE`: choose `router` (default) to update DHCP Option 6, or `per-device` when pointing clients at the resolver manually.
-  - `ARR_PORT_CHECK_MODE`: `enforce` (default) fails fast on conflicts, `warn` prints notices, and `skip` disables port validation (use sparingly).
+  - `ARR_PORT_CHECK_MODE`: `enforce` (default) fails fast on conflicts, `warn` prints notices, `skip` disables port validation (use sparingly), and `fix` attempts to stop conflicting listeners automatically before falling back to warn mode.
 - **Paths & storage**
   - `ARR_DATA_ROOT`: top-level data directory (defaults to `~/srv`). Override it before running the installer if you want a different layout.
   - `ARRCONF_DIR`: configuration directory for Proton credentials and overrides (defaults to `${ARR_DATA_ROOT}/${STACK}configs`).
