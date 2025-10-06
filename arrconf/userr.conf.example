@@ -19,7 +19,7 @@ ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"      # default: ${ARR_DATA_ROOT}/
 DOWNLOADS_DIR="${HOME}/Downloads"      # default: ${HOME}/Downloads; qBittorrent active downloads
 COMPLETED_DIR="${DOWNLOADS_DIR}/completed"      # default: ${DOWNLOADS_DIR}/completed; qBittorrent completed path
 
-MEDIA_DIR="${HOME}/SMBmedia"      # default: ${ARR_DATA_ROOT}/media; library root
+MEDIA_DIR="${ARR_DATA_ROOT}/media"      # default: ${ARR_DATA_ROOT}/media; library root
 TV_DIR="${MEDIA_DIR}/Shows"      # default: ${MEDIA_DIR}/Shows; Sonarr library
 MOVIES_DIR="${MEDIA_DIR}/Movies"      # default: ${MEDIA_DIR}/Movies; Radarr library
 # SUBS_DIR="${MEDIA_DIR}/subs"      # default: ${MEDIA_DIR}/subs; optional Bazarr subtitles path
