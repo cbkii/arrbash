@@ -356,8 +356,10 @@ install_aliases() {
   else
     warn "Reload your shell configuration to activate ARR aliases"
   fi
-
-  local diag_script="${ARR_STACK_DIR}/diagnose-vpn.sh"
+  
+  ensure_dir_mode "${ARR_STACK_DIR}/scripts" 755
+  
+  local diag_script="${ARR_STACK_DIR}/scripts/diagnose-vpn.sh"
   cat >"$diag_script" <<'DIAG'
 #!/bin/bash
 set -euo pipefail
@@ -472,7 +474,7 @@ DIAG
   diag_dir_escaped=${diag_dir_escaped//|/\|}
   sed -e "s|__ARR_STACK_DIR__|${diag_dir_escaped}|g" "$diag_script" >"$diag_tmp"
   mv "$diag_tmp" "$diag_script"
-  chmod 755 "$diag_script"
+  ensure_file_mode "$diag_script" 755
   msg "Diagnostic script: ${diag_script}"
 }
 

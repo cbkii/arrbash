@@ -2213,7 +2213,7 @@ sync_gluetun_library() {
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
   cp "${REPO_ROOT}/scripts/gluetun.sh" "$ARR_STACK_DIR/scripts/gluetun.sh"
-  ensure_file_mode "$ARR_STACK_DIR/scripts/gluetun.sh" 644
+  ensure_file_mode "$ARR_STACK_DIR/scripts/gluetun.sh" 755
 }
 
 # Syncs VPN auto-reconnect scripts with executable permissions into the stack
@@ -2223,7 +2223,7 @@ sync_vpn_auto_reconnect_assets() {
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
   cp "${REPO_ROOT}/scripts/vpn-auto-reconnect.sh" "$ARR_STACK_DIR/scripts/vpn-auto-reconnect.sh"
-  ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect.sh" 644
+  ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect.sh" 755
 
   cp "${REPO_ROOT}/scripts/vpn-auto-reconnect-daemon.sh" "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh" 755
