@@ -510,15 +510,16 @@ check_image_exists() {
     return 2
   fi
 
-  if command -v timeout >/dev/null 2>&1; then
-    if timeout "$timeout" docker manifest inspect "$image" >/dev/null 2>&1; then
-      return 0
+  # Retry manifest lookup up to 3 times with simple backoff for flaky registries
+  local attempt
+  for attempt in 1 2 3; do
+    if command -v timeout >/dev/null 2>&1; then
+      timeout "$timeout" docker manifest inspect "$image" >/dev/null 2>&1 && return 0
+    else
+      docker manifest inspect "$image" >/dev/null 2>&1 && return 0
     fi
-  else
-    if docker manifest inspect "$image" >/dev/null 2>&1; then
-      return 0
-    fi
-  fi
+    sleep $((attempt * 2))
+  done
 
   if docker image inspect "$image" >/dev/null 2>&1; then
     return 0
@@ -827,7 +828,8 @@ arr_wait_for_gluetun_ready() {
     fi
 
     local state has_health health_status
-    read -r state has_health health_status <<<"$inspect_output"
+    # Robust against caller IFS: enforce space splitting locally
+    arr_read_fields "$inspect_output" state has_health health_status
 
     if [[ "$state" != "running" ]]; then
       case "$state" in

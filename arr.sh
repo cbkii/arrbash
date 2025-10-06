@@ -83,7 +83,7 @@ if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
     fi
   done < <(arr_collect_all_expected_env_keys)
 else
-  while read -r _arr_env_line; do
+  while IFS= read -r _arr_env_line; do
     _arr_env_var="${_arr_env_line%%=*}"
     if [[ "${_arr_env_var}" == ARR_* ]]; then
       if [[ -z "${_arr_env_override_seen[${_arr_env_var}]+x}" ]]; then
@@ -255,6 +255,8 @@ fi
 
 # Drives the orchestrated install/update flow while honoring run flags and sidecars
 main() {
+  # Keep custom IFS local and restore it before calling deeper helpers
+  local OLDIFS="${IFS}"
   local IFS=$'\n\t'
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -310,6 +312,9 @@ main() {
         ;;
     esac
   done
+
+  # Restore default word splitting so callees are not impacted
+  IFS="${OLDIFS}"
 
   if [[ "${ARR_TRACE:-0}" == "1" ]] && declare -f arr_trace_start >/dev/null 2>&1; then
     arr_trace_start

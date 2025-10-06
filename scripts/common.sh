@@ -59,6 +59,17 @@ have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Read space-separated fields safely regardless of caller IFS.
+# Usage: arr_read_fields "a b c" var1 var2 var3
+arr_read_fields() {
+  local __src="$1"
+  shift
+  local __oldifs="$IFS"
+  IFS=' '
+  read -r "$@" <<<"$__src"
+  IFS="$__oldifs"
+}
+
 # Ensures port is numeric and within 1-65535
 validate_port() {
   local port="$1"
