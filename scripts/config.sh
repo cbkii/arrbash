@@ -139,7 +139,7 @@ show_configuration_preview() {
     server_names_display="(automatic selection)"
   fi
 
-  local rotation_order_display="${PVPN_ROTATE_COUNTRIES:-}" 
+  local rotation_order_display="${PVPN_ROTATE_COUNTRIES:-}"
   if [[ -z "$rotation_order_display" ]]; then
     rotation_order_display="(disabled)"
   fi
