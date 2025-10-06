@@ -6,8 +6,8 @@ Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `d
 
 ## Configuration layers
 
-1. **Shell environment** – anything exported before running `./arr.sh` overrides every other source. Keep this for one-off tweaks or automation. Paths like `ARR_USERCONF_PATH` may be normalised to an absolute path while loading.
-2. **CLI flags** – run-scoped toggles (for example `./arr.sh --enable-caddy`) apply after the read-only guard. Use them for temporary changes; exported variables still win.
+1. **CLI flags** – run-scoped toggles (for example `./arr.sh --enable-caddy`) apply after the read-only guard. They override exported variables and `userr.conf`, so use them for temporary changes.
+2. **Shell environment** – anything exported before running `./arr.sh` still overrides `userr.conf` and defaults, but CLI flags are applied last. Paths like `ARR_USERCONF_PATH` may be normalised to an absolute path while loading.
 3. **`${ARRCONF_DIR}/userr.conf`** – your saved settings (defaults to `${ARR_DATA_ROOT}/${STACK}configs/userr.conf`). Keep it outside version control and rerun the installer after every edit.
 4. **`arrconf/userr.conf.defaults.sh`** – repo defaults.
 
