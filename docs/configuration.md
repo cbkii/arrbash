@@ -51,8 +51,9 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 2. Save the file and rerun:
    ```bash
    ./arr.sh --yes
+   # Cancel before container startup if the preview looks wrong.
    ```
-   Cancel before container startup if the preview looks wrong.
+   
 3. Review the summary. Generated files (`.env`, `docker-compose.yml`, `Caddyfile`) should never be edited directly.
 4. Confirm preserved secrets remain in sync:
   ```bash
