@@ -335,7 +335,8 @@ install_aliases() {
     fi
   fi
 
-  local diag_script="${ARR_STACK_DIR}/diagnose-vpn.sh"
+  local diag_script="${ARR_STACK_DIR}/scripts/diagnose-vpn.sh"
+  ensure_dir_mode "${ARR_STACK_DIR}/scripts" 755
   cat >"$diag_script" <<'DIAG'
 #!/bin/bash
 set -euo pipefail
