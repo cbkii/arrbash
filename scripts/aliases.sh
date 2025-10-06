@@ -327,7 +327,6 @@ install_aliases() {
   read -r kind _ <<<"$(detect_shell_kind)"
   rc="${HOME}/.bashrc"
   [[ "$kind" == "zsh" ]] && rc="${HOME}/.zshrc"
-  : "${rc:=${HOME}/.bashrc}"
   if ! touch "$rc" 2>/dev/null; then
     warn "Unable to update shell rc at ${rc}"
   else
