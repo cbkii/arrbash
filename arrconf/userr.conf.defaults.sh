@@ -528,7 +528,7 @@ arr_render_userconf_template() {
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 # Keep arrconf/userr.conf.example in sync with any changes made here.
-# Make ONE copy named 'userr.conf', and edit as needed (default: '${ARR_DATA_ROOT}/${STACK}configs/userr.conf', must use path ≤4 deep below '$ARR_DATA_ROOT').
+# Make ONE copy named 'userr.conf', and edit as needed (default: '${ARR_DATA_ROOT}/${STACK}configs/userr.conf', must use path at most 4 deep below '$ARR_DATA_ROOT').
 # Values here override the defaults from arrconf/userr.conf.defaults.sh, which loads first.
 
 # --- Stack paths ---
