@@ -829,7 +829,12 @@ arr_wait_for_gluetun_ready() {
 
     local state has_health health_status
     # Robust against caller IFS: enforce space splitting locally
-    arr_read_fields "$inspect_output" state has_health health_status
+    if arr_read_fields "$inspect_output" state has_health health_status; then
+      :
+    else
+      warn "empty/invalid inspect output"
+      return 1
+    fi
 
     if [[ "$state" != "running" ]]; then
       case "$state" in
