@@ -905,9 +905,8 @@ YAML
         - >-
           set -eu;
           /gluetun-entrypoint healthcheck >/dev/null;
-          if ! (ip -4 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
-            ip -6 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
-            ip -o link show 2>/dev/null | grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'); then
+          if ! ({ ip -4 route show default; ip -6 route show default; } 2>/dev/null | LC_ALL=C grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
+            ip -o link show 2>/dev/null | LC_ALL=C grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'); then
             exit 1;
           fi;
           if command -v curl >/dev/null 2>&1; then
@@ -1364,9 +1363,8 @@ YAML
         - >-
           set -eu;
           /gluetun-entrypoint healthcheck >/dev/null;
-          if ! (ip -4 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
-            ip -6 route show default 2>/dev/null | grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
-            ip -o link show 2>/dev/null | grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'); then
+          if ! ({ ip -4 route show default; ip -6 route show default; } 2>/dev/null | LC_ALL=C grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
+            ip -o link show 2>/dev/null | LC_ALL=C grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'); then
             exit 1;
           fi;
           if command -v curl >/dev/null 2>&1; then
