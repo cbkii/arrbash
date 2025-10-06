@@ -442,6 +442,14 @@ force_kill_port_listeners() {
     if [[ -z "$proc_name" ]]; then
       proc_name="process"
     fi
+    case "$proc_name" in
+      docker-proxy)
+        ;;
+      *)
+        warn "    [fix] Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
+        continue
+        ;;
+    esac
     warn "    [fix] Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
     if kill "$pid" 2>/dev/null; then
       any_action=1
@@ -449,7 +457,6 @@ force_kill_port_listeners() {
       warn "    [fix] Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
     fi
   done
-
   if ((any_action)); then
     sleep 2
     for pid in "${targets[@]}"; do
