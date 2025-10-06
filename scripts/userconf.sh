@@ -34,9 +34,9 @@ arr_default_userconf_path() {
   printf '%s/userr.conf\n' "$conf_dir"
 }
 
-# Locate the first userr.conf override under ARR_DATA_ROOT (depth 4) and fall
-# back to the repo parent tree, excluding the repository itself when REPO_ROOT
-# is known. Returns the canonical absolute path on success.
+# Locate the first userr.conf override under ARR_DATA_ROOT (depth 4). If no override
+# is found, search the parent directory structure of the repository (excluding the
+# repository itself when REPO_ROOT is known) as a fallback. Returns the canonical absolute path on success.
 arr_find_userconf_override() {
   local target="userr.conf"
   local repo_root="${REPO_ROOT:-}"
