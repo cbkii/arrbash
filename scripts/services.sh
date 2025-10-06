@@ -827,6 +827,7 @@ arr_wait_for_gluetun_ready() {
     fi
 
     local state has_health health_status
+    local IFS=' '
     read -r state has_health health_status <<<"$inspect_output"
 
     if [[ "$state" != "running" ]]; then

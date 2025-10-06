@@ -246,7 +246,8 @@ fi
 
 # Drives the orchestrated install/update flow while honoring run flags and sidecars
 main() {
-  local IFS=$'\n\t'
+  local OLD_IFS="${IFS}"
+  IFS=$'\n\t'
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --yes)
@@ -297,6 +298,8 @@ main() {
         ;;
     esac
   done
+
+  IFS="${OLD_IFS}"
 
   if [[ "${REFRESH_ALIASES:-0}" == "1" ]]; then
     refresh_aliases
