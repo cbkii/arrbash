@@ -474,7 +474,7 @@ DIAG
   diag_dir_escaped=${diag_dir_escaped//|/\|}
   sed -e "s|__ARR_STACK_DIR__|${diag_dir_escaped}|g" "$diag_script" >"$diag_tmp"
   mv "$diag_tmp" "$diag_script"
-  ensure_file_mode "$diag_script" 755 || chmod 755 "$diag_script"
+  ensure_file_mode "$diag_script" 755
   msg "Diagnostic script: ${diag_script}"
 }
 
