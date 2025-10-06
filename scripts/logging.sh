@@ -65,7 +65,11 @@ arr_trace_start() {
   set -o xtrace
 
   if [[ "${ARR_TRACE_DEBUG:-0}" == "1" ]]; then
-    trap 'printf "%s [%s:%s] %s\n" "$(date -Iseconds)" "${BASH_SOURCE##*/}" "${LINENO}" "$BASH_COMMAND" >&$__arr_trace_fd' DEBUG
+    if [[ "${BASH_VERSINFO[0]:-0}" -ge 5 ]]; then
+      trap 'printf "%s [%s:%s] %s\n" "${EPOCHREALTIME}" "${BASH_SOURCE##*/}" "${LINENO}" "$BASH_COMMAND" >&$__arr_trace_fd' DEBUG
+    else
+      trap 'printf "%s [%s:%s] %s\n" "${SECONDS}" "${BASH_SOURCE##*/}" "${LINENO}" "$BASH_COMMAND" >&$__arr_trace_fd' DEBUG
+    fi
     set -o functrace
   fi
 
