@@ -40,7 +40,7 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
 ## Recover from `manifest unknown`
 1. Repair the generated `.env`:
    ```bash
-   ${ARR_STACK_DIR}/scripts/fix-versions.sh
+   "${ARR_STACK_DIR}/scripts/fix-versions.sh"
    ```
 2. Rerun the installer:
    ```bash

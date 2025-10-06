@@ -39,8 +39,8 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
    ```bash
    ./arr.sh --yes         # omit --yes for interactive mode
    ```
-  The script installs prerequisites, renders `.env` and `docker-compose.yml`, and starts the stack. Rerun it anytime after editing `userr.conf`. The installer first searches under `${ARR_DATA_ROOT}` (depth 4) and then the repo's parent directory for the first `userr.conf` it finds (for example `${ARR_DATA_ROOT}/arrconfigs/userr.conf` or `../userr.conf`), so keep only the copy you want applied.
-6. **Access services.** Use the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
+  The script checks that Docker, Compose, and helper tools are ready, then rebuilds `.env`, `docker-compose.yml`, and supporting files before starting the stack. Rerun it anytime after editing `userr.conf`. The installer first searches under `${ARR_DATA_ROOT}` (depth 4) and then the repo's parent directory for the first `userr.conf` it finds (for example `${ARR_DATA_ROOT}/arrconfigs/userr.conf` or `../userr.conf`), so keep only the copy you want applied.
+6. **Access services.** Follow the summary printed by the installer or browse to `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent).
 
 ## Minimal configuration
 - `ARR_DATA_ROOT`: top-level data directory for the stack (defaults to `~/srv`). Override it via the environment or `userr.conf` before running `./arr.sh`.
@@ -48,7 +48,7 @@ Self-host the *arr stack with Proton VPN port forwarding on a Debian-based host.
 - `userr.conf` and `proton.auth` both default to `${ARRCONF_DIR}`; keep them outside version control. If multiple overrides exist, the installer looks under `${ARR_DATA_ROOT}` (depth 4) and then above the repo for the first `userr.conf` it finds.
 - Review these core values:
   - `LAN_IP`: private address of the host; required before ports are exposed.
-- `STACK`: project label used for generated paths and logs (defaults to `arr` via `STACK="${STACK:-arr}"`).
+- `STACK`: project label used for generated paths and logs (defaults to `arr`).
 - `ARR_DATA_ROOT` also determines generated stack paths and the default location of Proton credentials and overrides.
   - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: defaults sit under `${ARR_DATA_ROOT}` (for example `${ARR_DATA_ROOT}/media`), but you should point each one at your actual storage volume in `userr.conf`.
   - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent; leave `0` for full VPN mode.
@@ -99,7 +99,7 @@ SABNZBD_TIMEOUT=15         # Helper/API timeout in seconds
 # Set SABNZBD_IMAGE=ghcr.io/linuxserver/sabnzbd:latest to pin an alternate container tag
 ```
 
-After your first SABnzbd login, paste the API key into the WebUI once; reruns will hydrate
+After your first SABnzbd login, paste the API key into the WebUI once; reruns hydrate
 `SABNZBD_API_KEY` from `sabnzbd.ini` automatically.
 
 To enable SABnzbd for a single installer run without editing `userr.conf`, pass `--enable-sab`:
@@ -110,19 +110,6 @@ To enable SABnzbd for a single installer run without editing `userr.conf`, pass 
 
 Refer to [docs/sabnzbd.md](docs/sabnzbd.md) for networking scenarios, API key preservation,
 and helper usage tips.
-
-Run:
-
-```bash
-./arr.sh --yes
-```
-
-Helper:
-
-```bash
-scripts/sab-helper.sh status
-scripts/sab-helper.sh add-file /path/to/file.nzb
-```
 
 VPN note:
 By default SAB runs outside the VPN (TLS to Usenet servers). Enable `SABNZBD_USE_VPN=1` for full tunnelling through Gluetun.

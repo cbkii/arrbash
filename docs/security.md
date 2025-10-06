@@ -5,7 +5,7 @@
 Keep the deployment private to your LAN and rotate credentials regularly.
 
 ## Secrets and permissions
-- Leave `ARR_PERMISSION_PROFILE=strict` unless you require collaborative write access. Secrets stay at mode `600`, data directories at `700`, and the installer enforces `umask 0077`.
+- Leave `ARR_PERMISSION_PROFILE=strict` unless you need collaborative write access. Secrets stay at mode `600`, data directories at `700`, and the installer enforces `umask 0077`.
 - When using the `collab` profile, set `PGID` to the shared storage group so write access is limited to expected members.
 - Never commit `arrconf/proton.auth`, `.env`, or other generated files to version control. The installer keeps permissions tight automatically.
 
@@ -17,7 +17,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 
 ## Network exposure
 - Bind the stack to a private `LAN_IP` and avoid forwarding raw service ports through your router. Use Caddy with strong credentials if you require remote access.
-- When local DNS is enabled, ensure only trusted clients point at the Pi. Keep a fallback public resolver in DHCP to avoid outages if the Pi is offline.
+- When local DNS is enabled, ensure only trusted clients point at the arrbash host. Keep a fallback public resolver in DHCP to avoid outages if the host is offline.
 - Enabling local DNS backs up `/etc/docker/daemon.json`, merges in `{ "userland-proxy": false }`, and requires a Docker restart before the change applies (use `scripts/host-dns-rollback.sh` to undo it).
 - Verify open ports regularly:
   ```bash

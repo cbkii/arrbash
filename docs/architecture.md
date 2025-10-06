@@ -13,7 +13,7 @@ This stack renders configuration from a small set of scripts, then launches Dock
 | FlareSolverr | Captcha solver service used by indexers. | `http://LAN_IP:${FLARR_PORT}`. |
 | Configarr (optional) | Keeps Sonarr/Radarr configuration in sync. | Runs headless; configure via Configarr secrets. |
 | Caddy (optional) | HTTPS reverse proxy with internal CA. | `https://<service>.<LAN_DOMAIN_SUFFIX>` with basic auth for remote access. |
-| local_dns (optional) | dnsmasq-based resolver that answers `*.home.arpa`. | List the Pi as primary DNS on clients. |
+| local_dns (optional) | dnsmasq-based resolver that answers `*.home.arpa`. | List the arrbash host as primary DNS on clients. |
 
 The installer publishes LAN ports when `EXPOSE_DIRECT_PORTS=1`. When disabled, access services via Docker networks or the optional proxy.
 
@@ -31,7 +31,7 @@ Generated files should not be edited manually; adjust `userr.conf` and rerun the
 1. **Preflight** – checks dependencies, confirms Docker availability, validates Proton credentials, and ensures required ports are free before writing files.
 2. **Defaults and overrides** – sources `arrconf/userr.conf.defaults.sh`, applies environment variables, then your `${ARRCONF_DIR}/userr.conf` values.
 3. **File rendering** – creates directories with safe permissions, hydrates preserved secrets from existing `.env`, and writes compose/env/proxy files in atomic steps.
-4. **Service start** – launches Gluetun first, waits for port forwarding, then starts the remaining containers and optional extras.
+4. **Service start** – launches Gluetun first, waits for it to become healthy, then starts the asynchronous Proton port-forwarding worker (when enabled) and brings up the remaining containers and optional extras.
 5. **Summary** – prints URLs, credentials, and reminders such as updating *Arr download client hosts when split tunnel is active.
 
 Understanding this flow helps when troubleshooting: re-running the installer replays the entire pipeline and reconciles drift automatically.
