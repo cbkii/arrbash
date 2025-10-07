@@ -64,13 +64,22 @@ vpn_auto_reconnect_state_dir() {
     return
   fi
 
-  local root=""
-  root="$(vpn_auto_gluetun_root 2>/dev/null || printf '')"
-  if [[ -z "$root" ]]; then
-    return 1
-  fi
+vpn_auto_reconnect_state_file() {
+  local dir
+  dir="$(vpn_auto_reconnect_state_dir 2>/dev/null)" || return 1
+  printf '%s/state.json' "$dir"
+}
 
-  printf '%s/auto-reconnect' "$root"
+vpn_auto_reconnect_cookie_file() {
+  local dir
+  dir="$(vpn_auto_reconnect_state_dir 2>/dev/null)" || return 1
+  printf '%s/session.cookie' "$dir"
+}
+
+vpn_auto_reconnect_history_file() {
+  local dir
+  dir="$(vpn_auto_reconnect_state_dir 2>/dev/null)" || return 1
+  printf '%s/history.log' "$dir"
 }
 
 # Returns path to persisted state.json for reconnect worker
