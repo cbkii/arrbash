@@ -807,10 +807,6 @@ write_env() {
     qbt_whitelist_raw+="${qbt_whitelist_raw:+,}${lan_private_subnet}"
   fi
   QBT_AUTH_WHITELIST="$(normalize_csv "$qbt_whitelist_raw")"
-  if ! arr_emit_compose_env_file; then
-    die "Unable to render ${ARR_ENV_FILE}"
-  fi
-
 }
 
 # Appends the shared SABnzbd service definition to the provided compose fragment.
