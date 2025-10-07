@@ -33,14 +33,15 @@ load_proton_credentials() {
   if [[ -z "$PROTON_USER_VALUE" || -z "$PROTON_PASS_VALUE" ]]; then
     die "Missing or empty PROTON_USER/PROTON_PASS in ${proton_file}"
   fi
-
+  
   OPENVPN_USER_VALUE="$PROTON_USER_VALUE"
-  PROTON_USER_PMP_ADDED=0
+  OPENVPN_USER_VALUE="$(trim_string "$OPENVPN_USER_VALUE")"
   if [[ "$OPENVPN_USER_VALUE" != *"+pmp" ]]; then
     OPENVPN_USER_VALUE+="+pmp"
     PROTON_USER_PMP_ADDED=1
+  else
+    PROTON_USER_PMP_ADDED=0
   fi
-
   : "$PROTON_USER_PMP_ADDED"
 }
 
