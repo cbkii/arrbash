@@ -73,25 +73,27 @@ vpn_auto_reconnect_state_dir() {
   printf '%s/auto-reconnect' "$root"
 }
 
-# Returns path to persisted state.json for reconnect worker
-vpn_auto_reconnect_state_file() {
+# Helper: Returns path to a file under the auto-reconnect state directory
+vpn_auto_reconnect_state_path() {
+  local filename="$1"
   local dir
   dir="$(vpn_auto_reconnect_state_dir 2>/dev/null)" || return 1
-  printf '%s/state.json' "$dir"
+  printf '%s/%s' "$dir" "$filename"
+}
+
+# Returns path to persisted state.json for reconnect worker
+vpn_auto_reconnect_state_file() {
+  vpn_auto_reconnect_state_path "state.json"
 }
 
 # Cookie jar used for qBittorrent API sessions
 vpn_auto_reconnect_cookie_file() {
-  local dir
-  dir="$(vpn_auto_reconnect_state_dir 2>/dev/null)" || return 1
-  printf '%s/session.cookie' "$dir"
+  vpn_auto_reconnect_state_path "session.cookie"
 }
 
 # History log tracking reconnect attempts and outcomes
 vpn_auto_reconnect_history_file() {
-  local dir
-  dir="$(vpn_auto_reconnect_state_dir 2>/dev/null)" || return 1
-  printf '%s/history.log' "$dir"
+  vpn_auto_reconnect_state_path "history.log"
 }
 
 # Path to human-readable status JSON stored alongside stack root
