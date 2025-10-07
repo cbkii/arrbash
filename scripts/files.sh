@@ -791,6 +791,7 @@ write_env() {
 
   mv "$tmp" "$ARR_ENV_FILE"
   ensure_secret_file_mode "$ARR_ENV_FILE"
+  sed -i 's/\r$//' "$ARR_ENV_FILE"
 
 }
 
@@ -824,13 +825,20 @@ append_sabnzbd_service_body() {
 YAML
 
   if [[ "$include_direct_port" == "1" ]]; then
-    printf '    ports:\n      - "${LAN_IP}:${SABNZBD_PORT}:%s"\n' "$internal_port" >>"$target"
+    arr_yaml_append "$target" <<'YAML'
+    ports:
+YAML
+    arr_yaml_list_item "      " "${LAN_IP}:${SABNZBD_PORT}:${internal_port}" >>"$target"
   fi
 
   {
     printf '    healthcheck:\n'
-    printf '      test: ["CMD", "curl", "-fsS", "http://%s:%s/api?mode=version&output=json"]\n' "$LOCALHOST_IP" "$internal_port"
-    printf '      interval: "30s"\n      timeout: "5s"\n      retries: "5"\n      start_period: "%ss"\n' "$health_start_period_seconds"
+    printf '      test: ["CMD", "curl", "-fsS", %s]\n' \
+      "$(arr_yaml_escape "http://${LOCALHOST_IP}:${internal_port}/api?mode=version&output=json")"
+    arr_yaml_kv "      " "interval" "30s"
+    arr_yaml_kv "      " "timeout" "5s"
+    arr_yaml_kv "      " "retries" "5"
+    arr_yaml_kv "      " "start_period" "${health_start_period_seconds}s"
   } >>"$target"
 
   cat <<'YAML' >>"$target"
@@ -962,8 +970,7 @@ YAML
   } >"$tmp"
 
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    # shellcheck disable=SC2016  # Compose needs the literal ${QBT_DOCKER_MODS}
-    printf '      DOCKER_MODS: "${QBT_DOCKER_MODS}"\n' >>"$tmp"
+    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
   fi
 
   cat <<'YAML' >>"$tmp"
@@ -1236,8 +1243,14 @@ YAML
     die "Generated docker-compose.yml contains nested environment placeholders"
   fi
 
+  if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
+    rm -f "$tmp"
+    die "Generated docker-compose.yml contains unexpected environment placeholders"
+  fi
+
   mv "$tmp" "$compose_path"
   ensure_nonsecret_file_mode "$compose_path"
+  sed -i 's/\r$//' "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
@@ -1309,8 +1322,8 @@ write_compose() {
 YAML
 
     if ((include_caddy == 0)); then
-      printf '%s\n' '# Caddy reverse proxy disabled (ENABLE_CADDY=0).'
-      printf '# Set ENABLE_CADDY=1 in %s and rerun ./%s.sh to add HTTPS hostnames via Caddy.\n' "$userconf_path" "$STACK"
+      arr_yaml_comment "" "Caddy reverse proxy disabled (ENABLE_CADDY=0)."
+      arr_yaml_comment "" "Set ENABLE_CADDY=1 in ${userconf_path} and rerun ./${STACK}.sh to add HTTPS hostnames via Caddy."
     fi
 
     cat <<'YAML'
@@ -1432,8 +1445,8 @@ YAML
 YAML
     local server
     for server in "${upstream_dns_servers[@]}"; do
-      printf '      - %s\n' "$(arr_yaml_escape "--server=${server}")"
-    done >>"$tmp"
+      arr_yaml_list_item "      " "--server=${server}" >>"$tmp"
+    done
     cat <<'YAML' >>"$tmp"
       - "--domain-needed"
       - "--bogus-priv"
@@ -1486,7 +1499,7 @@ YAML
       QBT_WEBUI_INIT_HOOK: "1"
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    printf '      DOCKER_MODS: "%s"\n' "${QBT_DOCKER_MODS}" >>"$tmp"
+    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
   fi
   cat <<'YAML' >>"$tmp"
     volumes:
@@ -1749,8 +1762,14 @@ YAML
     die "Generated docker-compose.yml contains nested environment placeholders"
   fi
 
+  if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
+    rm -f "$tmp"
+    die "Generated docker-compose.yml contains unexpected environment placeholders"
+  fi
+
   mv "$tmp" "$compose_path"
   ensure_nonsecret_file_mode "$compose_path"
+  sed -i 's/\r$//' "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }

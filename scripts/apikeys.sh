@@ -78,7 +78,7 @@ arr_update_secret_line() {
   fi
 
   if [[ ! -f "$secrets_file" ]]; then
-    printf '%s: "%s"\n' "$secret_key" "$new_value" >"$secrets_file"
+    arr_yaml_kv "" "$secret_key" "$new_value" >"$secrets_file"
     ensure_secret_file_mode "$secrets_file"
     printf 'created\n'
     return 0
@@ -90,7 +90,7 @@ arr_update_secret_line() {
   existing_line="$(grep -n -m1 "^${secret_key}:" "$secrets_file" 2>/dev/null || true)"
 
   if [[ -z "$existing_line" ]]; then
-    printf '%s: "%s"\n' "$secret_key" "$new_value" >>"$secrets_file"
+    arr_yaml_kv "" "$secret_key" "$new_value" >>"$secrets_file"
     ensure_secret_file_mode "$secrets_file"
     printf 'appended\n'
     return 0
