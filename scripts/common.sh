@@ -1349,14 +1349,18 @@ arr_verify_compose_placeholders() {
 
   declare -A _arr_known_env=()
   if [[ -n "$env_file" && -f "$env_file" ]]; then
+    local _arr_key=""
     while IFS= read -r _arr_line; do
-      [[ -z "$_arr_line" ]] && continue
+      [[ "$_arr_line" =~ ^[[:space:]]*$ ]] && continue
       [[ "$_arr_line" =~ ^[[:space:]]*# ]] && continue
-      if [[ "$_arr_line" == *'='* ]]; then
-        local _arr_key="${_arr_line%%=*}"
-        _arr_key="${_arr_key%%[[:space:]]*}"
-        [[ -n "$_arr_key" ]] && _arr_known_env["$_arr_key"]=1
+      if [[ "$_arr_line" =~ ^[[:space:]]*export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]]; then
+        _arr_key="${BASH_REMATCH[1]}"
+      elif [[ "$_arr_line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]]; then
+        _arr_key="${BASH_REMATCH[1]}"
+      else
+        continue
       fi
+      _arr_known_env["$_arr_key"]=1
     done <"$env_file"
   fi
 
