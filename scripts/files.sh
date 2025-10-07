@@ -913,13 +913,8 @@ YAML
       - ${ARR_DOCKER_DIR}/gluetun:/gluetun
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-YAML
-
-    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-      cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
-    fi
 
     cat <<'YAML' >>"$tmp"
     healthcheck:
