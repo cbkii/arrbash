@@ -27,7 +27,19 @@ show_summary() {
         warn "See docs/networking.md (Proton port forwarding) to restore the forwarded port."
         ;;
       *)
-        warn "Check ${ARR_STACK_DIR}/logs for additional detail."
+        local log_hint=""
+        if declare -f arr_log_dir >/dev/null 2>&1; then
+          log_hint="$(arr_log_dir)"
+        elif [[ -n "${ARR_LOG_DIR:-}" ]]; then
+          log_hint="${ARR_LOG_DIR%/}"
+        elif declare -f arr_stack_dir >/dev/null 2>&1; then
+          log_hint="$(arr_stack_dir)/logs"
+        elif [[ -n "${ARR_STACK_DIR:-}" ]]; then
+          log_hint="${ARR_STACK_DIR%/}/logs"
+        else
+          log_hint="logs"
+        fi
+        warn "Check ${log_hint} for additional detail."
         ;;
     esac
     return 0
@@ -40,9 +52,18 @@ show_summary() {
 
   # Always show qBittorrent access information prominently
   local qbt_pass_msg=""
-  if [[ -f "$ARR_ENV_FILE" ]]; then
+  local env_file="${ARR_ENV_FILE:-}"
+  if [[ -z "$env_file" ]]; then
+    if declare -f arr_env_file >/dev/null 2>&1; then
+      env_file="$(arr_env_file)"
+    elif declare -f arr_stack_dir >/dev/null 2>&1; then
+      env_file="$(arr_stack_dir)/.env"
+    fi
+  fi
+
+  if [[ -f "$env_file" ]]; then
     local configured_pass=""
-    if configured_pass="$(get_env_kv "QBT_PASS" "$ARR_ENV_FILE" 2>/dev/null)"; then
+    if configured_pass="$(get_env_kv "QBT_PASS" "$env_file" 2>/dev/null)"; then
       if [[ -n "$configured_pass" && "$configured_pass" != "adminadmin" ]]; then
         qbt_pass_msg="Password: ${configured_pass} (from .env)"
       else
@@ -278,10 +299,8 @@ WARNING
   local vpn_auto_status_file="${ARR_STACK_DIR%/}/.vpn-auto-reconnect-status.json"
   local vpn_auto_state_base="${ARR_DOCKER_DIR:-}"
   if [[ -z "$vpn_auto_state_base" ]]; then
-    if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-      vpn_auto_state_base="${ARR_STACK_DIR%/}/docker-data"
-    else
-      vpn_auto_state_base="${ARR_DATA_ROOT%/}/docker-data"
+    if declare -f arr_docker_data_root >/dev/null 2>&1; then
+      vpn_auto_state_base="$(arr_docker_data_root)"
     fi
   fi
   local vpn_auto_state_file="${vpn_auto_state_base%/}/gluetun/auto-reconnect/state.json"

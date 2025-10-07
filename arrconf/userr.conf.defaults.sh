@@ -42,9 +42,9 @@ case "${ARR_DATA_ROOT}" in
   /) ;;
   */) ARR_DATA_ROOT="${ARR_DATA_ROOT%/}" ;;
 esac
-ARRCONF_DIR="${ARRCONF_DIR:-${ARR_DATA_ROOT}/${STACK}configs}"
 ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_DATA_ROOT}/${STACK}}"
-ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_DATA_ROOT}/docker-data}"
+ARRCONF_DIR="${ARRCONF_DIR:-${ARR_STACK_DIR}configs}"
+ARR_DOCKER_DIR="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/dockarr}"
 ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
 ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
 ARR_LOG_DIR="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
@@ -541,7 +541,7 @@ ARR_DATA_ROOT="${HOME}/srv"           # Default data root (matches historical ~/
 ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"  # Directory for secrets and config overrides
 ARR_STACK_DIR="${ARR_DATA_ROOT}/${STACK}"  # Location for docker-compose.yml, scripts, and aliases
 ARR_ENV_FILE="${ARR_STACK_DIR}/.env"  # Path to the generated .env secrets file
-ARR_DOCKER_DIR="${ARR_DATA_ROOT}/docker-data"  # Docker volumes and persistent data storage
+ARR_DOCKER_DIR="${ARR_STACK_DIR}/dockarr"  # Docker volumes and persistent data storage
 ARR_USERCONF_PATH="${ARRCONF_DIR}/userr.conf"  # Optional: relocate this file outside ${ARR_DATA_ROOT}
 
 # --- Logging and output ---

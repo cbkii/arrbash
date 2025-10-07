@@ -15,32 +15,65 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 
 ## Core settings to review
 
-- **Network**
-  - `LAN_IP`: set this to your host's private address before exposing ports.
-  - `LOCALHOST_IP`: leave on loopback (`127.0.0.1`) so container health checks target the right place.
-  - `LAN_DOMAIN_SUFFIX`: optional hostname suffix (default `home.arpa`) needed for local DNS and Caddy URLs.
-  - `SPLIT_VPN`: `1` routes only qBittorrent through Gluetun; `0` tunnels everything.
-  - `EXPOSE_DIRECT_PORTS`: keep at `1` for simple LAN URLs, or set `0` to hide services behind Docker networking.
-  - `DNS_DISTRIBUTION_MODE`: choose `router` to update DHCP Option 6 or `per-device` to set DNS on each client yourself.
-  - `ARR_PORT_CHECK_MODE`: `enforce` (default) stops on conflicts, `warn` prints notices, `skip` disables checks, and `fix` tries to stop known blockers before warning.
-- **Paths & storage**
-  - `ARR_DATA_ROOT`: base directory for everything (defaults to `~/srv`). Override it before the first run if you want a different location.
-  - `ARRCONF_DIR`: holds Proton credentials and overrides (defaults to `${ARR_DATA_ROOT}/${STACK}configs`).
-  - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`, `TV_DIR`, `MOVIES_DIR`, `SUBS_DIR`: point these at your real storage; defaults live under `${ARR_DATA_ROOT}`.
-  - `ARR_LOG_DIR`: move logs if you prefer another disk.
-- **Credentials & preservation**
-  - `QBT_USER` / `QBT_PASS`: keep these in sync with the WebUI. Rerun the installer after changes so `.env` updates automatically.
-  - `GLUETUN_API_KEY`, `CADDY_BASIC_AUTH_USER`, `CADDY_BASIC_AUTH_HASH`: leave blank; rotation helpers fill them in.
-  - `QBT_AUTH_WHITELIST`: CIDRs allowed to skip the qBittorrent login (loopback and your LAN are added automatically).
-  - `QBT_BIND_ADDR`: override the container-side WebUI bind address if you need something other than `0.0.0.0`.
-  - WebUI port/address are enforced by default at startup and after drift.
-- **VPN automation**
-  - `VPN_AUTO_RECONNECT_ENABLED`: runs the reconnect worker that watches qBittorrent speeds.
-  - `VPN_SPEED_THRESHOLD_KBPS`, `VPN_CHECK_INTERVAL_MINUTES`, `VPN_CONSECUTIVE_CHECKS`: tune how quickly reconnects fire.
-  - `VPN_ALLOWED_HOURS_START` / `VPN_ALLOWED_HOURS_END`: limit reconnects to certain hours; set the same number for 24/7.
-- **Permission profiles**
-  - `ARR_PERMISSION_PROFILE`: `strict` (default) keeps secrets at `600`, data at `700`, and uses `umask 0077`. `collab` enables group write; set `PGID` to your shared group.
-  - Optional overrides: `ARR_UMASK_OVERRIDE`, `ARR_DATA_DIR_MODE_OVERRIDE`, `ARR_NONSECRET_FILE_MODE_OVERRIDE`, `ARR_SECRET_FILE_MODE_OVERRIDE` for advanced tuning.
+### Network
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `LAN_IP` | *(empty)* | Set to your host's LAN address before exposing ports so published services bind correctly. |
+| `LOCALHOST_IP` | `127.0.0.1` | Keep on loopback so health checks reach the Gluetun control API. |
+| `LAN_DOMAIN_SUFFIX` | `home.arpa` | Optional hostname suffix used by local DNS and Caddy URLs. |
+| `SPLIT_VPN` | `0` | `1` routes only qBittorrent through Gluetun; `0` tunnels the whole stack. |
+| `EXPOSE_DIRECT_PORTS` | `1` | Leave enabled for simple `http://${LAN_IP}:PORT` access; set `0` to hide UIs behind Docker networking. |
+| `DNS_DISTRIBUTION_MODE` | `router` | Choose `router` to push DNS via DHCP Option 6 or `per-device` to configure each client manually. |
+| `ARR_PORT_CHECK_MODE` | `enforce` | Controls port conflict handling: `enforce`, `warn`, `skip`, or `fix` (attempt to clear blockers then warn). |
+
+### Paths & storage
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `ARR_DATA_ROOT` | `${HOME}/srv` | Base directory; override before first run to relocate the entire stack. |
+| `ARR_STACK_DIR` | `${ARR_DATA_ROOT}/${STACK}` | Working tree for compose files, scripts, and helpers. |
+| `ARRCONF_DIR` | `${ARR_DATA_ROOT}/${STACK}configs` | Stores Proton credentials and overrides sourced during install. |
+| `ARR_DOCKER_DIR` | `${ARR_STACK_DIR}/dockarr` | Root for per-service volumes such as `${ARR_DOCKER_DIR}/qbittorrent`. |
+| `ARR_LOG_DIR` | `${ARR_STACK_DIR}/logs` | Installer logs, Compose validation output, VPN reconnect history. |
+| `DOWNLOADS_DIR` | `${HOME}/Downloads` | Active download location for qBittorrent. |
+| `COMPLETED_DIR` | `${DOWNLOADS_DIR}/completed` | Destination for finished downloads. |
+| `MEDIA_DIR` | `${ARR_DATA_ROOT}/media` | Library root used by Sonarr/Radarr/Bazarr. |
+| `TV_DIR` | `${MEDIA_DIR}/Shows` | Default Sonarr library path. |
+| `MOVIES_DIR` | `${MEDIA_DIR}/Movies` | Default Radarr library path. |
+| `SUBS_DIR` | `${MEDIA_DIR}/subs` | Optional Bazarr subtitles directory. |
+
+Changing `ARR_DOCKER_DIR` moves all service state directories. Rerun `./arr.sh --yes` after editing `userr.conf` so compose, hooks, and helpers pick up the new location. Adjust `ARR_STACK_DIR`, `ARRCONF_DIR`, or `ARR_LOG_DIR` similarly to relocate the working tree, configuration, or logs.
+
+### Credentials & preservation
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `QBT_USER` / `QBT_PASS` | `admin` / `adminadmin` | Keep credentials in sync with the WebUI; rerun the installer so `.env` updates. |
+| `GLUETUN_API_KEY` | *(empty)* | Leave blank to auto-generate; helpers rotate it when missing. |
+| `CADDY_BASIC_AUTH_USER` | `user` | Username required outside `CADDY_LAN_CIDRS`; hash updates follow automatically. |
+| `CADDY_BASIC_AUTH_HASH` | *(empty)* | Stored in `.env`; regenerated by the installer when blank. |
+| `QBT_AUTH_WHITELIST` | `127.0.0.1/32,${LAN_IP}/32` (derived) | CIDRs allowed to bypass the qBittorrent login; LAN defaults apply automatically. |
+
+### VPN automation
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `VPN_AUTO_RECONNECT_ENABLED` | `0` | Enables the reconnect worker that monitors qBittorrent throughput. |
+| `VPN_SPEED_THRESHOLD_KBPS` | `12` | Trigger reconnects when sustained speeds drop below this value. |
+| `VPN_CHECK_INTERVAL_MINUTES` | `20` | Minutes between throughput samples. |
+| `VPN_CONSECUTIVE_CHECKS` | `3` | Required failing samples before reconnecting. |
+| `VPN_ALLOWED_HOURS_START` / `VPN_ALLOWED_HOURS_END` | *(empty)* | Restrict reconnects to a specific window; identical values allow 24/7 operation. |
+
+### Permission profiles
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `ARR_PERMISSION_PROFILE` | `strict` | `strict` keeps secrets at `600` and data at `700`; `collab` enables group write access. |
+| `ARR_UMASK_OVERRIDE` | *(empty)* | Advanced override for `umask`; inherit from the active profile when unset. |
+| `ARR_DATA_DIR_MODE_OVERRIDE` | *(empty)* | Override directory mode used for data paths. |
+| `ARR_NONSECRET_FILE_MODE_OVERRIDE` | *(empty)* | Override mode for non-secret files emitted during install. |
+| `ARR_SECRET_FILE_MODE_OVERRIDE` | *(empty)* | Override mode for secret files such as `.env`. |
 
 ## Working with overrides / Verify resolved values
 

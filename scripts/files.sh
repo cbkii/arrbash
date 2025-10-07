@@ -654,141 +654,139 @@ write_env() {
 
   {
     printf '%s\n' '# Core settings'
-    write_env_kv "VPN_TYPE" "openvpn"
-    write_env_kv "PUID" "$PUID"
-    write_env_kv "PGID" "$PGID"
-    write_env_kv "TIMEZONE" "$TIMEZONE"
-    write_env_kv "LAN_IP" "$LAN_IP"
-    write_env_kv "LOCALHOST_IP" "$LOCALHOST_IP"
-    write_env_kv "EXPOSE_DIRECT_PORTS" "$EXPOSE_DIRECT_PORTS"
-    write_env_kv "ENABLE_CADDY" "$ENABLE_CADDY"
-    write_env_kv "SPLIT_VPN" "$SPLIT_VPN"
+    arr_write_env_kv "VPN_TYPE" "openvpn"
+    arr_write_env_kv "PUID" "$PUID"
+    arr_write_env_kv "PGID" "$PGID"
+    arr_write_env_kv "TIMEZONE" "$TIMEZONE"
+    arr_write_env_kv "LAN_IP" "$LAN_IP"
+    arr_write_env_kv "LOCALHOST_IP" "$LOCALHOST_IP"
+    arr_write_env_kv "EXPOSE_DIRECT_PORTS" "$EXPOSE_DIRECT_PORTS"
+    arr_write_env_kv "ENABLE_CADDY" "$ENABLE_CADDY"
+    arr_write_env_kv "SPLIT_VPN" "$SPLIT_VPN"
     printf '\n'
 
     printf '%s\n' '# Optional tooling'
-    write_env_kv "ENABLE_CONFIGARR" "$ENABLE_CONFIGARR"
+    arr_write_env_kv "ENABLE_CONFIGARR" "$ENABLE_CONFIGARR"
     printf '\n'
 
     printf '%s\n' '# Local DNS (disabled by default)'
     printf '%s\n' '# Preferred comma-separated chain (legacy UPSTREAM_DNS_1/UPSTREAM_DNS_2 remain supported).'
-    write_env_kv "LAN_DOMAIN_SUFFIX" "$LAN_DOMAIN_SUFFIX"
-    write_env_kv "ENABLE_LOCAL_DNS" "$ENABLE_LOCAL_DNS"
-    write_env_kv "DNS_DISTRIBUTION_MODE" "$DNS_DISTRIBUTION_MODE"
-    write_env_kv "UPSTREAM_DNS_SERVERS" "$UPSTREAM_DNS_SERVERS"
-    write_env_kv "UPSTREAM_DNS_1" "$UPSTREAM_DNS_1"
-    write_env_kv "UPSTREAM_DNS_2" "$UPSTREAM_DNS_2"
-    write_env_kv "DNS_HOST_ENTRY" "$dns_host_entry"
+    arr_write_env_kv "LAN_DOMAIN_SUFFIX" "$LAN_DOMAIN_SUFFIX"
+    arr_write_env_kv "ENABLE_LOCAL_DNS" "$ENABLE_LOCAL_DNS"
+    arr_write_env_kv "DNS_DISTRIBUTION_MODE" "$DNS_DISTRIBUTION_MODE"
+    arr_write_env_kv "UPSTREAM_DNS_SERVERS" "$UPSTREAM_DNS_SERVERS"
+    arr_write_env_kv "UPSTREAM_DNS_1" "$UPSTREAM_DNS_1"
+    arr_write_env_kv "UPSTREAM_DNS_2" "$UPSTREAM_DNS_2"
+    arr_write_env_kv "DNS_HOST_ENTRY" "$dns_host_entry"
     printf '\n'
 
     printf '%s\n' '# ProtonVPN OpenVPN credentials'
-    write_env_kv "OPENVPN_USER" "$PU"
-    write_env_kv "OPENVPN_PASSWORD" "$PW"
+    arr_write_env_kv "OPENVPN_USER" "$PU"
+    arr_write_env_kv "OPENVPN_PASSWORD" "$PW"
     printf '\n'
 
     printf '%s\n' '# Derived values'
-    write_env_kv "OPENVPN_USER_ENFORCED" "$PU"
-    write_env_kv "COMPOSE_PROJECT_NAME" "$COMPOSE_PROJECT_NAME"
-    write_env_kv "COMPOSE_PROFILES" "$compose_profiles_csv"
+    arr_write_env_kv "OPENVPN_USER_ENFORCED" "$PU"
+    arr_write_env_kv "COMPOSE_PROJECT_NAME" "$COMPOSE_PROJECT_NAME"
+    arr_write_env_kv "COMPOSE_PROFILES" "$compose_profiles_csv"
     printf '\n'
 
     printf '%s\n' '# Gluetun settings'
-    write_env_kv "VPN_SERVICE_PROVIDER" "protonvpn"
-    write_env_kv "GLUETUN_API_KEY" "$GLUETUN_API_KEY"
-    write_env_kv "GLUETUN_CONTROL_PORT" "$GLUETUN_CONTROL_PORT"
-    write_env_kv "SERVER_COUNTRIES" "$SERVER_COUNTRIES"
-    write_env_kv "GLUETUN_FIREWALL_INPUT_PORTS" "$firewall_ports_csv"
-    write_env_kv "GLUETUN_FIREWALL_OUTBOUND_SUBNETS" "$gluetun_firewall_outbound"
+    arr_write_env_kv "VPN_SERVICE_PROVIDER" "protonvpn"
+    arr_write_env_kv "GLUETUN_API_KEY" "$GLUETUN_API_KEY"
+    arr_write_env_kv "GLUETUN_CONTROL_PORT" "$GLUETUN_CONTROL_PORT"
+    arr_write_env_kv "SERVER_COUNTRIES" "$SERVER_COUNTRIES"
+    arr_write_env_kv "GLUETUN_FIREWALL_INPUT_PORTS" "$firewall_ports_csv"
+    arr_write_env_kv "GLUETUN_FIREWALL_OUTBOUND_SUBNETS" "$gluetun_firewall_outbound"
     printf '\n'
 
     printf '%s\n' '# VPN auto-reconnect'
-    write_env_kv "VPN_AUTO_RECONNECT_ENABLED" "$VPN_AUTO_RECONNECT_ENABLED"
-    write_env_kv "VPN_SPEED_THRESHOLD_KBPS" "$VPN_SPEED_THRESHOLD_KBPS"
-    write_env_kv "VPN_CHECK_INTERVAL_MINUTES" "$VPN_CHECK_INTERVAL_MINUTES"
-    write_env_kv "VPN_CONSECUTIVE_CHECKS" "$VPN_CONSECUTIVE_CHECKS"
-    write_env_kv "VPN_COOLDOWN_MINUTES" "$VPN_COOLDOWN_MINUTES"
-    write_env_kv "VPN_MAX_RETRY_MINUTES" "$VPN_MAX_RETRY_MINUTES"
-    write_env_kv "VPN_ROTATION_MAX_PER_DAY" "$VPN_ROTATION_MAX_PER_DAY"
-    write_env_kv "VPN_ROTATION_JITTER_SECONDS" "$VPN_ROTATION_JITTER_SECONDS"
-    write_env_kv "PVPN_ROTATE_COUNTRIES" "$PVPN_ROTATE_COUNTRIES"
-    write_env_kv "VPN_ALLOWED_HOURS_START" "$VPN_ALLOWED_HOURS_START"
-    write_env_kv "VPN_ALLOWED_HOURS_END" "$VPN_ALLOWED_HOURS_END"
+    arr_write_env_kv "VPN_AUTO_RECONNECT_ENABLED" "$VPN_AUTO_RECONNECT_ENABLED"
+    arr_write_env_kv "VPN_SPEED_THRESHOLD_KBPS" "$VPN_SPEED_THRESHOLD_KBPS"
+    arr_write_env_kv "VPN_CHECK_INTERVAL_MINUTES" "$VPN_CHECK_INTERVAL_MINUTES"
+    arr_write_env_kv "VPN_CONSECUTIVE_CHECKS" "$VPN_CONSECUTIVE_CHECKS"
+    arr_write_env_kv "VPN_COOLDOWN_MINUTES" "$VPN_COOLDOWN_MINUTES"
+    arr_write_env_kv "VPN_MAX_RETRY_MINUTES" "$VPN_MAX_RETRY_MINUTES"
+    arr_write_env_kv "VPN_ROTATION_MAX_PER_DAY" "$VPN_ROTATION_MAX_PER_DAY"
+    arr_write_env_kv "VPN_ROTATION_JITTER_SECONDS" "$VPN_ROTATION_JITTER_SECONDS"
+    arr_write_env_kv "PVPN_ROTATE_COUNTRIES" "$PVPN_ROTATE_COUNTRIES"
+    arr_write_env_kv "VPN_ALLOWED_HOURS_START" "$VPN_ALLOWED_HOURS_START"
+    arr_write_env_kv "VPN_ALLOWED_HOURS_END" "$VPN_ALLOWED_HOURS_END"
     printf '\n'
 
     printf '%s\n' '# Gluetun port-forwarding behavior (asynchronous worker)'
     printf '%s\n' '# GLUETUN_PF_STRICT=0  -> soft fail (stack continues even if PF never assigned)'
     printf '%s\n' '# GLUETUN_PF_STRICT=1  -> hard fail semantics (timeout recorded as hard status)'
     printf '%s\n' '# Adjust PF_ASYNC_TOTAL_BUDGET / PF_ASYNC_POLL_INTERVAL / PF_ASYNC_CYCLE_INTERVAL in user.conf if needed.'
-    write_env_kv "GLUETUN_PF_STRICT" "${GLUETUN_PF_STRICT:-0}"
+    arr_write_env_kv "GLUETUN_PF_STRICT" "${GLUETUN_PF_STRICT:-0}"
     printf '\n'
 
     printf '%s\n' '# Service ports'
-    write_env_kv "QBT_INT_PORT" "$QBT_INT_PORT"
-    write_env_kv "QBT_PORT" "$QBT_PORT"
-    write_env_kv "QBT_BIND_ADDR" "$QBT_BIND_ADDR"
-    write_env_kv "QBT_ENFORCE_WEBUI" "$QBT_ENFORCE_WEBUI"
-    write_env_kv "SONARR_PORT" "$SONARR_PORT"
-    write_env_kv "SONARR_INT_PORT" "$SONARR_INT_PORT"
-    write_env_kv "RADARR_PORT" "$RADARR_PORT"
-    write_env_kv "RADARR_INT_PORT" "$RADARR_INT_PORT"
-    write_env_kv "PROWLARR_PORT" "$PROWLARR_PORT"
-    write_env_kv "PROWLARR_INT_PORT" "$PROWLARR_INT_PORT"
-    write_env_kv "BAZARR_PORT" "$BAZARR_PORT"
-    write_env_kv "BAZARR_INT_PORT" "$BAZARR_INT_PORT"
-    write_env_kv "FLARR_PORT" "$FLARR_PORT"
-    write_env_kv "FLARR_INT_PORT" "$FLARR_INT_PORT"
+    arr_write_env_kv "QBT_INT_PORT" "$QBT_INT_PORT"
+    arr_write_env_kv "QBT_PORT" "$QBT_PORT"
+    arr_write_env_kv "SONARR_PORT" "$SONARR_PORT"
+    arr_write_env_kv "SONARR_INT_PORT" "$SONARR_INT_PORT"
+    arr_write_env_kv "RADARR_PORT" "$RADARR_PORT"
+    arr_write_env_kv "RADARR_INT_PORT" "$RADARR_INT_PORT"
+    arr_write_env_kv "PROWLARR_PORT" "$PROWLARR_PORT"
+    arr_write_env_kv "PROWLARR_INT_PORT" "$PROWLARR_INT_PORT"
+    arr_write_env_kv "BAZARR_PORT" "$BAZARR_PORT"
+    arr_write_env_kv "BAZARR_INT_PORT" "$BAZARR_INT_PORT"
+    arr_write_env_kv "FLARR_PORT" "$FLARR_PORT"
+    arr_write_env_kv "FLARR_INT_PORT" "$FLARR_INT_PORT"
     printf '\n'
 
     printf '%s\n' '# qBittorrent credentials (change in WebUI; preserved from existing .env when defaults remain)'
-    write_env_kv "QBT_USER" "$QBT_USER"
-    write_env_kv "QBT_PASS" "$QBT_PASS"
-    write_env_kv "QBT_DOCKER_MODS" "$QBT_DOCKER_MODS"
-    write_env_kv "QBT_AUTH_WHITELIST" "$QBT_AUTH_WHITELIST"
+    arr_write_env_kv "QBT_USER" "$QBT_USER"
+    arr_write_env_kv "QBT_PASS" "$QBT_PASS"
+    arr_write_env_kv "QBT_DOCKER_MODS" "$QBT_DOCKER_MODS"
+    arr_write_env_kv "QBT_AUTH_WHITELIST" "$QBT_AUTH_WHITELIST"
     printf '\n'
 
     printf '%s\n' '# SABnzbd'
-    write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
-    write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
-    write_env_kv "SABNZBD_HOST" "$SABNZBD_HOST"
-    write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
-    write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
-    write_env_kv "SABNZBD_TIMEOUT" "$SABNZBD_TIMEOUT"
-    write_env_kv "SABNZBD_PORT" "$SABNZBD_PORT"
-    write_env_kv "SABNZBD_INT_PORT" "$SABNZBD_INT_PORT"
-    write_env_kv "ARRBASH_USENET_CLIENT" "$ARRBASH_USENET_CLIENT"
+    arr_write_env_kv "SABNZBD_ENABLED" "$SABNZBD_ENABLED"
+    arr_write_env_kv "SABNZBD_USE_VPN" "$SABNZBD_USE_VPN"
+    arr_write_env_kv "SABNZBD_HOST" "$SABNZBD_HOST"
+    arr_write_env_kv "SABNZBD_API_KEY" "$SABNZBD_API_KEY"
+    arr_write_env_kv "SABNZBD_CATEGORY" "$SABNZBD_CATEGORY"
+    arr_write_env_kv "SABNZBD_TIMEOUT" "$SABNZBD_TIMEOUT"
+    arr_write_env_kv "SABNZBD_PORT" "$SABNZBD_PORT"
+    arr_write_env_kv "SABNZBD_INT_PORT" "$SABNZBD_INT_PORT"
+    arr_write_env_kv "ARRBASH_USENET_CLIENT" "$ARRBASH_USENET_CLIENT"
     printf '\n'
 
     printf '%s\n' '# Reverse proxy defaults'
-    write_env_kv "CADDY_HTTP_PORT" "$CADDY_HTTP_PORT"
-    write_env_kv "CADDY_HTTPS_PORT" "$CADDY_HTTPS_PORT"
-    write_env_kv "CADDY_DOMAIN_SUFFIX" "$ARR_DOMAIN_SUFFIX_CLEAN"
-    write_env_kv "CADDY_LAN_CIDRS" "$CADDY_LAN_CIDRS"
-    write_env_kv "CADDY_BASIC_AUTH_USER" "$CADDY_BASIC_AUTH_USER"
-    write_env_kv "CADDY_BASIC_AUTH_HASH" "$(unescape_env_value_from_compose "$CADDY_BASIC_AUTH_HASH")"
+    arr_write_env_kv "CADDY_HTTP_PORT" "$CADDY_HTTP_PORT"
+    arr_write_env_kv "CADDY_HTTPS_PORT" "$CADDY_HTTPS_PORT"
+    arr_write_env_kv "CADDY_DOMAIN_SUFFIX" "$ARR_DOMAIN_SUFFIX_CLEAN"
+    arr_write_env_kv "CADDY_LAN_CIDRS" "$CADDY_LAN_CIDRS"
+    arr_write_env_kv "CADDY_BASIC_AUTH_USER" "$CADDY_BASIC_AUTH_USER"
+    arr_write_env_kv "CADDY_BASIC_AUTH_HASH" "$(unescape_env_value_from_compose "$CADDY_BASIC_AUTH_HASH")"
     printf '\n'
 
     printf '%s\n' '# Paths'
-    write_env_kv "ARR_DOCKER_DIR" "$ARR_DOCKER_DIR"
-    write_env_kv "DOWNLOADS_DIR" "$DOWNLOADS_DIR"
-    write_env_kv "COMPLETED_DIR" "$COMPLETED_DIR"
-    write_env_kv "TV_DIR" "$TV_DIR"
-    write_env_kv "MOVIES_DIR" "$MOVIES_DIR"
+    arr_write_env_kv "ARR_DOCKER_DIR" "$ARR_DOCKER_DIR"
+    arr_write_env_kv "DOWNLOADS_DIR" "$DOWNLOADS_DIR"
+    arr_write_env_kv "COMPLETED_DIR" "$COMPLETED_DIR"
+    arr_write_env_kv "TV_DIR" "$TV_DIR"
+    arr_write_env_kv "MOVIES_DIR" "$MOVIES_DIR"
     if [[ -n "${SUBS_DIR:-}" ]]; then
-      write_env_kv "SUBS_DIR" "$SUBS_DIR"
+      arr_write_env_kv "SUBS_DIR" "$SUBS_DIR"
     fi
     printf '\n'
 
     printf '%s\n' '# Images'
-    write_env_kv "GLUETUN_IMAGE" "$GLUETUN_IMAGE"
-    write_env_kv "QBITTORRENT_IMAGE" "$QBITTORRENT_IMAGE"
-    write_env_kv "SONARR_IMAGE" "$SONARR_IMAGE"
-    write_env_kv "RADARR_IMAGE" "$RADARR_IMAGE"
-    write_env_kv "PROWLARR_IMAGE" "$PROWLARR_IMAGE"
-    write_env_kv "BAZARR_IMAGE" "$BAZARR_IMAGE"
-    write_env_kv "FLARR_IMAGE" "$FLARR_IMAGE"
-    write_env_kv "SABNZBD_IMAGE" "$SABNZBD_IMAGE"
-    write_env_kv "CONFIGARR_IMAGE" "$CONFIGARR_IMAGE"
-    write_env_kv "CADDY_IMAGE" "$CADDY_IMAGE"
-    write_env_kv "LOCALDNS_IMAGE" "$LOCALDNS_IMAGE"
+    arr_write_env_kv "GLUETUN_IMAGE" "$GLUETUN_IMAGE"
+    arr_write_env_kv "QBITTORRENT_IMAGE" "$QBITTORRENT_IMAGE"
+    arr_write_env_kv "SONARR_IMAGE" "$SONARR_IMAGE"
+    arr_write_env_kv "RADARR_IMAGE" "$RADARR_IMAGE"
+    arr_write_env_kv "PROWLARR_IMAGE" "$PROWLARR_IMAGE"
+    arr_write_env_kv "BAZARR_IMAGE" "$BAZARR_IMAGE"
+    arr_write_env_kv "FLARR_IMAGE" "$FLARR_IMAGE"
+    arr_write_env_kv "SABNZBD_IMAGE" "$SABNZBD_IMAGE"
+    arr_write_env_kv "CONFIGARR_IMAGE" "$CONFIGARR_IMAGE"
+    arr_write_env_kv "CADDY_IMAGE" "$CADDY_IMAGE"
+    arr_write_env_kv "LOCALDNS_IMAGE" "$LOCALDNS_IMAGE"
   } >"$tmp"
 
   mv "$tmp" "$ARR_ENV_FILE"
@@ -816,13 +814,13 @@ append_sabnzbd_service_body() {
 
   cat <<'YAML' >>"$target"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
     volumes:
-      - ${ARR_DOCKER_DIR}/sab/config:/config
-      - ${ARR_DOCKER_DIR}/sab/incomplete:/incomplete
-      - ${ARR_DOCKER_DIR}/sab/downloads:/downloads
+      - "${ARR_DOCKER_DIR}/sab/config:/config"
+      - "${ARR_DOCKER_DIR}/sab/incomplete:/incomplete"
+      - "${ARR_DOCKER_DIR}/sab/downloads:/downloads"
 YAML
 
   if [[ "$include_direct_port" == "1" ]]; then
@@ -832,14 +830,14 @@ YAML
   {
     printf '    healthcheck:\n'
     printf '      test: ["CMD", "curl", "-fsS", "http://%s:%s/api?mode=version&output=json"]\n' "$LOCALHOST_IP" "$internal_port"
-    printf '      interval: 30s\n      timeout: 5s\n      retries: 5\n      start_period: %ss\n' "$health_start_period_seconds"
+    printf '      interval: "30s"\n      timeout: "5s"\n      retries: "5"\n      start_period: "%ss"\n' "$health_start_period_seconds"
   } >>"$target"
 
   cat <<'YAML' >>"$target"
-    restart: unless-stopped
+    restart: "unless-stopped"
     # NOTE: Future hardening opportunity — consider CPU/memory limits and a read_only filesystem once defaults are vetted.
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
@@ -871,46 +869,46 @@ write_compose_split_mode() {
 # Caddy reverse proxy disabled automatically (SPLIT_VPN=1).
 services:
   gluetun:
-    image: ${GLUETUN_IMAGE}
-    container_name: gluetun
+    image: "${GLUETUN_IMAGE}"
+    container_name: "gluetun"
     profiles:
-      - ipdirect
+      - "ipdirect"
 YAML
 
     cat <<'YAML'
     cap_add:
-      - NET_ADMIN
+      - "NET_ADMIN"
     devices:
-      - /dev/net/tun
+      - "/dev/net/tun"
     environment:
-      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER}
-      VPN_TYPE: openvpn
-      OPENVPN_USER: ${OPENVPN_USER}
-      OPENVPN_PASSWORD: ${OPENVPN_PASSWORD}
+      VPN_SERVICE_PROVIDER: "${VPN_SERVICE_PROVIDER}"
+      VPN_TYPE: "openvpn"
+      OPENVPN_USER: "${OPENVPN_USER}"
+      OPENVPN_PASSWORD: "${OPENVPN_PASSWORD}"
       FREE_ONLY: "off"
-      SERVER_COUNTRIES: ${SERVER_COUNTRIES}
+      SERVER_COUNTRIES: "${SERVER_COUNTRIES}"
       VPN_PORT_FORWARDING: "on"
-      VPN_PORT_FORWARDING_PROVIDER: protonvpn
-      HTTP_CONTROL_SERVER_ADDRESS: 0.0.0.0:${GLUETUN_CONTROL_PORT}
+      VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
+      HTTP_CONTROL_SERVER_ADDRESS: "0.0.0.0:${GLUETUN_CONTROL_PORT}"
       HTTP_CONTROL_SERVER_AUTH: "apikey"
       HTTP_CONTROL_SERVER_APIKEY: "${GLUETUN_API_KEY}"
       VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
-      QBT_USER: ${QBT_USER}
-      QBT_PASS: ${QBT_PASS}
+      QBT_USER: "${QBT_USER}"
+      QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
       HEALTH_TARGET_ADDRESS: "1.1.1.1:443"
       HEALTH_VPN_DURATION_INITIAL: "30s"
       HEALTH_VPN_DURATION_ADDITION: "10s"
       HEALTH_SUCCESS_WAIT_DURATION: "10s"
       DNS_KEEP_NAMESERVER: "off"
-      FIREWALL_OUTBOUND_SUBNETS: ${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}
-      FIREWALL_INPUT_PORTS: ${GLUETUN_FIREWALL_INPUT_PORTS}
+      FIREWALL_OUTBOUND_SUBNETS: "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}"
+      FIREWALL_INPUT_PORTS: "${GLUETUN_FIREWALL_INPUT_PORTS}"
       UPDATER_PERIOD: "24h"
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
     volumes:
-      - ${ARR_DOCKER_DIR}/gluetun:/gluetun
+      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
@@ -934,68 +932,68 @@ YAML
           else
             exit 1;
           fi
-      interval: 30s
-      timeout: 30s
-      retries: 10
-      start_period: 120s
-    restart: unless-stopped
+      interval: "30s"
+      timeout: "30s"
+      retries: "10"
+      start_period: "120s"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "3"
 
   qbittorrent:
-    image: ${QBITTORRENT_IMAGE}
-    container_name: qbittorrent
+    image: "${QBITTORRENT_IMAGE}"
+    container_name: "qbittorrent"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      LANG: en_US.UTF-8
-      QBT_INT_PORT: ${QBT_INT_PORT}
-      QBT_BIND_ADDR: ${QBT_BIND_ADDR}
-      QBT_ENFORCE_WEBUI: ${QBT_ENFORCE_WEBUI}
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
+      QBT_INT_PORT: "${QBT_INT_PORT}"
+      QBT_BIND_ADDR: "${QBT_BIND_ADDR}"
+      QBT_ENFORCE_WEBUI: "${QBT_ENFORCE_WEBUI}"
       QBT_WEBUI_INIT_HOOK: 1
 YAML
   } >"$tmp"
 
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     # shellcheck disable=SC2016  # Compose needs the literal ${QBT_DOCKER_MODS}
-    printf '      DOCKER_MODS: ${QBT_DOCKER_MODS}\n' >>"$tmp"
+    printf '      DOCKER_MODS: "${QBT_DOCKER_MODS}"\n' >>"$tmp"
   fi
 
   cat <<'YAML' >>"$tmp"
     volumes:
-      - ${ARR_DOCKER_DIR}/qbittorrent:/config
-      - ${DOWNLOADS_DIR}:/downloads
-      - ${COMPLETED_DIR}:/completed
-      - ${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro
+      - "${ARR_DOCKER_DIR}/qbittorrent:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: "service_healthy"
     healthcheck:
       test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+      interval: "30s"
+      timeout: "10s"
+      retries: "3"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   sonarr:
-    image: ${SONARR_IMAGE}
-    container_name: sonarr
+    image: "${SONARR_IMAGE}"
+    container_name: "sonarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     networks:
-      - arr_net
+      - "arr_net"
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
@@ -1007,29 +1005,29 @@ YAML
 
   cat <<'YAML' >>"$tmp"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      LANG: en_US.UTF-8
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
     volumes:
-      - ${ARR_DOCKER_DIR}/sonarr:/config
-      - ${DOWNLOADS_DIR}:/downloads
-      - ${COMPLETED_DIR}:/completed
-      - ${TV_DIR}:/tv
-    restart: unless-stopped
+      - "${ARR_DOCKER_DIR}/sonarr:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${TV_DIR}:/tv"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   radarr:
-    image: ${RADARR_IMAGE}
-    container_name: radarr
+    image: "${RADARR_IMAGE}"
+    container_name: "radarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     networks:
-      - arr_net
+      - "arr_net"
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
@@ -1041,29 +1039,29 @@ YAML
 
   cat <<'YAML' >>"$tmp"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      LANG: en_US.UTF-8
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
     volumes:
-      - ${ARR_DOCKER_DIR}/radarr:/config
-      - ${DOWNLOADS_DIR}:/downloads
-      - ${COMPLETED_DIR}:/completed
-      - ${MOVIES_DIR}:/movies
-    restart: unless-stopped
+      - "${ARR_DOCKER_DIR}/radarr:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${MOVIES_DIR}:/movies"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   prowlarr:
-    image: ${PROWLARR_IMAGE}
-    container_name: prowlarr
+    image: "${PROWLARR_IMAGE}"
+    container_name: "prowlarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     networks:
-      - arr_net
+      - "arr_net"
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
@@ -1075,26 +1073,26 @@ YAML
 
   cat <<'YAML' >>"$tmp"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      LANG: en_US.UTF-8
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
     volumes:
-      - ${ARR_DOCKER_DIR}/prowlarr:/config
-    restart: unless-stopped
+      - "${ARR_DOCKER_DIR}/prowlarr:/config"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   bazarr:
-    image: ${BAZARR_IMAGE}
-    container_name: bazarr
+    image: "${BAZARR_IMAGE}"
+    container_name: "bazarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     networks:
-      - arr_net
+      - "arr_net"
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
@@ -1106,37 +1104,37 @@ YAML
 
   cat <<'YAML' >>"$tmp"
     environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TIMEZONE}
-      LANG: en_US.UTF-8
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
     volumes:
-      - ${ARR_DOCKER_DIR}/bazarr:/config
-      - ${TV_DIR}:/tv
-      - ${MOVIES_DIR}:/movies
+      - "${ARR_DOCKER_DIR}/bazarr:/config"
+      - "${TV_DIR}:/tv"
+      - "${MOVIES_DIR}:/movies"
 YAML
 
   if [[ -n "${SUBS_DIR:-}" ]]; then
     cat <<'YAML' >>"$tmp"
-      - ${SUBS_DIR}:/subs
+      - "${SUBS_DIR}:/subs"
 YAML
   fi
 
   cat <<'YAML' >>"$tmp"
-    restart: unless-stopped
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   flaresolverr:
-    image: ${FLARR_IMAGE}
-    container_name: flaresolverr
+    image: "${FLARR_IMAGE}"
+    container_name: "flaresolverr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     networks:
-      - arr_net
+      - "arr_net"
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
@@ -1148,16 +1146,16 @@ YAML
 
   cat <<'YAML' >>"$tmp"
     environment:
-      LOG_LEVEL: info
+      LOG_LEVEL: "info"
     healthcheck:
       test: ["CMD-SHELL", "if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health; elif command -v wget >/dev/null 2>&1; then wget -q --timeout=10 -O- http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health; else exit 1; fi"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
+      interval: "30s"
+      timeout: "10s"
+      retries: "3"
+      start_period: "40s"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
@@ -1168,23 +1166,23 @@ YAML
     arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
     cat <<'YAML' >>"$tmp"
   sabnzbd:
-    image: ${SABNZBD_IMAGE}
-    container_name: sabnzbd
+    image: "${SABNZBD_IMAGE}"
+    container_name: "sabnzbd"
     profiles:
-      - ipdirect
+      - "ipdirect"
 YAML
     if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: "service_healthy"
 YAML
       append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
     else
       cat <<'YAML' >>"$tmp"
     networks:
-      - arr_net
+      - "arr_net"
 YAML
       local expose_direct_port="0"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
@@ -1197,28 +1195,28 @@ YAML
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
   configarr:
-    image: ${CONFIGARR_IMAGE}
-    container_name: configarr
+    image: "${CONFIGARR_IMAGE}"
+    container_name: "configarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     networks:
-      - arr_net
+      - "arr_net"
     depends_on:
       sonarr:
-        condition: service_started
+        condition: "service_started"
       radarr:
-        condition: service_started
+        condition: "service_started"
     volumes:
-      - ${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro
-      - ${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro
-      - ${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro
-    working_dir: /app
+      - "${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro"
+    working_dir: "/app"
     entrypoint: ["/bin/sh","-lc","node dist/index.js || exit 1"]
     environment:
-      TZ: ${TIMEZONE}
+      TZ: "${TIMEZONE}"
     restart: "no"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "512k"
         max-file: "2"
@@ -1229,8 +1227,8 @@ YAML
 
 networks:
   arr_net:
-    name: ${COMPOSE_PROJECT_NAME}_arr_net
-    driver: bridge
+    name: "${COMPOSE_PROJECT_NAME}_arr_net"
+    driver: "bridge"
 YAML
 
   if ! verify_single_level_env_placeholders "$tmp"; then
@@ -1319,22 +1317,22 @@ YAML
 services:
   gluetun:
     image: "${GLUETUN_IMAGE}"
-    container_name: gluetun
+    container_name: "gluetun"
     profiles:
-      - ipdirect
+      - "ipdirect"
     cap_add:
-      - NET_ADMIN
+      - "NET_ADMIN"
     devices:
-      - /dev/net/tun
+      - "/dev/net/tun"
     environment:
       VPN_SERVICE_PROVIDER: "${VPN_SERVICE_PROVIDER}"
-      VPN_TYPE: openvpn
+      VPN_TYPE: "openvpn"
       OPENVPN_USER: "${OPENVPN_USER}"
       OPENVPN_PASSWORD: "${OPENVPN_PASSWORD}"
       FREE_ONLY: "off"
       SERVER_COUNTRIES: "${SERVER_COUNTRIES}"
       VPN_PORT_FORWARDING: "on"
-      VPN_PORT_FORWARDING_PROVIDER: protonvpn
+      VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
       HTTP_CONTROL_SERVER_ADDRESS: "0.0.0.0:${GLUETUN_CONTROL_PORT}"
       HTTP_CONTROL_SERVER_AUTH: "apikey"
       HTTP_CONTROL_SERVER_APIKEY: "${GLUETUN_API_KEY}"
@@ -1402,13 +1400,13 @@ YAML
           else
             exit 1;
           fi
-      interval: 30s
-      timeout: 30s
-      retries: 10
-      start_period: 120s
-    restart: unless-stopped
+      interval: "30s"
+      timeout: "30s"
+      retries: "10"
+      start_period: "120s"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "3"
@@ -1418,34 +1416,34 @@ YAML
     cat <<'YAML' >>"$tmp"
   local_dns:
     image: "${LOCALDNS_IMAGE}"
-    container_name: arr_local_dns
+    container_name: "arr_local_dns"
     profiles:
-      - localdns
+      - "localdns"
     cap_add:
-      - NET_ADMIN
+      - "NET_ADMIN"
     ports:
       - "${LAN_IP}:53:53/udp"
       - "${LAN_IP}:53:53/tcp"
     command:
-      - --log-facility=-
-      - --log-async=5
-      - --log-queries
-      - --no-resolv
+      - "--log-facility=-"
+      - "--log-async=5"
+      - "--log-queries"
+      - "--no-resolv"
 YAML
     local server
     for server in "${upstream_dns_servers[@]}"; do
-      printf '      - --server=%s\n' "$server"
+      printf '      - %s\n' "$(arr_yaml_escape "--server=${server}")"
     done >>"$tmp"
     cat <<'YAML' >>"$tmp"
-      - --domain-needed
-      - --bogus-priv
-      - --local-service
-      - --domain=${LAN_DOMAIN_SUFFIX}
-      - --local=/${LAN_DOMAIN_SUFFIX}/
-      - --address=/${LAN_DOMAIN_SUFFIX}/${DNS_HOST_ENTRY}
-    restart: unless-stopped
+      - "--domain-needed"
+      - "--bogus-priv"
+      - "--local-service"
+      - "--domain=${LAN_DOMAIN_SUFFIX}"
+      - "--local=/${LAN_DOMAIN_SUFFIX}/"
+      - "--address=/${LAN_DOMAIN_SUFFIX}/${DNS_HOST_ENTRY}"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
@@ -1462,10 +1460,10 @@ YAML
           else
             exit 1;
           fi
-      interval: 10s
-      timeout: 3s
-      retries: 6
-      start_period: 10s
+      interval: "10s"
+      timeout: "3s"
+      retries: "6"
+      start_period: "10s"
 
 YAML
   fi
@@ -1473,22 +1471,22 @@ YAML
   cat <<'YAML' >>"$tmp"
   qbittorrent:
     image: "${QBITTORRENT_IMAGE}"
-    container_name: qbittorrent
+    container_name: "qbittorrent"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
-      LANG: en_US.UTF-8
+      LANG: "en_US.UTF-8"
       QBT_INT_PORT: "${QBT_INT_PORT}"
       QBT_BIND_ADDR: "${QBT_BIND_ADDR}"
       QBT_ENFORCE_WEBUI: "${QBT_ENFORCE_WEBUI}"
       QBT_WEBUI_INIT_HOOK: "1"
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    printf '      DOCKER_MODS: %s\n' "${QBT_DOCKER_MODS}" >>"$tmp"
+    printf '      DOCKER_MODS: "%s"\n' "${QBT_DOCKER_MODS}" >>"$tmp"
   fi
   cat <<'YAML' >>"$tmp"
     volumes:
@@ -1498,30 +1496,30 @@ YAML
       - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: "service_healthy"
     healthcheck:
       test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+      interval: "30s"
+      timeout: "10s"
+      retries: "3"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   sonarr:
     image: "${SONARR_IMAGE}"
-    container_name: sonarr
+    container_name: "sonarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
-      LANG: en_US.UTF-8
+      LANG: "en_US.UTF-8"
     volumes:
       - "${ARR_DOCKER_DIR}/sonarr:/config"
       - "${DOWNLOADS_DIR}:/downloads"
@@ -1529,25 +1527,25 @@ YAML
       - "${TV_DIR}:/tv"
     depends_on:
       gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+        condition: "service_healthy"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   radarr:
     image: "${RADARR_IMAGE}"
-    container_name: radarr
+    container_name: "radarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
-      LANG: en_US.UTF-8
+      LANG: "en_US.UTF-8"
     volumes:
       - "${ARR_DOCKER_DIR}/radarr:/config"
       - "${DOWNLOADS_DIR}:/downloads"
@@ -1555,48 +1553,48 @@ YAML
       - "${MOVIES_DIR}:/movies"
     depends_on:
       gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+        condition: "service_healthy"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   prowlarr:
     image: "${PROWLARR_IMAGE}"
-    container_name: prowlarr
+    container_name: "prowlarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
-      LANG: en_US.UTF-8
+      LANG: "en_US.UTF-8"
     volumes:
       - "${ARR_DOCKER_DIR}/prowlarr:/config"
     depends_on:
       gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+        condition: "service_healthy"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   bazarr:
     image: "${BAZARR_IMAGE}"
-    container_name: bazarr
+    container_name: "bazarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
-      LANG: en_US.UTF-8
+      LANG: "en_US.UTF-8"
     volumes:
       - "${ARR_DOCKER_DIR}/bazarr:/config"
       - "${TV_DIR}:/tv"
@@ -1612,34 +1610,34 @@ YAML
   cat <<'YAML' >>"$tmp"
     depends_on:
       gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+        condition: "service_healthy"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
 
   flaresolverr:
     image: "${FLARR_IMAGE}"
-    container_name: flaresolverr
+    container_name: "flaresolverr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     environment:
-      LOG_LEVEL: info
+      LOG_LEVEL: "info"
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: "service_healthy"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || wget -q --timeout=10 -O- http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
+      interval: "30s"
+      timeout: "10s"
+      retries: "3"
+      start_period: "40s"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
@@ -1651,16 +1649,16 @@ YAML
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: "${SABNZBD_IMAGE}"
-    container_name: sabnzbd
+    container_name: "sabnzbd"
     profiles:
-      - ipdirect
+      - "ipdirect"
 YAML
     if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
       cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: "service_healthy"
 YAML
       append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
     else
@@ -1676,28 +1674,28 @@ YAML
     cat <<'YAML' >>"$tmp"
   configarr:
     image: "${CONFIGARR_IMAGE}"
-    container_name: configarr
+    container_name: "configarr"
     profiles:
-      - ipdirect
+      - "ipdirect"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: "service_healthy"
       sonarr:
-        condition: service_started
+        condition: "service_started"
       radarr:
-        condition: service_started
+        condition: "service_started"
     volumes:
       - "${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro"
       - "${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro"
       - "${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro"
-    working_dir: /app
+    working_dir: "/app"
     entrypoint: ["/bin/sh","-lc","node dist/index.js || exit 1"]
     environment:
       TZ: "${TIMEZONE}"
     restart: "no"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "512k"
         max-file: "2"
@@ -1708,9 +1706,9 @@ YAML
     cat <<'YAML' >>"$tmp"
   caddy:
     image: "${CADDY_IMAGE}"
-    container_name: caddy
+    container_name: "caddy"
     profiles:
-      - proxy
+      - "proxy"
     network_mode: "service:gluetun"
     volumes:
       - "${ARR_DOCKER_DIR}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
@@ -1719,12 +1717,12 @@ YAML
       - "${ARR_DOCKER_DIR}/caddy/ca-pub:/ca-pub:ro"
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: "service_healthy"
 YAML
     if ((include_local_dns)); then
       cat <<'YAML' >>"$tmp"
       local_dns:
-        condition: service_healthy
+        condition: "service_healthy"
 YAML
     fi
     cat <<'YAML' >>"$tmp"
@@ -1733,13 +1731,13 @@ YAML
         - "CMD-SHELL"
         - >-
           curl -fsS --max-time 3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1 || curl -fsS --max-time 3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 20s
-    restart: unless-stopped
+      interval: "10s"
+      timeout: "5s"
+      retries: "6"
+      start_period: "20s"
+    restart: "unless-stopped"
     logging:
-      driver: json-file
+      driver: "json-file"
       options:
         max-size: "1m"
         max-file: "2"
@@ -1756,6 +1754,8 @@ YAML
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
+
+validate_generated_paths() { return 0; }  # TODO: delete or use as generated file autofixer
 
 # Writes Gluetun hook/auth assets so API key and port forwarding stay aligned
 write_gluetun_control_assets() {
@@ -2729,16 +2729,16 @@ PY
 
   for quality in "${sonarr_qualities[@]}"; do
     sonarr_quality_yaml+="    - quality: \"${quality}\"\n"
-    sonarr_quality_yaml+="      min: ${episode_min_mbmin}\n"
-    sonarr_quality_yaml+="      preferred: ${episode_pref_mbmin}\n"
-    sonarr_quality_yaml+="      max: ${episode_max_mbmin}\n"
+    sonarr_quality_yaml+="      min: \"${episode_min_mbmin}\"\n"
+    sonarr_quality_yaml+="      preferred: \"${episode_pref_mbmin}\"\n"
+    sonarr_quality_yaml+="      max: \"${episode_max_mbmin}\"\n"
   done
 
   for quality in "${radarr_qualities[@]}"; do
     radarr_quality_yaml+="    - quality: \"${quality}\"\n"
-    radarr_quality_yaml+="      min: ${episode_min_mbmin}\n"
-    radarr_quality_yaml+="      preferred: ${episode_pref_mbmin}\n"
-    radarr_quality_yaml+="      max: ${episode_max_mbmin}\n"
+    radarr_quality_yaml+="      min: \"${episode_min_mbmin}\"\n"
+    radarr_quality_yaml+="      preferred: \"${episode_pref_mbmin}\"\n"
+    radarr_quality_yaml+="      max: \"${episode_max_mbmin}\"\n"
   done
 
   local sonarr_override_path="${runtime_cfs}/sonarr-quality-definition-override.yml"
@@ -2828,13 +2828,13 @@ PY
     local block="  # ${label}\n  - trash_ids:\n"
     local id
     for id in "${ids_ref[@]}"; do
-      block+="      - ${id}\n"
+      block+="      - $(arr_yaml_escape "${id}")\n"
     done
     block+="    assign_scores_to:\n"
     local target
     for target in "${policy_profile_targets[@]}"; do
-      block+="      - name: ${target}\n"
-      block+="        score: ${score}\n"
+      block+="      - name: $(arr_yaml_escape "${target}")\n"
+      block+="        score: $(arr_yaml_escape "${score}")\n"
     done
     printf '%s' "$block"
   }
@@ -2938,14 +2938,14 @@ PY
   local sonarr_include_yaml=""
   local template
   for template in "${sonarr_templates[@]}"; do
-    sonarr_include_yaml+="      - template: ${template}\n"
+    sonarr_include_yaml+="      - template: $(arr_yaml_escape "${template}")\n"
   done
   sonarr_include_yaml+="      # - template: sonarr-v4-quality-profile-web-2160p\n"
   sonarr_include_yaml+="      # - template: sonarr-v4-custom-formats-web-2160p\n"
 
   local radarr_include_yaml=""
   for template in "${radarr_templates[@]}"; do
-    radarr_include_yaml+="      - template: ${template}\n"
+    radarr_include_yaml+="      - template: $(arr_yaml_escape "${template}")\n"
   done
   radarr_include_yaml+="      # - template: radarr-v5-quality-profile-uhd-bluray-web\n"
   radarr_include_yaml+="      # - template: radarr-v5-custom-formats-uhd-bluray-web\n"

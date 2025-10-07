@@ -55,7 +55,7 @@ fi
 if [[ -n "$DATA_DIR_OVERRIDE" ]]; then
   CADDY_DATA_DIR="$DATA_DIR_OVERRIDE"
 else
-  ENV_FILE="${ARR_ENV_FILE:-${STACK_DIR}/.env}"
+  ENV_FILE="$(arr_env_file)"
   if [[ -f "$ENV_FILE" ]]; then
     env_value="$(grep '^ARR_DOCKER_DIR=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
     if [[ -n "$env_value" ]]; then

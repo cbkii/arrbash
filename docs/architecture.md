@@ -23,7 +23,7 @@ The installer publishes LAN ports when `EXPOSE_DIRECT_PORTS=1`. When disabled, r
 - `docker-compose.yml` – defines service profiles, networks, and health checks.
 - `Caddyfile` – created when Caddy is enabled and validated with `caddy validate` before use.
 - `.aliasarr` – helper alias definitions sourced in your shell.
-- `docker-data/` – persistent application data, credentials, and Gluetun hooks.
+- `${ARR_DOCKER_DIR}` – persistent application data, credentials, and Gluetun hooks.
 
 Do not edit generated files directly. Adjust `userr.conf` and rerun the installer instead.
 

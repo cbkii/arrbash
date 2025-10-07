@@ -14,7 +14,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 - After your first SABnzbd login, copy the API key from SABnzbd's WebUI into your configuration (e.g., `.env`). The installer hydrates `SABNZBD_API_KEY` automatically on reruns when the placeholder remains in `.env`.
 - Rotate the Gluetun API key periodically with `./arr.sh --rotate-api-key --yes` and restart the stack.
 - Refresh Caddy basic auth with `./arr.sh --rotate-caddy-auth --yes` before sharing remote access.
-- Keep the exported Caddy certificate bundle limited to the public `root.crt`. Never expose `docker-data/caddy` or private keys.
+- Keep the exported Caddy certificate bundle limited to the public `root.crt`. Never expose `${ARR_DOCKER_DIR}/caddy` or private keys.
 
 ## Network exposure
 - Bind the stack to a private `LAN_IP` and avoid forwarding raw service ports through your router. Use Caddy with strong credentials if you require remote access.

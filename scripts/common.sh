@@ -193,36 +193,77 @@ arr_resolve_compose_cmd() {
   fi
 }
 
-# Provides canonical docker-data root resolution with consistent fallbacks
-arr_docker_data_root() {
-  local base="${ARR_DOCKER_DIR:-}"
+# Resolves the canonical ARR_DATA_ROOT, defaulting to ~/srv when unset
+arr_data_root() {
+  local resolved="${ARR_DATA_ROOT:-}"
 
-  if [[ -n "$base" ]]; then
-    printf '%s' "${base%/}"
-    return
+  if [[ -z "$resolved" ]]; then
+    if [[ -n "${HOME:-}" ]]; then
+      resolved="${HOME%/}/srv"
+    else
+      resolved="/srv/${STACK:-arr}"
+    fi
   fi
 
-  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-    printf '%s' "${ARR_STACK_DIR%/}/docker-data"
-    return
-  fi
-
-  local base_root="${ARR_DATA_ROOT:-}"
-  if [[ -n "$base_root" ]]; then
-    printf '%s/docker-data' "${base_root%/}"
-    return
-  fi
-
-  local home_dir="${HOME:-}"
-  if [[ -n "$home_dir" ]]; then
-    printf '%s/srv/docker-data' "${home_dir%/}"
-    return
-  fi
-
-  printf '%s' "/srv/${STACK}/docker-data"
+  printf '%s' "${resolved%/}"
 }
 
-# Resolves the Gluetun data directory under the docker-data root
+# Resolves the stack working directory under ARR_DATA_ROOT
+arr_stack_dir() {
+  local resolved="${ARR_STACK_DIR:-}"
+
+  if [[ -z "$resolved" ]]; then
+    resolved="$(arr_data_root)/${STACK:-arr}"
+  fi
+
+  printf '%s' "${resolved%/}"
+}
+
+# Resolves the configuration/secrets directory
+arr_conf_dir() {
+  local resolved="${ARRCONF_DIR:-}"
+
+  if [[ -z "$resolved" ]]; then
+    resolved="$(arr_stack_dir)configs"
+  fi
+
+  printf '%s' "${resolved%/}"
+}
+
+# Resolves the generated .env file path
+arr_env_file() {
+  local resolved="${ARR_ENV_FILE:-}"
+
+  if [[ -z "$resolved" ]]; then
+    resolved="$(arr_stack_dir)/.env"
+  fi
+
+  printf '%s' "$resolved"
+}
+
+# Resolves the canonical location of userr.conf
+arr_userconf_path() {
+  local resolved="${ARR_USERCONF_PATH:-}"
+
+  if [[ -z "$resolved" ]]; then
+    resolved="$(arr_conf_dir)/userr.conf"
+  fi
+
+  printf '%s' "$resolved"
+}
+
+# Provides canonical dockarr root resolution with consistent fallbacks
+arr_docker_data_root() {
+  local resolved="${ARR_DOCKER_DIR:-}"
+
+  if [[ -z "$resolved" ]]; then
+    resolved="$(arr_stack_dir)/dockarr"
+  fi
+
+  printf '%s' "${resolved%/}"
+}
+
+# Resolves the Gluetun data directory under the dockarr root
 arr_gluetun_dir() {
   printf '%s/gluetun' "$(arr_docker_data_root)"
 }
@@ -230,6 +271,28 @@ arr_gluetun_dir() {
 # Resolves the VPN auto-reconnect working directory under Gluetun assets
 arr_gluetun_auto_reconnect_dir() {
   printf '%s/auto-reconnect' "$(arr_gluetun_dir)"
+}
+
+# Resolves the stack log directory, defaulting under ARR_STACK_DIR when unset
+arr_log_dir() {
+  local resolved="${ARR_LOG_DIR:-}"
+
+  if [[ -z "$resolved" ]]; then
+    resolved="$(arr_stack_dir)/logs"
+  fi
+
+  printf '%s' "${resolved%/}"
+}
+
+# Resolves the installer log location
+arr_install_log_path() {
+  local resolved="${ARR_INSTALL_LOG:-}"
+
+  if [[ -z "$resolved" ]]; then
+    resolved="$(arr_log_dir)/${STACK:-arr}-install.log"
+  fi
+
+  printf '%s' "$resolved"
 }
 
 # Escapes text for single-quoted shells; optional flatten mode serializes newlines
@@ -339,7 +402,8 @@ arr_json_log() {
     return 0
   fi
 
-  local log_dir="${ARR_LOG_DIR:-${ARR_STACK_DIR:-}/logs}"
+  local log_dir
+  log_dir="$(arr_log_dir)"
   if [[ -n "$log_dir" ]]; then
     ensure_dir "$log_dir"
     printf '%s\n' "$json_line" >>"${log_dir}/latest.log" 2>/dev/null || true
@@ -1015,7 +1079,8 @@ verify_tempfile_permission_guards() {
 
 # Sets up logging streams and symlinks before installer output begins
 init_logging() {
-  local log_dir="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
+  local log_dir
+  log_dir="$(arr_log_dir)"
   ensure_dir_mode "$log_dir" "$DATA_DIR_MODE"
 
   local timestamp
@@ -1113,39 +1178,50 @@ atomic_write() {
   fi
 }
 
-# Escapes ENV values for docker compose compatibility (newline/carriage/dollar aware)
-escape_env_value_for_compose() {
+# Produces a YAML-safe double-quoted scalar for literal emission
+arr_yaml_escape() {
   local value="${1-}"
-
-  if [[ -z "$value" ]]; then
-    printf '%s' ""
-    return
-  fi
-
+  value="${value//$'\r'/}"  # drop carriage returns
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
   value="${value//$'\n'/\\n}"
-  value="${value//$'\r'/\\r}"
-  value="${value//\$/\$\$}"
-
-  printf '%s' "$value"
+  printf '"%s"' "$value"
 }
 
-# Emits KEY=VALUE lines after compose-safe escaping; errors on newline-containing values
-write_env_kv() {
-  local key="$1"
+# Escapes dotenv values and wraps them in double quotes for Compose compatibility
+arr_env_escape_value() {
+  local value="${1-}"
+  value="${value//$'\r'/}"  # normalize CRLF
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/ }"
+  printf '"%s"' "$value"
+}
+
+# Emits KEY="escaped" lines while validating variable names
+arr_write_env_kv() {
+  local name="$1"
   local value="${2-}"
 
-  if [[ -z "$key" ]]; then
-    die "write_env_kv requires a key"
+  if [[ -z "$name" ]]; then
+    die "arr_write_env_kv requires a variable name"
   fi
 
-  local escaped
-  escaped="$(escape_env_value_for_compose "$value")"
-
-  if [[ "$escaped" == *$'\n'* ]]; then
-    die "Environment value for ${key} contains newline characters"
+  if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "[env] invalid var name: $name" >&2
+    return 1
   fi
 
-  printf '%s=%s\n' "$key" "$escaped"
+  printf '%s=%s\n' "$name" "$(arr_env_escape_value "$value")"
+}
+
+# Legacy helpers retained for compatibility
+escape_env_value_for_compose() {
+  arr_env_escape_value "${1-}"
+}
+
+write_env_kv() {
+  arr_write_env_kv "$@"
 }
 
 # Trims leading/trailing whitespace without touching inner spacing
@@ -1392,7 +1468,7 @@ persist_env_var() {
       escaped="$(escape_sed_replacement "$compose_safe")"
       portable_sed "s/^${key}=.*/${key}=${escaped}/" "${ARR_ENV_FILE}"
     else
-      write_env_kv "$key" "$value" >>"${ARR_ENV_FILE}"
+      arr_write_env_kv "$key" "$value" >>"${ARR_ENV_FILE}"
     fi
   fi
 }
