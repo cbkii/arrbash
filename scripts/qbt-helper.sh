@@ -6,6 +6,8 @@ set -euo pipefail
 # --- qBittorrent WebUI enforcement helpers (shared by init + host modes) ---
 
 qbt_webui_conf_path_default="/config/qBittorrent.conf"
+qbt_webui_restart_state="/tmp/qbt-webui-enforce.timestamp"
+qbt_webui_restart_interval_default=60
 
 qbt_webui_mktemp() {
   local base="$1"
@@ -92,9 +94,45 @@ qbt_webui_upsert_pref() {
   mv "$tmp" "$conf"
 }
 
+qbt_webui_pref_value() {
+  local conf="$1"
+  local key="$2"
+
+  [[ -f "$conf" ]] || return 1
+
+  awk -v target="$key" '
+    BEGIN {
+      section="";
+    }
+    /^\[.*\]$/ {
+      section=$0;
+      next;
+    }
+    section == "[Preferences]" && index($0, target "=") == 1 {
+      sub("^" target "=", "");
+      gsub(/\r$/, "");
+      print;
+      exit 0;
+    }
+  ' "$conf"
+}
+
+qbt_webui_pref_equals() {
+  local conf="$1"
+  local key="$2"
+  local expected="$3"
+  local actual
+
+  if ! actual="$(qbt_webui_pref_value "$conf" "$key" 2>/dev/null)"; then
+    return 1
+  fi
+
+  [[ "$actual" == "$expected" ]]
+}
+
 qbt_webui_enforce() {
   local conf="${1:-${QBT_CONF_PATH:-${qbt_webui_conf_path_default}}}"
-  local address="${2:-${QBT_WEBUI_ADDRESS:-0.0.0.0}}"
+  local address="${2:-${QBT_BIND_ADDR:-0.0.0.0}}"
   local port="${3:-${QBT_INT_PORT:-8082}}"
   local old_umask
 
@@ -118,7 +156,109 @@ qbt_webui_enforce() {
   chmod 600 "$conf" 2>/dev/null || true
 }
 
+qbt_webui_restart_service() {
+  local service_dir="/run/s6/services/qbittorrent"
+
+  if command -v s6-svc >/dev/null 2>&1 && [[ -d "$service_dir" ]]; then
+    if ! s6-svc -r "$service_dir" >/dev/null 2>&1; then
+      s6-svc -t "$service_dir" >/dev/null 2>&1 || true
+    fi
+    return 0
+  fi
+
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -TERM -f 'qbittorrent-nox' >/dev/null 2>&1 || true
+  fi
+
+  return 0
+}
+
+qbt_webui_rate_limited_restart() {
+  local interval="${QBT_WEBUI_RESTART_INTERVAL:-${qbt_webui_restart_interval_default}}"
+  local state_file="$qbt_webui_restart_state"
+  local now last
+
+  if [[ -z "$interval" || ! "$interval" =~ ^[0-9]+$ ]]; then
+    interval="$qbt_webui_restart_interval_default"
+  fi
+
+  if [[ -f "$state_file" ]]; then
+    if last="$(<"$state_file" 2>/dev/null)" && [[ "$last" =~ ^[0-9]+$ ]]; then
+      if now="$(date +%s 2>/dev/null)"; then
+        if (( now - last < interval )); then
+          return 0
+        fi
+      fi
+    fi
+  fi
+
+  if now="$(date +%s 2>/dev/null)"; then
+    printf '%s\n' "$now" >"$state_file" 2>/dev/null || true
+  fi
+
+  qbt_webui_restart_service
+}
+
+qbt_webui_repair() {
+  local conf="${QBT_CONF_PATH:-${qbt_webui_conf_path_default}}"
+  local address="${QBT_BIND_ADDR:-0.0.0.0}"
+  local port="${QBT_INT_PORT:-8082}"
+
+  if qbt_webui_enforce "$conf" "$address" "$port"; then
+    qbt_webui_rate_limited_restart
+    return 0
+  fi
+
+  return 1
+}
+
+qbt_webui_healthcheck() {
+  local enforce="${QBT_ENFORCE_WEBUI:-1}"
+  local conf="${QBT_CONF_PATH:-${qbt_webui_conf_path_default}}"
+  local address="${QBT_BIND_ADDR:-0.0.0.0}"
+  local port="${QBT_INT_PORT:-8082}"
+  local localhost="${LOCALHOST_IP:-127.0.0.1}"
+  local repaired=0
+
+  if [[ "$enforce" != "0" ]]; then
+    qbt_webui_strip_crlf "$conf" || true
+
+    if ! qbt_webui_pref_equals "$conf" 'WebUI\\Address' "$address" \
+      || ! qbt_webui_pref_equals "$conf" 'WebUI\\Port' "$port"; then
+      if qbt_webui_repair; then
+        repaired=1
+      fi
+    fi
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    if curl -fsS --connect-timeout 5 --max-time 8 "http://${localhost}:${port}/api/v2/app/version" >/dev/null 2>&1; then
+      return 0
+    fi
+  elif command -v wget >/dev/null 2>&1; then
+    if wget -q -T 8 -O- "http://${localhost}:${port}/api/v2/app/version" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  if [[ "$enforce" != "0" && "$repaired" -eq 0 ]]; then
+    if qbt_webui_repair; then
+      repaired=1
+    fi
+  fi
+
+  if ((repaired)); then
+    return 1
+  fi
+
+  return 1
+}
+
 qbt_webui_init_hook() {
+  if [[ "${QBT_ENFORCE_WEBUI:-1}" == "0" ]]; then
+    return 0
+  fi
+
   if ! qbt_webui_enforce; then
     printf '[qbt-helper] WebUI enforcement failed\n' >&2
     exit 1
@@ -126,8 +266,26 @@ qbt_webui_init_hook() {
 }
 
 if [[ "$(basename -- "$0")" == "00-qbt-webui" ]]; then
-  qbt_webui_init_hook "$@"
-  exit 0
+  case "${1:-init}" in
+    init | "")
+      qbt_webui_init_hook
+      exit 0
+      ;;
+    healthcheck)
+      qbt_webui_healthcheck
+      exit $?
+      ;;
+    enforce)
+      if qbt_webui_repair; then
+        exit 0
+      fi
+      exit 1
+      ;;
+    *)
+      printf '[qbt-helper] Unknown mode %s\n' "$1" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -362,7 +520,7 @@ update_whitelist() {
 restore_webui_bindings() {
   local context="$1"
   local desired_port="${QBT_INT_PORT:-8082}"
-  local address="0.0.0.0"
+  local address="${QBT_BIND_ADDR:-0.0.0.0}"
   local cfg rc=0
 
   cfg="$(config_file_path)"
@@ -388,6 +546,7 @@ diagnose_config() {
   cfg="$(config_file_path)"
   local host_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
   local expected_container_port="${QBT_INT_PORT:-8082}"
+  local expected_bind="${QBT_BIND_ADDR:-0.0.0.0}"
 
   if [[ ! -f "$cfg" ]]; then
     log_warn "Config file not found at $cfg; nothing to diagnose"
@@ -412,11 +571,11 @@ diagnose_config() {
   fi
 
   if [[ -n "$ui_addr" ]]; then
-    if [[ "$ui_addr" != "0.0.0.0" ]]; then
-      log_warn "WebUI bind address is ${ui_addr} but should be 0.0.0.0"
+    if [[ "$ui_addr" != "$expected_bind" ]]; then
+      log_warn "WebUI bind address is ${ui_addr} but should be ${expected_bind}"
       log_info "Run 'qbt-helper.sh fix-addr' to correct this"
     else
-      log_info "WebUI bind address matches expected container default (0.0.0.0)"
+      log_info "WebUI bind address matches expected container default (${expected_bind})"
     fi
   else
     log_warn "Unable to determine WebUI bind address from ${cfg}"
@@ -435,13 +594,18 @@ fix_webui_port() {
 
 # Forces WebUI bind address back to 0.0.0.0 for LAN access
 fix_webui_address() {
-  restore_webui_bindings "Restoring qBittorrent WebUI bind address to 0.0.0.0"
+  local address="${QBT_BIND_ADDR:-0.0.0.0}"
+  restore_webui_bindings "Restoring qBittorrent WebUI bind address to ${address}"
 }
 
 # Executes the init hook inside the running container and restarts qBittorrent
 force_webui_bindings() {
   local hook="/custom-cont-init.d/00-qbt-webui"
-  local -a exec_env=(-e "QBT_INT_PORT=${QBT_INT_PORT:-8082}" -e "QBT_WEBUI_ADDRESS=0.0.0.0")
+  local -a exec_env=(
+    -e "QBT_INT_PORT=${QBT_INT_PORT:-8082}"
+    -e "QBT_BIND_ADDR=${QBT_BIND_ADDR:-0.0.0.0}"
+    -e "QBT_ENFORCE_WEBUI=1"
+  )
 
   if [[ -n "${QBT_USER:-}" ]]; then
     exec_env+=(-e "QBT_USER=${QBT_USER}")
@@ -470,15 +634,17 @@ force_webui_bindings() {
 # Prints helper usage menu
 usage() {
   local default_port="${QBT_INT_PORT:-8082}"
+  local default_addr="${QBT_BIND_ADDR:-0.0.0.0}"
   cat <<USAGE
-Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr|force}
+Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr|force|repair}
   show       Display current access information
   reset      Reset authentication (generates a new temporary password)
   whitelist  Enable passwordless access from the LAN subnet
   diagnose   Check for WebUI configuration drift
   fix-port   Restore WebUI port to container default (${default_port})
-  fix-addr   Restore WebUI bind address to 0.0.0.0
+  fix-addr   Restore WebUI bind address to ${default_addr}
   force      Run WebUI init hook and restart the container
+  repair     Alias for 'force'
 USAGE
 }
 
@@ -508,7 +674,7 @@ main() {
     fix-addr)
       fix_webui_address
       ;;
-    force)
+    force | repair)
       force_webui_bindings
       ;;
     *)

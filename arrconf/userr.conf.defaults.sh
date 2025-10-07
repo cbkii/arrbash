@@ -219,6 +219,8 @@ GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
 
 QBT_INT_PORT="${QBT_INT_PORT:-8082}"
 QBT_PORT="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+QBT_BIND_ADDR="${QBT_BIND_ADDR:-0.0.0.0}"
+QBT_ENFORCE_WEBUI="${QBT_ENFORCE_WEBUI:-1}"
 
 SONARR_INT_PORT="${SONARR_INT_PORT:-8989}"
 SONARR_PORT="${SONARR_PORT:-${SONARR_INT_PORT:-8989}}"
@@ -339,6 +341,8 @@ ARR_USERCONF_TEMPLATE_VARS=(
   CADDY_BASIC_AUTH_USER
   QBT_INT_PORT
   QBT_PORT
+  QBT_BIND_ADDR
+  QBT_ENFORCE_WEBUI
   SONARR_INT_PORT
   SONARR_PORT
   RADARR_INT_PORT
@@ -607,6 +611,8 @@ ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT}" # Active Usenet client label (f
 # --- Service ports ---
 QBT_INT_PORT="${QBT_INT_PORT}"             # Internal qBittorrent WebUI port; match the container WEBUI_PORT env if you change it
 QBT_PORT="${QBT_PORT}"              # qBittorrent WebUI port exposed on the LAN (default: ${QBT_PORT})
+QBT_BIND_ADDR="${QBT_BIND_ADDR}"          # Address qBittorrent binds inside the container (default: ${QBT_BIND_ADDR})
+QBT_ENFORCE_WEBUI="${QBT_ENFORCE_WEBUI}"  # 1 keeps the WebUI bind/port enforced at startup and during health checks (default: ${QBT_ENFORCE_WEBUI})
 SONARR_PORT="${SONARR_PORT}"                     # Sonarr WebUI port exposed on the LAN (default: ${SONARR_PORT})
 RADARR_PORT="${RADARR_PORT}"                     # Radarr WebUI port exposed on the LAN (default: ${RADARR_PORT})
 PROWLARR_PORT="${PROWLARR_PORT}"                   # Prowlarr WebUI port exposed on the LAN (default: ${PROWLARR_PORT})

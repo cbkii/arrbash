@@ -199,6 +199,8 @@ arr_setup_defaults() {
   readonly -a ARR_DOCKER_SERVICES
 
   : "${QBT_INT_PORT:=8082}"
+  : "${QBT_BIND_ADDR:=0.0.0.0}"
+  : "${QBT_ENFORCE_WEBUI:=1}"
   : "${SONARR_INT_PORT:=8989}"
   : "${RADARR_INT_PORT:=7878}"
   : "${PROWLARR_INT_PORT:=9696}"

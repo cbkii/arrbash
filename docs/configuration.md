@@ -32,6 +32,8 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
   - `QBT_USER` / `QBT_PASS`: keep these in sync with the WebUI. Rerun the installer after changes so `.env` updates automatically.
   - `GLUETUN_API_KEY`, `CADDY_BASIC_AUTH_USER`, `CADDY_BASIC_AUTH_HASH`: leave blank; rotation helpers fill them in.
   - `QBT_AUTH_WHITELIST`: CIDRs allowed to skip the qBittorrent login (loopback and your LAN are added automatically).
+  - `QBT_BIND_ADDR`: override the container-side WebUI bind address if you need something other than `0.0.0.0`.
+  - WebUI port/address are enforced by default at startup and after drift.
 - **VPN automation**
   - `VPN_AUTO_RECONNECT_ENABLED`: runs the reconnect worker that watches qBittorrent speeds.
   - `VPN_SPEED_THRESHOLD_KBPS`, `VPN_CHECK_INTERVAL_MINUTES`, `VPN_CONSECUTIVE_CHECKS`: tune how quickly reconnects fire.
