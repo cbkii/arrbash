@@ -11,7 +11,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 
 ## Credential hygiene
 - Change qBittorrent credentials after first login and copy the values into `${ARRCONF_DIR}/userr.conf` (`QBT_USER`, `QBT_PASS`). Rerun the installer so `.env` updates without manual edits.
-- After your first SABnzbd login, copy the API key into the WebUI. The installer hydrates `SABNZBD_API_KEY` automatically on reruns when the placeholder remains in `.env`.
+- After your first SABnzbd login, copy the API key from SABnzbd's WebUI into your configuration (e.g., `.env`). The installer hydrates `SABNZBD_API_KEY` automatically on reruns when the placeholder remains in `.env`.
 - Rotate the Gluetun API key periodically with `./arr.sh --rotate-api-key --yes` and restart the stack.
 - Refresh Caddy basic auth with `./arr.sh --rotate-caddy-auth --yes` before sharing remote access.
 - Keep the exported Caddy certificate bundle limited to the public `root.crt`. Never expose `docker-data/caddy` or private keys.
