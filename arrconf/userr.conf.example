@@ -14,19 +14,19 @@ ARR_PERMISSION_PROFILE="strict"      # default: strict; strict=600/700, collab=6
 # --- Essential paths ---
 ARR_DATA_ROOT="${HOME}/srv"      # default: ${HOME}/srv; stack data root (~/srv)
 ARR_STACK_DIR="${ARR_DATA_ROOT}/${STACK}"      # default: ${ARR_DATA_ROOT}/${STACK}; compose + scripts
-ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"      # default: ${ARR_DATA_ROOT}/${STACK}configs; config & secrets dir
+ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"      # default: ${ARRCONF_DIR}; config & secrets dir
 
 DOWNLOADS_DIR="${HOME}/Downloads"      # default: ${HOME}/Downloads; qBittorrent active downloads
-COMPLETED_DIR="${DOWNLOADS_DIR}/completed"      # default: ${DOWNLOADS_DIR}/completed; qBittorrent completed path
+COMPLETED_DIR="${DOWNLOADS_DIR}/completed"      # default: ${COMPLETED_DIR}; qBittorrent completed path
 
-MEDIA_DIR="${ARR_DATA_ROOT}/media"      # default: ${ARR_DATA_ROOT}/media; library root
+MEDIA_DIR="${ARR_DATA_ROOT}/media"      # default: ${ARR_DATA_ROOT}/media; library root under ARR_DATA_ROOT
 TV_DIR="${MEDIA_DIR}/Shows"      # default: ${MEDIA_DIR}/Shows; Sonarr library
 MOVIES_DIR="${MEDIA_DIR}/Movies"      # default: ${MEDIA_DIR}/Movies; Radarr library
 # SUBS_DIR="${MEDIA_DIR}/subs"      # default: ${MEDIA_DIR}/subs; optional Bazarr subtitles path
 
 # --- Internal/resolution paths (rarely touched) ---
-# ARR_ENV_FILE="${ARR_STACK_DIR}/.env"      # default: ${ARR_STACK_DIR}/.env; generated secrets file
-# ARR_DOCKER_DIR="${ARR_DATA_ROOT}/docker-data"      # default: ${ARR_DATA_ROOT}/docker-data; Docker volumes & persistent data
+# ARR_ENV_FILE="${ARR_STACK_DIR}/.env"      # default: ${ARR_ENV_FILE}; generated secrets file
+# ARR_DOCKER_DIR="${ARR_STACK_DIR}/dockarr"      # default: ${ARR_DOCKER_DIR}; Docker volumes & persistent data
 # ARR_USERCONF_PATH="${ARRCONF_DIR}/userr.conf"      # default: ${ARRCONF_DIR}/userr.conf; location of this file
 # ARR_LOG_DIR="${ARR_STACK_DIR}/logs"      # default: ${ARR_STACK_DIR}/logs; runtime/service logs
 # ARR_INSTALL_LOG="${ARR_LOG_DIR}/${STACK}-install.log"      # default: ${ARR_LOG_DIR}/${STACK}-install.log; installer log path

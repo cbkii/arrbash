@@ -24,7 +24,9 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
    ```bash
    cd "${ARR_DATA_ROOT}"
    STACK="${STACK:-arr}"
-   tar -czf "${STACK}-backup-$(date +%Y%m%d).tar.gz" "$(basename "${ARR_STACK_DIR:-${STACK}}")" docker-data
+   tar -czf "${STACK}-backup-$(date +%Y%m%d).tar.gz" \
+     -C "$(dirname "${ARR_STACK_DIR:-${ARR_DATA_ROOT}/${STACK}}")" "$(basename "${ARR_STACK_DIR:-${STACK}}")" \
+     -C "$(dirname "${ARR_DOCKER_DIR}")" "$(basename "${ARR_DOCKER_DIR}")"
    ```
 2. Edit `${ARRCONF_DIR}/userr.conf` to change any `*_IMAGE` values.
 3. Apply changes:

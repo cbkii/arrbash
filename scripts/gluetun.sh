@@ -63,15 +63,26 @@ _pf_gluetun_root() {
     return
   fi
 
-  local base="${ARR_DOCKER_DIR:-}"
-  if [[ -z "$base" ]]; then
-    if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-      base="${ARR_STACK_DIR%/}/docker-data"
-    else
-      base="${ARR_DATA_ROOT%/}/docker-data"
+  local docker_root="${ARR_DOCKER_DIR:-}"
+  if [[ -z "$docker_root" ]]; then
+    if declare -f arr_docker_data_root >/dev/null 2>&1; then
+      docker_root="$(arr_docker_data_root)"
     fi
   fi
-  printf '%s/gluetun' "${base%/}"
+
+  if [[ -z "$docker_root" ]]; then
+    if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+      docker_root="${ARR_STACK_DIR%/}/dockarr"
+    elif [[ -n "${ARR_DATA_ROOT:-}" ]]; then
+      docker_root="${ARR_DATA_ROOT%/}/${STACK:-arr}/dockarr"
+    elif [[ -n "${HOME:-}" ]]; then
+      docker_root="${HOME%/}/srv/${STACK:-arr}/dockarr"
+    else
+      docker_root="/srv/${STACK:-arr}/dockarr"
+    fi
+  fi
+
+  printf '%s/gluetun' "${docker_root%/}"
 }
 
 # Returns absolute path to the async port-forward state file

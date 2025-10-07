@@ -24,22 +24,23 @@ fi
 arr_setup_defaults() {
   local previous_stack_dir="${ARR_STACK_DIR:-}"
   local default_docker_root=""
-  if [[ -n "${ARR_DATA_ROOT:-}" ]]; then
-    default_docker_root="${ARR_DATA_ROOT%/}/docker-data"
+  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+    default_docker_root="${ARR_STACK_DIR%/}/dockarr"
+  elif [[ -n "${ARR_DATA_ROOT:-}" ]]; then
+    default_docker_root="${ARR_DATA_ROOT%/}/${STACK}/dockarr"
   fi
 
-  if [[ -z "${ARR_DOCKER_DIR}" && -n "${default_docker_root}" && -d "${default_docker_root}" ]]; then
+  if [[ -z "${ARR_DOCKER_DIR:-}" && -n "${default_docker_root}" && -d "${default_docker_root}" ]]; then
     ARR_DOCKER_DIR="${default_docker_root}"
-    ARR_STACK_DIR="${ARR_STACK_DIR:-${ARR_DATA_ROOT}/${STACK}}"
   fi
 
   if [[ -n "${previous_stack_dir}" && "${previous_stack_dir}" != "${ARR_STACK_DIR}" ]]; then
-    local previous_env_file="${previous_stack_dir}/.env"
+    local previous_env_file="${previous_stack_dir%/}/.env"
     if [[ "${ARR_ENV_FILE:-}" == "${previous_env_file}" ]]; then
-      ARR_ENV_FILE="${ARR_STACK_DIR}/.env"
+      ARR_ENV_FILE="${ARR_STACK_DIR%/}/.env"
     fi
   fi
-  ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
+  ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR%/}/.env}"
 
   if [[ -n "${LAN_DOMAIN_SUFFIX:-}" ]]; then
     LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX#.}"

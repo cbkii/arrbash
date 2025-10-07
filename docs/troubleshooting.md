@@ -52,7 +52,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   arr.vpn.port.watch
   arr.vpn.port.sync
   ```
-- Ensure Gluetun accepts API requests (`docker-data/gluetun/auth/config.toml` is created automatically for versions ≥3.40).
+- Ensure Gluetun accepts API requests (`${ARR_DOCKER_DIR}/gluetun/auth/config.toml` is created automatically for versions ≥3.40).
 - Rotate the API key if authentication fails:
   ```bash
   ./arr.sh --rotate-api-key --yes
@@ -73,7 +73,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   ```bash
   arr.vpn.auto.resume
   ```
-- Inspect logs under `docker-data/gluetun/auto-reconnect/daemon.log` for recent actions.
+- Inspect logs under `${ARR_DOCKER_DIR}/gluetun/auto-reconnect/daemon.log` for recent actions.
 
 ## WebUI and credentials
 ### VueTorrent shows HTTP 500 or blank page
@@ -100,7 +100,7 @@ Follow these checks when services fail to start, DNS stops resolving, or VPN hel
   ```
 - Verify secrets:
   ```bash
-  grep _API_KEY docker-data/configarr/secrets.yml
+  grep _API_KEY "${ARR_DOCKER_DIR}/configarr/secrets.yml"
   ```
 
 ## Installer and runtime checks

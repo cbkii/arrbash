@@ -294,14 +294,14 @@ arr_effective_project_name() {
   fi
 
   local -a env_candidates=()
+  local stack_env="$(arr_env_file)"
   if [[ -n "${ARR_ENV_FILE:-}" ]]; then
     env_candidates+=("${ARR_ENV_FILE}")
-  fi
-  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-    local stack_env="${ARR_STACK_DIR}/.env"
-    if [[ -z "${ARR_ENV_FILE:-}" || "${ARR_ENV_FILE}" != "$stack_env" ]]; then
+    if [[ "${ARR_ENV_FILE}" != "$stack_env" ]]; then
       env_candidates+=("$stack_env")
     fi
+  elif [[ -n "$stack_env" ]]; then
+    env_candidates+=("$stack_env")
   fi
 
   local candidate value
@@ -366,7 +366,8 @@ safe_cleanup() {
 # Runs docker compose config to detect unresolved env placeholders before deploy
 preflight_compose_interpolation() {
   local file="${COMPOSE_FILE:-${ARR_STACK_DIR}/docker-compose.yml}"
-  local log_dir="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
+  local log_dir
+  log_dir="$(arr_log_dir)"
   ensure_dir "$log_dir"
   local warn_log="${log_dir}/compose-interpolation.log"
 
@@ -389,7 +390,8 @@ preflight_compose_interpolation() {
 # Validates docker-compose.yml syntax and surfaces context on failure
 validate_compose_or_die() {
   local file="${COMPOSE_FILE:-${ARR_STACK_DIR}/docker-compose.yml}"
-  local log_dir="${ARR_STACK_DIR}/logs"
+  local log_dir
+  log_dir="$(arr_log_dir)"
   ensure_dir "$log_dir"
   local errlog="${log_dir}/compose.err"
   local configdump="${log_dir}/compose-config.json"
@@ -450,7 +452,8 @@ validate_caddy_config() {
     return 0
   fi
 
-  local log_dir="${ARR_LOG_DIR:-${ARR_STACK_DIR}/logs}"
+  local log_dir
+  log_dir="$(arr_log_dir)"
   ensure_dir "$log_dir"
   local logfile="${log_dir}/caddy-validate.log"
 

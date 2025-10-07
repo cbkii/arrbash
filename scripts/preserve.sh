@@ -24,7 +24,8 @@ hydrate_sab_api_key_from_config() {
     return 0
   fi
 
-  local config_dir="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/docker-data}/sab/config"
+  local config_dir
+  config_dir="$(arr_docker_data_root)/sab/config"
   local ini_path="${config_dir}/sabnzbd.ini"
 
   if [[ -d "$config_dir" && "${ARR_SAB_CONFIG_PRESERVED:-0}" != "1" ]]; then
@@ -45,8 +46,8 @@ hydrate_sab_api_key_from_config() {
   fi
 
   api_key_value="${api_key_line#*=}"
-  api_key_value="${api_key_value#${api_key_value%%[![:space:]]*}}"
-  api_key_value="${api_key_value%${api_key_value##*[![:space:]]}}"
+  api_key_value="${api_key_value#"${api_key_value%%[![:space:]]*}"}"
+  api_key_value="${api_key_value%"${api_key_value##*[![:space:]]}"}"
 
   if [[ -z "$api_key_value" ]]; then
     return 0
@@ -107,7 +108,8 @@ hydrate_qbt_host_port_from_env_file() {
 # Reads qBittorrent's configured WebUI port so compose generation honors
 # existing deployments that override the default port.
 hydrate_qbt_webui_port_from_config() {
-  local config_dir="${ARR_DOCKER_DIR:-${ARR_STACK_DIR}/docker-data}/qbittorrent"
+  local config_dir
+  config_dir="$(arr_docker_data_root)/qbittorrent"
   local primary_conf="${config_dir}/qBittorrent.conf"
   local legacy_conf="${config_dir}/qBittorrent/qBittorrent.conf"
   local candidate=""

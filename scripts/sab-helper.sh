@@ -57,7 +57,7 @@ if [[ -n "$CONFIG_HELPER" ]]; then
   . "$CONFIG_HELPER"
 fi
 
-ENV_FILE="${ARR_ENV_FILE:-${STACK_DIR}/.env}"
+ENV_FILE="$(arr_env_file)"
 
 load_env() {
   [[ -f "$ENV_FILE" ]] || return 0

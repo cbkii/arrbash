@@ -20,7 +20,7 @@ if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
   . "${STACK_DIR}/arrconf/userr.conf.defaults.sh"
 fi
 
-ENV_FILE="${ARR_ENV_FILE:-${STACK_DIR}/.env}"
+ENV_FILE="$(arr_env_file)"
 CONTAINER_NAME="qbittorrent"
 
 # Sources the stack .env so helper commands reflect deployed values
@@ -49,17 +49,17 @@ load_env() {
   done <"$ENV_FILE"
 }
 
-# Determines docker-data directory from env overrides or common defaults
+# Determines dockarr directory from env overrides or common defaults
 resolve_docker_data() {
   local candidates=()
 
+  if declare -f arr_docker_data_root >/dev/null 2>&1; then
+    candidates+=("$(arr_docker_data_root)")
+  fi
   if [[ -n "${ARR_DOCKER_DIR:-}" ]]; then
     candidates+=("$ARR_DOCKER_DIR")
   fi
-  if [[ -n "${ARR_DATA_ROOT:-}" ]]; then
-    candidates+=("${ARR_DATA_ROOT%/}/docker-data")
-  fi
-  candidates+=("${STACK_DIR}/docker-data")
+  candidates+=("${STACK_DIR}/dockarr")
 
   local path
   for path in "${candidates[@]}"; do
@@ -103,7 +103,7 @@ webui_domain() {
   printf 'qbittorrent.%s' "$suffix"
 }
 
-# Computes path to qBittorrent.conf within docker-data tree
+# Computes path to qBittorrent.conf within dockarr tree
 config_file_path() {
   printf '%s/qbittorrent/qBittorrent.conf' "$DOCKER_DATA"
 }
@@ -377,7 +377,7 @@ USAGE
 main() {
   load_env
 
-  DOCKER_DATA=$(resolve_docker_data) || die "Cannot find docker-data directory"
+  DOCKER_DATA=$(resolve_docker_data) || die "Cannot find dockarr directory"
   export DOCKER_DATA
 
   case "${1:-show}" in

@@ -12,7 +12,7 @@ if ! STACK_DIR="$(cd "${STACK_DIR}" 2>/dev/null && pwd)"; then
   echo "Stack directory not found: ${ARR_STACK_DIR:-${REPO_ROOT}}" >&2
   exit 1
 fi
-ENV_FILE="${ARR_ENV_FILE:-${STACK_DIR}/.env}"
+ENV_FILE="$(arr_env_file)"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   die ".env file not found at $ENV_FILE"

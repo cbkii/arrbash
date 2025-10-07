@@ -11,8 +11,12 @@ arr_trace_start() {
 
   if [[ -z "$base_log" ]]; then
     local log_dir timestamp stack_name
-    if [[ -n "${ARR_LOG_DIR:-}" ]]; then
+    if declare -f arr_log_dir >/dev/null 2>&1; then
+      log_dir="$(arr_log_dir)"
+    elif [[ -n "${ARR_LOG_DIR:-}" ]]; then
       log_dir="${ARR_LOG_DIR%/}"
+    elif declare -f arr_stack_dir >/dev/null 2>&1; then
+      log_dir="$(arr_stack_dir)/logs"
     elif [[ -n "${ARR_STACK_DIR:-}" ]]; then
       log_dir="${ARR_STACK_DIR%/}/logs"
     else

@@ -30,15 +30,18 @@ vpn_auto_gluetun_root() {
     return
   fi
 
-  local base="${ARR_DOCKER_DIR:-}"
-  if [[ -z "$base" ]]; then
-    if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-      base="${ARR_STACK_DIR%/}/docker-data"
-    else
-      base="${ARR_DATA_ROOT%/}/docker-data"
+  local docker_root="${ARR_DOCKER_DIR:-}"
+  if [[ -z "$docker_root" ]]; then
+    if declare -f arr_docker_data_root >/dev/null 2>&1; then
+      docker_root="$(arr_docker_data_root)"
     fi
   fi
-  printf '%s/gluetun' "${base%/}"
+
+  if [[ -z "$docker_root" ]]; then
+    return 1
+  fi
+
+  printf '%s/gluetun' "${docker_root%/}"
 }
 
 # Caches jq availability checks to avoid repeated command lookups
@@ -54,14 +57,20 @@ vpn_auto_has_jq() {
   ((VPN_AUTO_RECONNECT_JQ_AVAILABLE == 1))
 }
 
-# Resolves auto-reconnect working directory under docker-data
+# Resolves auto-reconnect working directory under dockarr
 vpn_auto_reconnect_state_dir() {
   if declare -f arr_gluetun_auto_reconnect_dir >/dev/null 2>&1; then
     arr_gluetun_auto_reconnect_dir
     return
   fi
 
-  printf '%s/auto-reconnect' "$(vpn_auto_gluetun_root)"
+  local root=""
+  root="$(vpn_auto_gluetun_root 2>/dev/null || printf '')"
+  if [[ -z "$root" ]]; then
+    return 1
+  fi
+
+  printf '%s/auto-reconnect' "$root"
 }
 
 # Returns path to persisted state.json for reconnect worker
@@ -92,7 +101,11 @@ if ! declare -f pf_state_lock_file >/dev/null 2>&1; then
       state_file="$(pf_state_path)"
     else
       local pf_file="${PF_ASYNC_STATE_FILE:-pf-state.json}"
-      state_file="$(vpn_auto_gluetun_root)/${pf_file}"
+      local root=""
+      root="$(vpn_auto_gluetun_root 2>/dev/null || printf '')"
+      if [[ -n "$root" ]]; then
+        state_file="${root}/${pf_file}"
+      fi
     fi
 
     printf '%s.lock' "$state_file"
@@ -106,7 +119,13 @@ vpn_auto_reconnect_pf_state_file() {
     return
   fi
   local pf_file="${PF_ASYNC_STATE_FILE:-pf-state.json}"
-  printf '%s/%s' "$(vpn_auto_gluetun_root)" "$pf_file"
+  local root=""
+  root="$(vpn_auto_gluetun_root 2>/dev/null || printf '')"
+  if [[ -z "$root" ]]; then
+    return 1
+  fi
+
+  printf '%s/%s' "$root" "$pf_file"
 }
 
 if ! declare -f pf_write_with_lock >/dev/null 2>&1; then
@@ -147,7 +166,10 @@ vpn_auto_reconnect_resync_pf() {
     rm -f "$state_file" 2>/dev/null || true
   fi
   if [[ -z "$base_dir" ]]; then
-    base_dir="$(vpn_auto_gluetun_root)"
+    base_dir="$(vpn_auto_gluetun_root 2>/dev/null || printf '')"
+    if [[ -z "$base_dir" ]]; then
+      return 0
+    fi
   fi
   rm -f "$base_dir/forwarded_port" "$base_dir/forwarded_port.json" 2>/dev/null || true
   if declare -f start_async_pf_if_enabled >/dev/null 2>&1; then
@@ -602,8 +624,10 @@ vpn_auto_reconnect_is_enabled() {
 vpn_auto_reconnect_load_env() {
   local env_file="${ARR_ENV_FILE:-}"
   if [[ -z "$env_file" ]]; then
-    if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-      env_file="${ARR_STACK_DIR%/}/.env"
+    if declare -f arr_env_file >/dev/null 2>&1; then
+      env_file="$(arr_env_file)"
+    elif declare -f arr_stack_dir >/dev/null 2>&1; then
+      env_file="$(arr_stack_dir)/.env"
     fi
   fi
   if [[ -f "$env_file" ]]; then

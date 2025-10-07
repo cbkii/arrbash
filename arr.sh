@@ -341,6 +341,7 @@ main() {
   generate_api_key
   write_env
   write_compose
+  validate_generated_paths
   preflight_compose_interpolation
   validate_compose_or_die
   write_gluetun_control_assets

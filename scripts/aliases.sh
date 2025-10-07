@@ -365,7 +365,7 @@ install_aliases() {
 set -euo pipefail
 
 ARR_STACK_DIR="__ARR_STACK_DIR__"
-ARR_ENV_FILE="${ARR_STACK_DIR}/.env"
+ARR_ENV_FILE="__ARR_ENV_FILE__"
 SCRIPT_LIB_DIR="${ARR_STACK_DIR}/scripts"
 
 if [[ -f "${SCRIPT_LIB_DIR}/common.sh" ]]; then

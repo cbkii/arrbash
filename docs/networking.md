@@ -42,8 +42,8 @@ Tips:
 
 ## Proton port forwarding
 - Proton port forwarding is optional—the installer makes a quick attempt after VPN startup and continues even without a lease (you'll see a non-fatal notice in the summary).
-- Gluetun acquires the Proton forwarded port after the VPN is healthy. The installer writes hooks in `docker-data/gluetun` and spawns an async worker so other services can start without waiting.
-- Worker state lives in `docker-data/gluetun/pf-state.json`; logs stream to `docker-data/gluetun/port-forwarding.log`.
+- Gluetun acquires the Proton forwarded port after the VPN is healthy. The installer writes hooks in `${ARR_DOCKER_DIR}/gluetun` and spawns an async worker so other services can start without waiting.
+- Worker state lives in `${ARR_DOCKER_DIR}/gluetun/pf-state.json`; logs stream to `${ARR_DOCKER_DIR}/gluetun/port-forwarding.log`.
 - Helper aliases (available after sourcing `.aliasarr`) expose status:
   ```bash
   arr.vpn.port.state   # JSON snapshot
@@ -107,7 +107,7 @@ diagnose why DNS might not be running yet.
   arr.vpn.auto.resume  # remove pause/kill overrides
   arr.vpn.auto.once    # request a single reconnect
   ```
-- Runtime status lives in `${ARR_STACK_DIR}/.vpn-auto-reconnect-status.json`; detailed logs sit under `docker-data/gluetun/auto-reconnect/`.
+- Runtime status lives in `${ARR_STACK_DIR}/.vpn-auto-reconnect-status.json`; detailed logs sit under `${ARR_DOCKER_DIR}/gluetun/auto-reconnect/`.
 
 ## Related topics
 - [Configuration](configuration.md) – variables referenced above.
