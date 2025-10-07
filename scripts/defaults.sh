@@ -1,25 +1,5 @@
 # shellcheck shell=bash
 
-if ! declare -f arr_var_is_readonly >/dev/null 2>&1; then
-  arr_var_is_readonly() {
-    # Determines if a shell variable is readonly to avoid clobbering host overrides
-    local var="$1"
-    local declaration=""
-
-    if ! declaration=$(declare -p "$var" 2>/dev/null); then
-      return 1
-    fi
-
-    case $declaration in
-      declare\ -r*)
-        return 0
-        ;;
-    esac
-
-    return 1
-  }
-fi
-
 # Seeds global defaults, handling collaborative profile toggles and legacy overrides
 arr_setup_defaults() {
   local previous_stack_dir="${ARR_STACK_DIR:-}"

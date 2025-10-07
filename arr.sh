@@ -42,6 +42,15 @@ if [[ -f "${LOG_LIB}" ]]; then
   . "${LOG_LIB}"
 fi
 
+COMMON_LIB="${REPO_ROOT}/scripts/common.sh"
+if [[ -f "${COMMON_LIB}" ]]; then
+  # shellcheck source=scripts/common.sh
+  . "${COMMON_LIB}"
+else
+  printf '[arr] missing required module: %s\n' "${COMMON_LIB}" >&2
+  exit 1
+fi
+
 if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
@@ -60,16 +69,6 @@ arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _arr_use
 _expected_base="${ARR_DATA_ROOT}"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
 _canon_userconf="${ARR_USERCONF_PATH}"
-
-# Returns 0 if the given variable name is readonly, 1 otherwise
-arr_var_is_readonly() {
-  local varname=$1 out
-  # Ensure it's a variable that exists (not a function); bail if missing.
-  out=$(declare -p -- "${varname}" 2>/dev/null) || return 1
-  # Bash prints like: "declare -r name=…", "declare -rx name=…", "declare -ar name=…"
-  [[ ${out} == declare\ -*r* ]] && return 0
-  return 1
-}
 
 declare -a _arr_env_override_order=()
 declare -A _arr_env_overrides=()
@@ -222,10 +221,6 @@ modules=(
 for module in "${modules[@]}"; do
   f="${SCRIPT_LIB_DIR}/${module}"
   if [[ ! -f "${f}" ]]; then
-    if [[ "${ARR_ALLOW_MISSING_MODULES:-0}" == "1" ]]; then
-      printf '%s WARN: missing module (continuing due to ARR_ALLOW_MISSING_MODULES=1): %s\n' "${STACK_TAG}" "${f}" >&2
-      continue
-    fi
     printf '%s missing required module: %s\n' "${STACK_TAG}" "${f}" >&2
     exit 1
   fi
