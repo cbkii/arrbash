@@ -57,7 +57,7 @@ if ! arr_var_is_readonly ARR_PERMISSION_PROFILE; then
 fi
 
 # Download paths
-DOWNLOADS_DIR="${DOWNLOADS_DIR:-${HOME%/}/Downloads}"
+DOWNLOADS_DIR="${DOWNLOADS_DIR:-${HOME}/Downloads}"
 COMPLETED_DIR="${COMPLETED_DIR:-${DOWNLOADS_DIR}/completed}"
 
 # Media library
