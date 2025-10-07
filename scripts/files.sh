@@ -968,7 +968,8 @@ YAML
   } >"$tmp"
 
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    arr_yaml_kv "      " "DOCKER_MODS" "\${QBT_DOCKER_MODS}" >>"$tmp"
+    # write the literal ${QBT_DOCKER_MODS} var, not its value.
+    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
   fi
 
   cat <<'YAML' >>"$tmp"
@@ -1497,7 +1498,8 @@ YAML
       QBT_WEBUI_INIT_HOOK: "1"
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    arr_yaml_kv "      " "DOCKER_MODS" "\${QBT_DOCKER_MODS}" >>"$tmp"
+  # write the literal ${QBT_DOCKER_MODS} var, not its value.
+    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
   fi
   cat <<'YAML' >>"$tmp"
     volumes:
