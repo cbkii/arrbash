@@ -14,6 +14,19 @@
 : "${DATA_DIR_MODE:=700}"
 : "${LOCK_FILE_MODE:=640}"
 
+if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
+  _arr_common_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  YAML_EMIT_LIB="${YAML_EMIT_LIB:-${_arr_common_dir}/yaml-emit.sh}"
+  if [[ -f "${YAML_EMIT_LIB}" ]]; then
+    # shellcheck source=scripts/yaml-emit.sh
+    . "${YAML_EMIT_LIB}"
+  else
+    printf '[arr] missing emission helper library: %s\n' "${YAML_EMIT_LIB}" >&2
+    exit 1
+  fi
+  unset _arr_common_dir
+fi
+
 if [[ -z "${ARR_DATA_ROOT:-}" ]]; then
   if [[ -n "${HOME:-}" ]]; then
     ARR_DATA_ROOT="${HOME%/}/srv"
@@ -1178,52 +1191,6 @@ atomic_write() {
   fi
 }
 
-# Produces a YAML-safe double-quoted scalar for literal emission
-arr_yaml_escape() {
-  local value="${1-}"
-  value="${value//$'\r'/}"  # drop carriage returns
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  value="${value//$'\n'/\\n}"
-  printf '"%s"' "$value"
-}
-
-# Escapes dotenv values and wraps them in double quotes for Compose compatibility
-arr_env_escape_value() {
-  local value="${1-}"
-  value="${value//$'\r'/}"  # normalize CRLF
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  value="${value//$'\n'/ }"
-  printf '"%s"' "$value"
-}
-
-# Emits KEY="escaped" lines while validating variable names
-arr_write_env_kv() {
-  local name="$1"
-  local value="${2-}"
-
-  if [[ -z "$name" ]]; then
-    die "arr_write_env_kv requires a variable name"
-  fi
-
-  if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-    echo "[env] invalid var name: $name" >&2
-    return 1
-  fi
-
-  printf '%s=%s\n' "$name" "$(arr_env_escape_value "$value")"
-}
-
-# Legacy helpers retained for compatibility
-escape_env_value_for_compose() {
-  arr_env_escape_value "${1-}"
-}
-
-write_env_kv() {
-  arr_write_env_kv "$@"
-}
-
 # Trims leading/trailing whitespace without touching inner spacing
 trim_string() {
   local value="${1-}"
@@ -1367,6 +1334,59 @@ verify_single_level_env_placeholders() {
   return 1
 }
 
+# Ensures every ${VAR} placeholder in the compose file maps to a known environment key.
+# This keeps compose generation honest: if a new service references an env var that the
+# installer forgot to emit, docker compose would otherwise stall or fail at runtime.
+# Catching the mismatch here surfaces a clear error while we still know which module
+# introduced the placeholder.
+arr_verify_compose_placeholders() {
+  local compose_file="$1"
+  local env_file="$2"
+
+  if [[ -z "$compose_file" || ! -f "$compose_file" ]]; then
+    die "arr_verify_compose_placeholders requires an existing compose file"
+  fi
+
+  declare -A _arr_known_env=()
+  if [[ -n "$env_file" && -f "$env_file" ]]; then
+    while IFS= read -r _arr_line; do
+      [[ -z "$_arr_line" ]] && continue
+      [[ "$_arr_line" =~ ^[[:space:]]*# ]] && continue
+      if [[ "$_arr_line" == *'='* ]]; then
+        local _arr_key="${_arr_line%%=*}"
+        _arr_key="${_arr_key%%[[:space:]]*}"
+        [[ -n "$_arr_key" ]] && _arr_known_env["$_arr_key"]=1
+      fi
+    done <"$env_file"
+  fi
+
+  local _arr_unexpected=0
+  local _arr_placeholder="" _arr_name=""
+  local _arr_matches=""
+  _arr_matches="$(grep -o '\${[A-Za-z_][A-Za-z0-9_]*}' "$compose_file" 2>/dev/null | sort -u || true)"
+
+  if [[ -z "$_arr_matches" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r _arr_placeholder; do
+    _arr_name="${_arr_placeholder:2:${#_arr_placeholder}-3}"
+    if [[ -z "$_arr_name" ]]; then
+      continue
+    fi
+    if [[ -n "${_arr_known_env[${_arr_name}]:-}" ]]; then
+      continue
+    fi
+    if [[ ${!_arr_name+x} ]]; then
+      continue
+    fi
+    printf '[placeholders] Unexpected placeholder ${%s} in %s\n' "$_arr_name" "$compose_file" >&2
+    _arr_unexpected=1
+  done <<<"$_arr_matches"
+
+  return "$_arr_unexpected"
+}
+
 # Applies sed edits via temp file for portability across BSD/GNU variants
 portable_sed() {
   local expr="$1"
@@ -1462,7 +1482,7 @@ persist_env_var() {
 
   if [ -f "${ARR_ENV_FILE}" ]; then
     local compose_safe
-    compose_safe="$(escape_env_value_for_compose "$value")"
+    compose_safe="$(arr_env_escape_value "$value")"
     if grep -q "^${key}=" "${ARR_ENV_FILE}"; then
       local escaped
       escaped="$(escape_sed_replacement "$compose_safe")"

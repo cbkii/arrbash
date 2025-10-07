@@ -192,6 +192,15 @@ SCRIPT_LIB_DIR="${REPO_ROOT}/scripts"
 if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly SCRIPT_LIB_DIR
 fi
+
+YAML_EMIT_LIB="${REPO_ROOT}/scripts/yaml-emit.sh"
+if [[ -f "${YAML_EMIT_LIB}" ]]; then
+  # shellcheck source=scripts/yaml-emit.sh
+  . "${YAML_EMIT_LIB}"
+else
+  printf '%s missing emission helper library: %s\n' "${STACK_TAG}" "${YAML_EMIT_LIB}" >&2
+  exit 1
+fi
 modules=(
   "common.sh"
   "defaults.sh"
