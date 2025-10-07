@@ -495,6 +495,21 @@ write_env() {
   ARR_QBT_INT_PORT_STATUS="$qbt_webui_status"
   ARR_QBT_HOST_PORT_STATUS="$qbt_host_status"
 
+  local qbt_bind_addr_value="${QBT_BIND_ADDR:-0.0.0.0}"
+  if [[ -z "$qbt_bind_addr_value" ]]; then
+    qbt_bind_addr_value="0.0.0.0"
+  fi
+  QBT_BIND_ADDR="$qbt_bind_addr_value"
+
+  local qbt_enforce_value="${QBT_ENFORCE_WEBUI:-1}"
+  case "$qbt_enforce_value" in
+    0 | 1) ;;
+    *)
+      qbt_enforce_value=1
+      ;;
+  esac
+  QBT_ENFORCE_WEBUI="$qbt_enforce_value"
+
   local sab_api_state="empty"
   local sab_api_value="${SABNZBD_API_KEY:-}"
   if [[ -n "$sab_api_value" ]]; then
@@ -898,6 +913,7 @@ YAML
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
+
     cat <<'YAML' >>"$tmp"
     healthcheck:
       test:
@@ -938,6 +954,10 @@ YAML
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
       LANG: "en_US.UTF-8"
+      QBT_INT_PORT: "${QBT_INT_PORT}"
+      QBT_BIND_ADDR: "${QBT_BIND_ADDR}"
+      QBT_ENFORCE_WEBUI: "${QBT_ENFORCE_WEBUI}"
+      QBT_WEBUI_INIT_HOOK: 1
 YAML
   } >"$tmp"
 
@@ -951,11 +971,12 @@ YAML
       - "${ARR_DOCKER_DIR}/qbittorrent:/config"
       - "${DOWNLOADS_DIR}:/downloads"
       - "${COMPLETED_DIR}:/completed"
+      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
     depends_on:
       gluetun:
         condition: "service_healthy"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://${LOCALHOST_IP}:${QBT_INT_PORT}/api/v2/app/version"]
+      test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
       interval: "30s"
       timeout: "10s"
       retries: "3"
@@ -1338,6 +1359,12 @@ services:
 YAML
   } >"$tmp"
 
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    cat <<'YAML' >>"$tmp"
+      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
+YAML
+  fi
+
   if ((include_caddy)); then
     cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${CADDY_HTTP_PORT}:${CADDY_HTTP_PORT}"
@@ -1347,7 +1374,6 @@ YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}"
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}"
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}"
@@ -1454,6 +1480,10 @@ YAML
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
       LANG: "en_US.UTF-8"
+      QBT_INT_PORT: "${QBT_INT_PORT}"
+      QBT_BIND_ADDR: "${QBT_BIND_ADDR}"
+      QBT_ENFORCE_WEBUI: "${QBT_ENFORCE_WEBUI}"
+      QBT_WEBUI_INIT_HOOK: "1"
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     printf '      DOCKER_MODS: "%s"\n' "${QBT_DOCKER_MODS}" >>"$tmp"
@@ -1463,11 +1493,12 @@ YAML
       - "${ARR_DOCKER_DIR}/qbittorrent:/config"
       - "${DOWNLOADS_DIR}:/downloads"
       - "${COMPLETED_DIR}:/completed"
+      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
     depends_on:
       gluetun:
         condition: "service_healthy"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://${LOCALHOST_IP}:${QBT_INT_PORT}/api/v2/app/version"]
+      test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
       interval: "30s"
       timeout: "10s"
       retries: "3"
@@ -2252,7 +2283,9 @@ write_qbt_helper_script() {
   cp "${REPO_ROOT}/scripts/qbt-helper.sh" "$ARR_STACK_DIR/scripts/qbt-helper.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/qbt-helper.sh" 755
 
-  msg "  qBittorrent helper: ${ARR_STACK_DIR}/scripts/qbt-helper.sh"
+  rm -f "$ARR_STACK_DIR/scripts/qbt-webui.sh"
+
+  msg "  qBittorrent helper (also init hook): ${ARR_STACK_DIR}/scripts/qbt-helper.sh"
 }
 
 # Reconciles qBittorrent configuration defaults while preserving user customizations
@@ -2319,7 +2352,7 @@ WebUI\UseUPnP=false
 Downloads\SavePath=/completed/
 Downloads\TempPath=/downloads/incomplete/
 Downloads\TempPathEnabled=true
-WebUI\Address=0.0.0.0
+WebUI\Address=${QBT_BIND_ADDR}
 WebUI\AlternativeUIEnabled=${vt_alt_value}
 WebUI\RootFolder=${vt_root}
 WebUI\Port=${QBT_INT_PORT}
@@ -2342,7 +2375,7 @@ EOF
 
   local managed_spec
   local -a managed_lines=(
-    "WebUI\\Address=0.0.0.0"
+    "WebUI\\Address=${QBT_BIND_ADDR}"
     "WebUI\\Port=${QBT_INT_PORT}"
     "WebUI\\AlternativeUIEnabled=${vt_alt_value}"
     "WebUI\\RootFolder=${vt_root}"
