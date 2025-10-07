@@ -1371,36 +1371,6 @@ get_env_kv() {
   printf '%s\n' "$value"
 }
 
-# Updates a qBittorrent INI key atomically, creating the file if missing
-set_qbt_conf_value() {
-  local file="$1"
-  local key="$2"
-  local value="$3"
-
-  local tmp
-  if ! tmp="$(arr_mktemp_file "${file}.XXXX" "$SECRET_FILE_MODE")"; then
-    return 1
-  fi
-
-  if [ -f "$file" ]; then
-    awk -v k="$key" -v v="$value" '
-      BEGIN { found=0 }
-      $0 ~ "^"k"=" { print k"="v; found=1; next }
-      { print }
-      END { if (!found) print k"="v }
-    ' "$file" >"$tmp"
-  else
-    printf '%s=%s\n' "$key" "$value" >"$tmp"
-  fi
-
-  if mv "$tmp" "$file"; then
-    ensure_secret_file_mode "$file"
-  else
-    rm -f "$tmp"
-    return 1
-  fi
-}
-
 # Persists installer-discovered env vars back into .env without introducing duplicates
 persist_env_var() {
   local key="$1"

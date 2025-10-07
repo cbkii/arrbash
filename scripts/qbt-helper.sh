@@ -3,6 +3,133 @@
 
 set -euo pipefail
 
+# --- qBittorrent WebUI enforcement helpers (shared by init + host modes) ---
+
+qbt_webui_conf_path_default="/config/qBittorrent.conf"
+
+qbt_webui_mktemp() {
+  local base="$1"
+  local tmp
+  if ! tmp=$(mktemp "${base}.XXXXXX" 2>/dev/null); then
+    printf '[qbt-helper] Failed to create temporary file near %s\n' "$base" >&2
+    return 1
+  fi
+  printf '%s\n' "$tmp"
+}
+
+qbt_webui_ensure_conf() {
+  local conf="$1"
+  local dir
+  dir="$(dirname -- "$conf")"
+  mkdir -p "$dir"
+  if [[ ! -f "$conf" ]]; then
+    : >"$conf"
+  fi
+}
+
+qbt_webui_strip_crlf() {
+  local conf="$1"
+  if [[ -s "$conf" ]] && LC_ALL=C grep -q $'\r' "$conf"; then
+    local tmp
+    if ! tmp=$(qbt_webui_mktemp "$conf"); then
+      return 1
+    fi
+    tr -d '\r' <"$conf" >"$tmp"
+    mv "$tmp" "$conf"
+  fi
+}
+
+qbt_webui_ensure_preferences() {
+  local conf="$1"
+  if ! LC_ALL=C grep -q '^\[Preferences\]' "$conf" 2>/dev/null; then
+    printf '\n[Preferences]\n' >>"$conf"
+  fi
+}
+
+qbt_webui_upsert_pref() {
+  local conf="$1"
+  local key="$2"
+  local value="$3"
+  local tmp
+  if ! tmp=$(qbt_webui_mktemp "$conf"); then
+    return 1
+  fi
+  awk -v target="$key" -v desired="$value" '
+    BEGIN {
+      section = "";
+      inserted = 0;
+    }
+    /^\[.*\]$/ {
+      if (section == "[Preferences]" && !inserted) {
+        print target "=" desired;
+        inserted = 1;
+      }
+      section = $0;
+      print;
+      next;
+    }
+    {
+      if (section == "[Preferences]" && $0 ~ "^" target "=") {
+        if (!inserted) {
+          print target "=" desired;
+          inserted = 1;
+        }
+        next;
+      }
+      print;
+    }
+    END {
+      if (section == "[Preferences]" && !inserted) {
+        print target "=" desired;
+        inserted = 1;
+      }
+      if (!inserted) {
+        print "[Preferences]";
+        print target "=" desired;
+      }
+    }
+  ' "$conf" >"$tmp"
+  mv "$tmp" "$conf"
+}
+
+qbt_webui_enforce() {
+  local conf="${1:-${QBT_CONF_PATH:-${qbt_webui_conf_path_default}}}"
+  local address="${2:-${QBT_WEBUI_ADDRESS:-0.0.0.0}}"
+  local port="${3:-${QBT_INT_PORT:-8082}}"
+  local old_umask
+
+  if ! old_umask=$(umask); then
+    old_umask=0022
+  fi
+  trap 'umask "$old_umask" >/dev/null 2>&1 || true' RETURN
+  umask 077
+
+  qbt_webui_ensure_conf "$conf" || return 1
+  qbt_webui_strip_crlf "$conf" || return 1
+  qbt_webui_ensure_preferences "$conf" || return 1
+  qbt_webui_upsert_pref "$conf" 'WebUI\\Address' "$address" || return 1
+  qbt_webui_upsert_pref "$conf" 'WebUI\\Port' "$port" || return 1
+
+  if ! LC_ALL=C grep -E '^(WebUI\\Address|WebUI\\Port)=' "$conf" >/dev/null; then
+    printf '[qbt-helper] Failed to assert WebUI prefs in %s\n' "$conf" >&2
+    return 1
+  fi
+
+  chmod 600 "$conf" 2>/dev/null || true
+}
+
+qbt_webui_init_hook() {
+  if ! qbt_webui_enforce; then
+    printf '[qbt-helper] WebUI enforcement failed\n' >&2
+    exit 1
+  fi
+}
+
+if [[ "$(basename -- "$0")" == "00-qbt-webui" ]]; then
+  qbt_webui_init_hook "$@"
+  exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STACK_DIR_DEFAULT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 STACK_DIR="${ARR_STACK_DIR:-${STACK_DIR_DEFAULT}}"
@@ -10,6 +137,9 @@ if ! STACK_DIR="$(cd "${STACK_DIR}" 2>/dev/null && pwd)"; then
   echo "Stack directory not found: ${ARR_STACK_DIR:-${STACK_DIR_DEFAULT}}" >&2
   exit 1
 fi
+
+ARR_STACK_DIR="$STACK_DIR"
+export ARR_STACK_DIR
 
 # shellcheck source=scripts/common.sh
 . "${STACK_DIR}/scripts/common.sh"
@@ -228,55 +358,28 @@ update_whitelist() {
   log_info "LAN whitelist enabled for: $subnet"
 }
 
-# Ensures specified config key is set to desired value (adding if missing)
-ensure_qbt_config_setting() {
-  local key="$1"
-  local value="$2"
-  local cfg="$3"
+# Applies WebUI binding defaults using the shared enforcer script
+restore_webui_bindings() {
+  local context="$1"
+  local desired_port="${QBT_INT_PORT:-8082}"
+  local address="0.0.0.0"
+  local cfg rc=0
 
-  if [[ -z "$key" || -z "$cfg" ]]; then
-    return 1
+  cfg="$(config_file_path)"
+
+  log_info "$context"
+  stop_container
+
+  if qbt_webui_enforce "$cfg" "$address" "$desired_port"; then
+    ensure_secret_file_mode "$cfg"
+    log_info "Updated qBittorrent WebUI configuration in ${cfg}"
+  else
+    log_warn "Failed to update qBittorrent WebUI configuration; check ${cfg} manually"
+    rc=1
   fi
 
-  if [[ ! -f "$cfg" ]]; then
-    log_warn "Config file not found at $cfg; cannot update ${key}"
-    return 1
-  fi
-
-  local tmp
-  if ! tmp=$(arr_mktemp_file "${cfg}.XXXXXX.tmp" "$SECRET_FILE_MODE"); then
-    log_warn "Failed to create temporary file while updating ${cfg}"
-    return 1
-  fi
-
-  awk -v target="$key" -v desired="$value" '
-    BEGIN {
-      OFS = "=";
-      seen = 0;
-    }
-    {
-      line = $0;
-      if (index(line, "=") == 0) {
-        print line;
-        next;
-      }
-      split(line, kv, "=");
-      if (kv[1] == target) {
-        print target, desired;
-        seen = 1;
-      } else {
-        print line;
-      }
-    }
-    END {
-      if (!seen) {
-        print target, desired;
-      }
-    }
-  ' "$cfg" >"$tmp"
-
-  mv "$tmp" "$cfg"
-  ensure_secret_file_mode "$cfg"
+  start_container
+  return "$rc"
 }
 
 # Reports detected drift in WebUI port/bind settings relative to stack defaults
@@ -327,49 +430,55 @@ diagnose_config() {
 # Forces WebUI port back to container default and restarts service
 fix_webui_port() {
   local desired_port="${QBT_INT_PORT:-8082}"
-  log_info "Restoring qBittorrent WebUI port to ${desired_port}"
-  stop_container
-
-  local cfg
-  cfg="$(config_file_path)"
-
-  if ensure_qbt_config_setting "WebUI\\Port" "${desired_port}" "$cfg"; then
-    log_info "Updated WebUI port in ${cfg}"
-  else
-    log_warn "Failed to update WebUI port; check ${cfg} manually"
-  fi
-
-  start_container
+  restore_webui_bindings "Restoring qBittorrent WebUI port to ${desired_port}"
 }
 
 # Forces WebUI bind address back to 0.0.0.0 for LAN access
 fix_webui_address() {
-  log_info "Restoring qBittorrent WebUI bind address to 0.0.0.0"
-  stop_container
+  restore_webui_bindings "Restoring qBittorrent WebUI bind address to 0.0.0.0"
+}
 
-  local cfg
-  cfg="$(config_file_path)"
+# Executes the init hook inside the running container and restarts qBittorrent
+force_webui_bindings() {
+  local hook="/custom-cont-init.d/00-qbt-webui"
+  local -a exec_env=(-e "QBT_INT_PORT=${QBT_INT_PORT:-8082}" -e "QBT_WEBUI_ADDRESS=0.0.0.0")
 
-  if ensure_qbt_config_setting "WebUI\\Address" "0.0.0.0" "$cfg"; then
-    log_info "Updated WebUI bind address in ${cfg}"
-  else
-    log_warn "Failed to update WebUI bind address; check ${cfg} manually"
+  if [[ -n "${QBT_USER:-}" ]]; then
+    exec_env+=(-e "QBT_USER=${QBT_USER}")
+  fi
+  if [[ -n "${QBT_PASS:-}" ]]; then
+    exec_env+=(-e "QBT_PASS=${QBT_PASS}")
   fi
 
-  start_container
+  log_info "Running qBittorrent WebUI init hook (${hook})..."
+  if ! docker exec "${exec_env[@]}" "$CONTAINER_NAME" "$hook"; then
+    log_warn "Init hook exited with an error; inspect 'docker logs ${CONTAINER_NAME}'"
+  fi
+
+  if docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1; then
+    arr_resolve_compose_cmd
+    if compose restart "$CONTAINER_NAME"; then
+      log_info "Restarted ${CONTAINER_NAME} via docker compose"
+    else
+      log_warn "Failed to restart ${CONTAINER_NAME}; restart the container manually"
+    fi
+  else
+    log_warn "Docker Compose v2 not detected; skipping container restart"
+  fi
 }
 
 # Prints helper usage menu
 usage() {
   local default_port="${QBT_INT_PORT:-8082}"
   cat <<USAGE
-Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr}
+Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr|force}
   show       Display current access information
   reset      Reset authentication (generates a new temporary password)
   whitelist  Enable passwordless access from the LAN subnet
   diagnose   Check for WebUI configuration drift
   fix-port   Restore WebUI port to container default (${default_port})
   fix-addr   Restore WebUI bind address to 0.0.0.0
+  force      Run WebUI init hook and restart the container
 USAGE
 }
 
@@ -398,6 +507,9 @@ main() {
       ;;
     fix-addr)
       fix_webui_address
+      ;;
+    force)
+      force_webui_bindings
       ;;
     *)
       usage

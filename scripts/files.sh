@@ -938,6 +938,7 @@ YAML
       PGID: ${PGID}
       TZ: ${TIMEZONE}
       LANG: en_US.UTF-8
+      QBT_INT_PORT: ${QBT_INT_PORT}
 YAML
   } >"$tmp"
 
@@ -951,6 +952,7 @@ YAML
       - ${ARR_DOCKER_DIR}/qbittorrent:/config
       - ${DOWNLOADS_DIR}:/downloads
       - ${COMPLETED_DIR}:/completed
+      - ${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro
     depends_on:
       gluetun:
         condition: service_healthy
@@ -1335,6 +1337,7 @@ services:
     ports:
       # Centralize host exposure since all services share gluetun's namespace
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
+      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
   } >"$tmp"
 
@@ -1347,7 +1350,6 @@ YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}"
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}"
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}"
@@ -1454,6 +1456,7 @@ YAML
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
       LANG: en_US.UTF-8
+      QBT_INT_PORT: "${QBT_INT_PORT}"
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     printf '      DOCKER_MODS: %s\n' "${QBT_DOCKER_MODS}" >>"$tmp"
@@ -1463,6 +1466,7 @@ YAML
       - "${ARR_DOCKER_DIR}/qbittorrent:/config"
       - "${DOWNLOADS_DIR}:/downloads"
       - "${COMPLETED_DIR}:/completed"
+      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
     depends_on:
       gluetun:
         condition: service_healthy
@@ -2250,7 +2254,9 @@ write_qbt_helper_script() {
   cp "${REPO_ROOT}/scripts/qbt-helper.sh" "$ARR_STACK_DIR/scripts/qbt-helper.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/qbt-helper.sh" 755
 
-  msg "  qBittorrent helper: ${ARR_STACK_DIR}/scripts/qbt-helper.sh"
+  rm -f "$ARR_STACK_DIR/scripts/qbt-webui.sh"
+
+  msg "  qBittorrent helper (also init hook): ${ARR_STACK_DIR}/scripts/qbt-helper.sh"
 }
 
 # Reconciles qBittorrent configuration defaults while preserving user customizations
