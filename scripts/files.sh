@@ -613,7 +613,7 @@ write_env() {
   fi
 
   SABNZBD_HOST="$sab_host_value"
-  ARR_SAB_HOST_AUTO="$sab_host_auto"
+  export ARR_SAB_HOST_AUTO="$sab_host_auto"
 
   local qbt_webui_default="${QBT_INT_PORT:-8082}"
   local qbt_host_default="$qbt_webui_default"
@@ -657,8 +657,8 @@ write_env() {
 
   QBT_INT_PORT="$qbt_webui_port"
   QBT_PORT="$qbt_host_port"
-  ARR_QBT_INT_PORT_STATUS="$qbt_webui_status"
-  ARR_QBT_HOST_PORT_STATUS="$qbt_host_status"
+  export ARR_QBT_INT_PORT_STATUS="$qbt_webui_status"
+  export ARR_QBT_HOST_PORT_STATUS="$qbt_host_status"
 
   local qbt_bind_addr_value="${QBT_BIND_ADDR:-0.0.0.0}"
   if [[ -z "$qbt_bind_addr_value" ]]; then
@@ -824,8 +824,6 @@ append_sabnzbd_service_body() {
   local include_direct_port="${2:-0}"
   local sab_internal_fallback="${SABNZBD_INT_PORT:-8080}"
   local internal_port="${3:-${sab_internal_fallback}}"
-  local via_vpn="${4:-0}"
-  # shellcheck disable=SC2034  # reserved for future per-network tweaks
 
   local sab_timeout_for_health
   arr_resolve_positive_int sab_timeout_for_health "${SABNZBD_TIMEOUT:-}" 60
@@ -991,7 +989,8 @@ YAML
 YAML
 
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" "${QBT_DOCKER_MODS}")
+    #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
+    arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}')
   fi
 
   arr_compose_stream_block "$tmp" <<'YAML'
@@ -1206,7 +1205,7 @@ YAML
       gluetun:
         condition: "service_healthy"
 YAML
-      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
+      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port"
     else
       arr_compose_stream_block "$tmp" <<'YAML'
     networks:
@@ -1216,7 +1215,7 @@ YAML
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
         expose_direct_port="1"
       fi
-      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port" "0"
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port"
     fi
   fi
 
@@ -1525,7 +1524,8 @@ YAML
       QBT_WEBUI_INIT_HOOK: "1"
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" "${QBT_DOCKER_MODS}")
+    #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
+    arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}')
   fi
   arr_compose_stream_block "$tmp" <<'YAML'
     volumes:
@@ -1699,13 +1699,13 @@ YAML
       gluetun:
         condition: "service_healthy"
 YAML
-      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port" "1"
+      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port"
     else
       local expose_direct_port="0"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
         expose_direct_port="1"
       fi
-      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port" "0"
+      append_sabnzbd_service_body "$tmp" "$expose_direct_port" "$sab_internal_port"
     fi
   fi
 
@@ -1804,9 +1804,6 @@ YAML
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
-
-validate_generated_paths() { return 0; }  # TODO: delete or use as generated file autofixer
-
 # Writes Gluetun hook/auth assets so API key and port forwarding stay aligned
 write_gluetun_control_assets() {
   msg "[pf] Preparing Gluetun control assets"
@@ -2866,18 +2863,19 @@ PY
 
   local -a policy_profile_targets=("WEB-1080p" "HD Bluray + WEB")
   append_cf_block() {
-    local -n ids_ref=$1
-    local score="$2"
-    local label="$3"
+    local score="$1"
+    local label="$2"
+    shift 2 || return 0
+    local -a ids=("$@")
     if [[ -z "$score" || "$score" == "0" ]]; then
       return 0
     fi
-    if ((${#ids_ref[@]} == 0)); then
+    if ((${#ids[@]} == 0)); then
       return 0
     fi
     local block="  # ${label}\n  - trash_ids:\n"
     local id
-    for id in "${ids_ref[@]}"; do
+    for id in "${ids[@]}"; do
       block+="      - $(arr_yaml_escape "${id}")\n"
     done
     block+="    assign_scores_to:\n"
@@ -2889,53 +2887,47 @@ PY
     printf '%s' "$block"
   }
 
-  # shellcheck disable=SC2034
   local -a cf_ids_lq=("9c11cd3f07101cdba90a2d81cf0e56b4" "90a6f9a284dff5103f6346090e6280c8")
-  # shellcheck disable=SC2034
   local -a cf_ids_lq_title=("e2315f990da2e2cbfc9fa5b7a6fcfe48" "e204b80c87be9497a8a6eaff48f72905")
-  # shellcheck disable=SC2034
   local -a cf_ids_upscaled=("23297a736ca77c0fc8e70f8edd7ee56c" "bfd8eb01832d646a0a89c4deb46f8564")
-  # shellcheck disable=SC2034
   local -a cf_ids_language=("69aa1e159f97d860440b04cd6d590c4f" "0dc8aec3bd1c47cd6c40c46ecd27e846")
-  # shellcheck disable=SC2034
   local -a cf_ids_multi=("7ba05c6e0e14e793538174c679126996" "4b900e171accbfb172729b63323ea8ca")
-  # shellcheck disable=SC2034
   local -a cf_ids_x265=("47435ece6b99a0b477caf360e79ba0bb" "dc98083864ea246d05a42df0d05f81cc")
 
   local common_cf_body=""
   local block=""
 
   if ((strict_junk_block)); then
-    block="$(append_cf_block cf_ids_lq "$junk_score" "LQ releases")"
+    block="$(append_cf_block "$junk_score" "LQ releases" "${cf_ids_lq[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
-    block="$(append_cf_block cf_ids_lq_title "$junk_score" "LQ (Release Title)")"
+    block="$(append_cf_block "$junk_score" "LQ (Release Title)" "${cf_ids_lq_title[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
-    block="$(append_cf_block cf_ids_upscaled "$junk_score" "Upscaled flags")"
+    block="$(append_cf_block "$junk_score" "Upscaled flags" "${cf_ids_upscaled[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
   fi
 
   if ((english_only)); then
-    block="$(append_cf_block cf_ids_language "$english_penalty_score" "Language: Not English")"
+    block="$(append_cf_block "$english_penalty_score" "Language: Not English" "${cf_ids_language[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
   fi
 
   if ((discourage_multi)); then
-    block="$(append_cf_block cf_ids_multi "$multi_score" "MULTi releases")"
+    block="$(append_cf_block "$multi_score" "MULTi releases" "${cf_ids_multi[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
   fi
 
   if ((penalize_hd_x265)); then
-    block="$(append_cf_block cf_ids_x265 "$x265_score" "x265 (HD)")"
+    block="$(append_cf_block "$x265_score" "x265 (HD)" "${cf_ids_x265[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi

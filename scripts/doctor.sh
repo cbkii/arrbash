@@ -650,8 +650,8 @@ else
   fi
 
   if [[ "${ENABLE_CADDY}" == "1" ]]; then
-    local caddy_http_port=""
-    local caddy_https_port=""
+    caddy_http_port=""
+    caddy_https_port=""
     resolve_caddy_ports caddy_http_port caddy_https_port
     report_port "Caddy HTTP" tcp "${LAN_IP}" "$caddy_http_port"
     report_port "Caddy HTTPS" tcp "${LAN_IP}" "$caddy_https_port"
@@ -701,8 +701,8 @@ else
 fi
 
 if [[ "${ENABLE_CADDY}" == "1" ]]; then
-  local caddy_http_port=""
-  local caddy_https_port=""
+  caddy_http_port=""
+  caddy_https_port=""
   resolve_caddy_ports caddy_http_port caddy_https_port
   echo "[doctor] Testing CA fetch over HTTP (bootstrap)"
   if have_command curl && have_command openssl; then
@@ -777,8 +777,8 @@ elif [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
 fi
 
 if [[ "${ENABLE_CADDY}" == "1" ]]; then
-  local _unused_caddy_http_port=""
-  local caddy_https_port=""
+  _unused_caddy_http_port=""
+  caddy_https_port=""
   resolve_caddy_ports _unused_caddy_http_port caddy_https_port
   echo "  curl -k https://qbittorrent.${SUFFIX}/ --resolve qbittorrent.${SUFFIX}:${caddy_https_port}:${lan_target}"
 fi

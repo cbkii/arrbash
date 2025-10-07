@@ -1391,7 +1391,7 @@ arr_verify_compose_placeholders() {
     if [[ ${!_arr_name+x} ]]; then
       continue
     fi
-    printf '[placeholders] Unexpected placeholder ${%s} in %s\n' "$_arr_name" "$compose_file" >&2
+    printf "[placeholders] Unexpected placeholder \${%s} in %s\n" "$_arr_name" "$compose_file" >&2
     _arr_unexpected=1
   done <<<"$_arr_matches"
   return "$_arr_unexpected"
@@ -1576,9 +1576,9 @@ sanitize_user() {
 
 # Validates bcrypt hash formatting and cost bounds before accepting user input
 valid_bcrypt() {
-  local candidate="${1-}"
+  local hash_candidate="${1:-}"
 
-  if [[ "$candidate" =~ ^\$2[aby]\$([0-3][0-9])\$[./A-Za-z0-9]{53}$ ]]; then
+  if [[ "$hash_candidate" =~ ^\$2[aby]\$([0-3][0-9])\$[./A-Za-z0-9]{53}$ ]]; then
     local cost="${BASH_REMATCH[1]}"
     if ((10#$cost >= 4 && 10#$cost <= 31)); then
       return 0
@@ -1590,9 +1590,9 @@ valid_bcrypt() {
 
 # Checks if a compose-escaped value decodes to a valid bcrypt hash
 is_bcrypt_hash() {
-  local candidate="${1-}"
+  local escaped_candidate="${1:-}"
 
-  candidate="$(unescape_env_value_from_compose "$candidate")"
+  escaped_candidate="$(unescape_env_value_from_compose "$escaped_candidate")"
 
-  valid_bcrypt "$candidate"
+  valid_bcrypt "$escaped_candidate"
 }
