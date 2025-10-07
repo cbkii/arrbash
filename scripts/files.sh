@@ -414,8 +414,8 @@ arr_emit_compose_env_file() {
       printf '[compose-vars] Unset required variables:'
       printf ' %s' "${missing[@]}"
       printf '\n'
-      printf 'Source order: CLI > ENV > user.conf > defaults\n'
-      printf 'Hint: set in %s/user.conf or export before ./arr.sh (CLI flags override last)\n' "${ARRCONF_DIR:-arrconf}"
+      printf 'Source order: CLI > ENV > userr.conf > defaults\n'
+      printf 'Hint: set in %s/userr.conf or export before ./arr.sh (CLI flags override last)\n' "${ARRCONF_DIR:-arrconf}"
     } >&2
     rm -f "$tmp"
     return 1
