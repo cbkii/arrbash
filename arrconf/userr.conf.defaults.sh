@@ -5,26 +5,6 @@
 # behave predictably when the user configuration runs afterwards.
 # Override these in ${ARRCONF_DIR}/userr.conf (git-ignored; defaults to ${ARR_DATA_ROOT}/${STACK}configs/userr.conf where ARR_DATA_ROOT defaults to ~/srv).
 
-# Guard helpers for shells that source these defaults alongside other scripts
-if ! declare -f arr_var_is_readonly >/dev/null 2>&1; then
-  arr_var_is_readonly() {
-    local var="$1"
-    local declaration=""
-
-    if ! declaration=$(declare -p "$var" 2>/dev/null); then
-      return 1
-    fi
-
-    case $declaration in
-      declare\ -r*)
-        return 0
-        ;;
-    esac
-
-    return 1
-  }
-fi
-
 # Base paths
 STACK="${STACK:-arr}"
 STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
@@ -52,7 +32,7 @@ ARR_INSTALL_LOG="${ARR_INSTALL_LOG:-${ARR_LOG_DIR}/${STACK}-install.log}"
 ARR_COLOR_OUTPUT="${ARR_COLOR_OUTPUT:-1}"
 
 # File/dir permissions (strict keeps secrets 600/700, collab enables group read/write 660/770)
-if ! arr_var_is_readonly ARR_PERMISSION_PROFILE; then
+if ! declare -f arr_var_is_readonly >/dev/null 2>&1 || ! arr_var_is_readonly ARR_PERMISSION_PROFILE; then
   ARR_PERMISSION_PROFILE="${ARR_PERMISSION_PROFILE:-strict}"
 fi
 

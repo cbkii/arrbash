@@ -67,6 +67,18 @@ arr_resolve_color_output() {
 
 arr_resolve_color_output
 
+# Determines if a shell variable is readonly to avoid clobbering host overrides
+arr_var_is_readonly() {
+  local varname="$1"
+  local declaration=""
+
+  if ! declaration=$(declare -p -- "$varname" 2>/dev/null); then
+    return 1
+  fi
+
+  [[ ${declaration} == declare\ -*r* ]]
+}
+
 # Checks command availability without emitting output (used for optional deps)
 have_command() {
   command -v "$1" >/dev/null 2>&1
