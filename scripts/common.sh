@@ -1334,47 +1334,42 @@ verify_single_level_env_placeholders() {
   return 1
 }
 
-# Ensures every ${VAR} placeholder in the compose file maps to a known environment key.
-# This keeps compose generation honest: if a new service references an env var that the
-# installer forgot to emit, docker compose would otherwise stall or fail at runtime.
-# Catching the mismatch here surfaces a clear error while we still know which module
-# introduced the placeholder.
+# Ensure every ${VAR} in compose file maps to a known key; catch while we know which module introduced the $VAR.
 arr_verify_compose_placeholders() {
   local compose_file="$1"
   local env_file="$2"
-
   if [[ -z "$compose_file" || ! -f "$compose_file" ]]; then
     die "arr_verify_compose_placeholders requires an existing compose file"
   fi
-
   declare -A _arr_known_env=()
   if [[ -n "$env_file" && -f "$env_file" ]]; then
-    local _arr_key=""
     while IFS= read -r _arr_line; do
-      [[ "$_arr_line" =~ ^[[:space:]]*$ ]] && continue
+      [[ -z "$_arr_line" ]] && continue
       [[ "$_arr_line" =~ ^[[:space:]]*# ]] && continue
-      if [[ "$_arr_line" =~ ^[[:space:]]*export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]]; then
-        _arr_key="${BASH_REMATCH[1]}"
-      elif [[ "$_arr_line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]]; then
-        _arr_key="${BASH_REMATCH[1]}"
-      else
-        continue
+      if [[ "$_arr_line" == *'='* ]]; then
+        local _arr_key="${_arr_line%%=*}"
+        _arr_key="${_arr_key%%[[:space:]]*}"
+        [[ -n "$_arr_key" ]] && _arr_known_env["$_arr_key"]=1
       fi
-      _arr_known_env["$_arr_key"]=1
     done <"$env_file"
   fi
-
   local _arr_unexpected=0
-  local _arr_placeholder="" _arr_name=""
+  local _arr_placeholder="" _arr_name="" _arr_sep=""
   local _arr_matches=""
-  _arr_matches="$(grep -o '\${[A-Za-z_][A-Za-z0-9_]*}' "$compose_file" 2>/dev/null | sort -u || true)"
-
+  # Match ${VAR}, ${VAR-...}, ${VAR:-...}, ${VAR=...}, ${VAR:=...}, ${VAR?...}, ${VAR:+...}
+  _arr_matches="$(LC_ALL=C grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*([:\-=\?+][^}]*)?\}' "$compose_file" 2>/dev/null | sort -u || true)"
   if [[ -z "$_arr_matches" ]]; then
     return 0
   fi
-
   while IFS= read -r _arr_placeholder; do
     _arr_name="${_arr_placeholder:2:${#_arr_placeholder}-3}"
+    # Strip any parameter operator and default/message segment
+    for _arr_sep in ':-' '-' ':=' ':?' ':+'
+    do
+      if [[ "$_arr_name" == *"$_arr_sep"* ]]; then
+        _arr_name="${_arr_name%%"$_arr_sep"*}"
+      fi
+    done
     if [[ -z "$_arr_name" ]]; then
       continue
     fi
@@ -1387,7 +1382,6 @@ arr_verify_compose_placeholders() {
     printf '[placeholders] Unexpected placeholder ${%s} in %s\n' "$_arr_name" "$compose_file" >&2
     _arr_unexpected=1
   done <<<"$_arr_matches"
-
   return "$_arr_unexpected"
 }
 
