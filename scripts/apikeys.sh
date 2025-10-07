@@ -86,19 +86,19 @@ arr_update_secret_line() {
 
   ensure_secret_file_mode "$secrets_file"
 
-  local existing_line
-  existing_line="$(grep -n -m1 "^${secret_key}:" "$secrets_file" 2>/dev/null || true)"
+  local line_no
+  line_no="$(awk -F':' -v key="$secret_key" '$1 == key {print NR; exit}' "$secrets_file" 2>/dev/null || true)"
 
-  if [[ -z "$existing_line" ]]; then
+  if [[ -z "$line_no" ]]; then
     arr_yaml_kv "" "$secret_key" "$new_value" >>"$secrets_file"
     ensure_secret_file_mode "$secrets_file"
     printf 'appended\n'
     return 0
   fi
 
-  local line_no="${existing_line%%:*}"
-  local raw_value="${existing_line#*:}"
-  raw_value="${raw_value#${secret_key}:}"
+  local line_content
+  line_content="$(sed -n "${line_no}p" "$secrets_file" 2>/dev/null || true)"
+  local raw_value="${line_content#*:}"
 
   raw_value="${raw_value#"${raw_value%%[![:space:]]*}"}"
   raw_value="${raw_value%%#*}"
@@ -139,9 +139,10 @@ arr_update_secret_line() {
     return 0
   fi
 
-  local escaped
-  escaped="$(escape_sed_replacement "\"${new_value}\"")"
-  portable_sed "${line_no}s|^${secret_key}:.*|${secret_key}: ${escaped}|" "$secrets_file"
+  local new_line="${secret_key}: \"${new_value}\""
+  local escaped_line
+  escaped_line="$(escape_sed_replacement "$new_line")"
+  portable_sed "${line_no}s|.*|${escaped_line}|" "$secrets_file"
   ensure_secret_file_mode "$secrets_file"
   printf 'updated\n'
   return 0
