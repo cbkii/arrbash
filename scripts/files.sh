@@ -913,8 +913,14 @@ YAML
       - ${ARR_DOCKER_DIR}/gluetun:/gluetun
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
+YAML
+
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+      cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
+    fi
+
     cat <<'YAML' >>"$tmp"
     healthcheck:
       test:
@@ -958,6 +964,7 @@ YAML
       QBT_INT_PORT: ${QBT_INT_PORT}
       QBT_BIND_ADDR: ${QBT_BIND_ADDR}
       QBT_ENFORCE_WEBUI: ${QBT_ENFORCE_WEBUI}
+      QBT_WEBUI_INIT_HOOK: 1
 YAML
   } >"$tmp"
 
@@ -1356,9 +1363,14 @@ services:
     ports:
       # Centralize host exposure since all services share gluetun's namespace
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
   } >"$tmp"
+
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    cat <<'YAML' >>"$tmp"
+      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
+YAML
+  fi
 
   if ((include_caddy)); then
     cat <<'YAML' >>"$tmp"
@@ -1478,6 +1490,7 @@ YAML
       QBT_INT_PORT: "${QBT_INT_PORT}"
       QBT_BIND_ADDR: "${QBT_BIND_ADDR}"
       QBT_ENFORCE_WEBUI: "${QBT_ENFORCE_WEBUI}"
+      QBT_WEBUI_INIT_HOOK: "1"
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     printf '      DOCKER_MODS: %s\n' "${QBT_DOCKER_MODS}" >>"$tmp"

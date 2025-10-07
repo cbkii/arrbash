@@ -6,8 +6,22 @@ set -euo pipefail
 # --- qBittorrent WebUI enforcement helpers (shared by init + host modes) ---
 
 qbt_webui_conf_path_default="/config/qBittorrent.conf"
+qbt_webui_hook_path_default="/custom-cont-init.d/00-qbt-webui"
 qbt_webui_restart_state="/tmp/qbt-webui-enforce.timestamp"
 qbt_webui_restart_interval_default=60
+
+qbt_webui_hook_path() {
+  printf '%s\n' "${QBT_WEBUI_HOOK_PATH:-$qbt_webui_hook_path_default}"
+}
+
+qbt_webui_init_flag_enabled() {
+  case "${QBT_WEBUI_INIT_HOOK:-}" in
+    1 | true | TRUE | yes | YES | on | ON)
+      return 0
+      ;;
+  esac
+  return 1
+}
 
 qbt_webui_mktemp() {
   local base="$1"
@@ -265,27 +279,28 @@ qbt_webui_init_hook() {
   fi
 }
 
-if [[ "$(basename -- "$0")" == "00-qbt-webui" ]]; then
-  case "${1:-init}" in
-    init | "")
-      qbt_webui_init_hook
+if [[ "${1:-}" == "--init-hook" ]]; then
+  shift
+  qbt_webui_init_hook
+  exit $?
+fi
+
+case "${1:-}" in
+  healthcheck)
+    qbt_webui_healthcheck
+    exit $?
+    ;;
+  enforce)
+    if qbt_webui_repair; then
       exit 0
-      ;;
-    healthcheck)
-      qbt_webui_healthcheck
-      exit $?
-      ;;
-    enforce)
-      if qbt_webui_repair; then
-        exit 0
-      fi
-      exit 1
-      ;;
-    *)
-      printf '[qbt-helper] Unknown mode %s\n' "$1" >&2
-      exit 1
-      ;;
-  esac
+    fi
+    exit 1
+    ;;
+esac
+
+if qbt_webui_init_flag_enabled; then
+  qbt_webui_init_hook
+  exit $?
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -516,30 +531,6 @@ update_whitelist() {
   log_info "LAN whitelist enabled for: $subnet"
 }
 
-# Applies WebUI binding defaults using the shared enforcer script
-restore_webui_bindings() {
-  local context="$1"
-  local desired_port="${QBT_INT_PORT:-8082}"
-  local address="${QBT_BIND_ADDR:-0.0.0.0}"
-  local cfg rc=0
-
-  cfg="$(config_file_path)"
-
-  log_info "$context"
-  stop_container
-
-  if qbt_webui_enforce "$cfg" "$address" "$desired_port"; then
-    ensure_secret_file_mode "$cfg"
-    log_info "Updated qBittorrent WebUI configuration in ${cfg}"
-  else
-    log_warn "Failed to update qBittorrent WebUI configuration; check ${cfg} manually"
-    rc=1
-  fi
-
-  start_container
-  return "$rc"
-}
-
 # Reports detected drift in WebUI port/bind settings relative to stack defaults
 diagnose_config() {
   local cfg
@@ -589,22 +580,26 @@ diagnose_config() {
 # Forces WebUI port back to container default and restarts service
 fix_webui_port() {
   local desired_port="${QBT_INT_PORT:-8082}"
-  restore_webui_bindings "Restoring qBittorrent WebUI port to ${desired_port}"
+  force_webui_bindings "Restoring qBittorrent WebUI port to ${desired_port}"
 }
 
 # Forces WebUI bind address back to 0.0.0.0 for LAN access
 fix_webui_address() {
   local address="${QBT_BIND_ADDR:-0.0.0.0}"
-  restore_webui_bindings "Restoring qBittorrent WebUI bind address to ${address}"
+  force_webui_bindings "Restoring qBittorrent WebUI bind address to ${address}"
 }
 
 # Executes the init hook inside the running container and restarts qBittorrent
 force_webui_bindings() {
-  local hook="/custom-cont-init.d/00-qbt-webui"
+  local message="${1:-Forcing qBittorrent WebUI bind address/port to configured defaults...}"
+  local hook
+  hook="$(qbt_webui_hook_path)"
+
   local -a exec_env=(
     -e "QBT_INT_PORT=${QBT_INT_PORT:-8082}"
     -e "QBT_BIND_ADDR=${QBT_BIND_ADDR:-0.0.0.0}"
     -e "QBT_ENFORCE_WEBUI=1"
+    -e "QBT_WEBUI_INIT_HOOK=1"
   )
 
   if [[ -n "${QBT_USER:-}" ]]; then
@@ -614,21 +609,27 @@ force_webui_bindings() {
     exec_env+=(-e "QBT_PASS=${QBT_PASS}")
   fi
 
+  log_info "$message"
   log_info "Running qBittorrent WebUI init hook (${hook})..."
-  if ! docker exec "${exec_env[@]}" "$CONTAINER_NAME" "$hook"; then
+
+  if ! docker exec "${exec_env[@]}" "$CONTAINER_NAME" "$hook" --init-hook; then
     log_warn "Init hook exited with an error; inspect 'docker logs ${CONTAINER_NAME}'"
+    return 1
   fi
 
   if docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1; then
     arr_resolve_compose_cmd
-    if compose restart "$CONTAINER_NAME"; then
+    if (cd "$STACK_DIR" && "${DOCKER_COMPOSE_CMD[@]}" restart "$CONTAINER_NAME"); then
       log_info "Restarted ${CONTAINER_NAME} via docker compose"
     else
       log_warn "Failed to restart ${CONTAINER_NAME}; restart the container manually"
+      return 1
     fi
   else
     log_warn "Docker Compose v2 not detected; skipping container restart"
   fi
+
+  return 0
 }
 
 # Prints helper usage menu
