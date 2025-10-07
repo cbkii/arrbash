@@ -24,27 +24,24 @@ validate_proton_creds() {
 load_proton_credentials() {
   local proton_file="${ARRCONF_DIR}/proton.auth"
 
-  PROTON_USER_VALUE=""
-  PROTON_PASS_VALUE=""
-  OPENVPN_USER_VALUE=""
-  PROTON_USER_PMP_ADDED=0
+  PROTON_USER_VALUE="$(get_env_kv PROTON_USER "$proton_file" 2>/dev/null || printf '')"
+  PROTON_PASS_VALUE="$(get_env_kv PROTON_PASS "$proton_file" 2>/dev/null || printf '')"
 
-  if [[ -f "$proton_file" ]]; then
-    PROTON_USER_VALUE="$(grep '^PROTON_USER=' "$proton_file" | head -n1 | cut -d= -f2- | tr -d '\r' || true)"
-    PROTON_PASS_VALUE="$(grep '^PROTON_PASS=' "$proton_file" | head -n1 | cut -d= -f2- | tr -d '\r' || true)"
-  fi
+  PROTON_USER_VALUE="${PROTON_USER_VALUE//$'\r'/}"
+  PROTON_PASS_VALUE="${PROTON_PASS_VALUE//$'\r'/}"
 
   if [[ -z "$PROTON_USER_VALUE" || -z "$PROTON_PASS_VALUE" ]]; then
     die "Missing or empty PROTON_USER/PROTON_PASS in ${proton_file}"
   fi
-
-  local enforced
-  enforced="${PROTON_USER_VALUE%+pmp}+pmp"
-  if [[ "$enforced" != "$PROTON_USER_VALUE" ]]; then
+  
+  OPENVPN_USER_VALUE="$PROTON_USER_VALUE"
+  OPENVPN_USER_VALUE="$(trim_string "$OPENVPN_USER_VALUE")"
+  if [[ "$OPENVPN_USER_VALUE" != *"+pmp" ]]; then
+    OPENVPN_USER_VALUE+="+pmp"
     PROTON_USER_PMP_ADDED=1
+  else
+    PROTON_USER_PMP_ADDED=0
   fi
-
-  OPENVPN_USER_VALUE="$enforced"
   : "$PROTON_USER_PMP_ADDED"
 }
 

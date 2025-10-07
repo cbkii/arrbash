@@ -1442,13 +1442,17 @@ unescape_env_value_from_compose() {
 
   value="${value//$'\r'/}" # Normalize line endings
 
-  if [[ "$value" =~ ^".*"$ ]]; then
-    value="${value:1:${#value}-2}"
-    value="${value//\$\$/${sentinel}}"
-    value="$(printf '%b' "$value")"
-    value="${value//${sentinel}/\$}"
-    printf '%s' "$value"
-    return
+  if (( ${#value} >= 2 )); then
+    local first_char="${value:0:1}"
+    local last_char="${value: -1}"
+    if [[ "$first_char" == '"' && "$last_char" == '"' ]]; then
+      value="${value:1:${#value}-2}"
+      value="${value//\$\$/${sentinel}}"
+      value="$(printf '%b' "$value")"
+      value="${value//${sentinel}/\$}"
+      printf '%s' "$value"
+      return
+    fi
   fi
 
   value="${value//\$\$/${sentinel}}"
