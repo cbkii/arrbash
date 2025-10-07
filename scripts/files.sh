@@ -1734,7 +1734,7 @@ validate_generated_paths() {
 
   local file
   for file in "${files[@]}"; do
-    if [[ -f "$file" ]] && LC_ALL=C grep -RIEq "$forbid_re" "$file"; then
+    if [[ -f "$file" ]] && LC_ALL=C grep -IEq "$forbid_re" "$file"; then
       printf '[paths-validation] Found hardcoded path fragment in: %s\n' "$file" >&2
       return 1
     fi
