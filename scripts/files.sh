@@ -367,7 +367,6 @@ hydrate_caddy_auth_from_env_file() {
   fi
 }
 
-# Emits the compose .env file using the placeholder set collected while rendering docker-compose.yml
 arr_emit_compose_env_file() {
   if [[ -z "${ARR_ENV_FILE:-}" ]]; then
     return 0
@@ -385,12 +384,22 @@ arr_emit_compose_env_file() {
   done
 
   if ((${#keys[@]})); then
-    IFS=$'\n' read -r -d '' -a keys < <(printf '%s\n' "${keys[@]}" | LC_ALL=C sort && printf '\0')
+    IFS=$'\n' read -r -d '' -a keys < <(
+      printf '%s\n' "${keys[@]}" | LC_ALL=C sort
+      printf '\0'
+    )
+  fi
+
+  # If no placeholders were tracked, do nothing (avoid clobbering an existing .env)
+  if ((${#keys[@]} == 0)); then
+    rm -f "$tmp"
+    return 0
   fi
 
   local -a missing=()
+  # Only required vars (tracked in ARR_COMPOSE_MISSING) should be considered missing
   for var in "${keys[@]}"; do
-    if [[ ! ${!var+x} ]]; then
+    if [[ -n "${ARR_COMPOSE_MISSING[$var]:-}" ]]; then
       missing+=("$var")
     fi
   done
@@ -418,7 +427,6 @@ arr_emit_compose_env_file() {
   ensure_secret_file_mode "$ARR_ENV_FILE"
   sed -i 's/\r$//' "$ARR_ENV_FILE"
 }
-
 # Renders .env with derived networking, VPN, and credential values; enforces prerequisites
 write_env() {
   step "📝 Writing .env file"
