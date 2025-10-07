@@ -130,14 +130,16 @@ arr_compose_register_placeholder() {
 arr_compose_stream_line() {
   local target="$1"
   local line="$2"
-  local processed="$line"
+  local processed=""
   local search="$line"
 
   while [[ "$search" =~ (\$\{[A-Za-z_][A-Za-z0-9_]*([:=\-\?+][^}]*)?\}) ]]; do
+    # Append text before the placeholder
+    processed+="${search%%"${BASH_REMATCH[1]}"*}"
     local placeholder="${BASH_REMATCH[1]}"
     local expression="${placeholder:2:${#placeholder}-3}"
     local operator=""
-    local sep=""
+    local sep
     for sep in ':-' '-' ':=' ':?' ':+'; do
       if [[ "$expression" == *"$sep"* ]]; then
         operator="$sep"
@@ -148,37 +150,36 @@ arr_compose_stream_line() {
 
     local require_value=1
     case "$operator" in
-      '' )
-        require_value=1
-        ;;
-      ':?' )
-        require_value=1
-        ;;
-      *)
-        require_value=0
-        ;;
+      ''|':?') require_value=1 ;;
+      *)       require_value=0 ;;
     esac
 
-    if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" ]]; then
-      if [[ ${!expression+x} ]]; then
-        local replacement
-        replacement="$(arr_compose_inline_escape "${!expression}")"
-        processed="${processed/${placeholder}/$replacement}"
-        unset 'ARR_COMPOSE_MISSING[$expression]'
-        unset 'ARR_COMPOSE_VARS[$expression]'
-      else
-        ARR_COMPOSE_MISSING["$expression"]=1
-      fi
+    if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" && ${!expression+x} ]]; then
+      # Inline the value and clear any prior tracking
+      local replacement
+      replacement="$(arr_compose_inline_escape "${!expression}")"
+      processed+="$replacement"
+      unset 'ARR_COMPOSE_MISSING[$expression]'
+      unset 'ARR_COMPOSE_VARS[$expression]'
     else
+      # Emit the placeholder verbatim and register it
+      processed+="$placeholder"
       arr_compose_register_placeholder "$expression" "$require_value"
+      # If in inline mode with a required-but-unset var, track it for failure
+      if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" && ! ${!expression+x} ]]; then
+        ARR_COMPOSE_MISSING["$expression"]=1
+        ARR_COMPOSE_VARS["$expression"]=1
+      fi
     fi
 
-    search="${search/${placeholder}/}"
+    # Remove the processed chunk from search
+    search="${search#*"${placeholder}"}"
   done
 
+  # Append any remaining text
+  processed+="$search"
   printf '%s\n' "$processed" >>"$target"
 }
-
 arr_compose_stream_block() {
   local target="$1"
   local line=""
