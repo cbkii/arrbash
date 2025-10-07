@@ -49,6 +49,7 @@ Run these from the repository root:
 | `scripts/qbt-helper.sh` | Show or reset qBittorrent WebUI credentials and whitelist entries. |
 | `scripts/doctor.sh` | Run the same port, DNS, HTTPS, and connectivity checks the installer performs. |
 | `scripts/fix-versions.sh` | Swap pinned LinuxServer tags to `latest` when a registry removes a manifest. |
+| `scripts/sab-helper.sh` | Submit downloads, check SAB status, or open a shell when SABnzbd is enabled. |
 
 ## Routine maintenance
 1. Edit `${ARRCONF_DIR}/userr.conf` with new paths, credentials, or toggles.
@@ -59,6 +60,17 @@ Run these from the repository root:
    arr.vpn.status
    ```
 4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `--rotate-caddy-auth`, `scripts/qbt-helper.sh reset`).
+
+## SABnzbd helper
+
+When `SABNZBD_ENABLED=1`, the installer copies `scripts/sab-helper.sh` into `${ARR_STACK_DIR}/scripts/` and refreshes handy aliases such as `sab-logs`, `sab-shell`, and `open-sab` (run `./arr.sh --refresh-aliases` if you need them immediately).
+
+- View commands with `scripts/sab-helper.sh --help` or `sab-helper --help` from inside the stack directory.
+- Common tasks: `status` (checks connectivity), `add-file` (upload an NZB), and `add-url` (submit a direct download link).
+- The helper prints a gentle warning and exits if SABnzbd is disabled, so you always know why a request failed.
+- Set `SABNZBD_HOST`, `SABNZBD_PORT`, and `SABNZBD_API_KEY` in `userr.conf` if you customised the WebUI or run SAB behind Gluetun.
+- The helper reports SAB’s version even before the API key is stored, matching the container healthcheck described in the installer summary.
+- For network placement advice, revisit [SABnzbd network placements](networking.md#sabnzbd-network-placements).
 
 ## Related topics
 - [Configuration](configuration.md) – variable reference.

@@ -6,11 +6,12 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 
 ## Secrets and permissions
 - Leave `ARR_PERMISSION_PROFILE=strict` unless you need collaborative write access. Secrets stay at mode `600`, data directories at `700`, and the installer enforces `umask 0077`.
-- When using the `collab` profile, set `PGID` to the shared storage group so write access is limited to expected members.
+- When you switch to the `collab` profile, set `PGID` to the shared storage group so write access stays limited to expected members.
 - Never commit `arrconf/proton.auth`, `.env`, or other generated files to version control. The installer keeps permissions tight automatically.
 
 ## Credential hygiene
 - Change qBittorrent credentials after first login and copy the values into `${ARRCONF_DIR}/userr.conf` (`QBT_USER`, `QBT_PASS`). Rerun the installer so `.env` updates without manual edits.
+- After your first SABnzbd login, copy the API key into the WebUI. The installer hydrates `SABNZBD_API_KEY` automatically on reruns when the placeholder remains in `.env`.
 - Rotate the Gluetun API key periodically with `./arr.sh --rotate-api-key --yes` and restart the stack.
 - Refresh Caddy basic auth with `./arr.sh --rotate-caddy-auth --yes` before sharing remote access.
 - Keep the exported Caddy certificate bundle limited to the public `root.crt`. Never expose `docker-data/caddy` or private keys.

@@ -2,7 +2,7 @@
 
 # Architecture
 
-This stack renders configuration from a small set of scripts, then launches Docker containers for media automation and VPN routing.
+The installer renders configuration from a few scripts, then launches Docker containers for media automation and VPN routing.
 
 ## Core containers
 | Service | Purpose | Default access |
@@ -15,17 +15,17 @@ This stack renders configuration from a small set of scripts, then launches Dock
 | Caddy (optional) | HTTPS reverse proxy with internal CA. | `https://<service>.<LAN_DOMAIN_SUFFIX>` with basic auth for remote access. |
 | local_dns (optional) | dnsmasq-based resolver that answers `*.home.arpa`. | List the arrbash host as primary DNS on clients. |
 
-The installer publishes LAN ports when `EXPOSE_DIRECT_PORTS=1`. When disabled, access services via Docker networks or the optional proxy.
+The installer publishes LAN ports when `EXPOSE_DIRECT_PORTS=1`. When disabled, reach services through Docker networks or the optional proxy.
 
 ## Generated files
-`./arr.sh` writes artefacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:
+`./arr.sh` writes artifacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:
 - `.env` – rendered from defaults plus `${ARRCONF_DIR}/userr.conf`; reused across runs.
 - `docker-compose.yml` – defines service profiles, networks, and health checks.
 - `Caddyfile` – created when Caddy is enabled and validated with `caddy validate` before use.
 - `.aliasarr` – helper alias definitions sourced in your shell.
 - `docker-data/` – persistent application data, credentials, and Gluetun hooks.
 
-Generated files should not be edited manually; adjust `userr.conf` and rerun the installer instead.
+Do not edit generated files directly. Adjust `userr.conf` and rerun the installer instead.
 
 ## Installer flow
 1. **Preflight** – checks dependencies, confirms Docker availability, validates Proton credentials, and ensures required ports are free before writing files.
@@ -34,7 +34,7 @@ Generated files should not be edited manually; adjust `userr.conf` and rerun the
 4. **Service start** – launches Gluetun first, waits for it to become healthy, then starts the asynchronous Proton port-forwarding worker (when enabled) and brings up the remaining containers and optional extras.
 5. **Summary** – prints URLs, credentials, and reminders such as updating *Arr download client hosts when split tunnel is active.
 
-Understanding this flow helps when troubleshooting: re-running the installer replays the entire pipeline and reconciles drift automatically.
+Understanding this flow helps when troubleshooting. Rerunning the installer replays the pipeline and reconciles drift automatically.
 
 ## Related topics
 - [Configuration](configuration.md) – adjust installer inputs.
