@@ -1724,7 +1724,7 @@ YAML
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
 
-# Ensures generated stack files do not contain hardcoded docker-data/dockarr paths
+# Ensures generated stack files do not contain hardcoded literal "docker-data" or "dockarr" path fragments
 validate_generated_paths() {
   local forbid_re='(^|[^A-Za-z_/])(docker-data|dockarr)([^A-Za-z0-9_-]|$)'
   local -a files=(
