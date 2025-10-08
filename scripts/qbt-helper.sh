@@ -345,6 +345,7 @@ load_env() {
 
     if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       printf -v "$key" '%s' "$value"
+      # shellcheck disable=SC2163  # export is intentional for dynamic key names
       export "$key"
     else
       echo "Warning: Invalid environment variable name '$key' in $ENV_FILE, skipping." >&2
@@ -618,6 +619,7 @@ force_webui_bindings() {
   fi
 
   if docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1; then
+    # shellcheck disable=SC2119  # arr_resolve_compose_cmd treats verbosity as optional
     arr_resolve_compose_cmd
     if (cd "$STACK_DIR" && "${DOCKER_COMPOSE_CMD[@]}" restart "$CONTAINER_NAME"); then
       log_info "Restarted ${CONTAINER_NAME} via docker compose"

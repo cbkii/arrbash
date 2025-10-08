@@ -1145,6 +1145,7 @@ vpn_auto_reconnect_pick_country() {
   local attempts=0
   while ((attempts < max_index)); do
     local candidate_index=$(((index + attempts) % max_index))
+    # shellcheck disable=SC2178,SC2128  # candidate comes from array indexing but is used as a scalar
     local candidate="${countries[$candidate_index]}"
     # Skip countries that recently failed within the cooldown window
     if ! vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then

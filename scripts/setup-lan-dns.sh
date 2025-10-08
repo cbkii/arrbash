@@ -12,9 +12,10 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 . "${REPO_ROOT}/scripts/network.sh"
 
 # Escalation insertion point: call this at top of scripts that need root
-arr_escalate_privileges "$@" || exit $?
-
-set -Eeuo pipefail
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  arr_escalate_privileges "$@" || exit $?
+  set -Eeuo pipefail
+fi
 
 log() {
   msg "$@"
@@ -109,16 +110,7 @@ json_encode_array() {
   fi
 
   if have_command python3; then
-    if ! printf '%s\0' "${values[@]}" | python3 - <<'PYTHON'; then
-import json, sys
-data = sys.stdin.buffer.read()
-# Remove trailing null if present (like jq -Rs 'split("\u0000")[:-1]')
-items = data.split(b'\0')
-if items and items[-1] == b'':
-    items = items[:-1]
-# Decode bytes to str (assuming UTF-8, as bash does)
-print(json.dumps([x.decode('utf-8', 'replace') for x in items]))
-PYTHON
+    if ! printf '%s\0' "${values[@]}" | python3 -c $'import json, sys\ndata = sys.stdin.buffer.read()\nitems = data.split(b"\\0")\nif items and items[-1] == b"":\n    items = items[:-1]\nprint(json.dumps([x.decode("utf-8", "replace") for x in items]))'; then
       return 1
     fi
     return 0
@@ -340,4 +332,6 @@ main() {
   configure_docker_dns "${lan_ip}" || true
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

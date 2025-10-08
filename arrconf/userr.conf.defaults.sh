@@ -472,6 +472,7 @@ arr_userconf_envsubst_spec() {
   local spec=""
 
   for var in "${ARR_USERCONF_TEMPLATE_VARS[@]}"; do
+    # shellcheck disable=SC2178,SC2179  # spec is intentionally a scalar string passed to envsubst
     spec+=" \${${var}}"
   done
 

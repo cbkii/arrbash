@@ -76,6 +76,7 @@ load_env() {
 
     if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       printf -v "$key" '%s' "$value"
+      # shellcheck disable=SC2163  # export is intentional for dynamic key names
       export "$key"
     else
       log_warn "Invalid environment variable name '$key' in $ENV_FILE, skipping."
@@ -140,7 +141,10 @@ sab_api() {
   sab_check_env || return 1
 
   local timeout="${SABNZBD_TIMEOUT:-15}"
-  local base="$(sab_base_url)"
+  local base=""
+  if ! base="$(sab_base_url)"; then
+    return 1
+  fi
   local args="${query}"
 
   if [[ "$args" != *"apikey="* ]]; then
@@ -174,7 +178,10 @@ sab_version() {
   fi
 
   local timeout="${SABNZBD_TIMEOUT:-15}"
-  local base="$(sab_base_url)"
+  local base=""
+  if ! base="$(sab_base_url)"; then
+    return 1
+  fi
   local output=""
 
   if ! output=$(curl -fsSL --connect-timeout "$timeout" "${base}/api" --get --data-urlencode 'mode=version' --data-urlencode 'output=json' 2>/dev/null); then
@@ -247,7 +254,10 @@ sab_add_nzb_file() {
     return 1
   fi
 
-  local base="$(sab_base_url)"
+  local base=""
+  if ! base="$(sab_base_url)"; then
+    return 1
+  fi
   local response
   if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" \
     -F "apikey=${SABNZBD_API_KEY}" \
@@ -275,7 +285,10 @@ sab_add_nzb_url() {
     return 1
   fi
 
-  local base="$(sab_base_url)"
+  local base=""
+  if ! base="$(sab_base_url)"; then
+    return 1
+  fi
   local response
   if ! response=$(curl -fsSL --connect-timeout "${SABNZBD_TIMEOUT}" --get \
     --data-urlencode "apikey=${SABNZBD_API_KEY}" \
@@ -338,6 +351,7 @@ main() {
   load_env
 
   local cmd="${1:-}"
+  # shellcheck disable=SC2221,SC2222  # -* pattern intentionally includes double-dash variants
   case "$cmd" in
     version)
       sab_version
