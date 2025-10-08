@@ -381,13 +381,14 @@ arr_hydrate_all_compose_vars() {
       if [[ -n "$value" ]]; then
         printf -v "$name" '%s' "$value"
         unset 'ARR_COMPOSE_MISSING[$name]'
-        continue
-      fi
-    fi
-
     if [[ ${!name+x} ]]; then
-      unset 'ARR_COMPOSE_MISSING[$name]'
-      continue
+      # honor non-empty values only; empty strings should be considered missing
+      if [[ -n "${!name}" ]]; then
+        unset 'ARR_COMPOSE_MISSING[$name]'
+        continue
+      else
+        unset "$name"
+      fi
     fi
 
     resolved=0
@@ -423,7 +424,15 @@ arr_hydrate_all_compose_vars() {
     esac
 
     if ((resolved)); then
-      printf -v "$name" '%s' "$value"
+      if [[ -n "$value" ]]; then
+        printf -v "$name" '%s' "$value"
+      else
+        unset "$name"
+      fi
+    fi
+
+    if [[ ${!name+x} && -n "${!name}" ]]; then
+      unset 'ARR_COMPOSE_MISSING[$name]'
     fi
 
     if [[ ${!name+x} ]]; then
