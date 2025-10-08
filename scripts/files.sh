@@ -93,10 +93,18 @@ arr_prompt_direct_port_exposure() {
 # Tracks compose placeholders encountered while streaming docker-compose.yml
 declare -Ag ARR_COMPOSE_VARS=()
 declare -Ag ARR_COMPOSE_MISSING=()
+declare -Ag ARR_COMPOSE_REQUIRED_BY=()
+
+ARR_COMPOSE_CONTEXT="compose"
 
 arr_compose_reset_tracking() {
   ARR_COMPOSE_VARS=()
   ARR_COMPOSE_MISSING=()
+  ARR_COMPOSE_REQUIRED_BY=()
+}
+
+arr_compose_set_context() {
+  ARR_COMPOSE_CONTEXT="$1"
 }
 
 arr_compose_inline_escape() {
@@ -124,6 +132,10 @@ arr_compose_register_placeholder() {
     else
       ARR_COMPOSE_MISSING["$name"]=1
     fi
+  fi
+
+  if [[ -n "$ARR_COMPOSE_CONTEXT" ]]; then
+    ARR_COMPOSE_REQUIRED_BY["$name"]="$ARR_COMPOSE_CONTEXT"
   fi
 }
 
@@ -186,6 +198,246 @@ arr_compose_stream_block() {
   while IFS= read -r line || [[ -n "$line" ]]; do
     arr_compose_stream_line "$target" "$line"
     line=""
+  done
+}
+
+# Derivation helpers reused by compose hydration and write_env; prints a private IPv4 or nothing.
+arr_derive_dns_host_entry() {
+  local ip="${LAN_IP:-}"
+
+  if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && validate_ipv4 "$ip" && is_private_ipv4 "$ip"; then
+    printf '%s\n' "$ip"
+    return 0
+  fi
+
+  if command -v hostname >/dev/null 2>&1; then
+    while IFS= read -r candidate; do
+      if [[ -n "$candidate" ]] && validate_ipv4 "$candidate" && is_private_ipv4 "$candidate"; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    done < <(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF')
+  fi
+
+  printf '%s\n' "127.0.0.1"
+}
+}
+
+arr_derive_gluetun_firewall_outbound_subnets() {
+  local ip="${LAN_IP:-}"
+  local -a candidates=("192.168.0.0/16" "10.0.0.0/8" "172.16.0.0/12")
+  local cidr=""
+
+  if [[ -n "$ip" ]]; then
+    if cidr="$(lan_ipv4_subnet_cidr "$ip" 2>/dev/null || true)"; then
+      if [[ -n "$cidr" ]]; then
+        candidates=("$cidr" "${candidates[@]}")
+      fi
+    fi
+  fi
+
+  printf '%s\n' "${candidates[@]}" | LC_ALL=C sort -u | paste -sd, -
+}
+
+arr_derive_gluetun_firewall_input_ports() {
+  local split_mode="${SPLIT_VPN:-0}"
+  local expose_direct="${EXPOSE_DIRECT_PORTS:-0}"
+  local -a ports=()
+  local port=""
+
+  if [[ "$split_mode" != "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
+    for port in "${CADDY_HTTP_PORT:-}" "${CADDY_HTTPS_PORT:-}"; do
+      if [[ -n "$port" ]]; then
+        ports+=("$port")
+      fi
+    done
+  fi
+
+  if [[ "$split_mode" == "1" ]]; then
+    port="${QBT_PORT:-}"
+    if [[ -n "$port" ]]; then
+      ports+=("$port")
+    fi
+  elif [[ "$expose_direct" == "1" ]]; then
+    for port in "${QBT_PORT:-}" "${SONARR_PORT:-}" "${RADARR_PORT:-}" "${PROWLARR_PORT:-}" "${BAZARR_PORT:-}" "${FLARR_PORT:-}"; do
+      if [[ -n "$port" ]]; then
+        ports+=("$port")
+      fi
+    done
+    if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+      port="${SABNZBD_PORT:-}"
+      if [[ -n "$port" ]]; then
+        ports+=("$port")
+      fi
+    fi
+  fi
+
+  if ((${#ports[@]} == 0)); then
+    printf '\n'
+    return 0
+  fi
+
+  local -A seen=()
+  local -a deduped=()
+  for port in "${ports[@]}"; do
+    if [[ -n "$port" && -z "${seen[$port]:-}" && "$port" =~ ^[0-9]+$ ]]; then
+      seen["$port"]=1
+      deduped+=("$port")
+    fi
+  done
+
+  if ((${#deduped[@]} == 0)); then
+    printf '\n'
+    return 0
+  fi
+
+  IFS=, printf '%s\n' "${deduped[*]}"
+}
+
+arr_derive_openvpn_user() {
+  if [[ ${OPENVPN_USER+x} ]]; then
+    printf '%s\n' "${OPENVPN_USER}"
+    return 0
+  fi
+
+  if [[ -n "${OPENVPN_USER_VALUE:-}" ]]; then
+    printf '%s\n' "${OPENVPN_USER_VALUE}"
+    return 0
+  fi
+
+  if [[ -n "${PROTON_USER_VALUE:-}" ]]; then
+    printf '%s\n' "${PROTON_USER_VALUE%+pmp}+pmp"
+    return 0
+  fi
+
+  printf '\n'
+}
+
+arr_derive_openvpn_password() {
+  if [[ ${OPENVPN_PASSWORD+x} ]]; then
+    printf '%s\n' "${OPENVPN_PASSWORD}"
+    return 0
+  fi
+
+  if [[ -n "${PROTON_PASS_VALUE:-}" ]]; then
+    printf '%s\n' "${PROTON_PASS_VALUE}"
+    return 0
+  fi
+
+  printf '\n'
+}
+
+arr_derive_compose_profiles_csv() {
+  local -a profiles=(ipdirect)
+
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+    profiles+=(proxy)
+  fi
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
+    profiles+=(localdns)
+  fi
+
+  if ((${#profiles[@]} == 0)); then
+    printf '\n'
+    return 0
+  fi
+
+  local -A seen=()
+  local -a deduped=()
+  local profile
+  for profile in "${profiles[@]}"; do
+    if [[ -n "$profile" && -z "${seen[$profile]:-}" ]]; then
+      seen["$profile"]=1
+      deduped+=("$profile")
+    fi
+  done
+
+  IFS=, printf '%s\n' "${deduped[*]}"
+}
+
+arr_hydrate_all_compose_vars() {
+  local name value userconf_path resolved
+
+  if ((${#ARR_COMPOSE_VARS[@]} == 0)); then
+    return 0
+  fi
+
+  userconf_path="${ARR_USERCONF_PATH:-}"
+  if [[ -z "$userconf_path" ]]; then
+    userconf_path="$(arr_default_userconf_path 2>/dev/null || true)"
+  fi
+
+  for name in "${!ARR_COMPOSE_VARS[@]}"; do
+    # validate identifier (defensive)
+    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      warn "Skipping invalid compose placeholder name: $(printf '%q' "$name")"
+      unset 'ARR_COMPOSE_VARS[$name]'
+      unset 'ARR_COMPOSE_MISSING[$name]'
+      continue
+    fi
+
+    if [[ -n "$userconf_path" && -f "$userconf_path" ]]; then
+      value="$(get_env_kv "$name" "$userconf_path" 2>/dev/null || true)"
+      if [[ -n "$value" ]]; then
+        printf -v "$name" '%s' "$value"
+        unset 'ARR_COMPOSE_MISSING[$name]'
+    if [[ ${!name+x} ]]; then
+      # honor non-empty values only; empty strings should be considered missing
+      if [[ -n "${!name}" ]]; then
+        unset 'ARR_COMPOSE_MISSING[$name]'
+        continue
+      else
+        unset "$name"
+      fi
+    fi
+
+    resolved=0
+    case "$name" in
+      DNS_HOST_ENTRY)
+        value="$(arr_derive_dns_host_entry)"
+        resolved=1
+        ;;
+      GLUETUN_FIREWALL_OUTBOUND_SUBNETS)
+        value="$(arr_derive_gluetun_firewall_outbound_subnets)"
+        resolved=1
+        ;;
+      GLUETUN_FIREWALL_INPUT_PORTS)
+        value="$(arr_derive_gluetun_firewall_input_ports)"
+        resolved=1
+        ;;
+      OPENVPN_USER)
+        value="$(arr_derive_openvpn_user)"
+        resolved=1
+        ;;
+      OPENVPN_PASSWORD)
+        value="$(arr_derive_openvpn_password)"
+        resolved=1
+        ;;
+      VPN_SERVICE_PROVIDER)
+        value="${VPN_SERVICE_PROVIDER:-protonvpn}"
+        resolved=1
+        ;;
+      COMPOSE_PROFILES)
+        value="$(arr_derive_compose_profiles_csv)"
+        resolved=1
+        ;;
+    esac
+
+    if ((resolved)); then
+      if [[ -n "$value" ]]; then
+        printf -v "$name" '%s' "$value"
+      else
+        unset "$name"
+      fi
+    fi
+
+    if [[ ${!name+x} && -n "${!name}" ]]; then
+      unset 'ARR_COMPOSE_MISSING[$name]'
+    fi
+
+    if [[ ${!name+x} ]]; then
+      unset 'ARR_COMPOSE_MISSING[$name]'
+    fi
   done
 }
 
@@ -373,66 +625,118 @@ arr_emit_compose_env_file() {
     return 0
   fi
 
+  local -a missing=()
+  local name userconf_hint resolved_conf
+
+  if ((${#ARR_COMPOSE_MISSING[@]} > 0)); then
+    for name in "${!ARR_COMPOSE_MISSING[@]}"; do
+      missing+=("$name")
+    done
+  fi
+
+  if ((${#missing[@]} > 0)); then
+    userconf_hint="${ARRCONF_DIR:-arrconf}/userr.conf"
+    resolved_conf="${ARR_USERCONF_PATH:-}"
+    if [[ -z "$resolved_conf" ]]; then
+      resolved_conf="$(arr_default_userconf_path 2>/dev/null || true)"
+    fi
+
+    {
+      printf '[compose-vars] Unset required variables:'
+      printf ' %s' "${missing[@]}"
+      printf '\nSource order: CLI > ENV > user.conf > defaults\n'
+      printf 'Required by:\n'
+      for name in "${missing[@]}"; do
+        printf '  - %s  (context: %s)\n' "$name" "${ARR_COMPOSE_REQUIRED_BY[$name]:-unknown}"
+      done
+      printf 'Hint: set in %s (resolved: %s) or export before ./arr.sh; CLI overrides last\n' "$userconf_hint" "${resolved_conf:-?}"
+    } >&2
+    return 1
+  fi
+
+  local -a keys=()
+  for name in "${!ARR_COMPOSE_VARS[@]}"; do
+    if [[ ${!name+x} ]]; then
+      keys+=("$name")
+    fi
+  done
+
+  if ((${#keys[@]} == 0)); then
+    return 0
+  fi
+
+  IFS=$'\n' read -r -d '' -a keys < <(
+    printf '%s\n' "${keys[@]}" | LC_ALL=C sort
+    printf '\0'
+  )
+
   local tmp
   tmp="$(arr_mktemp_file "${ARR_ENV_FILE}.XXXXXX.tmp" "$SECRET_FILE_MODE")" \
     || die "Failed to create temp file for ${ARR_ENV_FILE}"
   ensure_secret_file_mode "$tmp"
 
-  local -a keys=()
-  local var=""
-  for var in "${!ARR_COMPOSE_VARS[@]}"; do
-    keys+=("$var")
-  done
-
-  if ((${#keys[@]})); then
-    IFS=$'\n' read -r -d '' -a keys < <(
-      printf '%s\n' "${keys[@]}" | LC_ALL=C sort
-      printf '\0'
-    )
-  fi
-
-  # If no placeholders were tracked, do nothing (avoid clobbering an existing .env)
-  if ((${#keys[@]} == 0)); then
-    rm -f "$tmp"
-    return 0
-  fi
-
-  # Build missing list directly from ARR_COMPOSE_MISSING
-  local -a missing=()
-  if ((${#ARR_COMPOSE_MISSING[@]} > 0)); then
-    for var in "${!ARR_COMPOSE_MISSING[@]}"; do
-      missing+=("$var")
-    done
-    IFS=$'\n' read -r -d '' -a missing < <(
-      printf '%s\n' "${missing[@]}" | LC_ALL=C sort
-      printf '\0'
-    )
-  fi
-
-  if ((${#missing[@]})); then
-    {
-      printf '[compose-vars] Unset required variables:'
-      printf ' %s' "${missing[@]}"
-      printf '\n'
-      printf 'Source order: CLI > ENV > userr.conf > defaults\n'
-      printf 'Hint: set in %s/userr.conf or export before ./arr.sh (CLI flags override last)\n' "${ARRCONF_DIR:-arrconf}"
-    } >&2
-    rm -f "$tmp"
-    return 1
-  fi
-
   {
     printf '# Generated by arrbash — compose placeholders only\n'
-    for var in "${keys[@]}"; do
-      if [[ ${!var+x} ]]; then
-        arr_write_env_kv "$var" "${!var}"
+    for name in "${keys[@]}"; do
+      if [[ ${!name+x} ]]; then
+        arr_write_env_kv "$name" "${!name}"
       fi
     done
   } >"$tmp"
 
+  sed -i 's/\r$//' "$tmp"
   mv "$tmp" "$ARR_ENV_FILE"
   ensure_secret_file_mode "$ARR_ENV_FILE"
-  sed -i 's/\r$//' "$ARR_ENV_FILE"
+}
+
+arr_safe_compose_write() {
+  local target="$1"
+  local tmp="$2"
+  local backup="${target}.backup"
+
+  if [[ -f "$target" ]]; then
+    cp -f "$target" "$backup" || return 1
+  fi
+
+  if mv "$tmp" "$target"; then
+    rm -f "$backup"
+    return 0
+  fi
+
+  if [[ -f "$backup" ]]; then
+    mv -f "$backup" "$target" || true
+  fi
+  return 1
+}
+
+arr_validate_compose_prerequisites() {
+  local -a errors=()
+
+  if [[ -z "${PUID:-}" ]]; then
+    errors+=("PUID not set")
+  fi
+  if [[ -z "${PGID:-}" ]]; then
+    errors+=("PGID not set")
+  fi
+
+  if [[ "${SPLIT_VPN:-0}" == "1" || "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    if [[ -z "${LAN_IP:-}" || "$LAN_IP" == "0.0.0.0" ]]; then
+      errors+=("LAN_IP required for split/direct mode")
+    fi
+  fi
+
+  if ((${#errors[@]} == 0)); then
+    return 0
+  fi
+
+  {
+    printf '[compose-validation]\n'
+    local err
+    for err in "${errors[@]}"; do
+      printf '  - %s\n' "$err"
+    done
+  } >&2
+  return 1
 }
 # Renders .env with derived networking, VPN, and credential values; enforces prerequisites
 write_env() {
@@ -716,99 +1020,54 @@ write_env() {
       COMPOSE_PROJECT_NAME="${STACK}"
     fi
   fi
-  local dns_host_entry="${LAN_IP:-0.0.0.0}"
-  if [[ -z "$dns_host_entry" || "$dns_host_entry" == "0.0.0.0" ]]; then
-    dns_host_entry="HOST_IP"
-  fi
-  local -a outbound_candidates=("192.168.0.0/16" "10.0.0.0/8" "172.16.0.0/12")
-  local lan_private_subnet=""
-  if lan_private_subnet="$(lan_ipv4_subnet_cidr "$LAN_IP" 2>/dev/null)"; then
-    outbound_candidates=("$lan_private_subnet" "${outbound_candidates[@]}")
-  fi
-  local gluetun_firewall_outbound
-  gluetun_firewall_outbound="$(printf '%s\n' "${outbound_candidates[@]}" | sort -u | paste -sd, -)"
-
-  local -a firewall_ports=()
-  # Add Caddy ports if not split VPN
-  if ((split_vpn == 0)) && [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    local caddy_port
-    for caddy_port in "$CADDY_HTTP_PORT" "$CADDY_HTTPS_PORT"; do
-      if [[ -n "$caddy_port" ]] && [[ " ${firewall_ports[*]} " != *" $caddy_port "* ]]; then
-        firewall_ports+=("$caddy_port")
-      fi
-    done
+  if [[ ! ${VPN_SERVICE_PROVIDER+x} ]]; then
+    VPN_SERVICE_PROVIDER="protonvpn"
   fi
 
-  # qBittorrent port handling
-  if ((split_vpn == 1)); then
-    local qbt_split_port="${QBT_PORT:-}"
-    if [[ -n "$qbt_split_port" ]]; then
-      [[ " ${firewall_ports[*]} " == *" ${qbt_split_port} "* ]] || firewall_ports+=("${qbt_split_port}")
-    fi
-  elif [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    local qbt_direct_port="${QBT_PORT:-}"
-    for p in "$qbt_direct_port" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARR_PORT}"; do
-      if [[ -n "$p" ]] && [[ " ${firewall_ports[*]} " != *" $p "* ]]; then firewall_ports+=("$p"); fi
-    done
-    if [[ "${SABNZBD_ENABLED}" == "1" && "${SABNZBD_USE_VPN}" != "1" ]]; then
-      if [[ -n "${SABNZBD_PORT:-}" ]] && [[ " ${firewall_ports[*]} " != *" ${SABNZBD_PORT} "* ]]; then
-        firewall_ports+=("${SABNZBD_PORT}")
-      fi
-    fi
-  fi
+  OPENVPN_USER="$(arr_derive_openvpn_user)"
+  OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
+
+  # shellcheck disable=SC2034  # consumed by compose env emission
+  DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
+  # shellcheck disable=SC2034  # consumed by compose env emission
+  GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
+  # shellcheck disable=SC2034  # consumed by compose env emission
+  GLUETUN_FIREWALL_INPUT_PORTS="$(arr_derive_gluetun_firewall_input_ports)"
+  # shellcheck disable=SC2034  # consumed by compose env emission
+  COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
 
   local -a upstream_dns_servers=()
   mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
 
   if ((${#upstream_dns_servers[@]} > 0)); then
+    # shellcheck disable=SC2034  # exported for compose env emission
     UPSTREAM_DNS_SERVERS="$(
       IFS=','
       printf '%s' "${upstream_dns_servers[*]}"
     )"
+    # shellcheck disable=SC2034  # exported for compose env emission
     UPSTREAM_DNS_1="${upstream_dns_servers[0]}"
+    # shellcheck disable=SC2034  # exported for compose env emission
     UPSTREAM_DNS_2="${upstream_dns_servers[1]:-}"
   else
+    # shellcheck disable=SC2034  # exported for compose env emission
     UPSTREAM_DNS_SERVERS=""
+    # shellcheck disable=SC2034  # exported for compose env emission
     UPSTREAM_DNS_1=""
+    # shellcheck disable=SC2034  # exported for compose env emission
     UPSTREAM_DNS_2=""
-  fi
-
-  local firewall_ports_csv=""
-  if ((${#firewall_ports[@]})); then
-    local -A seen_firewall_ports=()
-    local firewall_port
-    for firewall_port in "${firewall_ports[@]}"; do
-      if [[ -n "$firewall_port" && -z "${seen_firewall_ports[$firewall_port]:-}" ]]; then
-        seen_firewall_ports["$firewall_port"]=1
-        firewall_ports_csv+="${firewall_ports_csv:+,}${firewall_port}"
-      fi
-    done
-  fi
-
-  local -a compose_profiles=(ipdirect)
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    compose_profiles+=(proxy)
-  fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    compose_profiles+=(localdns)
-  fi
-
-  local compose_profiles_csv=""
-  if ((${#compose_profiles[@]})); then
-    local -A seen_profiles=()
-    local profile
-    for profile in "${compose_profiles[@]}"; do
-      if [[ -n "$profile" && -z "${seen_profiles[$profile]:-}" ]]; then
-        seen_profiles["$profile"]=1
-        compose_profiles_csv+="${compose_profiles_csv:+,}${profile}"
-      fi
-    done
   fi
 
   local qbt_whitelist_raw
   qbt_whitelist_raw="${QBT_AUTH_WHITELIST:-}"
   if [[ -z "$qbt_whitelist_raw" ]]; then
     qbt_whitelist_raw="${LOCALHOST_IP}/32,::1/128"
+  fi
+  local lan_private_subnet=""
+  if lan_private_subnet="$(lan_ipv4_subnet_cidr "$LAN_IP" 2>/dev/null)"; then
+    :
+  else
+    lan_private_subnet=""
   fi
   if [[ -n "$lan_private_subnet" ]]; then
     qbt_whitelist_raw+="${qbt_whitelist_raw:+,}${lan_private_subnet}"
@@ -879,6 +1138,10 @@ write_compose_split_mode() {
   local sab_internal_port
   arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
 
+  if ! arr_validate_compose_prerequisites; then
+    die "Compose prerequisites not satisfied"
+  fi
+
   LOCAL_DNS_STATE="split-disabled"
   LOCAL_DNS_STATE_REASON="Local DNS disabled in split mode (SPLIT_VPN=1)"
 
@@ -886,7 +1149,7 @@ write_compose_split_mode() {
   ensure_nonsecret_file_mode "$tmp"
 
   arr_compose_reset_tracking
-
+  arr_compose_set_context "compose:header"
   arr_compose_stream_block "$tmp" <<'YAML'
 # -----------------------------------------------------------------------------
 # docker-compose.yml is auto-generated by the stack script. Do not edit manually.
@@ -902,6 +1165,7 @@ services:
       - "ipdirect"
 YAML
 
+  arr_compose_set_context "service:gluetun"
   arr_compose_stream_block "$tmp" <<'YAML'
     cap_add:
       - "NET_ADMIN"
@@ -970,6 +1234,7 @@ YAML
         max-size: "1m"
         max-file: "3"
 
+  arr_compose_set_context "service:qbittorrent"
   arr_compose_stream_block "$tmp" <<'YAML'
   qbittorrent:
     image: "${QBITTORRENT_IMAGE}"
@@ -990,6 +1255,7 @@ YAML
 
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
+    # shellcheck disable=SC2016  # intentional literal for compose placeholder
     arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}')
   fi
 
@@ -1250,6 +1516,7 @@ YAML
 YAML
   fi
 
+  arr_compose_set_context "compose:networks"
   arr_compose_stream_block "$tmp" <<'YAML'
 
 networks:
@@ -1258,6 +1525,7 @@ networks:
     driver: "bridge"
 YAML
 
+  arr_hydrate_all_compose_vars
   if ! arr_emit_compose_env_file; then
     rm -f "$tmp"
     die "Unable to render ${ARR_ENV_FILE}"
@@ -1273,7 +1541,17 @@ YAML
     die "Generated docker-compose.yml contains unexpected environment placeholders"
   fi
 
-  mv "$tmp" "$compose_path"
+  if command -v docker >/dev/null 2>&1; then
+    if ! docker compose -f "$tmp" config >/dev/null 2>&1; then
+      rm -f "$tmp"
+      die "docker compose config failed (syntax)"
+    fi
+  fi
+
+  if ! arr_safe_compose_write "$compose_path" "$tmp"; then
+    rm -f "$tmp"
+    die "Failed to update ${compose_path}"
+  fi
   ensure_nonsecret_file_mode "$compose_path"
   sed -i 's/\r$//' "$compose_path"
 
@@ -1291,6 +1569,10 @@ write_compose() {
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
+
+  if ! arr_validate_compose_prerequisites; then
+    die "Compose prerequisites not satisfied"
+  fi
 
   LOCAL_DNS_STATE="inactive"
   LOCAL_DNS_STATE_REASON="Local DNS container disabled (ENABLE_LOCAL_DNS=0)"
@@ -1337,7 +1619,7 @@ write_compose() {
   ensure_nonsecret_file_mode "$tmp"
 
   arr_compose_reset_tracking
-
+  arr_compose_set_context "compose:header"
   arr_compose_stream_block "$tmp" <<'YAML'
 # -----------------------------------------------------------------------------
 # docker-compose.yml is auto-generated by the stack script. Do not edit manually.
@@ -1352,6 +1634,7 @@ YAML
     arr_compose_stream_block "$tmp" < <(arr_yaml_comment "" "Set ENABLE_CADDY=1 in ${userconf_path} and rerun ./${STACK}.sh to add HTTPS hostnames via Caddy.")
   fi
 
+  arr_compose_set_context "service:gluetun"
   arr_compose_stream_block "$tmp" <<'YAML'
 services:
   gluetun:
@@ -1525,6 +1808,7 @@ YAML
 YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
+    # shellcheck disable=SC2016  # intentional literal for compose placeholder
     arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}')
   fi
   arr_compose_stream_block "$tmp" <<'YAML'
@@ -1783,6 +2067,7 @@ YAML
 YAML
   fi
 
+  arr_hydrate_all_compose_vars
   if ! arr_emit_compose_env_file; then
     rm -f "$tmp"
     die "Unable to render ${ARR_ENV_FILE}"
@@ -1798,7 +2083,17 @@ YAML
     die "Generated docker-compose.yml contains unexpected environment placeholders"
   fi
 
-  mv "$tmp" "$compose_path"
+  if command -v docker >/dev/null 2>&1; then
+    if ! docker compose -f "$tmp" config >/dev/null 2>&1; then
+      rm -f "$tmp"
+      die "docker compose config failed (syntax)"
+    fi
+  fi
+
+  if ! arr_safe_compose_write "$compose_path" "$tmp"; then
+    rm -f "$tmp"
+    die "Failed to update ${compose_path}"
+  fi
   ensure_nonsecret_file_mode "$compose_path"
   sed -i 's/\r$//' "$compose_path"
 
