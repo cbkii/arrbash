@@ -365,7 +365,9 @@ arr_hydrate_all_compose_vars() {
 
   for name in "${!ARR_COMPOSE_VARS[@]}"; do
     # validate identifier (defensive)
-    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && ${!name+x} ]]; then
+    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      warn "Skipping invalid compose placeholder name: $(printf '%q' "$name")"
+      unset 'ARR_COMPOSE_VARS[$name]'
       unset 'ARR_COMPOSE_MISSING[$name]'
       continue
     fi
