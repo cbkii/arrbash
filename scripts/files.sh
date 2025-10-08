@@ -201,14 +201,21 @@ arr_compose_stream_block() {
   done
 }
 
-# Derivation helpers reused by compose hydration and write_env
+# Derivation helpers reused by compose hydration and write_env; prints a private IPv4 or nothing.
 arr_derive_dns_host_entry() {
-  local ip="${LAN_IP:-0.0.0.0}"
+  local ip="${LAN_IP:-}"
 
-  if [[ -z "$ip" || "$ip" == "0.0.0.0" ]]; then
-    printf '%s\n' "HOST_IP"
-  else
+  # Prefer explicitly configured LAN_IP
+  if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && validate_ipv4 "$ip" && is_private_ipv4 "$ip"; then
     printf '%s\n' "$ip"
+  fi
+
+  # Last attempt: first private from hostname -I
+  if command -v hostname >/dev/null 2>&1; then
+    ip="$(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF' | while read -r a; do
+           if [[ -n "$a" ]] && validate_ipv4 "$a" && is_private_ipv4 "$a"; then echo "$a"; break; fi
+         done)"
+    [[ -n "$ip" ]] && printf '%s\n' "$ip"
   fi
 }
 
@@ -225,7 +232,7 @@ arr_derive_gluetun_firewall_outbound_subnets() {
     fi
   fi
 
-  printf '%s\n' "${candidates[@]}" | sort -u | paste -sd, -
+  printf '%s\n' "${candidates[@]}" | LC_ALL=C sort -u | paste -sd, -
 }
 
 arr_derive_gluetun_firewall_input_ports() {
@@ -357,7 +364,8 @@ arr_hydrate_all_compose_vars() {
   fi
 
   for name in "${!ARR_COMPOSE_VARS[@]}"; do
-    if [[ ${!name+x} ]]; then
+    # validate identifier (defensive)
+    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && ${!name+x} ]]; then
       unset 'ARR_COMPOSE_MISSING[$name]'
       continue
     fi
