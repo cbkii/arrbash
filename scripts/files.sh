@@ -205,22 +205,22 @@ arr_compose_stream_block() {
 arr_derive_dns_host_entry() {
   local ip="${LAN_IP:-}"
 
-  # Prefer explicitly configured LAN_IP
   if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && validate_ipv4 "$ip" && is_private_ipv4 "$ip"; then
     printf '%s\n' "$ip"
+    return 0
   fi
-  # Else attempt first private from hostname -I
+
   if command -v hostname >/dev/null 2>&1; then
-    ip="$(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF' | while read -r a; do
-           if [[ -n "$a" ]] && validate_ipv4 "$a" && is_private_ipv4 "$a"; then echo "$a"; break; fi
-         done)"
-    [[ -n "$ip" ]] && printf '%s\n' "$ip"
+    while IFS= read -r candidate; do
+      if [[ -n "$candidate" ]] && validate_ipv4 "$candidate" && is_private_ipv4 "$candidate"; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    done < <(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF')
   fi
-  # Final fallback to default localhost so not empty
-  if ! validate_ipv4 "$ip"; then
-    ip="127.0.0.1"
-    printf '%s\n' "$ip"
-  fi
+
+  printf '%s\n' "127.0.0.1"
+}
 }
 
 arr_derive_gluetun_firewall_outbound_subnets() {
