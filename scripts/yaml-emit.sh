@@ -7,7 +7,7 @@ if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   # Produces a YAML-safe double-quoted scalar for literal emission
   arr_yaml_escape() {
     local value="${1-}"
-    value="${value//$'\r'/}"  # drop carriage returns
+    value="${value//$'\r'/}" # drop carriage returns
     value="${value//\\/\\\\}"
     value="${value//\"/\\\"}"
     value="${value//$'\n'/\\n}"
@@ -52,7 +52,7 @@ if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   # Escapes dotenv values and wraps them in double quotes for Compose compatibility
   arr_env_escape_value() {
     local value="${1-}"
-    value="${value//$'\r'/}"  # normalize CRLF
+    value="${value//$'\r'/}" # normalize CRLF
     value="${value//\\/\\\\}"
     value="${value//\"/\\\"}"
     value="${value//$'\n'/ }"

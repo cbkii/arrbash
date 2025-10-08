@@ -109,7 +109,7 @@ arr_compose_set_context() {
 
 arr_compose_inline_escape() {
   local value="${1-}"
-  value="${value//$'\r'/}"  # normalize CRLF
+  value="${value//$'\r'/}" # normalize CRLF
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
   value="${value//$'\n'/\\n}"
@@ -162,8 +162,8 @@ arr_compose_stream_line() {
 
     local require_value=1
     case "$operator" in
-      ''|':?') require_value=1 ;;
-      *)       require_value=0 ;;
+      '' | ':?') require_value=1 ;;
+      *) require_value=0 ;;
     esac
 
     if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" && ${!expression+x} ]]; then
@@ -220,7 +220,6 @@ arr_derive_dns_host_entry() {
   fi
 
   printf '%s\n' "127.0.0.1"
-}
 }
 
 arr_derive_gluetun_firewall_outbound_subnets() {
@@ -381,6 +380,9 @@ arr_hydrate_all_compose_vars() {
       if [[ -n "$value" ]]; then
         printf -v "$name" '%s' "$value"
         unset 'ARR_COMPOSE_MISSING[$name]'
+      fi
+    fi
+
     if [[ ${!name+x} ]]; then
       # honor non-empty values only; empty strings should be considered missing
       if [[ -n "${!name}" ]]; then
@@ -438,6 +440,7 @@ arr_hydrate_all_compose_vars() {
     if [[ ${!name+x} ]]; then
       unset 'ARR_COMPOSE_MISSING[$name]'
     fi
+
   done
 }
 

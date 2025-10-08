@@ -443,8 +443,7 @@ force_kill_port_listeners() {
       proc_name="process"
     fi
     case "$proc_name" in
-      docker-proxy)
-        ;;
+      docker-proxy) ;;
       *)
         warn "    [fix] Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
         continue

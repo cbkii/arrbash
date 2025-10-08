@@ -52,9 +52,9 @@ arr_trace_start() {
 
   exec {__arr_trace_fd}> >(
     if [[ -n "$mask" ]]; then
-      sed -u -E "s/${mask}/[REDACTED]/g" >> "$ARR_TRACE_FILE"
+      sed -u -E "s/${mask}/[REDACTED]/g" >>"$ARR_TRACE_FILE"
     else
-      cat >> "$ARR_TRACE_FILE"
+      cat >>"$ARR_TRACE_FILE"
     fi
   )
 

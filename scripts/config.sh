@@ -33,7 +33,7 @@ load_proton_credentials() {
   if [[ -z "$PROTON_USER_VALUE" || -z "$PROTON_PASS_VALUE" ]]; then
     die "Missing or empty PROTON_USER/PROTON_PASS in ${proton_file}"
   fi
-  
+
   OPENVPN_USER_VALUE="$PROTON_USER_VALUE"
   OPENVPN_USER_VALUE="$(trim_string "$OPENVPN_USER_VALUE")"
   if [[ "$OPENVPN_USER_VALUE" != *"+pmp" ]]; then
@@ -156,7 +156,10 @@ show_configuration_preview() {
       upstream_parts+=("${UPSTREAM_DNS_2}")
     fi
     if ((${#upstream_parts[@]} > 0)); then
-      upstream_dns_display="$(IFS=,; printf '%s' "${upstream_parts[*]}")"
+      upstream_dns_display="$(
+        IFS=,
+        printf '%s' "${upstream_parts[*]}"
+      )"
     else
       upstream_dns_display="(docker defaults)"
     fi

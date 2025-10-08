@@ -521,8 +521,8 @@ check_image_exists() {
     else
       docker manifest inspect "$image" >/dev/null 2>&1 && return 0
     fi
-    if (( attempt < 3 )); then
-      sleep $(( attempt * 2 ))
+    if ((attempt < 3)); then
+      sleep $((attempt * 2))
     fi
   done
 

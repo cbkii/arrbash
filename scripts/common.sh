@@ -87,7 +87,8 @@ have_command() {
 # Read space-separated fields safely regardless of caller IFS.
 # Usage: arr_read_fields "a b c" var1 var2 var3
 arr_read_fields() {
-  local __src="$1"; shift
+  local __src="$1"
+  shift
   local __oldifs="$IFS"
   local __status
   IFS=' '
@@ -1376,8 +1377,7 @@ arr_verify_compose_placeholders() {
   while IFS= read -r _arr_placeholder; do
     _arr_name="${_arr_placeholder:2:${#_arr_placeholder}-3}"
     # Strip any parameter operator and default/message segment
-    for _arr_sep in ':-' '-' ':=' ':?' ':+'
-    do
+    for _arr_sep in ':-' '-' ':=' ':?' ':+'; do
       if [[ "$_arr_name" == *"$_arr_sep"* ]]; then
         _arr_name="${_arr_name%%"$_arr_sep"*}"
       fi
@@ -1442,7 +1442,7 @@ unescape_env_value_from_compose() {
 
   value="${value//$'\r'/}" # Normalize line endings
 
-  if (( ${#value} >= 2 )); then
+  if ((${#value} >= 2)); then
     local first_char="${value:0:1}"
     local last_char="${value: -1}"
     if [[ "$first_char" == '"' && "$last_char" == '"' ]]; then

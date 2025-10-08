@@ -199,7 +199,7 @@ qbt_webui_rate_limited_restart() {
   if [[ -f "$state_file" ]]; then
     if last="$(<"$state_file" 2>/dev/null)" && [[ "$last" =~ ^[0-9]+$ ]]; then
       if now="$(date +%s 2>/dev/null)"; then
-        if (( now - last < interval )); then
+        if ((now - last < interval)); then
           return 0
         fi
       fi

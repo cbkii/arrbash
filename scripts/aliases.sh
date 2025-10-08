@@ -19,37 +19,37 @@ write_aliases_file() {
   fi
 
   local stack_dir_escaped env_file_escaped docker_dir_escaped arrconf_dir_escaped
-  
+
   # Escape helpers for sed with '|' delimiter
   stack_dir_escaped=${ARR_STACK_DIR//\\/\\\\}
   stack_dir_escaped=${stack_dir_escaped//&/\&}
   stack_dir_escaped=${stack_dir_escaped//|/\|}
-  
+
   # Resolve env file with fallbacks: ARR_ENV_FILE -> arr_env_file -> ${ARR_STACK_DIR}/.env
   local _env_file="${ARR_ENV_FILE:-}"
   if [[ -z "$_env_file" ]] && declare -f arr_env_file >/dev/null 2>&1; then
     _env_file="$(arr_env_file)"
   fi
   [[ -n "$_env_file" ]] || _env_file="${ARR_STACK_DIR%/}/.env"
-  
+
   env_file_escaped=${_env_file//\\/\\\\}
   env_file_escaped=${env_file_escaped//&/\&}
   env_file_escaped=${env_file_escaped//|/\|}
-  
+
   docker_dir_escaped=${ARR_DOCKER_DIR//\\/\\\\}
   docker_dir_escaped=${docker_dir_escaped//&/\&}
   docker_dir_escaped=${docker_dir_escaped//|/\|}
-  
+
   arrconf_dir_escaped=${ARRCONF_DIR//\\/\\\\}
   arrconf_dir_escaped=${arrconf_dir_escaped//&/\&}
   arrconf_dir_escaped=${arrconf_dir_escaped//|/\|}
-  
+
   sed -e "s|__ARR_STACK_DIR__|${stack_dir_escaped}|g" \
-      -e "s|__ARR_ENV_FILE__|${env_file_escaped}|g" \
-      -e "s|__ARR_DOCKER_DIR__|${docker_dir_escaped}|g" \
-      -e "s|__ARRCONF_DIR__|${arrconf_dir_escaped}|g" \
-      "$template_file" >"$tmp_file"
-  
+    -e "s|__ARR_ENV_FILE__|${env_file_escaped}|g" \
+    -e "s|__ARR_DOCKER_DIR__|${docker_dir_escaped}|g" \
+    -e "s|__ARRCONF_DIR__|${arrconf_dir_escaped}|g" \
+    "$template_file" >"$tmp_file"
+
   if grep -q "__ARR_" "$tmp_file"; then
     warn "Failed to replace all template placeholders in aliases file"
     rm -f "$tmp_file"
@@ -339,7 +339,10 @@ install_aliases() {
   fi
 
   local kind _ rc repo_escaped alias_line source_line
-  { local IFS=' '; read -r kind _ <<<"$(detect_shell_kind)"; }
+  {
+    local IFS=' '
+    read -r kind _ <<<"$(detect_shell_kind)"
+  }
   rc="${HOME}/.bashrc"
   [[ "$kind" == "zsh" ]] && rc="${HOME}/.zshrc"
   if ! touch "$rc" 2>/dev/null; then
@@ -368,9 +371,9 @@ install_aliases() {
   else
     warn "Reload your shell configuration to activate ARR aliases"
   fi
-  
+
   ensure_dir_mode "${ARR_STACK_DIR}/scripts" 755
-  
+
   local diag_script="${ARR_STACK_DIR}/scripts/diagnose-vpn.sh"
   cat >"$diag_script" <<'DIAG'
 #!/bin/bash
@@ -480,29 +483,29 @@ DIAG
     warn "Failed to create temporary diagnostic script"
     return 1
   fi
-  
+
   # Escape stack dir
   local diag_dir_escaped
   diag_dir_escaped=${ARR_STACK_DIR//\\/\\\\}
   diag_dir_escaped=${diag_dir_escaped//&/\&}
   diag_dir_escaped=${diag_dir_escaped//|/\|}
-  
+
   # Resolve env file with fallbacks: ARR_ENV_FILE -> arr_env_file -> ${ARR_STACK_DIR}/.env
   local diag_env_file="${ARR_ENV_FILE:-}"
   if [[ -z "$diag_env_file" ]] && declare -f arr_env_file >/dev/null 2>&1; then
     diag_env_file="$(arr_env_file)"
   fi
   [[ -n "$diag_env_file" ]] || diag_env_file="${ARR_STACK_DIR%/}/.env"
-  
+
   # Escape env file for sed replacement
   diag_env_file=${diag_env_file//\\/\\\\}
   diag_env_file=${diag_env_file//&/\&}
   diag_env_file=${diag_env_file//|/\|}
-  
+
   sed -e "s|__ARR_STACK_DIR__|${diag_dir_escaped}|g" \
-      -e "s|__ARR_ENV_FILE__|${diag_env_file}|g" \
-      "$diag_script" >"$diag_tmp"
-  
+    -e "s|__ARR_ENV_FILE__|${diag_env_file}|g" \
+    "$diag_script" >"$diag_tmp"
+
   mv "$diag_tmp" "$diag_script"
   ensure_file_mode "$diag_script" 755
   msg "Diagnostic script: ${diag_script}"
