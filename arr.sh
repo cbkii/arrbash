@@ -68,7 +68,7 @@ arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _arr_use
 
 _expected_base="${ARR_DATA_ROOT}"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
-_canon_userconf="${ARR_USERCONF_PATH}"
+_canon_userconf="$(arr_canonical_path "${ARR_USERCONF_PATH}")"
 
 declare -a _arr_env_override_order=()
 declare -A _arr_env_overrides=()
