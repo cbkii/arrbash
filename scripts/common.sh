@@ -98,6 +98,7 @@ arr_read_fields() {
     __status=$?
   fi
   IFS="$__oldifs"
+  # shellcheck disable=SC2248  # __status is a numeric return code
   return $__status
 }
 
@@ -169,6 +170,7 @@ arr_resolve_positive_int() {
 }
 
 # Detects docker compose command once per shell and memoizes result for callers
+# shellcheck disable=SC2120  # Verbosity flag is intentionally optional for callers
 arr_resolve_compose_cmd() {
   local verbose="${1:-0}"
 
@@ -502,9 +504,11 @@ ensure_dir() {
         fi
       fi
     elif [[ $EUID -eq 0 ]]; then
+      # shellcheck disable=SC2248  # rc is an integer exit code from mkdir
       return $rc
     fi
   fi
+  # shellcheck disable=SC2248  # rc is an integer exit code from mkdir
   return $rc
 }
 

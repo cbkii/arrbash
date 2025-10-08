@@ -294,6 +294,7 @@ arr_effective_project_name() {
   fi
 
   local -a env_candidates=()
+  # shellcheck disable=SC2155  # arr_env_file cannot fail and only returns a path string
   local stack_env="$(arr_env_file)"
   if [[ -n "${ARR_ENV_FILE:-}" ]]; then
     env_candidates+=("${ARR_ENV_FILE}")
@@ -479,8 +480,10 @@ validate_caddy_config() {
     exit 1
   fi
 
+  # shellcheck disable=SC2016  # literal ${ is intentional to flag unresolved placeholders
   if grep -q '\${' "$caddyfile"; then
     warn "Caddyfile contains unresolved variable references that might cause issues at runtime"
+    # shellcheck disable=SC2016  # literal ${ is intentional to flag unresolved placeholders
     grep -n '\${' "$caddyfile"
   fi
 

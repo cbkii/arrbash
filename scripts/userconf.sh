@@ -86,6 +86,7 @@ arr_resolve_userconf_paths() {
   local __override_var="${2-}"
   local __source_var="${3-}"
 
+  # shellcheck disable=SC2178,SC2128  # candidate is managed as a scalar path
   local candidate="${ARR_USERCONF_PATH:-}"
   local source="default"
   local override=""
