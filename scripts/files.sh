@@ -209,13 +209,17 @@ arr_derive_dns_host_entry() {
   if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && validate_ipv4 "$ip" && is_private_ipv4 "$ip"; then
     printf '%s\n' "$ip"
   fi
-
-  # Last attempt: first private from hostname -I
+  # Else attempt first private from hostname -I
   if command -v hostname >/dev/null 2>&1; then
     ip="$(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF' | while read -r a; do
            if [[ -n "$a" ]] && validate_ipv4 "$a" && is_private_ipv4 "$a"; then echo "$a"; break; fi
          done)"
     [[ -n "$ip" ]] && printf '%s\n' "$ip"
+  fi
+  # Final fallback to default localhost so not empty
+  if ! validate_ipv4 "$ip"; then
+    ip="127.0.0.1"
+    printf '%s\n' "$ip"
   fi
 }
 
@@ -276,7 +280,7 @@ arr_derive_gluetun_firewall_input_ports() {
   local -A seen=()
   local -a deduped=()
   for port in "${ports[@]}"; do
-    if [[ -n "$port" && -z "${seen[$port]:-}" ]]; then
+    if [[ -n "$port" && -z "${seen[$port]:-}" && "$port" =~ ^[0-9]+$ ]]; then
       seen["$port"]=1
       deduped+=("$port")
     fi
