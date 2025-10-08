@@ -23,6 +23,14 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
 ---
 
+## Naming Conventions (arrbash-specific)
+
+* **User config (canonical):** `arrconf/userr.conf.defaults.sh` → `${ARRCONF_DIR}/userr.conf` (**double r**).
+* **Scripts / helpers:** file names kebab-case; shared helpers prefixed `arr_` (e.g., `arr_emit_*`, `arr_write_*`).
+* **Variables:** uppercase `SNAKE_CASE` with service/area prefixes (`ARR_`, `GLUETUN_`, `QBT_`, `CADDY_`, `PROWLARR_`, etc.).
+* **Compose/env artefacts:** `docker-compose.yml` and `.env` (generated; do not hand-edit).
+* **Examples/placeholders:** `*.example` suffix only (never committed with real secrets).
+
 ## Coding Style & Conventions
 
 - Use **Bash** with strict safety: `#!/usr/bin/env bash`, `set -Eeuo pipefail`.
