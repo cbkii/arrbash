@@ -43,7 +43,7 @@ if [[ ! -f "$TEMPLATE_PATH" ]]; then
 fi
 
 if ! command -v envsubst >/dev/null 2>&1; then
-  printf 'error: envsubst not found (install gettext)\n' >&2
+  printf 'error: envsubst not found. Install gettext-base (Debian/Ubuntu) or gettext.\n' >&2
   exit 1
 fi
 
