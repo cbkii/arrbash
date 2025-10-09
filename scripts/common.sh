@@ -1664,11 +1664,7 @@ arr_verify_compose_placeholders() {
     return 0
   fi
 
-  # Always escape backslashes, ampersands, and newlines which have special meaning in replacements.
-  s="${s//\\/\\\\}"
-  s="${s//&/\\&}"
-  s="${s//$'\n'/\\n}"
-
+    #something broke here
         _arr_name="${_arr_name%%"$_arr_sep"*}"
       fi
     done
@@ -1725,10 +1721,11 @@ escape_sed_replacement() {
   local s="${1-}"
   local delim="${2:-/}"
 
-  # Always escape backslashes and '&' which have special meaning in replacements.
+  # Always escape backslashes, newlines and '&' which have special meaning in replacements.
   s="${s//\\/\\\\}"
+  s="${s//$'\n'/\\n}"
   s="${s//&/\\&}"
-
+  
   case "$delim" in
     '/') s="${s//\//\\/}" ;;
     '|') s="${s//|/\\|}" ;;
