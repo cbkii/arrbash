@@ -1663,11 +1663,12 @@ arr_verify_compose_placeholders() {
   if ((_arr_matches_rc != 0)) || [[ -z "$_arr_matches" ]]; then
     return 0
   fi
-  while IFS= read -r _arr_placeholder; do
-    _arr_name="${_arr_placeholder:2:${#_arr_placeholder}-3}"
-    # Strip any parameter operator and default/message segment
-    for _arr_sep in ':-' '-' ':=' ':?' ':+'; do
-      if [[ "$_arr_name" == *"$_arr_sep"* ]]; then
+
+  # Always escape backslashes, ampersands, and newlines which have special meaning in replacements.
+  s="${s//\\/\\\\}"
+  s="${s//&/\\&}"
+  s="${s//$'\n'/\\n}"
+
         _arr_name="${_arr_name%%"$_arr_sep"*}"
       fi
     done
