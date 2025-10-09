@@ -49,32 +49,4 @@ if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
     cat >>"$1"
   }
 
-  # Escapes dotenv values and wraps them in double quotes for Compose compatibility
-  arr_env_escape_value() {
-    local value="${1-}"
-    value="${value//$'\r'/}" # normalize CRLF
-    value="${value//\\/\\\\}"
-    value="${value//\"/\\\"}"
-    value="${value//$'\n'/ }"
-    printf '"%s"' "$value"
-  }
-
-  # Emits KEY="escaped" lines while validating variable names
-  arr_write_env_kv() {
-    local name="$1"
-    local value="${2-}"
-
-    if [[ -z "$name" ]]; then
-      printf '%s\n' "arr_write_env_kv requires a variable name" >&2
-      return 1
-    fi
-
-    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-      printf '[env] invalid var name: %s\n' "$name" >&2
-      return 1
-    fi
-
-    printf '%s=%s\n' "$name" "$(arr_env_escape_value "$value")"
-  }
-
 fi
