@@ -185,25 +185,32 @@ arr_resolve_compose_cmd() {
   local -a candidate=()
   local version=""
   local major=""
+  local version_output=""
 
   if docker compose version >/dev/null 2>&1; then
     candidate=(docker compose)
-    version="$(docker compose version --short 2>/dev/null || true)"
-    version="${version#v}"
-    major="${version%%.*}"
-    if [[ -n "$major" && "$major" =~ ^[0-9]+$ ]]; then
-      : # major version is valid, do nothing
+    if version_output="$(docker compose version --short 2>/dev/null)"; then
+      version="${version_output#v}"
+      major="${version%%.*}"
+      if [[ -n "$major" && "$major" =~ ^[0-9]+$ ]]; then
+        : # major version is valid, do nothing
+      else
+        version=""
+      fi
     else
       version=""
     fi
   fi
 
   if ((${#candidate[@]} == 0)) && have_command docker-compose; then
-    version="$(docker-compose version --short 2>/dev/null || true)"
-    version="${version#v}"
-    major="${version%%.*}"
-    if [[ "$major" =~ ^[0-9]+$ ]] && ((major >= 2)); then
-      candidate=(docker-compose)
+    if version_output="$(docker-compose version --short 2>/dev/null)"; then
+      version="${version_output#v}"
+      major="${version%%.*}"
+      if [[ "$major" =~ ^[0-9]+$ ]] && ((major >= 2)); then
+        candidate=(docker-compose)
+      else
+        version=""
+      fi
     else
       version=""
     fi
@@ -459,7 +466,13 @@ missing_commands() {
 # Warns when optional commands are missing so installers can proceed with awareness
 check_dependencies() {
   local missing
-  missing="$(missing_commands "$@" || true)"
+  local rc=0
+
+  if ! missing="$(missing_commands "$@")"; then
+    rc=$?
+    warn "Unable to evaluate optional dependencies (missing_commands exited with ${rc})"
+    return "$rc"
+  fi
 
   if [[ -z "$missing" ]]; then
     return 0
@@ -474,7 +487,10 @@ check_dependencies() {
 # Aborts immediately if required commands are unavailable
 require_dependencies() {
   local missing
-  missing="$(missing_commands "$@" || true)"
+  if ! missing="$(missing_commands "$@")"; then
+    local rc=$?
+    die "Failed to evaluate required dependencies (missing_commands exited with ${rc})"
+  fi
 
   if [[ -z "$missing" ]]; then
     return 0
@@ -558,7 +574,9 @@ arr_is_group_writable() {
   local target="$1"
 
   local mode
-  mode="$(arr_stat_mode "$target" || true)"
+  if ! mode="$(arr_stat_mode "$target")"; then
+    return 1
+  fi
 
   if [[ -z "$mode" ]]; then
     return 1
@@ -976,10 +994,17 @@ arr_read_run_failure_reason() {
 
   [[ -f "$flag" ]] || return 1
 
-  local message
-  message="$(grep -m1 '^message=' "$flag" 2>/dev/null | cut -d= -f2- || true)"
+  local message=""
+  local message_rc=0
+  if ! message="$(grep -m1 '^message=' "$flag" 2>/dev/null | cut -d= -f2-)"; then
+    message_rc=$?
+  fi
 
-  if [[ -n "$message" ]]; then
+  if ((message_rc > 1)); then
+    return 1
+  fi
+
+  if ((message_rc == 0)) && [[ -n "$message" ]]; then
     printf '%s\n' "$message"
     return 0
   fi
@@ -996,8 +1021,16 @@ arr_read_run_failure_code() {
 
   [[ -f "$flag" ]] || return 1
 
-  local code
-  code="$(grep -m1 '^code=' "$flag" 2>/dev/null | cut -d= -f2- || true)"
+  local code=""
+  local code_rc=0
+  if ! code="$(grep -m1 '^code=' "$flag" 2>/dev/null | cut -d= -f2-)"; then
+    code_rc=$?
+  fi
+
+  if ((code_rc > 1)); then
+    return 1
+  fi
+
   [[ -z "$code" ]] && return 1
   printf '%s\n' "$code"
 }
@@ -1295,9 +1328,15 @@ arr_derive_gluetun_firewall_outbound_subnets() {
   local cidr=""
 
   if [[ -n "$ip" ]] && arr_function_exists lan_ipv4_subnet_cidr; then
-    if cidr="$(lan_ipv4_subnet_cidr "$ip" 2>/dev/null || true)"; then
+    local cidr_rc=0
+    if cidr="$(lan_ipv4_subnet_cidr "$ip" 2>/dev/null)"; then
       if [[ -n "$cidr" ]]; then
         candidates=("$cidr" "${candidates[@]}")
+      fi
+    else
+      cidr_rc=$?
+      if ((cidr_rc != 0)); then
+        : # Ignore failure; fallback candidates cover the defaults.
       fi
     fi
   fi
@@ -1562,8 +1601,13 @@ verify_single_level_env_placeholders() {
   fi
 
   local nested=""
+  local nested_rc=0
 
-  nested="$(awk '/\$\{[^}]*\$\{/{printf "%d:%s\n", NR, $0}' "$file" || true)"
+  nested="$(awk '/\$\{[^}]*\$\{/{printf "%d:%s\n", NR, $0}' "$file")" || nested_rc=$?
+
+  if ((nested_rc != 0)); then
+    die "Failed to inspect ${file} for nested placeholders (awk exited with ${nested_rc})"
+  fi
 
   if [[ -z "$nested" ]]; then
     return 0
@@ -1599,8 +1643,24 @@ arr_verify_compose_placeholders() {
   local _arr_placeholder="" _arr_name="" _arr_sep=""
   local _arr_matches=""
   # Match ${VAR}, ${VAR-...}, ${VAR:-...}, ${VAR=...}, ${VAR:=...}, ${VAR?...}, ${VAR:+...}
-  _arr_matches="$(LC_ALL=C grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*([:\-=\?+][^}]*)?\}' "$compose_file" 2>/dev/null | sort -u || true)"
-  if [[ -z "$_arr_matches" ]]; then
+  local _arr_matches_rc=0
+  local _arr_raw_matches=""
+
+  if ! _arr_raw_matches="$(LC_ALL=C grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*([:\-=\?+][^}]*)?\}' "$compose_file" 2>/dev/null)"; then
+    _arr_matches_rc=$?
+  else
+    if [[ -n "$_arr_raw_matches" ]]; then
+      _arr_matches="$(printf '%s\n' "$_arr_raw_matches" | sort -u)"
+    else
+      _arr_matches=""
+    fi
+  fi
+
+  if ((_arr_matches_rc > 1)); then
+    die "Failed to inspect ${compose_file} for environment placeholders (grep exited with ${_arr_matches_rc})"
+  fi
+
+  if ((_arr_matches_rc != 0)) || [[ -z "$_arr_matches" ]]; then
     return 0
   fi
   while IFS= read -r _arr_placeholder; do
