@@ -90,158 +90,6 @@ arr_prompt_direct_port_exposure() {
   esac
 }
 
-# Derivation helpers reused by compose hydration and prepare_env_context; prints a private IPv4 or nothing.
-arr_derive_dns_host_entry() {
-  local ip="${LAN_IP:-}"
-
-  if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && validate_ipv4 "$ip" && is_private_ipv4 "$ip"; then
-    printf '%s\n' "$ip"
-    return 0
-  fi
-
-  if command -v hostname >/dev/null 2>&1; then
-    while IFS= read -r candidate; do
-      if [[ -n "$candidate" ]] && validate_ipv4 "$candidate" && is_private_ipv4 "$candidate"; then
-        printf '%s\n' "$candidate"
-        return 0
-      fi
-    done < <(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF')
-  fi
-
-  printf '%s\n' "127.0.0.1"
-}
-
-arr_derive_gluetun_firewall_outbound_subnets() {
-  local ip="${LAN_IP:-}"
-  local -a candidates=("192.168.0.0/16" "10.0.0.0/8" "172.16.0.0/12")
-  local cidr=""
-
-  if [[ -n "$ip" ]]; then
-    if cidr="$(lan_ipv4_subnet_cidr "$ip" 2>/dev/null || true)"; then
-      if [[ -n "$cidr" ]]; then
-        candidates=("$cidr" "${candidates[@]}")
-      fi
-    fi
-  fi
-
-  printf '%s\n' "${candidates[@]}" | LC_ALL=C sort -u | paste -sd, -
-}
-
-arr_derive_gluetun_firewall_input_ports() {
-  local split_mode="${SPLIT_VPN:-0}"
-  local expose_direct="${EXPOSE_DIRECT_PORTS:-0}"
-  local -a ports=()
-  local port=""
-
-  if [[ "$split_mode" != "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
-    for port in "${CADDY_HTTP_PORT:-}" "${CADDY_HTTPS_PORT:-}"; do
-      if [[ -n "$port" ]]; then
-        ports+=("$port")
-      fi
-    done
-  fi
-
-  if [[ "$split_mode" == "1" ]]; then
-    port="${QBT_PORT:-}"
-    if [[ -n "$port" ]]; then
-      ports+=("$port")
-    fi
-  elif [[ "$expose_direct" == "1" ]]; then
-    for port in "${QBT_PORT:-}" "${SONARR_PORT:-}" "${RADARR_PORT:-}" "${PROWLARR_PORT:-}" "${BAZARR_PORT:-}" "${FLARR_PORT:-}"; do
-      if [[ -n "$port" ]]; then
-        ports+=("$port")
-      fi
-    done
-    if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
-      port="${SABNZBD_PORT:-}"
-      if [[ -n "$port" ]]; then
-        ports+=("$port")
-      fi
-    fi
-  fi
-
-  if ((${#ports[@]} == 0)); then
-    printf '\n'
-    return 0
-  fi
-
-  local -A seen=()
-  local -a deduped=()
-  for port in "${ports[@]}"; do
-    if [[ -n "$port" && -z "${seen[$port]:-}" && "$port" =~ ^[0-9]+$ ]]; then
-      seen["$port"]=1
-      deduped+=("$port")
-    fi
-  done
-
-  if ((${#deduped[@]} == 0)); then
-    printf '\n'
-    return 0
-  fi
-
-  IFS=, printf '%s\n' "${deduped[*]}"
-}
-
-arr_derive_openvpn_user() {
-  if [[ ${OPENVPN_USER+x} ]]; then
-    printf '%s\n' "${OPENVPN_USER}"
-    return 0
-  fi
-
-  if [[ -n "${OPENVPN_USER_VALUE:-}" ]]; then
-    printf '%s\n' "${OPENVPN_USER_VALUE}"
-    return 0
-  fi
-
-  if [[ -n "${PROTON_USER_VALUE:-}" ]]; then
-    printf '%s\n' "${PROTON_USER_VALUE%+pmp}+pmp"
-    return 0
-  fi
-
-  printf '\n'
-}
-
-arr_derive_openvpn_password() {
-  if [[ ${OPENVPN_PASSWORD+x} ]]; then
-    printf '%s\n' "${OPENVPN_PASSWORD}"
-    return 0
-  fi
-
-  if [[ -n "${PROTON_PASS_VALUE:-}" ]]; then
-    printf '%s\n' "${PROTON_PASS_VALUE}"
-    return 0
-  fi
-
-  printf '\n'
-}
-
-arr_derive_compose_profiles_csv() {
-  local -a profiles=(ipdirect)
-
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    profiles+=(proxy)
-  fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    profiles+=(localdns)
-  fi
-
-  if ((${#profiles[@]} == 0)); then
-    printf '\n'
-    return 0
-  fi
-
-  local -A seen=()
-  local -a deduped=()
-  local profile
-  for profile in "${profiles[@]}"; do
-    if [[ -n "$profile" && -z "${seen[$profile]:-}" ]]; then
-      seen["$profile"]=1
-      deduped+=("$profile")
-    fi
-  done
-
-  IFS=, printf '%s\n' "${deduped[*]}"
-}
 
 # Creates stack/data/media directories and reconciles permissions per profile
 mkdirs() {
@@ -483,15 +331,23 @@ prepare_env_context() {
 
   CADDY_BASIC_AUTH_USER="$(sanitize_user "$CADDY_BASIC_AUTH_USER")"
 
+  local direct_ports_raw="${EXPOSE_DIRECT_PORTS:-0}"
+  EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "$direct_ports_raw")"
   local split_vpn_raw="${SPLIT_VPN:-0}"
-  local split_vpn="$split_vpn_raw"
-  if [[ "$split_vpn" != "0" && "$split_vpn" != "1" ]]; then
-    warn "Invalid SPLIT_VPN=${split_vpn_raw}; defaulting to 0 (full tunnel)."
-    split_vpn=0
-  fi
+  local split_vpn="$(arr_normalize_bool "$split_vpn_raw")"
+  case "$split_vpn_raw" in
+    ''|0|1|true|TRUE|false|FALSE|yes|YES|no|NO|on|ON|off|OFF) ;;
+    *)
+      warn "Invalid SPLIT_VPN=${split_vpn_raw}; defaulting to 0 (full tunnel)."
+      split_vpn=0
+      ;;
+  esac
   SPLIT_VPN="$split_vpn"
 
-  local direct_ports_requested="${EXPOSE_DIRECT_PORTS:-0}"
+  ENABLE_CADDY="$(arr_normalize_bool "${ENABLE_CADDY:-0}")"
+  ENABLE_LOCAL_DNS="$(arr_normalize_bool "${ENABLE_LOCAL_DNS:-0}")"
+
+  local direct_ports_requested="${EXPOSE_DIRECT_PORTS}"
   local userconf_path="${ARR_USERCONF_PATH:-}"
   if [[ -z "${userconf_path}" ]]; then
     if ! userconf_path="$(arr_default_userconf_path 2>/dev/null)"; then
@@ -562,18 +418,21 @@ prepare_env_context() {
     "Invalid CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-}; defaulting to 443."
   CADDY_HTTPS_PORT="$caddy_https_port_value"
 
-  local sab_enabled="${SABNZBD_ENABLED:-0}"
-  if [[ "$sab_enabled" != "1" ]]; then
-    sab_enabled=0
-  fi
+  local sab_enabled_raw="${SABNZBD_ENABLED:-0}"
+  local sab_enabled
+  sab_enabled="$(arr_normalize_bool "$sab_enabled_raw")"
   SABNZBD_ENABLED="$sab_enabled"
 
   local sab_use_vpn_raw="${SABNZBD_USE_VPN:-0}"
-  local sab_use_vpn="$sab_use_vpn_raw"
-  if [[ "$sab_use_vpn" != "0" && "$sab_use_vpn" != "1" ]]; then
-    warn "Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
-    sab_use_vpn=0
-  fi
+  local sab_use_vpn
+  sab_use_vpn="$(arr_normalize_bool "$sab_use_vpn_raw")"
+  case "$sab_use_vpn_raw" in
+    ''|0|1|true|TRUE|false|FALSE|yes|YES|no|NO|on|ON|off|OFF) ;;
+    *)
+      warn "Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
+      sab_use_vpn=0
+    ;;
+  esac
 
   local gluetun_available=0
   if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1; then
@@ -757,7 +616,9 @@ prepare_env_context() {
     VPN_SERVICE_PROVIDER="protonvpn"
   fi
 
+  # shellcheck disable=SC2034  # consumed by env template generation
   OPENVPN_USER="$(arr_derive_openvpn_user)"
+  # shellcheck disable=SC2034  # consumed by env template generation
   OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
 
   # shellcheck disable=SC2034  # consumed by env template generation
@@ -770,26 +631,10 @@ prepare_env_context() {
   COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
 
   local -a upstream_dns_servers=()
-  mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
-
-  if ((${#upstream_dns_servers[@]} > 0)); then
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_SERVERS="$(
-      IFS=','
-      printf '%s' "${upstream_dns_servers[*]}"
-    )"
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_1="${upstream_dns_servers[0]}"
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_2="${upstream_dns_servers[1]:-}"
-  else
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_SERVERS=""
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_1=""
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_2=""
+  if declare -f collect_upstream_dns_servers >/dev/null 2>&1; then
+    mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers 2>/dev/null || true)
   fi
+  arr_assign_upstream_dns_env "${upstream_dns_servers[@]}"
 
   local qbt_whitelist_raw
   qbt_whitelist_raw="${QBT_AUTH_WHITELIST:-}"
@@ -813,6 +658,7 @@ prepare_env_context() {
       if [[ ! ${!_env_key+x} ]]; then
         printf -v "$_env_key" '%s' ""
       fi
+      # shellcheck disable=SC2163
       export "$_env_key"
     done < <(arr_collect_all_expected_env_keys)
   fi

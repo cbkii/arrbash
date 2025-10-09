@@ -141,7 +141,7 @@ arr_update_secret_line() {
 
   local new_line="${secret_key}: \"${new_value}\""
   local escaped_line
-  escaped_line="$(escape_sed_replacement "$new_line")"
+  escaped_line="$(escape_sed_replacement "$new_line" '/')"
   portable_sed "${line_no}s/.*/${escaped_line}/" "$secrets_file"
   ensure_secret_file_mode "$secrets_file"
   printf 'updated\n'
