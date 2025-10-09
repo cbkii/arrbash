@@ -1216,6 +1216,231 @@ trim_string() {
   printf '%s' "$value"
 }
 
+arr_function_exists() {
+  declare -f "$1" >/dev/null 2>&1
+}
+
+arr_normalize_bool() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      printf '1\n'
+      ;;
+    *)
+      printf '0\n'
+      ;;
+  esac
+}
+
+arr_validate_ipv4_safe() {
+  local ip="${1:-}"
+  if arr_function_exists validate_ipv4; then
+    validate_ipv4 "$ip"
+    return
+  fi
+  [[ "$ip" =~ ^(([0-9]{1,3})\.){3}[0-9]{1,3}$ ]]
+}
+
+arr_ipv4_is_private_pattern() {
+  local ip="${1:-}"
+  [[ "$ip" =~ ^10\. ]] && return 0
+  [[ "$ip" =~ ^192\.168\. ]] && return 0
+  [[ "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]] && return 0
+  return 1
+}
+
+arr_is_private_ipv4_safe() {
+  local ip="${1:-}"
+  if arr_function_exists is_private_ipv4; then
+    is_private_ipv4 "$ip"
+    return
+  fi
+  arr_validate_ipv4_safe "$ip" && arr_ipv4_is_private_pattern "$ip"
+}
+
+arr_hostname_private_candidates() {
+  if ! command -v hostname >/dev/null 2>&1; then
+    return 1
+  fi
+  hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF'
+}
+
+arr_derive_dns_host_entry() {
+  local ip="${LAN_IP:-}"
+
+  if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && arr_validate_ipv4_safe "$ip" && arr_is_private_ipv4_safe "$ip"; then
+    printf '%s\n' "$ip"
+    return 0
+  fi
+
+  local candidate
+  local -a host_candidates=()
+  if command -v hostname >/dev/null 2>&1; then
+    mapfile -t host_candidates < <(arr_hostname_private_candidates 2>/dev/null || true)
+  fi
+
+  for candidate in "${host_candidates[@]}"; do
+    [[ -z "$candidate" ]] && continue
+    if arr_validate_ipv4_safe "$candidate" && arr_is_private_ipv4_safe "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  printf '%s\n' "127.0.0.1"
+}
+
+arr_derive_gluetun_firewall_outbound_subnets() {
+  local ip="${LAN_IP:-}"
+  local -a candidates=("192.168.0.0/16" "10.0.0.0/8" "172.16.0.0/12")
+  local cidr=""
+
+  if [[ -n "$ip" ]] && arr_function_exists lan_ipv4_subnet_cidr; then
+    if cidr="$(lan_ipv4_subnet_cidr "$ip" 2>/dev/null || true)"; then
+      if [[ -n "$cidr" ]]; then
+        candidates=("$cidr" "${candidates[@]}")
+      fi
+    fi
+  fi
+
+  printf '%s\n' "${candidates[@]}" | LC_ALL=C sort -u | paste -sd, -
+}
+
+arr_derive_gluetun_firewall_input_ports() {
+  local split_mode="${SPLIT_VPN:-0}"
+  local expose_direct="${EXPOSE_DIRECT_PORTS:-0}"
+  local -a ports=()
+  local port=""
+
+  if [[ "$split_mode" != "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
+    for port in "${CADDY_HTTP_PORT:-}" "${CADDY_HTTPS_PORT:-}"; do
+      [[ -n "$port" ]] && ports+=("$port")
+    done
+  fi
+
+  if [[ "$split_mode" == "1" ]]; then
+    port="${QBT_PORT:-}"
+    [[ -n "$port" ]] && ports+=("$port")
+  elif [[ "$expose_direct" == "1" ]]; then
+    for port in \
+      "${QBT_PORT:-}" "${SONARR_PORT:-}" "${RADARR_PORT:-}" \
+      "${PROWLARR_PORT:-}" "${BAZARR_PORT:-}" "${FLARR_PORT:-}"; do
+      [[ -n "$port" ]] && ports+=("$port")
+    done
+    if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
+      port="${SABNZBD_PORT:-}"
+      [[ -n "$port" ]] && ports+=("$port")
+    fi
+  fi
+
+  if ((${#ports[@]} == 0)); then
+    printf '\n'
+    return 0
+  fi
+
+  local -A seen=()
+  local -a deduped=()
+  for port in "${ports[@]}"; do
+    if [[ -n "$port" && -z "${seen[$port]:-}" && "$port" =~ ^[0-9]+$ ]]; then
+      seen["$port"]=1
+      deduped+=("$port")
+    fi
+  done
+
+  if ((${#deduped[@]} == 0)); then
+    printf '\n'
+    return 0
+  fi
+
+  IFS=, printf '%s\n' "${deduped[*]}"
+}
+
+arr_derive_openvpn_user() {
+  if [[ ${OPENVPN_USER+x} ]]; then
+    printf '%s\n' "${OPENVPN_USER}"
+    return 0
+  fi
+
+  if [[ -n "${OPENVPN_USER_VALUE:-}" ]]; then
+    printf '%s\n' "${OPENVPN_USER_VALUE}"
+    return 0
+  fi
+
+  if [[ -n "${PROTON_USER_VALUE:-}" ]]; then
+    printf '%s\n' "${PROTON_USER_VALUE%+pmp}+pmp"
+    return 0
+  fi
+
+  printf '\n'
+}
+
+arr_derive_openvpn_password() {
+  if [[ ${OPENVPN_PASSWORD+x} ]]; then
+    printf '%s\n' "${OPENVPN_PASSWORD}"
+    return 0
+  fi
+
+  if [[ -n "${PROTON_PASS_VALUE:-}" ]]; then
+    printf '%s\n' "${PROTON_PASS_VALUE}"
+    return 0
+  fi
+
+  printf '\n'
+}
+
+arr_derive_compose_profiles_csv() {
+  local -a profiles=(ipdirect)
+
+  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+    profiles+=(proxy)
+  fi
+  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
+    profiles+=(localdns)
+  fi
+
+  if ((${#profiles[@]} == 0)); then
+    printf '\n'
+    return 0
+  fi
+
+  local -A seen=()
+  local -a deduped=()
+  local profile
+  for profile in "${profiles[@]}"; do
+    if [[ -n "$profile" && -z "${seen[$profile]:-}" ]]; then
+      seen["$profile"]=1
+      deduped+=("$profile")
+    fi
+  done
+
+  IFS=, printf '%s\n' "${deduped[*]}"
+}
+
+arr_assign_upstream_dns_env() {
+  local -a servers=("$@")
+
+  if ((${#servers[@]} == 0)); then
+    if declare -p ARR_UPSTREAM_DNS_CHAIN >/dev/null 2>&1; then
+      servers=("${ARR_UPSTREAM_DNS_CHAIN[@]}")
+    fi
+  fi
+
+  if ((${#servers[@]} == 0)); then
+    servers=("1.1.1.1" "1.0.0.1")
+  fi
+
+  local csv_input
+  csv_input="$(IFS=,; printf '%s' "${servers[*]}")"
+  local csv_normalized
+  csv_normalized="$(normalize_csv "$csv_input")"
+  local -a normalized=()
+  IFS=',' read -r -a normalized <<<"$csv_normalized"
+
+  UPSTREAM_DNS_SERVERS="$csv_normalized"
+  UPSTREAM_DNS_1="${normalized[0]:-}"
+  UPSTREAM_DNS_2="${normalized[1]:-}"
+  export UPSTREAM_DNS_SERVERS UPSTREAM_DNS_1 UPSTREAM_DNS_2
+}
+
 # Deduplicates and normalizes comma-separated lists while stripping whitespace
 normalize_csv() {
   local csv="${1-}"
@@ -1436,7 +1661,21 @@ portable_sed() {
 
 # Escapes replacement strings for safe use in sed substitution bodies
 escape_sed_replacement() {
-  printf '%s' "$1" | sed -e 's/[&/|]/\\&/g'
+  local s="${1-}"
+  local delim="${2:-/}"
+
+  # Always escape backslashes and '&' which have special meaning in replacements.
+  s="${s//\\/\\\\}"
+  s="${s//&/\\&}"
+
+  case "$delim" in
+    '/') s="${s//\//\\/}" ;;
+    '|') s="${s//|/\\|}" ;;
+    '#') s="${s//#/\\#}" ;;
+    *) : ;;  # Add more delimiters as needed.
+  esac
+
+  printf '%s' "$s"
 }
 
 # Reverses docker compose escaping to recover raw env values (handles $$ expansion)
@@ -1512,7 +1751,7 @@ persist_env_var() {
 
   if grep -q "^${key}=" "${ARR_ENV_FILE}"; then
     local escaped
-    escaped="$(escape_sed_replacement "$line")"
+    escaped="$(escape_sed_replacement "$line" '|')"
     portable_sed "s|^${key}=.*$|${escaped}|" "${ARR_ENV_FILE}"
   else
     printf '%s\n' "$line" >>"${ARR_ENV_FILE}"
