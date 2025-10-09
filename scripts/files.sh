@@ -90,117 +90,6 @@ arr_prompt_direct_port_exposure() {
   esac
 }
 
-# Tracks compose placeholders encountered while streaming docker-compose.yml
-declare -Ag ARR_COMPOSE_VARS=()
-declare -Ag ARR_COMPOSE_MISSING=()
-declare -Ag ARR_COMPOSE_REQUIRED_BY=()
-
-ARR_COMPOSE_CONTEXT="compose"
-
-arr_compose_reset_tracking() {
-  ARR_COMPOSE_VARS=()
-  ARR_COMPOSE_MISSING=()
-  ARR_COMPOSE_REQUIRED_BY=()
-}
-
-arr_compose_set_context() {
-  ARR_COMPOSE_CONTEXT="$1"
-}
-
-arr_compose_inline_escape() {
-  local value="${1-}"
-  value="${value//$'\r'/}" # normalize CRLF
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  value="${value//$'\n'/\\n}"
-  printf '%s' "$value"
-}
-
-arr_compose_register_placeholder() {
-  local name="$1"
-  local require_value="${2:-1}"
-
-  if [[ -z "$name" ]]; then
-    return
-  fi
-
-  ARR_COMPOSE_VARS["$name"]=1
-
-  if ((require_value)); then
-    if [[ ${!name+x} ]]; then
-      unset 'ARR_COMPOSE_MISSING[$name]'
-    else
-      ARR_COMPOSE_MISSING["$name"]=1
-    fi
-  fi
-
-  if [[ -n "$ARR_COMPOSE_CONTEXT" ]]; then
-    ARR_COMPOSE_REQUIRED_BY["$name"]="$ARR_COMPOSE_CONTEXT"
-  fi
-}
-
-arr_compose_stream_line() {
-  local target="$1"
-  local line="$2"
-  local processed=""
-  local search="$line"
-
-  while [[ "$search" =~ (\$\{[A-Za-z_][A-Za-z0-9_]*([:=\-\?+][^}]*)?\}) ]]; do
-    # Append text before the placeholder
-    processed+="${search%%"${BASH_REMATCH[1]}"*}"
-    local placeholder="${BASH_REMATCH[1]}"
-    local expression="${placeholder:2:${#placeholder}-3}"
-    local operator=""
-    local sep
-    for sep in ':-' '-' ':=' ':?' ':+'; do
-      if [[ "$expression" == *"$sep"* ]]; then
-        operator="$sep"
-        expression="${expression%%"$sep"*}"
-        break
-      fi
-    done
-
-    local require_value=1
-    case "$operator" in
-      '' | ':?') require_value=1 ;;
-      *) require_value=0 ;;
-    esac
-
-    if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" && ${!expression+x} ]]; then
-      # Inline the value and clear any prior tracking
-      local replacement
-      replacement="$(arr_compose_inline_escape "${!expression}")"
-      processed+="$replacement"
-      unset 'ARR_COMPOSE_MISSING[$expression]'
-      unset 'ARR_COMPOSE_VARS[$expression]'
-    else
-      # Emit the placeholder verbatim and register it
-      processed+="$placeholder"
-      arr_compose_register_placeholder "$expression" "$require_value"
-      # If in inline mode with a required-but-unset var, track it for failure
-      if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" && ! ${!expression+x} ]]; then
-        ARR_COMPOSE_MISSING["$expression"]=1
-        ARR_COMPOSE_VARS["$expression"]=1
-      fi
-    fi
-
-    # Remove the processed chunk from search
-    search="${search#*"${placeholder}"}"
-  done
-
-  # Append any remaining text
-  processed+="$search"
-  printf '%s\n' "$processed" >>"$target"
-}
-arr_compose_stream_block() {
-  local target="$1"
-  local line=""
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    arr_compose_stream_line "$target" "$line"
-    line=""
-  done
-}
-
 # Derivation helpers reused by compose hydration and write_env; prints a private IPv4 or nothing.
 arr_derive_dns_host_entry() {
   local ip="${LAN_IP:-}"
@@ -352,96 +241,6 @@ arr_derive_compose_profiles_csv() {
   done
 
   IFS=, printf '%s\n' "${deduped[*]}"
-}
-
-arr_hydrate_all_compose_vars() {
-  local name value userconf_path resolved
-
-  if ((${#ARR_COMPOSE_VARS[@]} == 0)); then
-    return 0
-  fi
-
-  userconf_path="${ARR_USERCONF_PATH:-}"
-  if [[ -z "$userconf_path" ]]; then
-    userconf_path="$(arr_default_userconf_path 2>/dev/null || true)"
-  fi
-
-  for name in "${!ARR_COMPOSE_VARS[@]}"; do
-    # validate identifier (defensive)
-    if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-      warn "Skipping invalid compose placeholder name: $(printf '%q' "$name")"
-      unset 'ARR_COMPOSE_VARS[$name]'
-      unset 'ARR_COMPOSE_MISSING[$name]'
-      continue
-    fi
-
-    if [[ -n "$userconf_path" && -f "$userconf_path" ]]; then
-      value="$(get_env_kv "$name" "$userconf_path" 2>/dev/null || true)"
-      if [[ -n "$value" ]]; then
-        printf -v "$name" '%s' "$value"
-        unset 'ARR_COMPOSE_MISSING[$name]'
-      fi
-    fi
-
-    if [[ ${!name+x} ]]; then
-      # honor non-empty values only; empty strings should be considered missing
-      if [[ -n "${!name}" ]]; then
-        unset 'ARR_COMPOSE_MISSING[$name]'
-        continue
-      else
-        unset "$name"
-      fi
-    fi
-
-    resolved=0
-    case "$name" in
-      DNS_HOST_ENTRY)
-        value="$(arr_derive_dns_host_entry)"
-        resolved=1
-        ;;
-      GLUETUN_FIREWALL_OUTBOUND_SUBNETS)
-        value="$(arr_derive_gluetun_firewall_outbound_subnets)"
-        resolved=1
-        ;;
-      GLUETUN_FIREWALL_INPUT_PORTS)
-        value="$(arr_derive_gluetun_firewall_input_ports)"
-        resolved=1
-        ;;
-      OPENVPN_USER)
-        value="$(arr_derive_openvpn_user)"
-        resolved=1
-        ;;
-      OPENVPN_PASSWORD)
-        value="$(arr_derive_openvpn_password)"
-        resolved=1
-        ;;
-      VPN_SERVICE_PROVIDER)
-        value="${VPN_SERVICE_PROVIDER:-protonvpn}"
-        resolved=1
-        ;;
-      COMPOSE_PROFILES)
-        value="$(arr_derive_compose_profiles_csv)"
-        resolved=1
-        ;;
-    esac
-
-    if ((resolved)); then
-      if [[ -n "$value" ]]; then
-        printf -v "$name" '%s' "$value"
-      else
-        unset "$name"
-      fi
-    fi
-
-    if [[ ${!name+x} && -n "${!name}" ]]; then
-      unset 'ARR_COMPOSE_MISSING[$name]'
-    fi
-
-    if [[ ${!name+x} ]]; then
-      unset 'ARR_COMPOSE_MISSING[$name]'
-    fi
-
-  done
 }
 
 # Creates stack/data/media directories and reconciles permissions per profile
@@ -621,75 +420,6 @@ hydrate_caddy_auth_from_env_file() {
       fi
     fi
   fi
-}
-
-arr_emit_compose_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" ]]; then
-    return 0
-  fi
-
-  local -a missing=()
-  local name userconf_hint resolved_conf
-
-  if ((${#ARR_COMPOSE_MISSING[@]} > 0)); then
-    for name in "${!ARR_COMPOSE_MISSING[@]}"; do
-      missing+=("$name")
-    done
-  fi
-
-  if ((${#missing[@]} > 0)); then
-    userconf_hint="${ARRCONF_DIR:-arrconf}/userr.conf"
-    resolved_conf="${ARR_USERCONF_PATH:-}"
-    if [[ -z "$resolved_conf" ]]; then
-      resolved_conf="$(arr_default_userconf_path 2>/dev/null || true)"
-    fi
-
-    {
-      printf '[compose-vars] Unset required variables:'
-      printf ' %s' "${missing[@]}"
-      printf '\nSource order: CLI > ENV > user.conf > defaults\n'
-      printf 'Required by:\n'
-      for name in "${missing[@]}"; do
-        printf '  - %s  (context: %s)\n' "$name" "${ARR_COMPOSE_REQUIRED_BY[$name]:-unknown}"
-      done
-      printf 'Hint: set in %s (resolved: %s) or export before ./arr.sh; CLI overrides last\n' "$userconf_hint" "${resolved_conf:-?}"
-    } >&2
-    return 1
-  fi
-
-  local -a keys=()
-  for name in "${!ARR_COMPOSE_VARS[@]}"; do
-    if [[ ${!name+x} ]]; then
-      keys+=("$name")
-    fi
-  done
-
-  if ((${#keys[@]} == 0)); then
-    return 0
-  fi
-
-  IFS=$'\n' read -r -d '' -a keys < <(
-    printf '%s\n' "${keys[@]}" | LC_ALL=C sort
-    printf '\0'
-  )
-
-  local tmp
-  tmp="$(arr_mktemp_file "${ARR_ENV_FILE}.XXXXXX.tmp" "$SECRET_FILE_MODE")" \
-    || die "Failed to create temp file for ${ARR_ENV_FILE}"
-  ensure_secret_file_mode "$tmp"
-
-  {
-    printf '# Generated by arrbash — compose placeholders only\n'
-    for name in "${keys[@]}"; do
-      if [[ ${!name+x} ]]; then
-        arr_write_env_kv "$name" "${!name}"
-      fi
-    done
-  } >"$tmp"
-
-  sed -i 's/\r$//' "$tmp"
-  mv "$tmp" "$ARR_ENV_FILE"
-  ensure_secret_file_mode "$ARR_ENV_FILE"
 }
 
 arr_safe_compose_write() {
@@ -1030,34 +760,34 @@ write_env() {
   OPENVPN_USER="$(arr_derive_openvpn_user)"
   OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
 
-  # shellcheck disable=SC2034  # consumed by compose env emission
+  # shellcheck disable=SC2034  # consumed by env template generation
   DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
-  # shellcheck disable=SC2034  # consumed by compose env emission
+  # shellcheck disable=SC2034  # consumed by env template generation
   GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
-  # shellcheck disable=SC2034  # consumed by compose env emission
+  # shellcheck disable=SC2034  # consumed by env template generation
   GLUETUN_FIREWALL_INPUT_PORTS="$(arr_derive_gluetun_firewall_input_ports)"
-  # shellcheck disable=SC2034  # consumed by compose env emission
+  # shellcheck disable=SC2034  # consumed by env template generation
   COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
 
   local -a upstream_dns_servers=()
   mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
 
   if ((${#upstream_dns_servers[@]} > 0)); then
-    # shellcheck disable=SC2034  # exported for compose env emission
+    # shellcheck disable=SC2034  # exported for env template generation
     UPSTREAM_DNS_SERVERS="$(
       IFS=','
       printf '%s' "${upstream_dns_servers[*]}"
     )"
-    # shellcheck disable=SC2034  # exported for compose env emission
+    # shellcheck disable=SC2034  # exported for env template generation
     UPSTREAM_DNS_1="${upstream_dns_servers[0]}"
-    # shellcheck disable=SC2034  # exported for compose env emission
+    # shellcheck disable=SC2034  # exported for env template generation
     UPSTREAM_DNS_2="${upstream_dns_servers[1]:-}"
   else
-    # shellcheck disable=SC2034  # exported for compose env emission
+    # shellcheck disable=SC2034  # exported for env template generation
     UPSTREAM_DNS_SERVERS=""
-    # shellcheck disable=SC2034  # exported for compose env emission
+    # shellcheck disable=SC2034  # exported for env template generation
     UPSTREAM_DNS_1=""
-    # shellcheck disable=SC2034  # exported for compose env emission
+    # shellcheck disable=SC2034  # exported for env template generation
     UPSTREAM_DNS_2=""
   fi
 
@@ -1076,6 +806,30 @@ write_env() {
     qbt_whitelist_raw+="${qbt_whitelist_raw:+,}${lan_private_subnet}"
   fi
   QBT_AUTH_WHITELIST="$(normalize_csv "$qbt_whitelist_raw")"
+
+  if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
+    while IFS= read -r _env_key; do
+      [[ -z "$_env_key" ]] && continue
+      if [[ ! ${!_env_key+x} ]]; then
+        printf -v "$_env_key" '%s' ""
+      fi
+      export "$_env_key"
+    done < <(arr_collect_all_expected_env_keys)
+  fi
+
+  local generator_root="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)}"
+  local generator_path="${generator_root}/scripts/gen-env.sh"
+  if [[ ! -x "$generator_path" ]]; then
+    die "Missing env generator: ${generator_path}"
+  fi
+
+  local template_path="${generator_root}/.env.template"
+  local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
+  local user_conf_path="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
+
+  if ! "$generator_path" "$template_path" "$env_target" "$user_conf_path"; then
+    die "Failed to generate ${env_target}"
+  fi
 }
 
 # Appends the shared SABnzbd service definition to the provided compose fragment.
@@ -1094,7 +848,7 @@ append_sabnzbd_service_body() {
     health_start_period_seconds="$sab_timeout_for_health"
   fi
 
-  arr_compose_stream_block "$target" <<'YAML'
+  cat <<'YAML' >>"$target"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
@@ -1106,22 +860,22 @@ append_sabnzbd_service_body() {
 YAML
 
   if [[ "$include_direct_port" == "1" ]]; then
-    arr_compose_stream_block "$target" <<'YAML'
+    cat <<'YAML' >>"$target"
     ports:
 YAML
-    arr_compose_stream_block "$target" < <(arr_yaml_list_item "      " "${LAN_IP}:${SABNZBD_PORT}:${internal_port}")
+    arr_yaml_list_item "      " "${LAN_IP}:${SABNZBD_PORT}:${internal_port}" >>"$target"
   fi
 
-  arr_compose_stream_line "$target" "    healthcheck:"
+  printf '%s\n' "    healthcheck:" >>"$target"
   local _health_url
   _health_url="$(arr_yaml_escape "http://${LOCALHOST_IP}:${internal_port}/api?mode=version&output=json")"
-  arr_compose_stream_line "$target" "      test: [\"CMD\", \"curl\", \"-fsS\", ${_health_url}]"
-  arr_compose_stream_block "$target" < <(arr_yaml_kv "      " "interval" "30s")
-  arr_compose_stream_block "$target" < <(arr_yaml_kv "      " "timeout" "5s")
-  arr_compose_stream_block "$target" < <(arr_yaml_kv "      " "retries" "5")
-  arr_compose_stream_block "$target" < <(arr_yaml_kv "      " "start_period" "${health_start_period_seconds}s")
+  printf '%s\n' "      test: [\"CMD\", \"curl\", \"-fsS\", ${_health_url}]" >>"$target"
+  arr_yaml_kv "      " "interval" "30s" >>"$target"
+  arr_yaml_kv "      " "timeout" "5s" >>"$target"
+  arr_yaml_kv "      " "retries" "5" >>"$target"
+  arr_yaml_kv "      " "start_period" "${health_start_period_seconds}s" >>"$target"
 
-  arr_compose_stream_block "$target" <<'YAML'
+  cat <<'YAML' >>"$target"
     restart: "unless-stopped"
     # NOTE: Future hardening opportunity — consider CPU/memory limits and a read_only filesystem once defaults are vetted.
     logging:
@@ -1151,9 +905,7 @@ write_compose_split_mode() {
   tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
 
-  arr_compose_reset_tracking
-  arr_compose_set_context "compose:header"
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
 # -----------------------------------------------------------------------------
 # docker-compose.yml is auto-generated by the stack script. Do not edit manually.
 # Split VPN mode is active: only qBittorrent shares gluetun's network namespace
@@ -1168,8 +920,7 @@ services:
       - "ipdirect"
 YAML
 
-  arr_compose_set_context "service:gluetun"
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     cap_add:
       - "NET_ADMIN"
     devices:
@@ -1208,7 +959,7 @@ YAML
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -1237,8 +988,7 @@ YAML
         max-size: "1m"
         max-file: "3"
 
-  arr_compose_set_context "service:qbittorrent"
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
   qbittorrent:
     image: "${QBITTORRENT_IMAGE}"
     container_name: "qbittorrent"
@@ -1259,10 +1009,10 @@ YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
     # shellcheck disable=SC2016  # intentional literal for compose placeholder
-    arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}')
+    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     volumes:
       - "${ARR_DOCKER_DIR}/qbittorrent:/config"
       - "${DOWNLOADS_DIR}:/downloads"
@@ -1293,13 +1043,13 @@ YAML
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}"
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
@@ -1327,13 +1077,13 @@ YAML
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}"
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
@@ -1361,13 +1111,13 @@ YAML
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}"
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
@@ -1392,13 +1142,13 @@ YAML
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_INT_PORT}"
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     environment:
       PUID: "${PUID}"
       PGID: "${PGID}"
@@ -1411,12 +1161,12 @@ YAML
 YAML
 
   if [[ -n "${SUBS_DIR:-}" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
       - "${SUBS_DIR}:/subs"
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     restart: "unless-stopped"
     logging:
       driver: "json-file"
@@ -1434,13 +1184,13 @@ YAML
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
     ports:
       - "${LAN_IP}:${FLARR_PORT}:${FLARR_INT_PORT}"
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     environment:
       LOG_LEVEL: "info"
     healthcheck:
@@ -1460,7 +1210,7 @@ YAML
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
     arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: "${SABNZBD_IMAGE}"
     container_name: "sabnzbd"
@@ -1468,7 +1218,7 @@ YAML
       - "ipdirect"
 YAML
     if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
-      arr_compose_stream_block "$tmp" <<'YAML'
+      cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
@@ -1476,7 +1226,7 @@ YAML
 YAML
       append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port"
     else
-      arr_compose_stream_block "$tmp" <<'YAML'
+      cat <<'YAML' >>"$tmp"
     networks:
       - "arr_net"
 YAML
@@ -1489,7 +1239,7 @@ YAML
   fi
 
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
   configarr:
     image: "${CONFIGARR_IMAGE}"
     container_name: "configarr"
@@ -1519,20 +1269,13 @@ YAML
 YAML
   fi
 
-  arr_compose_set_context "compose:networks"
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
 
 networks:
   arr_net:
     name: "${COMPOSE_PROJECT_NAME}_arr_net"
     driver: "bridge"
 YAML
-
-  arr_hydrate_all_compose_vars
-  if ! arr_emit_compose_env_file; then
-    rm -f "$tmp"
-    die "Unable to render ${ARR_ENV_FILE}"
-  fi
 
   if ! verify_single_level_env_placeholders "$tmp"; then
     rm -f "$tmp"
@@ -1621,9 +1364,7 @@ write_compose() {
   tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
 
-  arr_compose_reset_tracking
-  arr_compose_set_context "compose:header"
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
 # -----------------------------------------------------------------------------
 # docker-compose.yml is auto-generated by the stack script. Do not edit manually.
 # All application containers join gluetun's network namespace so every request
@@ -1633,12 +1374,11 @@ write_compose() {
 YAML
 
   if ((include_caddy == 0)); then
-    arr_compose_stream_block "$tmp" < <(arr_yaml_comment "" "Caddy reverse proxy disabled (ENABLE_CADDY=0).")
-    arr_compose_stream_block "$tmp" < <(arr_yaml_comment "" "Set ENABLE_CADDY=1 in ${userconf_path} and rerun ./${STACK}.sh to add HTTPS hostnames via Caddy.")
+    arr_yaml_comment "" "Caddy reverse proxy disabled (ENABLE_CADDY=0)." >>"$tmp"
+    arr_yaml_comment "" "Set ENABLE_CADDY=1 in ${userconf_path} and rerun ./${STACK}.sh to add HTTPS hostnames via Caddy." >>"$tmp"
   fi
 
-  arr_compose_set_context "service:gluetun"
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
 services:
   gluetun:
     image: "${GLUETUN_IMAGE}"
@@ -1684,20 +1424,20 @@ services:
 YAML
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
   fi
 
   if ((include_caddy)); then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${CADDY_HTTP_PORT}:${CADDY_HTTP_PORT}"
       - "${LAN_IP}:${CADDY_HTTPS_PORT}:${CADDY_HTTPS_PORT}"
 YAML
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}"
       - "${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}"
       - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}"
@@ -1706,7 +1446,7 @@ YAML
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -1737,7 +1477,7 @@ YAML
 YAML
 
   if ((include_local_dns)); then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
   local_dns:
     image: "${LOCALDNS_IMAGE}"
     container_name: "arr_local_dns"
@@ -1756,9 +1496,9 @@ YAML
 YAML
     local server
     for server in "${upstream_dns_servers[@]}"; do
-      arr_compose_stream_block "$tmp" < <(arr_yaml_list_item "      " "--server=${server}")
+      arr_yaml_list_item "      " "--server=${server}" >>"$tmp"
     done
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
       - "--domain-needed"
       - "--bogus-priv"
       - "--local-service"
@@ -1792,7 +1532,7 @@ YAML
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
   qbittorrent:
     image: "${QBITTORRENT_IMAGE}"
     container_name: "qbittorrent"
@@ -1812,9 +1552,9 @@ YAML
   if [[ -n "${QBT_DOCKER_MODS}" ]]; then
     #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
     # shellcheck disable=SC2016  # intentional literal for compose placeholder
-    arr_compose_stream_block "$tmp" < <(arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}')
+    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
   fi
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     volumes:
       - "${ARR_DOCKER_DIR}/qbittorrent:/config"
       - "${DOWNLOADS_DIR}:/downloads"
@@ -1928,12 +1668,12 @@ YAML
 YAML
 
   if [[ -n "${SUBS_DIR:-}" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
       - "${SUBS_DIR}:/subs"
 YAML
   fi
 
-  arr_compose_stream_block "$tmp" <<'YAML'
+  cat <<'YAML' >>"$tmp"
     depends_on:
       gluetun:
         condition: "service_healthy"
@@ -1972,7 +1712,7 @@ YAML
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
     arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: "${SABNZBD_IMAGE}"
     container_name: "sabnzbd"
@@ -1980,7 +1720,7 @@ YAML
       - "ipdirect"
 YAML
     if [[ "${SABNZBD_USE_VPN}" == "1" ]]; then
-      arr_compose_stream_block "$tmp" <<'YAML'
+      cat <<'YAML' >>"$tmp"
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
@@ -1997,7 +1737,7 @@ YAML
   fi
 
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
   configarr:
     image: "${CONFIGARR_IMAGE}"
     container_name: "configarr"
@@ -2029,7 +1769,7 @@ YAML
   fi
 
   if ((include_caddy)); then
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
   caddy:
     image: "${CADDY_IMAGE}"
     container_name: "caddy"
@@ -2046,12 +1786,12 @@ YAML
         condition: "service_healthy"
 YAML
     if ((include_local_dns)); then
-      arr_compose_stream_block "$tmp" <<'YAML'
+      cat <<'YAML' >>"$tmp"
       local_dns:
         condition: "service_healthy"
 YAML
     fi
-    arr_compose_stream_block "$tmp" <<'YAML'
+    cat <<'YAML' >>"$tmp"
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -2068,12 +1808,6 @@ YAML
         max-size: "1m"
         max-file: "2"
 YAML
-  fi
-
-  arr_hydrate_all_compose_vars
-  if ! arr_emit_compose_env_file; then
-    rm -f "$tmp"
-    die "Unable to render ${ARR_ENV_FILE}"
   fi
 
   if ! verify_single_level_env_placeholders "$tmp"; then

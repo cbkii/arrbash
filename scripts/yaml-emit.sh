@@ -77,24 +77,4 @@ if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
     printf '%s=%s\n' "$name" "$(arr_env_escape_value "$value")"
   }
 
-  # Writes a full dotenv file using arr_write_env_kv for each key/value pair
-  arr_write_env_file() {
-    local out="$1"
-    shift || return 0
-
-    : >"$out" || return 1
-
-    while (($#)); do
-      local key="$1"
-      if (($# < 2)); then
-        printf '[env] missing value for %s in arr_write_env_file\n' "$key" >&2
-        return 1
-      fi
-      local value="$2"
-      shift 2
-      if ! arr_write_env_kv "$key" "$value" >>"$out"; then
-        return 1
-      fi
-    done
-  }
 fi

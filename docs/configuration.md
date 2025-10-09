@@ -2,7 +2,7 @@
 
 # Configuration guide
 
-Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it.
+Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `.env` now comes from `.env.template` via `scripts/gen-env.sh`, so the template is the single source of truth for Compose variables. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it.
 
 ## Configuration layers
 
