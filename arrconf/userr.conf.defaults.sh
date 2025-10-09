@@ -292,6 +292,7 @@ REFRESH_ALIASES="${REFRESH_ALIASES:-0}"
 
 ARR_USERCONF_TEMPLATE_VARS=(
   STACK
+  ARR_DATA_ROOT
   ARR_USERCONF_PATH
   ARR_LOG_DIR
   ARR_INSTALL_LOG
@@ -363,6 +364,8 @@ ARR_USERCONF_TEMPLATE_VARS=(
   VPN_ALLOWED_HOURS_END
   VPN_COOLDOWN_MINUTES
   VPN_MAX_RETRY_MINUTES
+  VPN_ROTATION_MAX_PER_DAY
+  VPN_ROTATION_JITTER_SECONDS
   GLUETUN_IMAGE
   QBITTORRENT_IMAGE
   SONARR_IMAGE
@@ -418,7 +421,7 @@ ARR_USERCONF_IMPLICIT_VARS=(
   SABNZBD_API_KEY
 )
 
-# Derived (non-user) environment keys written into .env by write_env; kept here
+# Derived (non-user) environment keys prepared for .env generation; kept here
 # so tooling can validate compose interpolation without needing .env.example.
 ARR_DERIVED_ENV_VARS=(
   VPN_TYPE

@@ -90,7 +90,7 @@ arr_prompt_direct_port_exposure() {
   esac
 }
 
-# Derivation helpers reused by compose hydration and write_env; prints a private IPv4 or nothing.
+# Derivation helpers reused by compose hydration and prepare_env_context; prints a private IPv4 or nothing.
 arr_derive_dns_host_entry() {
   local ip="${LAN_IP:-}"
 
@@ -471,9 +471,9 @@ arr_validate_compose_prerequisites() {
   } >&2
   return 1
 }
-# Renders .env with derived networking, VPN, and credential values; enforces prerequisites
-write_env() {
-  step "📝 Writing .env file"
+# Prepares derived networking, VPN, and credential values for .env generation
+prepare_env_context() {
+  step "📝 Preparing environment values"
 
   hydrate_caddy_auth_from_env_file
   hydrate_user_credentials_from_env_file
@@ -817,19 +817,7 @@ write_env() {
     done < <(arr_collect_all_expected_env_keys)
   fi
 
-  local generator_root="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)}"
-  local generator_path="${generator_root}/scripts/gen-env.sh"
-  if [[ ! -x "$generator_path" ]]; then
-    die "Missing env generator: ${generator_path}"
-  fi
-
-  local template_path="${generator_root}/.env.template"
-  local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
-  local user_conf_path="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
-
-  if ! "$generator_path" "$template_path" "$env_target" "$user_conf_path"; then
-    die "Failed to generate ${env_target}"
-  fi
+  ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
 }
 
 # Appends the shared SABnzbd service definition to the provided compose fragment.

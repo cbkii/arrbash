@@ -230,7 +230,7 @@ filter_conditionals() {
 : "${ARR_DATA_ROOT:=${HOME%/}/srv}"
 : "${ARR_STACK_DIR:=${ARR_DATA_ROOT}/${STACK}}"
 : "${ARR_ENV_FILE:=${ARR_STACK_DIR}/.env}"
-: "${ARRCONF_DIR:=${ARR_STACK_DIR}configs}"
+: "${ARRCONF_DIR:=${ARR_STACK_DIR}/configs}"
 : "${ARR_LOG_DIR:=${ARR_STACK_DIR}/logs}"
 : "${ARR_INSTALL_LOG:=${ARR_LOG_DIR}/${STACK}-install.log}"
 : "${ARR_USERCONF_PATH:=${ARRCONF_DIR}/userr.conf}"
@@ -244,6 +244,9 @@ filter_conditionals() {
 : "${FLARR_INT_PORT:=8191}"
 : "${SABNZBD_INT_PORT:=8080}"
 : "${SABNZBD_PORT:=${SABNZBD_INT_PORT}}"
+: "${CADDY_HTTP_PORT:=80}"
+: "${CADDY_HTTPS_PORT:=443}"
+: "${CADDY_DOMAIN_SUFFIX:=${LAN_DOMAIN_SUFFIX:-home.arpa}}"
 
 EXPOSE_DIRECT_PORTS="$(norm_bool "${EXPOSE_DIRECT_PORTS:-0}")"
 ENABLE_CADDY="$(norm_bool "${ENABLE_CADDY:-0}")"
@@ -257,6 +260,8 @@ VPN_AUTO_RECONNECT_ENABLED="$(norm_bool "${VPN_AUTO_RECONNECT_ENABLED:-0}")"
 QBT_ENFORCE_WEBUI="$(norm_bool "${QBT_ENFORCE_WEBUI:-1}")"
 ENABLE_CONFIGARR="$(norm_bool "${ENABLE_CONFIGARR:-1}")"
 SPLIT_VPN="$(norm_bool "${SPLIT_VPN:-0}")"
+
+export ENABLE_CADDY EXPOSE_DIRECT_PORTS SABNZBD_ENABLED
 
 if [[ -z "${SONARR_PORT:-}" ]]; then SONARR_PORT="$SONARR_INT_PORT"; fi
 if [[ -z "${RADARR_PORT:-}" ]]; then RADARR_PORT="$RADARR_INT_PORT"; fi
@@ -274,15 +279,24 @@ if lan_private_subnet="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null || true)
 fi
 QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
 
-if mapfile -t _arr_dns_chain < <(collect_upstream_dns_servers 2>/dev/null || true); then
-  if ((${#_arr_dns_chain[@]} > 0)); then
+dns_candidates=()
+if mapfile -t dns_candidates < <(collect_upstream_dns_servers 2>/dev/null || true); then
+  if ((${#dns_candidates[@]} > 0)); then
     # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_SERVERS="$(IFS=,; printf '%s' "${_arr_dns_chain[*]}")"
+    UPSTREAM_DNS_SERVERS="$(IFS=,; printf '%s' "${dns_candidates[*]}")"
     # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_1="${_arr_dns_chain[0]}"
+    UPSTREAM_DNS_1="${dns_candidates[0]}"
     # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_2="${_arr_dns_chain[1]:-}"
+    UPSTREAM_DNS_2="${dns_candidates[1]:-}"
   fi
+fi
+if [[ -z "${UPSTREAM_DNS_SERVERS:-}" && -z "${UPSTREAM_DNS_1:-}" && -z "${UPSTREAM_DNS_2:-}" ]]; then
+  # shellcheck disable=SC2034  # exported for env template generation
+  UPSTREAM_DNS_1="1.1.1.1"
+  # shellcheck disable=SC2034  # exported for env template generation
+  UPSTREAM_DNS_2="1.0.0.1"
+  # shellcheck disable=SC2034  # exported for env template generation
+  UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_1},${UPSTREAM_DNS_2}"
 fi
 : "${UPSTREAM_DNS_2_DISPLAY:=${UPSTREAM_DNS_2:-<unset>}}"
 
