@@ -1436,7 +1436,7 @@ portable_sed() {
 
 # Escapes replacement strings for safe use in sed substitution bodies
 escape_sed_replacement() {
-  printf '%s' "$1" | sed -e 's/[&/]/\\&/g'
+  printf '%s' "$1" | sed -e 's/[&/|]/\\&/g'
 }
 
 # Reverses docker compose escaping to recover raw env values (handles $$ expansion)
@@ -1498,16 +1498,24 @@ persist_env_var() {
     die "Environment value for ${key} contains newline characters"
   fi
 
-  if [ -f "${ARR_ENV_FILE}" ]; then
-    local compose_safe
-    compose_safe="$(arr_env_escape_value "$value")"
-    if grep -q "^${key}=" "${ARR_ENV_FILE}"; then
-      local escaped
-      escaped="$(escape_sed_replacement "$compose_safe")"
-      portable_sed "s/^${key}=.*/${key}=${escaped}/" "${ARR_ENV_FILE}"
-    else
-      arr_write_env_kv "$key" "$value" >>"${ARR_ENV_FILE}"
-    fi
+  if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    warn "Skipping invalid environment variable name: ${key}"
+    return
+  fi
+
+  if [[ ! -f "${ARR_ENV_FILE}" ]]; then
+    return
+  fi
+
+  local line
+  line="${key}=${value}"
+
+  if grep -q "^${key}=" "${ARR_ENV_FILE}"; then
+    local escaped
+    escaped="$(escape_sed_replacement "$line")"
+    portable_sed "s|^${key}=.*$|${escaped}|" "${ARR_ENV_FILE}"
+  else
+    printf '%s\n' "$line" >>"${ARR_ENV_FILE}"
   fi
 }
 

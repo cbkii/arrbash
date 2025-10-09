@@ -343,7 +343,13 @@ main() {
   run_one_time_migrations
   safe_cleanup
   generate_api_key
-  write_env
+  prepare_env_context
+  local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
+  local template_path="${REPO_ROOT}/.env.template"
+  local user_conf_path="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
+  if ! "${REPO_ROOT}/scripts/gen-env.sh" "$template_path" "$env_target" "$user_conf_path"; then
+    die "Failed to generate ${env_target}"
+  fi
   write_compose
   validate_generated_paths
   preflight_compose_interpolation

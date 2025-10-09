@@ -53,9 +53,7 @@ run_one_time_migrations() {
       fixed_value="${existing_unescaped%+pmp}+pmp"
       if [[ "$fixed_value" != "$existing_unescaped" ]]; then
         ensure_env_backup
-        local compose_value
-        compose_value="$(arr_env_escape_value "$fixed_value")"
-        sed_value="$(escape_sed_replacement "$compose_value")"
+        sed_value="$(escape_sed_replacement "$fixed_value")"
         portable_sed "s|^OPENVPN_USER=.*$|OPENVPN_USER=${sed_value}|" "${ARR_ENV_FILE}"
         warn "OPENVPN_USER was missing '+pmp'; updated automatically in ${ARR_ENV_FILE}"
       fi
@@ -67,9 +65,7 @@ run_one_time_migrations() {
       existing_unescaped="$(unescape_env_value_from_compose "$existing_value")"
       if [[ "$existing_value" != "$existing_unescaped" ]]; then
         ensure_env_backup
-        local compose_hash
-        compose_hash="$(arr_env_escape_value "$existing_unescaped")"
-        sed_value="$(escape_sed_replacement "$compose_hash")"
+        sed_value="$(escape_sed_replacement "$existing_unescaped")"
         portable_sed "s|^CADDY_BASIC_AUTH_HASH=.*$|CADDY_BASIC_AUTH_HASH=${sed_value}|" "${ARR_ENV_FILE}"
         warn "Normalized CADDY_BASIC_AUTH_HASH format for Docker Compose compatibility"
       fi
