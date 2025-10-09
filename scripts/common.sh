@@ -192,7 +192,9 @@ arr_resolve_compose_cmd() {
     version="${version#v}"
     major="${version%%.*}"
     if [[ -n "$major" && "$major" =~ ^[0-9]+$ ]]; then
-      : # major version is valid, do nothing
+      if ((major < 2)); then
+        warn "docker compose plugin version ${version:-unknown} is older than v2; upgrade is recommended"
+      fi
     else
       version=""
     fi

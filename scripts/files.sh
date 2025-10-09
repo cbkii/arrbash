@@ -90,117 +90,6 @@ arr_prompt_direct_port_exposure() {
   esac
 }
 
-# Tracks compose placeholders encountered while streaming docker-compose.yml
-declare -Ag ARR_COMPOSE_VARS=()
-declare -Ag ARR_COMPOSE_MISSING=()
-declare -Ag ARR_COMPOSE_REQUIRED_BY=()
-
-ARR_COMPOSE_CONTEXT="compose"
-
-arr_compose_reset_tracking() {
-  ARR_COMPOSE_VARS=()
-  ARR_COMPOSE_MISSING=()
-  ARR_COMPOSE_REQUIRED_BY=()
-}
-
-arr_compose_set_context() {
-  ARR_COMPOSE_CONTEXT="$1"
-}
-
-arr_compose_inline_escape() {
-  local value="${1-}"
-  value="${value//$'\r'/}" # normalize CRLF
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  value="${value//$'\n'/\\n}"
-  printf '%s' "$value"
-}
-
-arr_compose_register_placeholder() {
-  local name="$1"
-  local require_value="${2:-1}"
-
-  if [[ -z "$name" ]]; then
-    return
-  fi
-
-  ARR_COMPOSE_VARS["$name"]=1
-
-  if ((require_value)); then
-    if [[ ${!name+x} ]]; then
-      unset 'ARR_COMPOSE_MISSING[$name]'
-    else
-      ARR_COMPOSE_MISSING["$name"]=1
-    fi
-  fi
-
-  if [[ -n "$ARR_COMPOSE_CONTEXT" ]]; then
-    ARR_COMPOSE_REQUIRED_BY["$name"]="$ARR_COMPOSE_CONTEXT"
-  fi
-}
-
-arr_compose_stream_line() {
-  local target="$1"
-  local line="$2"
-  local processed=""
-  local search="$line"
-
-  while [[ "$search" =~ (\$\{[A-Za-z_][A-Za-z0-9_]*([:=\-\?+][^}]*)?\}) ]]; do
-    # Append text before the placeholder
-    processed+="${search%%"${BASH_REMATCH[1]}"*}"
-    local placeholder="${BASH_REMATCH[1]}"
-    local expression="${placeholder:2:${#placeholder}-3}"
-    local operator=""
-    local sep
-    for sep in ':-' '-' ':=' ':?' ':+'; do
-      if [[ "$expression" == *"$sep"* ]]; then
-        operator="$sep"
-        expression="${expression%%"$sep"*}"
-        break
-      fi
-    done
-
-    local require_value=1
-    case "$operator" in
-      '' | ':?') require_value=1 ;;
-      *) require_value=0 ;;
-    esac
-
-    if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" && ${!expression+x} ]]; then
-      # Inline the value and clear any prior tracking
-      local replacement
-      replacement="$(arr_compose_inline_escape "${!expression}")"
-      processed+="$replacement"
-      unset 'ARR_COMPOSE_MISSING[$expression]'
-      unset 'ARR_COMPOSE_VARS[$expression]'
-    else
-      # Emit the placeholder verbatim and register it
-      processed+="$placeholder"
-      arr_compose_register_placeholder "$expression" "$require_value"
-      # If in inline mode with a required-but-unset var, track it for failure
-      if [[ "${COMPOSE_INLINE_VALUES:-0}" == "1" && -z "$operator" && ! ${!expression+x} ]]; then
-        ARR_COMPOSE_MISSING["$expression"]=1
-        ARR_COMPOSE_VARS["$expression"]=1
-      fi
-    fi
-
-    # Remove the processed chunk from search
-    search="${search#*"${placeholder}"}"
-  done
-
-  # Append any remaining text
-  processed+="$search"
-  printf '%s\n' "$processed" >>"$target"
-}
-arr_compose_stream_block() {
-  local target="$1"
-  local line=""
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    arr_compose_stream_line "$target" "$line"
-    line=""
-  done
-}
-
 # Derivation helpers reused by compose hydration and write_env; prints a private IPv4 or nothing.
 arr_derive_dns_host_entry() {
   local ip="${LAN_IP:-}"
@@ -272,7 +161,6 @@ arr_derive_gluetun_firewall_input_ports() {
   fi
 
   if ((${#ports[@]} == 0)); then
-    printf '\n'
     return 0
   fi
 
@@ -286,7 +174,6 @@ arr_derive_gluetun_firewall_input_ports() {
   done
 
   if ((${#deduped[@]} == 0)); then
-    printf '\n'
     return 0
   fi
 
@@ -687,7 +574,7 @@ arr_emit_compose_env_file() {
     done
   } >"$tmp"
 
-  sed -i 's/\r$//' "$tmp"
+  sed -i $'s/\t/  /g; s/\r$//' "$tmp"
   mv "$tmp" "$ARR_ENV_FILE"
   ensure_secret_file_mode "$ARR_ENV_FILE"
 }
@@ -710,6 +597,48 @@ arr_safe_compose_write() {
     mv -f "$backup" "$target" || true
   fi
   return 1
+}
+
+arr_finalize_compose_artifacts() {
+  local tmp="$1"
+  local compose_path="$2"
+
+  arr_hydrate_all_compose_vars
+  if ! arr_emit_compose_env_file; then
+    rm -f "$tmp"
+    die "Unable to render ${ARR_ENV_FILE}"
+  fi
+
+  sed -i $'s/\t/  /g; s/\r$//' "$tmp"
+
+  if ! verify_single_level_env_placeholders "$tmp"; then
+    rm -f "$tmp"
+    die "Generated docker-compose.yml contains nested environment placeholders"
+  fi
+
+  if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
+    rm -f "$tmp"
+    die "Generated docker-compose.yml contains unexpected environment placeholders"
+  fi
+
+  if ! arr_safe_compose_write "$compose_path" "$tmp"; then
+    rm -f "$tmp"
+    die "Failed to update ${compose_path}"
+  fi
+
+  ensure_nonsecret_file_mode "$compose_path"
+  sed -i $'s/\t/  /g; s/\r$//' "$compose_path"
+
+  if command -v docker >/dev/null 2>&1; then
+    local compose_err="${ARR_STACK_DIR}/.compose.err"
+    if ! docker compose -f "$compose_path" config --verbose >/dev/null 2>"$compose_err"; then
+      echo "[arr] docker compose config failed" >&2
+      nl -ba "$compose_path" | sed -n '1,120p' >&2
+      head -n 40 "$compose_err" >&2
+      exit 1
+    fi
+    rm -f "$compose_err"
+  fi
 }
 
 arr_validate_compose_prerequisites() {
@@ -1105,12 +1034,11 @@ append_sabnzbd_service_body() {
       - "${ARR_DOCKER_DIR}/sab/downloads:/downloads"
 YAML
 
+  local -a sab_ports=()
   if [[ "$include_direct_port" == "1" ]]; then
-    arr_compose_stream_block "$target" <<'YAML'
-    ports:
-YAML
-    arr_compose_stream_block "$target" < <(arr_yaml_list_item "      " "${LAN_IP}:${SABNZBD_PORT}:${internal_port}")
+    sab_ports+=("\${LAN_IP}:\${SABNZBD_PORT}:${internal_port}")
   fi
+  arr_compose_emit_ports_block "$target" "    " "${sab_ports[@]}"
 
   arr_compose_stream_line "$target" "    healthcheck:"
   local _health_url
@@ -1203,10 +1131,13 @@ YAML
       TZ: "${TIMEZONE}"
     volumes:
       - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
-    ports:
-      - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
+
+  local -a split_gluetun_ports=(
+    '\${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}'
+    '\${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}'
+  )
+  arr_compose_emit_ports_block "$tmp" "    " "${split_gluetun_ports[@]}"
 
   arr_compose_stream_block "$tmp" <<'YAML'
     healthcheck:
@@ -1292,12 +1223,13 @@ YAML
       - "arr_net"
 YAML
 
+  local -a split_sonarr_ports=()
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
-    ports:
-      - "${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}"
-YAML
+    split_sonarr_ports+=(
+      '\${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}'
+    )
   fi
+  arr_compose_emit_ports_block "$tmp" "    " "${split_sonarr_ports[@]}"
 
   arr_compose_stream_block "$tmp" <<'YAML'
     environment:
@@ -1326,12 +1258,13 @@ YAML
       - "arr_net"
 YAML
 
+  local -a split_radarr_ports=()
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
-    ports:
-      - "${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}"
-YAML
+    split_radarr_ports+=(
+      '\${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}'
+    )
   fi
+  arr_compose_emit_ports_block "$tmp" "    " "${split_radarr_ports[@]}"
 
   arr_compose_stream_block "$tmp" <<'YAML'
     environment:
@@ -1360,12 +1293,13 @@ YAML
       - "arr_net"
 YAML
 
+  local -a split_prowlarr_ports=()
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
-    ports:
-      - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}"
-YAML
+    split_prowlarr_ports+=(
+      '\${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}'
+    )
   fi
+  arr_compose_emit_ports_block "$tmp" "    " "${split_prowlarr_ports[@]}"
 
   arr_compose_stream_block "$tmp" <<'YAML'
     environment:
@@ -1391,12 +1325,13 @@ YAML
       - "arr_net"
 YAML
 
+  local -a split_bazarr_ports=()
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
-    ports:
-      - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_INT_PORT}"
-YAML
+    split_bazarr_ports+=(
+      '\${LAN_IP}:${BAZARR_PORT}:${BAZARR_INT_PORT}'
+    )
   fi
+  arr_compose_emit_ports_block "$tmp" "    " "${split_bazarr_ports[@]}"
 
   arr_compose_stream_block "$tmp" <<'YAML'
     environment:
@@ -1433,12 +1368,13 @@ YAML
       - "arr_net"
 YAML
 
+  local -a split_flaresolverr_ports=()
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
-    ports:
-      - "${LAN_IP}:${FLARR_PORT}:${FLARR_INT_PORT}"
-YAML
+    split_flaresolverr_ports+=(
+      '\${LAN_IP}:${FLARR_PORT}:${FLARR_INT_PORT}'
+    )
   fi
+  arr_compose_emit_ports_block "$tmp" "    " "${split_flaresolverr_ports[@]}"
 
   arr_compose_stream_block "$tmp" <<'YAML'
     environment:
@@ -1528,35 +1464,7 @@ networks:
     driver: "bridge"
 YAML
 
-  arr_hydrate_all_compose_vars
-  if ! arr_emit_compose_env_file; then
-    rm -f "$tmp"
-    die "Unable to render ${ARR_ENV_FILE}"
-  fi
-
-  if ! verify_single_level_env_placeholders "$tmp"; then
-    rm -f "$tmp"
-    die "Generated docker-compose.yml contains nested environment placeholders"
-  fi
-
-  if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
-    rm -f "$tmp"
-    die "Generated docker-compose.yml contains unexpected environment placeholders"
-  fi
-
-  if command -v docker >/dev/null 2>&1; then
-    if ! docker compose -f "$tmp" config >/dev/null 2>&1; then
-      rm -f "$tmp"
-      die "docker compose config failed (syntax)"
-    fi
-  fi
-
-  if ! arr_safe_compose_write "$compose_path" "$tmp"; then
-    rm -f "$tmp"
-    die "Failed to update ${compose_path}"
-  fi
-  ensure_nonsecret_file_mode "$compose_path"
-  sed -i 's/\r$//' "$compose_path"
+  arr_finalize_compose_artifacts "$tmp" "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
@@ -1678,33 +1586,31 @@ services:
       TZ: "${TIMEZONE}"
     volumes:
       - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
-    ports:
-      # Centralize host exposure since all services share gluetun's namespace
-      - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
 YAML
 
+  local -a gluetun_ports=(
+    '\${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}'
+  )
+
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
-      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
-YAML
+    gluetun_ports+=(
+      '\${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}'
+      '\${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}'
+      '\${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}'
+      '\${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}'
+      '\${LAN_IP}:${BAZARR_PORT}:${BAZARR_INT_PORT}'
+      '\${LAN_IP}:${FLARR_PORT}:${FLARR_INT_PORT}'
+    )
   fi
 
   if ((include_caddy)); then
-    arr_compose_stream_block "$tmp" <<'YAML'
-      - "${LAN_IP}:${CADDY_HTTP_PORT}:${CADDY_HTTP_PORT}"
-      - "${LAN_IP}:${CADDY_HTTPS_PORT}:${CADDY_HTTPS_PORT}"
-YAML
+    gluetun_ports+=(
+      '\${LAN_IP}:${CADDY_HTTP_PORT}:${CADDY_HTTP_PORT}'
+      '\${LAN_IP}:${CADDY_HTTPS_PORT}:${CADDY_HTTPS_PORT}'
+    )
   fi
 
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    arr_compose_stream_block "$tmp" <<'YAML'
-      - "${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}"
-      - "${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}"
-      - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}"
-      - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_INT_PORT}"
-      - "${LAN_IP}:${FLARR_PORT}:${FLARR_INT_PORT}"
-YAML
-  fi
+  arr_compose_emit_ports_block "$tmp" "    " --comment "Centralize host exposure since all services share gluetun's namespace" "${gluetun_ports[@]}"
 
   arr_compose_stream_block "$tmp" <<'YAML'
     healthcheck:
@@ -1745,9 +1651,13 @@ YAML
       - "localdns"
     cap_add:
       - "NET_ADMIN"
-    ports:
-      - "${LAN_IP}:53:53/udp"
-      - "${LAN_IP}:53:53/tcp"
+YAML
+    local -a local_dns_ports=(
+      '\${LAN_IP}:53:53/udp'
+      '\${LAN_IP}:53:53/tcp'
+    )
+    arr_compose_emit_ports_block "$tmp" "    " "${local_dns_ports[@]}"
+    arr_compose_stream_block "$tmp" <<'YAML'
     command:
       - "--log-facility=-"
       - "--log-async=5"
@@ -2070,35 +1980,7 @@ YAML
 YAML
   fi
 
-  arr_hydrate_all_compose_vars
-  if ! arr_emit_compose_env_file; then
-    rm -f "$tmp"
-    die "Unable to render ${ARR_ENV_FILE}"
-  fi
-
-  if ! verify_single_level_env_placeholders "$tmp"; then
-    rm -f "$tmp"
-    die "Generated docker-compose.yml contains nested environment placeholders"
-  fi
-
-  if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
-    rm -f "$tmp"
-    die "Generated docker-compose.yml contains unexpected environment placeholders"
-  fi
-
-  if command -v docker >/dev/null 2>&1; then
-    if ! docker compose -f "$tmp" config >/dev/null 2>&1; then
-      rm -f "$tmp"
-      die "docker compose config failed (syntax)"
-    fi
-  fi
-
-  if ! arr_safe_compose_write "$compose_path" "$tmp"; then
-    rm -f "$tmp"
-    die "Failed to update ${compose_path}"
-  fi
-  ensure_nonsecret_file_mode "$compose_path"
-  sed -i 's/\r$//' "$compose_path"
+  arr_finalize_compose_artifacts "$tmp" "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
