@@ -46,30 +46,38 @@ run_one_time_migrations() {
 
     local existing_line existing_value existing_unescaped fixed_value sed_value
 
-    existing_line="$(grep '^OPENVPN_USER=' "${ARR_ENV_FILE}" | head -n1 || true)"
-    if [[ -n "$existing_line" ]]; then
+    existing_line="$(grep '^OPENVPN_USER=' "${ARR_ENV_FILE}" | head -n1)"
+    local existing_line_rc=$?
+    if ((existing_line_rc > 1)); then
+      warn "Unable to inspect ${ARR_ENV_FILE} for OPENVPN_USER (grep exited with ${existing_line_rc})"
+      existing_line=""
+    fi
+
+    if ((existing_line_rc == 0)) && [[ -n "$existing_line" ]]; then
       existing_value="${existing_line#OPENVPN_USER=}"
       existing_unescaped="$(unescape_env_value_from_compose "$existing_value")"
       fixed_value="${existing_unescaped%+pmp}+pmp"
       if [[ "$fixed_value" != "$existing_unescaped" ]]; then
         ensure_env_backup
-        local compose_value
-        compose_value="$(arr_env_escape_value "$fixed_value")"
-        sed_value="$(escape_sed_replacement "$compose_value")"
+        sed_value="$(escape_sed_replacement "$fixed_value" '|')"
         portable_sed "s|^OPENVPN_USER=.*$|OPENVPN_USER=${sed_value}|" "${ARR_ENV_FILE}"
         warn "OPENVPN_USER was missing '+pmp'; updated automatically in ${ARR_ENV_FILE}"
       fi
     fi
 
-    existing_line="$(grep '^CADDY_BASIC_AUTH_HASH=' "${ARR_ENV_FILE}" | head -n1 || true)"
-    if [[ -n "$existing_line" ]]; then
+    existing_line="$(grep '^CADDY_BASIC_AUTH_HASH=' "${ARR_ENV_FILE}" | head -n1)"
+    existing_line_rc=$?
+    if ((existing_line_rc > 1)); then
+      warn "Unable to inspect ${ARR_ENV_FILE} for CADDY_BASIC_AUTH_HASH (grep exited with ${existing_line_rc})"
+      existing_line=""
+    fi
+
+    if ((existing_line_rc == 0)) && [[ -n "$existing_line" ]]; then
       existing_value="${existing_line#CADDY_BASIC_AUTH_HASH=}"
       existing_unescaped="$(unescape_env_value_from_compose "$existing_value")"
       if [[ "$existing_value" != "$existing_unescaped" ]]; then
         ensure_env_backup
-        local compose_hash
-        compose_hash="$(arr_env_escape_value "$existing_unescaped")"
-        sed_value="$(escape_sed_replacement "$compose_hash")"
+        sed_value="$(escape_sed_replacement "$existing_unescaped" '|')"
         portable_sed "s|^CADDY_BASIC_AUTH_HASH=.*$|CADDY_BASIC_AUTH_HASH=${sed_value}|" "${ARR_ENV_FILE}"
         warn "Normalized CADDY_BASIC_AUTH_HASH format for Docker Compose compatibility"
       fi
