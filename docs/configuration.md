@@ -4,6 +4,10 @@
 
 Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `.env` now comes from `.env.template` via `scripts/gen-env.sh`, so the template is the single source of truth for Compose variables. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it.
 
+## Prerequisites
+
+- Ensure `envsubst` is available (Debian/Ubuntu: `sudo apt-get install -y gettext-base`; Alpine: `apk add gettext`).
+
 ## Configuration layers
 
 1. **CLI flags** – run-scoped toggles (for example `./arr.sh --enable-caddy`) apply after the read-only guard. They override exported variables and `userr.conf`, so use them for temporary changes.

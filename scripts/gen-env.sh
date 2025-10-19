@@ -15,6 +15,79 @@ if [[ -f "$NETWORK_LIB" ]]; then
   . "$NETWORK_LIB"
 fi
 
+if ! type -t validate_ipv4 >/dev/null 2>&1; then
+  validate_ipv4() {
+    local ip="${1:-}"
+    [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+    local IFS='.'
+    local -a octets=()
+    read -r -a octets <<<"$ip"
+    local octet
+    for octet in "${octets[@]}"; do
+      [[ "$octet" =~ ^[0-9]+$ ]] || return 1
+      if ((octet < 0 || octet > 255)); then
+        return 1
+      fi
+    done
+    return 0
+  }
+fi
+
+if ! type -t is_private_ipv4 >/dev/null 2>&1; then
+  is_private_ipv4() {
+    local ip="${1:-}"
+    validate_ipv4 "$ip" || return 1
+    case "$ip" in
+      10.*|127.*|192.168.*|169.254.*) return 0 ;;
+      172.1[6-9].*|172.2[0-9].*|172.3[0-1].*) return 0 ;;
+      *) return 1 ;;
+    esac
+  }
+fi
+
+if ! type -t lan_ipv4_subnet_cidr >/dev/null 2>&1; then
+  lan_ipv4_subnet_cidr() {
+    local ip="${1:-}"
+    validate_ipv4 "$ip" || return 1
+    is_private_ipv4 "$ip" || return 1
+    local IFS='.'
+    local o1 o2 o3 _rest
+    read -r o1 o2 o3 _rest <<<"$ip"
+    printf '%s.%s.%s.0/24\n' "$o1" "$o2" "$o3"
+  }
+fi
+
+if ! type -t normalize_csv >/dev/null 2>&1; then
+  normalize_csv() {
+    local input="${1:-}"
+    local IFS=','
+    local -a parts=()
+    read -r -a parts <<<"$input"
+    local -a cleaned=()
+    local part trimmed
+    for part in "${parts[@]}"; do
+      trimmed="$(printf '%s' "$part" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      [[ -z "$trimmed" ]] && continue
+      cleaned+=("$trimmed")
+    done
+    if ((${#cleaned[@]})); then
+      (IFS=','; printf '%s\n' "${cleaned[*]}")
+    else
+      printf '%s\n' ""
+    fi
+  }
+fi
+
+if ! type -t sanitize_user >/dev/null 2>&1; then
+  sanitize_user() {
+    local input="${1:-}"
+    local sanitized
+    sanitized="${input,,}"
+    sanitized="${sanitized//[^a-z0-9._-]/}"
+    printf '%s\n' "$sanitized"
+  }
+fi
+
 resolve_path() {
   local path="$1"
   if [[ -z "$path" ]]; then
@@ -132,46 +205,56 @@ if [[ -z "${FLARR_PORT:-}" ]]; then FLARR_PORT="$FLARR_INT_PORT"; fi
 if [[ -z "${QBT_AUTH_WHITELIST:-}" ]]; then
   QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"
 fi
-if lan_private_subnet="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null || true)"; then
-  if [[ -n "$lan_private_subnet" ]]; then
-    QBT_AUTH_WHITELIST+="${QBT_AUTH_WHITELIST:+,}${lan_private_subnet}"
+if declare -f lan_ipv4_subnet_cidr >/dev/null 2>&1; then
+  if lan_private_subnet="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null || true)"; then
+    if [[ -n "$lan_private_subnet" ]]; then
+      QBT_AUTH_WHITELIST+="${QBT_AUTH_WHITELIST:+,}${lan_private_subnet}"
+    fi
   fi
 fi
-QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
+if declare -f normalize_csv >/dev/null 2>&1; then
+  QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
+fi
 
 dns_candidates=()
 if declare -f collect_upstream_dns_servers >/dev/null 2>&1; then
   mapfile -t dns_candidates < <(collect_upstream_dns_servers 2>/dev/null || true)
 fi
-arr_assign_upstream_dns_env "${dns_candidates[@]}"
+if declare -f arr_assign_upstream_dns_env >/dev/null 2>&1; then
+  arr_assign_upstream_dns_env "${dns_candidates[@]}"
+fi
 : "${UPSTREAM_DNS_2_DISPLAY:=${UPSTREAM_DNS_2:-<unset>}}"
 
-if [[ -z "${DNS_HOST_ENTRY:-}" ]]; then
+if [[ -z "${DNS_HOST_ENTRY:-}" ]] && declare -f arr_derive_dns_host_entry >/dev/null 2>&1; then
   DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
 fi
-if [[ -z "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS:-}" ]]; then
+if [[ -z "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS:-}" ]] && declare -f arr_derive_gluetun_firewall_outbound_subnets >/dev/null 2>&1; then
   GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
 fi
-if [[ -z "${GLUETUN_FIREWALL_INPUT_PORTS:-}" ]]; then
+if [[ -z "${GLUETUN_FIREWALL_INPUT_PORTS:-}" ]] && declare -f arr_derive_gluetun_firewall_input_ports >/dev/null 2>&1; then
   GLUETUN_FIREWALL_INPUT_PORTS="$(arr_derive_gluetun_firewall_input_ports)"
 fi
 if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   COMPOSE_PROJECT_NAME="${STACK}"
 fi
-if [[ -z "${COMPOSE_PROFILES:-}" ]]; then
+if [[ -z "${COMPOSE_PROFILES:-}" ]] && declare -f arr_derive_compose_profiles_csv >/dev/null 2>&1; then
   COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
 fi
 : "${VPN_SERVICE_PROVIDER:=${VPN_SERVICE_PROVIDER:-protonvpn}}"
 : "${VPN_TYPE:=${VPN_TYPE:-openvpn}}"
-if [[ -z "${OPENVPN_USER:-}" ]]; then
+if [[ -z "${OPENVPN_USER:-}" ]] && declare -f arr_derive_openvpn_user >/dev/null 2>&1; then
   OPENVPN_USER="$(arr_derive_openvpn_user)"
 fi
-if [[ -z "${OPENVPN_PASSWORD:-}" ]]; then
+if [[ -z "${OPENVPN_PASSWORD:-}" ]] && declare -f arr_derive_openvpn_password >/dev/null 2>&1; then
   OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
 fi
 : "${OPENVPN_USER_ENFORCED:=${OPENVPN_USER:+1}}"
 
-CADDY_BASIC_AUTH_USER="$(sanitize_user "${CADDY_BASIC_AUTH_USER:-}")"
+if declare -f sanitize_user >/dev/null 2>&1; then
+  CADDY_BASIC_AUTH_USER="$(sanitize_user "${CADDY_BASIC_AUTH_USER:-}")"
+else
+  CADDY_BASIC_AUTH_USER="${CADDY_BASIC_AUTH_USER:-}"
+fi
 
 OUT_PATH="${OUT_ARG}" 
 if [[ -z "$OUT_PATH" ]]; then
