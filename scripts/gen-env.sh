@@ -56,146 +56,6 @@ if [[ -f "$CONF_PATH" ]]; then
   . "$CONF_PATH"
 fi
 
-norm_bool() {
-  case "${1:-}" in
-    1|true|TRUE|yes|YES|on|ON) printf '1\n' ;;
-    *) printf '0\n' ;;
-  esac
-}
-
-derive_dns_host_entry() {
-  local ip="${LAN_IP:-}"
-  if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && validate_ipv4 "$ip" && is_private_ipv4 "$ip"; then
-    printf '%s\n' "$ip"
-    return 0
-  fi
-  if command -v hostname >/dev/null 2>&1; then
-    while IFS= read -r candidate; do
-      [[ -z "$candidate" ]] && continue
-      if validate_ipv4 "$candidate" && is_private_ipv4 "$candidate"; then
-        printf '%s\n' "$candidate"
-        return 0
-      fi
-    done < <(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF')
-  fi
-  printf '%s\n' "127.0.0.1"
-}
-
-derive_gluetun_firewall_outbound_subnets() {
-  local ip="${LAN_IP:-}"
-  local -a candidates=("192.168.0.0/16" "10.0.0.0/8" "172.16.0.0/12")
-  local cidr=""
-  if [[ -n "$ip" ]]; then
-    if cidr="$(lan_ipv4_subnet_cidr "$ip" 2>/dev/null || true)"; then
-      if [[ -n "$cidr" ]]; then
-        candidates=("$cidr" "${candidates[@]}")
-      fi
-    fi
-  fi
-  printf '%s\n' "${candidates[@]}" | LC_ALL=C sort -u | paste -sd, -
-}
-
-derive_gluetun_firewall_input_ports() {
-  local split_mode="${SPLIT_VPN:-0}"
-  local expose_direct="${EXPOSE_DIRECT_PORTS:-0}"
-  local -a ports=()
-  local port=""
-
-  if [[ "$split_mode" != "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
-    for port in "${CADDY_HTTP_PORT:-}" "${CADDY_HTTPS_PORT:-}"; do
-      [[ -n "$port" ]] && ports+=("$port")
-    done
-  fi
-
-  if [[ "$split_mode" == "1" ]]; then
-    port="${QBT_PORT:-}"
-    [[ -n "$port" ]] && ports+=("$port")
-  elif [[ "$expose_direct" == "1" ]]; then
-    for port in \
-      "${QBT_PORT:-}" "${SONARR_PORT:-}" "${RADARR_PORT:-}" \
-      "${PROWLARR_PORT:-}" "${BAZARR_PORT:-}" "${FLARR_PORT:-}"; do
-      [[ -n "$port" ]] && ports+=("$port")
-    done
-    if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
-      port="${SABNZBD_PORT:-}"
-      [[ -n "$port" ]] && ports+=("$port")
-    fi
-  fi
-
-  if ((${#ports[@]} == 0)); then
-    printf '\n'
-    return 0
-  fi
-
-  local -A seen=()
-  local -a deduped=()
-  for port in "${ports[@]}"; do
-    if [[ -n "$port" && -z "${seen[$port]:-}" && "$port" =~ ^[0-9]+$ ]]; then
-      seen["$port"]=1
-      deduped+=("$port")
-    fi
-  done
-
-  if ((${#deduped[@]} == 0)); then
-    printf '\n'
-    return 0
-  fi
-
-  IFS=, printf '%s\n' "${deduped[*]}"
-}
-
-derive_compose_profiles() {
-  local -a profiles=(ipdirect)
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    profiles+=(proxy)
-  fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    profiles+=(localdns)
-  fi
-  if ((${#profiles[@]} == 0)); then
-    printf '\n'
-    return 0
-  fi
-  local -A seen=()
-  local -a deduped=()
-  local profile
-  for profile in "${profiles[@]}"; do
-    if [[ -n "$profile" && -z "${seen[$profile]:-}" ]]; then
-      seen["$profile"]=1
-      deduped+=("$profile")
-    fi
-  done
-  IFS=, printf '%s\n' "${deduped[*]}"
-}
-
-derive_openvpn_user() {
-  if [[ ${OPENVPN_USER+x} ]]; then
-    printf '%s\n' "${OPENVPN_USER}"
-    return 0
-  fi
-  if [[ -n "${OPENVPN_USER_VALUE:-}" ]]; then
-    printf '%s\n' "${OPENVPN_USER_VALUE}"
-    return 0
-  fi
-  if [[ -n "${PROTON_USER_VALUE:-}" ]]; then
-    printf '%s\n' "${PROTON_USER_VALUE%+pmp}+pmp"
-    return 0
-  fi
-  printf '\n'
-}
-
-derive_openvpn_password() {
-  if [[ ${OPENVPN_PASSWORD+x} ]]; then
-    printf '%s\n' "${OPENVPN_PASSWORD}"
-    return 0
-  fi
-  if [[ -n "${PROTON_PASS_VALUE:-}" ]]; then
-    printf '%s\n' "${PROTON_PASS_VALUE}"
-    return 0
-  fi
-  printf '\n'
-}
-
 filter_conditionals() {
   awk '
     function truthy(v) {
@@ -248,18 +108,18 @@ filter_conditionals() {
 : "${CADDY_HTTPS_PORT:=443}"
 : "${CADDY_DOMAIN_SUFFIX:=${LAN_DOMAIN_SUFFIX:-home.arpa}}"
 
-EXPOSE_DIRECT_PORTS="$(norm_bool "${EXPOSE_DIRECT_PORTS:-0}")"
-ENABLE_CADDY="$(norm_bool "${ENABLE_CADDY:-0}")"
-ENABLE_LOCAL_DNS="$(norm_bool "${ENABLE_LOCAL_DNS:-0}")"
-SABNZBD_ENABLED="$(norm_bool "${SABNZBD_ENABLED:-0}")"
-SABNZBD_USE_VPN="$(norm_bool "${SABNZBD_USE_VPN:-0}")"
-PF_ASYNC_ENABLE="$(norm_bool "${PF_ASYNC_ENABLE:-1}")"
-PF_ENABLE_CYCLE="$(norm_bool "${PF_ENABLE_CYCLE:-1}")"
-GLUETUN_PF_STRICT="$(norm_bool "${GLUETUN_PF_STRICT:-0}")"
-VPN_AUTO_RECONNECT_ENABLED="$(norm_bool "${VPN_AUTO_RECONNECT_ENABLED:-0}")"
-QBT_ENFORCE_WEBUI="$(norm_bool "${QBT_ENFORCE_WEBUI:-1}")"
-ENABLE_CONFIGARR="$(norm_bool "${ENABLE_CONFIGARR:-1}")"
-SPLIT_VPN="$(norm_bool "${SPLIT_VPN:-0}")"
+EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "${EXPOSE_DIRECT_PORTS:-0}")"
+ENABLE_CADDY="$(arr_normalize_bool "${ENABLE_CADDY:-0}")"
+ENABLE_LOCAL_DNS="$(arr_normalize_bool "${ENABLE_LOCAL_DNS:-0}")"
+SABNZBD_ENABLED="$(arr_normalize_bool "${SABNZBD_ENABLED:-0}")"
+SABNZBD_USE_VPN="$(arr_normalize_bool "${SABNZBD_USE_VPN:-0}")"
+PF_ASYNC_ENABLE="$(arr_normalize_bool "${PF_ASYNC_ENABLE:-1}")"
+PF_ENABLE_CYCLE="$(arr_normalize_bool "${PF_ENABLE_CYCLE:-1}")"
+GLUETUN_PF_STRICT="$(arr_normalize_bool "${GLUETUN_PF_STRICT:-0}")"
+VPN_AUTO_RECONNECT_ENABLED="$(arr_normalize_bool "${VPN_AUTO_RECONNECT_ENABLED:-0}")"
+QBT_ENFORCE_WEBUI="$(arr_normalize_bool "${QBT_ENFORCE_WEBUI:-1}")"
+ENABLE_CONFIGARR="$(arr_normalize_bool "${ENABLE_CONFIGARR:-1}")"
+SPLIT_VPN="$(arr_normalize_bool "${SPLIT_VPN:-0}")"
 
 export ENABLE_CADDY EXPOSE_DIRECT_PORTS SABNZBD_ENABLED
 
@@ -280,48 +140,34 @@ fi
 QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
 
 dns_candidates=()
-if mapfile -t dns_candidates < <(collect_upstream_dns_servers 2>/dev/null || true); then
-  if ((${#dns_candidates[@]} > 0)); then
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_SERVERS="$(IFS=,; printf '%s' "${dns_candidates[*]}")"
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_1="${dns_candidates[0]}"
-    # shellcheck disable=SC2034  # exported for env template generation
-    UPSTREAM_DNS_2="${dns_candidates[1]:-}"
-  fi
+if declare -f collect_upstream_dns_servers >/dev/null 2>&1; then
+  mapfile -t dns_candidates < <(collect_upstream_dns_servers 2>/dev/null || true)
 fi
-if [[ -z "${UPSTREAM_DNS_SERVERS:-}" && -z "${UPSTREAM_DNS_1:-}" && -z "${UPSTREAM_DNS_2:-}" ]]; then
-  # shellcheck disable=SC2034  # exported for env template generation
-  UPSTREAM_DNS_1="1.1.1.1"
-  # shellcheck disable=SC2034  # exported for env template generation
-  UPSTREAM_DNS_2="1.0.0.1"
-  # shellcheck disable=SC2034  # exported for env template generation
-  UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_1},${UPSTREAM_DNS_2}"
-fi
+arr_assign_upstream_dns_env "${dns_candidates[@]}"
 : "${UPSTREAM_DNS_2_DISPLAY:=${UPSTREAM_DNS_2:-<unset>}}"
 
 if [[ -z "${DNS_HOST_ENTRY:-}" ]]; then
-  DNS_HOST_ENTRY="$(derive_dns_host_entry)"
+  DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
 fi
 if [[ -z "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS:-}" ]]; then
-  GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(derive_gluetun_firewall_outbound_subnets)"
+  GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
 fi
 if [[ -z "${GLUETUN_FIREWALL_INPUT_PORTS:-}" ]]; then
-  GLUETUN_FIREWALL_INPUT_PORTS="$(derive_gluetun_firewall_input_ports)"
+  GLUETUN_FIREWALL_INPUT_PORTS="$(arr_derive_gluetun_firewall_input_ports)"
 fi
 if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   COMPOSE_PROJECT_NAME="${STACK}"
 fi
 if [[ -z "${COMPOSE_PROFILES:-}" ]]; then
-  COMPOSE_PROFILES="$(derive_compose_profiles)"
+  COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
 fi
 : "${VPN_SERVICE_PROVIDER:=${VPN_SERVICE_PROVIDER:-protonvpn}}"
 : "${VPN_TYPE:=${VPN_TYPE:-openvpn}}"
 if [[ -z "${OPENVPN_USER:-}" ]]; then
-  OPENVPN_USER="$(derive_openvpn_user)"
+  OPENVPN_USER="$(arr_derive_openvpn_user)"
 fi
 if [[ -z "${OPENVPN_PASSWORD:-}" ]]; then
-  OPENVPN_PASSWORD="$(derive_openvpn_password)"
+  OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
 fi
 : "${OPENVPN_USER_ENFORCED:=${OPENVPN_USER:+1}}"
 
@@ -336,10 +182,6 @@ OUT_PATH="$(resolve_path "$OUT_PATH")"
 filter_tmp="$(mktemp)"
 trap 'rm -f "$filter_tmp"' EXIT
 
-filter_conditionals <"$TEMPLATE_PATH" >"$filter_tmp"
-
-VARS="$(grep -oE '\$\{[A-Z0-9_]+\}' "$filter_tmp" | sort -u | tr '\n' ' ')"
-
 if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
   while IFS= read -r key; do
     [[ -z "$key" ]] && continue
@@ -350,6 +192,10 @@ if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
     export "$key"
   done < <(arr_collect_all_expected_env_keys)
 fi
+
+filter_conditionals <"$TEMPLATE_PATH" >"$filter_tmp"
+
+VARS="$(grep -oE '\$\{[A-Z0-9_]+\}' "$filter_tmp" | sort -u | tr '\n' ' ')"
 
 for placeholder in $VARS; do
   var_name="${placeholder:2:${#placeholder}-3}"
