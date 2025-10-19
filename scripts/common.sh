@@ -1664,7 +1664,12 @@ arr_verify_compose_placeholders() {
     return 0
   fi
 
-    #something broke here
+  _arr_name="${_arr_name%%"$_arr_sep"*}"
+  while IFS= read -r _arr_placeholder; do
+    _arr_name="${_arr_placeholder:2:${#_arr_placeholder}-3}"
+    # Strip any parameter operator and default/message segment
+    for _arr_sep in ':-' '-' ':=' ':?' ':+'; do
+      if [[ "$_arr_name" == *"$_arr_sep"* ]]; then
         _arr_name="${_arr_name%%"$_arr_sep"*}"
       fi
     done
