@@ -617,18 +617,42 @@ prepare_env_context() {
   fi
 
   # shellcheck disable=SC2034  # consumed by env template generation
-  OPENVPN_USER="$(arr_derive_openvpn_user)"
+  if type -t arr_derive_openvpn_user >/dev/null 2>&1; then
+    OPENVPN_USER="$(arr_derive_openvpn_user)"
+  else
+    OPENVPN_USER=""
+  fi
   # shellcheck disable=SC2034  # consumed by env template generation
-  OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
+  if type -t arr_derive_openvpn_password >/dev/null 2>&1; then
+    OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
+  else
+    OPENVPN_PASSWORD=""
+  fi
 
   # shellcheck disable=SC2034  # consumed by env template generation
-  DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
+  if type -t arr_derive_dns_host_entry >/dev/null 2>&1; then
+    DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
+  else
+    DNS_HOST_ENTRY=""
+  fi
   # shellcheck disable=SC2034  # consumed by env template generation
-  GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
+  if type -t arr_derive_gluetun_firewall_outbound_subnets >/dev/null 2>&1; then
+    GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
+  else
+    GLUETUN_FIREWALL_OUTBOUND_SUBNETS=""
+  fi
   # shellcheck disable=SC2034  # consumed by env template generation
-  GLUETUN_FIREWALL_INPUT_PORTS="$(arr_derive_gluetun_firewall_input_ports)"
+  if type -t arr_derive_gluetun_firewall_input_ports >/dev/null 2>&1; then
+    GLUETUN_FIREWALL_INPUT_PORTS="$(arr_derive_gluetun_firewall_input_ports)"
+  else
+    GLUETUN_FIREWALL_INPUT_PORTS=""
+  fi
   # shellcheck disable=SC2034  # consumed by env template generation
-  COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
+  if type -t arr_derive_compose_profiles_csv >/dev/null 2>&1; then
+    COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
+  else
+    COMPOSE_PROFILES=""
+  fi
 
   local -a upstream_dns_servers=()
   if declare -f collect_upstream_dns_servers >/dev/null 2>&1; then
