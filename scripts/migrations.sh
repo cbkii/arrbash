@@ -46,10 +46,14 @@ run_one_time_migrations() {
 
     local existing_line existing_value existing_unescaped fixed_value sed_value
 
-    existing_line="$(grep '^OPENVPN_USER=' "${ARR_ENV_FILE}" | head -n1)"
-    local existing_line_rc=$?
-    if ((existing_line_rc > 1)); then
-      warn "Unable to inspect ${ARR_ENV_FILE} for OPENVPN_USER (grep exited with ${existing_line_rc})"
+    local existing_line_rc=0
+    if existing_line="$(grep -m1 '^OPENVPN_USER=' "${ARR_ENV_FILE}")"; then
+      existing_line_rc=0
+    else
+      existing_line_rc=$?
+      if ((existing_line_rc > 1)); then
+        warn "Unable to inspect ${ARR_ENV_FILE} for OPENVPN_USER (grep exited with ${existing_line_rc})"
+      fi
       existing_line=""
     fi
 
@@ -65,10 +69,13 @@ run_one_time_migrations() {
       fi
     fi
 
-    existing_line="$(grep '^CADDY_BASIC_AUTH_HASH=' "${ARR_ENV_FILE}" | head -n1)"
-    existing_line_rc=$?
-    if ((existing_line_rc > 1)); then
-      warn "Unable to inspect ${ARR_ENV_FILE} for CADDY_BASIC_AUTH_HASH (grep exited with ${existing_line_rc})"
+    if existing_line="$(grep -m1 '^CADDY_BASIC_AUTH_HASH=' "${ARR_ENV_FILE}")"; then
+      existing_line_rc=0
+    else
+      existing_line_rc=$?
+      if ((existing_line_rc > 1)); then
+        warn "Unable to inspect ${ARR_ENV_FILE} for CADDY_BASIC_AUTH_HASH (grep exited with ${existing_line_rc})"
+      fi
       existing_line=""
     fi
 
