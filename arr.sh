@@ -25,6 +25,48 @@ arr_err_trap() {
 # Install trap early so sourcing failures have context
 trap 'arr_err_trap' ERR
 
+arr_main_cleanup_dispatch() {
+  local rc="${1:-$?}"
+
+  if declare -f arr_restore_stack_runtime_state >/dev/null 2>&1; then
+    arr_restore_stack_runtime_state "${rc}"
+  fi
+
+  if declare -f arr_global_cleanup >/dev/null 2>&1; then
+    arr_global_cleanup
+  fi
+}
+
+arr_main_exit_trap() {
+  local rc=$?
+  trap - EXIT
+
+  if [[ "${ARR_MAIN_INTERRUPTED:-0}" == "1" ]]; then
+    exit "${rc}"
+  fi
+
+  arr_main_cleanup_dispatch "${rc}"
+  exit "${rc}"
+}
+
+arr_main_signal_trap() {
+  local signal="$1"
+  local code="$2"
+
+  trap - "${signal}"
+  ARR_MAIN_INTERRUPTED=1
+  arr_main_cleanup_dispatch "${code}"
+  exit "${code}"
+}
+
+trap 'arr_main_signal_trap INT 130' INT
+trap 'arr_main_signal_trap TERM 143' TERM
+trap 'arr_main_signal_trap HUP 129' HUP
+trap 'arr_main_signal_trap QUIT 131' QUIT
+trap 'arr_main_exit_trap' EXIT
+
+ARR_MAIN_TRAP_INSTALLED=1
+
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
@@ -338,6 +380,7 @@ main() {
   hydrate_sab_api_key_from_config
 
   preflight
+  arr_capture_stack_runtime_state || true
   check_network_requirements
   mkdirs
   run_one_time_migrations
@@ -347,7 +390,7 @@ main() {
   local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
   local template_path="${REPO_ROOT}/.env.template"
   local user_conf_path="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
-  if ! "${REPO_ROOT}/scripts/gen-env.sh" "$template_path" "$env_target" "$user_conf_path"; then
+  if ! "${REPO_ROOT}/scripts/gen-env.sh" "${template_path}" "${env_target}" "${user_conf_path}"; then
     die "Failed to generate ${env_target}"
   fi
   write_compose
