@@ -1733,12 +1733,17 @@ arr_replace_nested_placeholders_in_line() {
   local placeholder=""
   local resolved=""
 
-  while [[ "$working" =~ (\$\{[^}]*\$\{[^}]*\}) ]]; do
+  while [[ "$working" =~ (\$\{[^}]*\$\{[^}]*\}[^}]*\}) ]]; do
     placeholder="${BASH_REMATCH[1]}"
 
     if ! resolved="$(arr_evaluate_nested_placeholder "$placeholder")"; then
       warn "  Unable to resolve nested placeholder ${placeholder} automatically"
-      return 1
+      break
+    fi
+    # Prevent infinite loop when no progress can be made
+    if [[ "$resolved" == "$placeholder" ]]; then
+      warn "  Nested placeholder ${placeholder} did not resolve to a different value; stopping to avoid infinite loop"
+      break
     fi
 
     working="${working//${placeholder}/${resolved}}"

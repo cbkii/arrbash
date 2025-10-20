@@ -502,7 +502,10 @@ arr_compose_autorepair_and_validate() {
 
   local compose_cmd_raw=""
   local -a compose_cmd=()
-  if compose_cmd_raw="$(detect_compose_cmd)"; then
+  if ! compose_cmd_raw="$(detect_compose_cmd)" || [[ -z "$compose_cmd_raw" ]]; then
+    arr_compose_log_message "$log_file" "Docker Compose unavailable; validation skipped"
+    summary_lines+=("validation skipped (compose command unavailable)")
+  else
     read -r -a compose_cmd <<<"$compose_cmd_raw"
     if ((${#compose_cmd[@]} > 0)); then
       if ! "${compose_cmd[@]}" -f "$staging" config --quiet >/dev/null 2>&1; then
@@ -513,9 +516,6 @@ arr_compose_autorepair_and_validate() {
       arr_compose_log_message "$log_file" "Compose validation succeeded via ${compose_cmd[*]} config --quiet"
       summary_lines+=("validated with ${compose_cmd[*]} config --quiet")
     fi
-  else
-    arr_compose_log_message "$log_file" "Docker Compose unavailable; validation skipped"
-    summary_lines+=("validation skipped (compose command unavailable)")
   fi
 
   if ! arr_safe_compose_write "$target" "$staging"; then
