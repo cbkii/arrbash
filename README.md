@@ -39,7 +39,7 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
    ```bash
    ./arr.sh --yes         # omit --yes for interactive mode
    ```
-   > The script checks Docker, Compose, and helper tools, then regenerates `.env` from `.env.template` via `scripts/gen-env.sh` alongside `docker-compose.yml` and support files before starting the stack. Rerun it after every edit to `userr.conf`. The installer looks under `${ARR_DATA_ROOT}` (depth 4) and then the repo's parent directory for the first `userr.conf` it finds, so keep only the copy you want applied.
+   > The script checks Docker, Compose, and helper tools, then regenerates `.env` from `.env.template` via `scripts/gen-env.sh` alongside `docker-compose.yml` and support files before starting the stack. Do not edit those generated files by hand—change `userr.conf` instead and rerun the installer. The installer looks under `${ARR_DATA_ROOT}` (depth 4) and then the repo's parent directory for the first `userr.conf` it finds, so keep only the copy you want applied.
   
 6. **Access services.** Follow the summary printed by the installer or visit `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent). See **First-Run Checklist** below.
 
@@ -47,6 +47,7 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
 - `ARR_DATA_ROOT`: top-level data directory for the stack (defaults to `~/srv`). Override it via the environment or `userr.conf` before running `./arr.sh`.
 - `ARRCONF_DIR`: configuration folder for Proton credentials and overrides (defaults to `${ARR_DATA_ROOT}/${STACK}configs`).
 - `userr.conf` and `proton.auth` both live in `${ARRCONF_DIR}`. Keep them out of version control. If multiple overrides exist, the installer scans `${ARR_DATA_ROOT}` (depth 4) and then above the repo for the first `userr.conf` it finds.
+- Configuration precedence is `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`. The later layers only apply when earlier ones do not set a value.
 - Check these values first:
   - `LAN_IP`: private address of the host. Set this before exposing ports.
   - `STACK`: project label used for generated paths and logs (defaults to `arr`).

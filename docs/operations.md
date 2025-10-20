@@ -5,7 +5,7 @@
 Use these commands to run the installer safely, rotate credentials, and call helper scripts.
 
 ## Installer basics
-- `./arr.sh` is idempotent. Rerun it after editing `${ARRCONF_DIR}/userr.conf`; the script regenerates `.env` from `.env.template` via `scripts/gen-env.sh` plus `docker-compose.yml`, the Caddyfile, and helper assets before starting containers. It only checks prerequisites, so install Docker and helper tools yourself first.
+- `./arr.sh` is idempotent. Rerun it after editing `${ARRCONF_DIR}/userr.conf`; the script regenerates `.env` from `.env.template` via `scripts/gen-env.sh` plus `docker-compose.yml`, the Caddyfile, and helper assets before starting containers. Do not edit those generated files manually—change `userr.conf` or use CLI flags instead. It only checks prerequisites, so install Docker and helper tools yourself first.
 - Key flags (combine as needed):
 
   ```bash

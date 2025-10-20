@@ -2,7 +2,7 @@
 
 # Configuration guide
 
-Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `.env` now comes from `.env.template` via `scripts/gen-env.sh`, so the template is the single source of truth for Compose variables. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it.
+Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `.env` now comes from `.env.template` via `scripts/gen-env.sh`, so the template is the single source of truth for Compose variables. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it. Generated artifacts (`.env`, `docker-compose.yml`, `Caddyfile`, etc.) are overwritten on every run—never edit them manually.
 
 ## Prerequisites
 
@@ -11,11 +11,17 @@ Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `d
 ## Configuration layers
 
 1. **CLI flags** – run-scoped toggles (for example `./arr.sh --enable-caddy`) apply after the read-only guard. They override exported variables and `userr.conf`, so use them for temporary changes.
-2. **Shell environment** – anything exported before running `./arr.sh` still overrides `userr.conf` and defaults, but CLI flags are applied last. Paths like `ARR_USERCONF_PATH` may be normalised to an absolute path while loading.
+2. **Shell environment** – anything exported before running `./arr.sh` overrides `userr.conf` and defaults, but CLI flags are applied last. Paths like `ARR_USERCONF_PATH` may be normalised to an absolute path while loading.
 3. **`${ARRCONF_DIR}/userr.conf`** – your saved settings (defaults to `${ARR_DATA_ROOT}/${STACK}configs/userr.conf`). Keep it outside version control and rerun the installer after every edit.
 4. **`arrconf/userr.conf.defaults.sh`** – repo defaults.
 
+The effective precedence is `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`. When two layers define the same variable, the earlier layer wins.
+
 The installer prints a configuration table during preflight. Cancel with `Ctrl+C` if a value looks wrong, adjust `userr.conf`, and rerun.
+
+### Placeholder handling, quoting, and feature gates
+- `.env.template` uses `# @if VAR` / `# @endif` guards to include optional blocks only when their controlling variable resolves to a truthy value (`1`, `true`, `yes`, or `on`). `scripts/gen-env.sh` exports just the placeholders that survive those checks and substitutes them via `envsubst`, writing `KEY=value` lines with no additional quoting or escaping. Compose reads the resulting `.env` literally, so values containing spaces, `#`, or other shell metacharacters must already be valid for `.env` syntax.
+- `docker-compose.yml` is rendered from Bash templates that always double-quote scalars and escape backslashes, quotes, and newlines. Optional services (Caddy, Configarr, SABnzbd, VPN helpers, etc.) only contribute sections and environment keys when their feature flag is enabled. Leave variables such as `CADDY_BASIC_AUTH_HASH` or `SABNZBD_API_KEY` blank in `userr.conf`—the installer backfills them from preserved secrets where possible.
 
 ## Core settings to review
 
@@ -96,7 +102,7 @@ Changing `ARR_DOCKER_DIR` moves all service state directories. Rerun `./arr.sh -
 
 ## Optional services and containers
 
-Toggle these extras in `${ARRCONF_DIR}/userr.conf` or via the matching `./arr.sh` flags. Rerun the installer after every change so generated files and helper aliases stay in sync.
+Toggle these extras in `${ARRCONF_DIR}/userr.conf` or via the matching `./arr.sh` flags. Variables scoped to a disabled feature are omitted from `.env` and `docker-compose.yml`, so leave their values blank until you enable the feature. Rerun the installer after every change so generated files and helper aliases stay in sync.
 
 ### Caddy HTTPS proxy
 - Set `ENABLE_CADDY=1` or run `./arr.sh --enable-caddy --yes` for a one-off enable.
