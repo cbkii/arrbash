@@ -379,6 +379,42 @@ arr_compose_log_message() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file" 2>/dev/null || true
 }
 
+arr_compose_log_offending_lines() {
+  local log_file="$1"
+  local source_file="$2"
+  local lint_output="$3"
+
+  if [[ -z "$log_file" || -z "$source_file" || -z "$lint_output" ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "$source_file" ]]; then
+    arr_compose_log_message "$log_file" "Unable to display offending lines; ${source_file} missing"
+    return 0
+  fi
+
+  local -A seen_lines=()
+  local lint_line=""
+  while IFS= read -r lint_line; do
+    if [[ "$lint_line" =~ :([0-9]+):([0-9]+): ]]; then
+      local line_no="${BASH_REMATCH[1]}"
+      if [[ -n "${seen_lines["$line_no"]:-}" ]]; then
+        continue
+      fi
+
+      local offending_line=""
+      offending_line="$(sed -n "${line_no}p" "$source_file" 2>/dev/null || printf '')"
+      if [[ -n "$offending_line" ]]; then
+        arr_compose_log_message "$log_file" "Line ${line_no}: ${offending_line}"
+      else
+        arr_compose_log_message "$log_file" "Line ${line_no}: <unavailable>"
+      fi
+
+      seen_lines["$line_no"]=1
+    fi
+  done <<<"$lint_output"
+}
+
 arr_compose_ensure_document_start() {
   local staging="$1"
   local log_file="$2"
@@ -588,12 +624,14 @@ arr_compose_autorepair() {
       if [[ -n "$lint_output" ]]; then
         arr_compose_log_message "$log_file" $'yamllint reported warnings:'
         printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
+        arr_compose_log_offending_lines "$log_file" "$staging" "$lint_output"
       else
         arr_compose_log_message "$log_file" "yamllint completed without issues"
       fi
     else
       arr_compose_log_message "$log_file" $'yamllint reported issues:'
       printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
+      arr_compose_log_offending_lines "$log_file" "$staging" "$lint_output"
     fi
   else
     arr_compose_log_message "$log_file" "yamllint not available; skipping linting"
@@ -1217,6 +1255,8 @@ YAML
       options:
         max-size: "1m"
         max-file: "3"
+
+YAML
 
   cat <<'YAML' >>"$tmp"
   qbittorrent:
