@@ -79,6 +79,9 @@ arr_setup_defaults() {
   DOCKER_COMPOSE_CMD=()
   ARR_LOCKFILE=""
   LOG_FILE=""
+  if [[ -z "${ARR_FORCE_UNLOCK:-}" ]]; then
+    ARR_FORCE_UNLOCK=0
+  fi
   : "${DOCKER_COMPOSE_CMD[*]}" "$ARR_LOCKFILE" "$LOG_FILE"
 
   local requested_permission_profile="${ARR_PERMISSION_PROFILE:-}"

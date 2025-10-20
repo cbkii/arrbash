@@ -1272,6 +1272,22 @@ acquire_lock() {
 
   local lockfile="${lock_dir}/.${STACK}.lock"
 
+  if [[ "${ARR_FORCE_UNLOCK:-0}" == "1" && -e "${lockfile}" ]]; then
+    local previous_owner=""
+    if previous_owner="$(cat "${lockfile}" 2>/dev/null)"; then
+      previous_owner="${previous_owner//[$'\n\r\t ']}"
+    fi
+    if [[ -n "${previous_owner}" ]]; then
+      warn "Force-unlocking existing installer lock held by PID ${previous_owner} (${lockfile})."
+    else
+      warn "Force-unlocking existing installer lock at ${lockfile}."
+    fi
+    if ! rm -f -- "${lockfile}" 2>/dev/null; then
+      die "Failed to remove existing installer lock at ${lockfile}."
+    fi
+    ARR_FORCE_UNLOCK=0
+  fi
+
   while ! (
     set -C
     printf '%s' "$$" >"$lockfile"

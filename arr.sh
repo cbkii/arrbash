@@ -287,6 +287,7 @@ Options:
   --no-auto-api-sync    Disable automatic Configarr API key sync for this run
   --setup-host-dns      Run the host DNS takeover helper during installation
   --refresh-aliases     Regenerate helper aliases and reload your shell
+  --force-unlock        Remove an existing installer lock before continuing
   --help                Show this help message
 USAGE
 }
@@ -339,6 +340,10 @@ main() {
         ;;
       --no-auto-api-sync)
         DISABLE_AUTO_API_KEY_SYNC=1
+        shift
+        ;;
+      --force-unlock)
+        ARR_FORCE_UNLOCK=1
         shift
         ;;
       --setup-host-dns)
