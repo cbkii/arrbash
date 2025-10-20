@@ -399,7 +399,7 @@ arr_compose_ensure_document_start() {
     break
   done <"$staging"
 
-  if [[ "$first_content_line" == '---' ]]; then
+  if [[ "$first_content_line" =~ ^[[:space:]]*---[[:space:]]*$ ]]; then
     return 0
   fi
 
