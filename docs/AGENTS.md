@@ -20,6 +20,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
   * `scripts/gen-env.sh` — single, authoritative generator for `.env` using **Bash/Zsh logic + envsubst**.
   * `.env.template` — repository-tracked template with `${VAR}` placeholders and optional blocks guarded by `# @if VAR` … `# @endif`.
+  * Runtime layering is `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`. Mirror that order in all docs.
 * **Scripts directory:** `scripts/` — helper scripts (DNS, versions, networking, qbt helpers, etc.).
 
   * **ENV EMISSION MOVED HERE** (via `gen-env.sh` only).
@@ -50,16 +51,18 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
    * `arrconf/userr.conf.defaults.sh` (defaults)
    * `${ARRCONF_DIR}/userr.conf` (user overrides; optional)
    * `.env.template` (placeholders, optional `# @if VAR` guards)
+   * CLI flags and exported environment variables layered ahead of `${ARRCONF_DIR}/userr.conf`
 
 2. **Generator**
 
    * `scripts/gen-env.sh`:
 
-     * Sources defaults then user overrides.
+    * Sources defaults then user overrides (arr.sh applies CLI/environment overrides before invoking the generator).
      * Applies **derived logic** (internal→external port fallbacks, Caddy defaults, DNS upstream defaults, PF/ProtonVPN toggles, boolean normalisation).
      * Processes conditional blocks: keeps content between `# @if VAR` … `# @endif` only when `VAR` is “truthy” (`1/true/yes/on`, case-insensitive).
      * Runs `envsubst` **scoped** to placeholders actually used in the filtered template.
      * Writes to `${ARR_ENV_FILE}` (default `${ARR_STACK_DIR}/.env`) with mode `0600`.
+     * Emits `KEY=value` with no wrapping quotes; Compose consumes the file literally.
 
 3. **Outcomes**
 
@@ -103,8 +106,10 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 * **Authority for `.env`:** `scripts/gen-env.sh` (only).
 
   * Format: `NAME=VALUE` (no `export`), one per line.
-  * Values are produced via `envsubst`; source variables must be set before substitution.
+  * Values are produced via `envsubst`; source variables must be set before substitution. Do not add quotes around values in `userr.conf`—Compose reads `.env` values literally, so quotes become part of the value. Spaces and `#` are allowed in values; just ensure there’s no trailing comment after the value in the template.
+  * Optional blocks rely on `# @if VAR` guards so feature-scoped variables disappear entirely when falsey.
 * **YAML emission:** keep YAML-escape logic (double-quoted scalars; escape `\` → `\\`, `"` → `\"`, newlines → `\n`). Prefer list-form commands/healthchecks.
+  * Feature-gated sections (Caddy, SABnzbd, Configarr, VPN helpers, etc.) must drop their services and dependent variables whenever the controlling flag is disabled.
 * **Double-expansion guard:** after writing YAML, ensure unresolved placeholders are only those intended for Compose interpolation (allow-list common runtime names).
 
 ---
