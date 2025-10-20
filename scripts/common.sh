@@ -14,6 +14,51 @@
 : "${DATA_DIR_MODE:=700}"
 : "${LOCK_FILE_MODE:=640}"
 
+declare -a ARR_TEMP_PATHS=()
+
+arr_cleanup_temp_assets() {
+  local path=""
+
+  if [[ -z "${ARR_TEMP_PATHS[*]:-}" ]]; then
+    return 0
+  fi
+
+  for path in "${ARR_TEMP_PATHS[@]}"; do
+    [[ -n "$path" ]] || continue
+    rm -rf -- "$path" 2>/dev/null || true
+  done
+
+  ARR_TEMP_PATHS=()
+}
+
+arr_global_cleanup() {
+  arr_cleanup_temp_assets
+
+  if [[ -n "${ARR_LOCKFILE:-}" ]]; then
+    rm -f -- "$ARR_LOCKFILE" 2>/dev/null || true
+  fi
+}
+
+arr_register_cleanup() {
+  if [[ -n "${ARR_CLEANUP_TRAP_SET:-}" ]]; then
+    return 0
+  fi
+
+  trap 'arr_global_cleanup' EXIT INT TERM HUP QUIT
+  ARR_CLEANUP_TRAP_SET=1
+}
+
+arr_register_temp_path() {
+  local path="$1"
+
+  if [[ -z "$path" ]]; then
+    return 0
+  fi
+
+  arr_register_cleanup
+  ARR_TEMP_PATHS+=("$path")
+}
+
 if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   _arr_common_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   YAML_EMIT_LIB="${YAML_EMIT_LIB:-${_arr_common_dir}/yaml-emit.sh}"
@@ -105,7 +150,24 @@ arr_read_fields() {
 # Ensures port is numeric and within 1-65535
 validate_port() {
   local port="$1"
-  [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+  local display="${port:-<empty>}"
+
+  if [[ -z "$port" ]]; then
+    warn "Invalid port: ${display} (expected integer between 1 and 65535)"
+    return 1
+  fi
+
+  if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+    warn "Invalid port: ${display} (expected integer between 1 and 65535)"
+    return 1
+  fi
+
+  if ((port < 1 || port > 65535)); then
+    warn "Invalid port: ${display} (expected integer between 1 and 65535)"
+    return 1
+  fi
+
+  return 0
 }
 
 # Normalises a port value, falling back to a default and warning when invalid
@@ -678,6 +740,10 @@ arr_mktemp_file() {
     chmod "$mode" "$tmp" 2>/dev/null || warn "Could not set mode ${mode} on temporary file ${tmp}"
   fi
 
+  : >"$tmp"
+
+  arr_register_temp_path "$tmp"
+
   printf '%s\n' "$tmp"
 }
 
@@ -696,6 +762,8 @@ arr_mktemp_dir() {
   if [[ -n "$mode" ]]; then
     chmod "$mode" "$tmp" 2>/dev/null || warn "Could not set mode ${mode} on temporary directory ${tmp}"
   fi
+
+  arr_register_temp_path "$tmp"
 
   printf '%s\n' "$tmp"
 }
@@ -1213,7 +1281,7 @@ acquire_lock() {
   chmod "$LOCK_FILE_MODE" "$lockfile" 2>/dev/null || true
 
   ARR_LOCKFILE="$lockfile"
-  trap 'rm -f -- "$ARR_LOCKFILE"' EXIT INT TERM HUP QUIT
+  arr_register_cleanup
 }
 
 # Safely writes content to target by staging through a temp file with correct mode
@@ -1593,6 +1661,204 @@ probe_dns_resolver() {
 }
 
 # Flags nested ${...${...}} constructs that docker compose cannot interpolate
+arr_scan_nested_placeholders() {
+  local file="$1"
+
+  if [[ -z "$file" || ! -f "$file" ]]; then
+    return 1
+  fi
+
+  local line=""
+  local line_no=0
+  local depth=0
+  local max_depth=0
+  local char=""
+  local i=0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_no=$((line_no + 1))
+    depth=0
+    max_depth=0
+
+    for ((i = 0; i < ${#line}; i++)); do
+      char="${line:i:1}"
+
+      if [[ "$char" == '$' && $((i + 1)) -lt ${#line} && "${line:i+1:1}" == '{' ]]; then
+        depth=$((depth + 1))
+        ((depth > max_depth)) && max_depth=$depth
+        ((i++))
+        continue
+      fi
+
+      if [[ "$char" == '}' && depth -gt 0 ]]; then
+        depth=$((depth - 1))
+      fi
+    done
+
+    if ((max_depth > 1)); then
+      printf '%d\t%s\n' "$line_no" "$line"
+    fi
+  done <"$file"
+}
+
+arr_evaluate_nested_placeholder() {
+  local expr="$1"
+
+  if [[ -z "$expr" ]]; then
+    return 1
+  fi
+
+  if [[ "$expr" == *$'$(' || "$expr" == *$'\x60' ]]; then
+    return 1
+  fi
+
+  if [[ ! "$expr" =~ ^\$\{[A-Za-z0-9_!:?+\-\{\}\$]*\}$ ]]; then
+    return 1
+  fi
+
+  local sanitized="${expr//"/\\"}"
+  local resolved=""
+
+  # Intentionally using eval to resolve trusted/generated placeholders; guarded by rejecting
+  # $(...) and backticks, regex validation, and quote escaping. Consider allowlisting specific
+  # parameter operators or forbidding characters like ':' or '-' for extra hardening.
+  if ! resolved="$(eval "printf '%s' \"${sanitized}\"")"; then
+    return 1
+  fi
+
+  printf '%s' "$resolved"
+}
+
+arr_replace_nested_placeholders_in_line() {
+  local line="$1"
+  local working="$line"
+  local replaced=0
+  local placeholder=""
+  local resolved=""
+  local max_iterations=50
+  local iterations=0
+  local i=0
+
+  while [[ "$working" == *"\${"* ]]; do
+    ((iterations++))
+    if ((iterations > max_iterations)); then
+      warn "  Reached maximum nested placeholder resolution iterations; stopping"
+      break
+    fi
+
+    local prefix="${working%%\$\{*}"
+    local remainder="${working:${#prefix}}"
+    local brace_count=0
+    local found=0
+
+    # The remainder starts with '${', so we start with a brace_count of 1
+    # and scan from the 3rd character.
+    brace_count=1
+    for ((i = 2; i < ${#remainder}; i++)); do
+      local ch="${remainder:i:1}"
+      if [[ "$ch" == "{" ]]; then
+        ((brace_count++))
+      elif [[ "$ch" == "}" ]]; then
+        ((brace_count--))
+        if ((brace_count == 0)); then
+          placeholder="${remainder:0:i+1}"
+          found=1
+          break
+        fi
+      fi
+    done
+
+    if ((found == 0)); then
+      warn "  Unable to locate closing brace for nested placeholder starting at: ${remainder}"
+      break
+    fi
+
+    if ! resolved="$(arr_evaluate_nested_placeholder "$placeholder")"; then
+      warn "  Unable to resolve nested placeholder ${placeholder} automatically"
+      break
+    fi
+    # Prevent infinite loop when no progress can be made
+    if [[ "$resolved" == "$placeholder" ]]; then
+      warn "  Nested placeholder ${placeholder} did not resolve to a different value; stopping to avoid infinite loop"
+      break
+    fi
+
+    local rest="${remainder:${#placeholder}}"
+    working="${prefix}${resolved}${rest}"
+    replaced=1
+  done
+
+  printf '%s' "$working"
+
+  if ((replaced == 0)); then
+    return 1
+  fi
+}
+
+arr_hardcode_nested_placeholders() {
+  local file="$1"
+  local nested_blob="$2"
+
+  if [[ -z "$file" || -z "$nested_blob" ]]; then
+    return 1
+  fi
+
+  local tmp=""
+  tmp="$(arr_mktemp_file "${file}.XXXXXX.hardcode" '')" || return 1
+
+  local -A targets=()
+  local -a ordered_lines=()
+  local line_no=""
+  local content=""
+
+  while IFS=$'\t' read -r line_no content; do
+    [[ -z "$line_no" ]] && continue
+    if [[ -z "${targets[$line_no]+x}" ]]; then
+      ordered_lines+=("$line_no")
+    fi
+    targets[$line_no]="$content"
+  done <<<"$nested_blob"
+
+  local current_line=0
+  local line=""
+  local resolved_line=""
+  local unresolved=0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    current_line=$((current_line + 1))
+
+    if [[ -n "${targets[$current_line]:-}" ]]; then
+      if resolved_line="$(arr_replace_nested_placeholders_in_line "$line")"; then
+        printf '%s\n' "$resolved_line" >>"$tmp"
+      else
+        printf '%s\n' "$line" >>"$tmp"
+        unresolved=1
+      fi
+    else
+      printf '%s\n' "$line" >>"$tmp"
+    fi
+  done <"$file"
+
+  if ! mv "$tmp" "$file"; then
+    warn "Failed to update ${file} while hardcoding nested placeholders"
+    return 1
+  fi
+
+  if ((unresolved)); then
+    warn "Unable to resolve all nested placeholders automatically"
+    return 1
+  fi
+
+  local summary=""
+  summary="$(printf 'L%s ' "${ordered_lines[@]}")"
+  summary="${summary%% }"
+  if [[ -n "$summary" ]]; then
+    msg "Hardcoded nested placeholders on lines: ${summary}"
+  fi
+
+  return 0
+}
+
 verify_single_level_env_placeholders() {
   local file="$1"
 
@@ -1601,12 +1867,8 @@ verify_single_level_env_placeholders() {
   fi
 
   local nested=""
-  local nested_rc=0
-
-  nested="$(awk '/\$\{[^}]*\$\{/{printf "%d:%s\n", NR, $0}' "$file")" || nested_rc=$?
-
-  if ((nested_rc != 0)); then
-    die "Failed to inspect ${file} for nested placeholders (awk exited with ${nested_rc})"
+  if ! nested="$(arr_scan_nested_placeholders "$file")"; then
+    die "Failed to inspect ${file} for nested placeholders"
   fi
 
   if [[ -z "$nested" ]]; then
@@ -1614,10 +1876,53 @@ verify_single_level_env_placeholders() {
   fi
 
   warn "Detected unsupported nested environment placeholders while rendering ${file}"
-  warn "  Nested variable expansions:"
-  printf '%s\n' "$nested" >&2
+  warn "  Offending lines:"
 
-  return 1
+  local line_no=""
+  local content=""
+  while IFS=$'\t' read -r line_no content; do
+    warn "    L${line_no}: ${content}"
+  done <<<"$nested"
+
+  local auto_fix=0
+  if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+    auto_fix=1
+    msg "ASSUME_YES=1; automatically hardcoding nested placeholders."
+  else
+    printf 'Replace nested environment placeholders with hardcoded values? [y/N]: '
+    local response=""
+    if ! read -r response; then
+      warn "Could not read response; nested placeholders remain."
+      return 1
+    fi
+    case "${response,,}" in
+      y | yes)
+        auto_fix=1
+        ;;
+      *)
+        warn "Nested placeholders remain; aborting compose generation."
+        return 1
+        ;;
+    esac
+  fi
+
+  if ((auto_fix == 0)); then
+    return 1
+  fi
+
+  if ! arr_hardcode_nested_placeholders "$file" "$nested"; then
+    warn "Nested placeholders could not be hardcoded automatically."
+    return 1
+  fi
+
+  local post_fix=""
+  post_fix="$(arr_scan_nested_placeholders "$file")"
+  if [[ -n "$post_fix" ]]; then
+    warn "Nested placeholders persist after attempted hardcoding; manual intervention required."
+    return 1
+  fi
+
+  return 0
 }
 
 # Ensure every ${VAR} in compose file maps to a known key; catch while we know which module introduced the $VAR.
