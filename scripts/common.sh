@@ -1719,6 +1719,9 @@ arr_evaluate_nested_placeholder() {
   local sanitized="${expr//"/\\"}"
   local resolved=""
 
+  # Intentionally using eval to resolve trusted/generated placeholders; guarded by rejecting
+  # $(...) and backticks, regex validation, and quote escaping. Consider allowlisting specific
+  # parameter operators or forbidding characters like ':' or '-' for extra hardening.
   if ! resolved="$(eval "printf '%s' \"${sanitized}\"")"; then
     return 1
   fi
@@ -1732,9 +1735,39 @@ arr_replace_nested_placeholders_in_line() {
   local replaced=0
   local placeholder=""
   local resolved=""
+  local max_iterations=50
+  local iterations=0
 
-  while [[ "$working" =~ (\$\{[^}]*\$\{[^}]*\}[^}]*\}) ]]; do
-    placeholder="${BASH_REMATCH[1]}"
+  while [[ "$working" == *"\${"* ]]; do
+    ((iterations++))
+    if ((iterations > max_iterations)); then
+      warn "  Reached maximum nested placeholder resolution iterations; stopping"
+      break
+    fi
+
+    local prefix="${working%%\$\{*}"
+    local remainder="${working:${#prefix}}"
+    local brace_count=0
+    local found=0
+
+    for ((i = 0; i < ${#remainder}; i++)); do
+      local ch="${remainder:i:1}"
+      if [[ "$ch" == "{" ]]; then
+        ((brace_count++))
+      elif [[ "$ch" == "}" ]]; then
+        ((brace_count--))
+        if ((brace_count == 0)); then
+          placeholder="${remainder:0:i+1}"
+          found=1
+          break
+        fi
+      fi
+    done
+
+    if ((found == 0)); then
+      warn "  Unable to locate closing brace for nested placeholder starting at: ${remainder}"
+      break
+    fi
 
     if ! resolved="$(arr_evaluate_nested_placeholder "$placeholder")"; then
       warn "  Unable to resolve nested placeholder ${placeholder} automatically"
@@ -1746,7 +1779,8 @@ arr_replace_nested_placeholders_in_line() {
       break
     fi
 
-    working="${working//${placeholder}/${resolved}}"
+    local rest="${remainder:${#placeholder}}"
+    working="${prefix}${resolved}${rest}"
     replaced=1
   done
 
