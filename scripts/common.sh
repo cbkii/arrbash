@@ -1750,7 +1750,10 @@ arr_replace_nested_placeholders_in_line() {
     local brace_count=0
     local found=0
 
-    for ((i = 0; i < ${#remainder}; i++)); do
+    # The remainder starts with '${', so we start with a brace_count of 1
+    # and scan from the 3rd character.
+    brace_count=1
+    for ((i = 2; i < ${#remainder}; i++)); do
       local ch="${remainder:i:1}"
       if [[ "$ch" == "{" ]]; then
         ((brace_count++))
