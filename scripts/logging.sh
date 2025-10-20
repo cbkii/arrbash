@@ -67,7 +67,7 @@ arr_trace_start() {
 
   if [[ -n "$mask" ]]; then
     local final_err="" final_status=0
-    final_err=$(printf '' | sed -E "s/${mask}//" >/dev/null 2>&1) || final_status=$?
+    final_err=$(printf '' | sed -E "s/${mask}//" 2>&1) || final_status=$?
     if (( final_status != 0 )); then
       printf '%s WARN: disabling trace masking due to invalid combined expression (sed status %s).\n' "${STACK_LABEL:-[arr]}" "$final_status" >&2
       if [[ -n "$final_err" ]]; then
