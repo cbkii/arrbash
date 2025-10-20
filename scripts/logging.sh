@@ -47,8 +47,36 @@ arr_trace_start() {
 
   export ARR_TRACE_FILE="${ARR_TRACE_FILE:-$trace_file}"
 
-  local base_mask='([Pp]assword|[Tt]oken|[Ss]ecret|[Aa]pi[_-]?[Kk]ey|[Aa]ccess[_-]?[Tt]oken|[Aa]uth|[Ss]ession|[Jj]wt)=[^[:space:]]+|Authorization:[[:space:]]*Basic[[:space:]]+[A-Za-z0-9+/=]+|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9\-._~+/]+=*|Cookie:[[:space:]]*[^;[:space:]]+'
-  local mask="${ARR_TRACE_MASK_RE:+${ARR_TRACE_MASK_RE}|}${base_mask}"
+  local base_mask='([Pp]assword|[Tt]oken|[Ss]ecret|[Aa]pi[_-]?[Kk]ey|[Aa]ccess[_-]?[Tt]oken|[Aa]uth|[Ss]ession|[Jj]wt)=[^[:space:]]+|Authorization:[[:space:]]*Basic[[:space:]]+[A-Za-z0-9+/=]+|Authorization:[[:space:]]*Bearer[[:space:]]+[-A-Za-z0-9._~+/]+=*|Cookie:[[:space:]]*[^;[:space:]]+'
+  local mask="${base_mask}"
+
+  if [[ -n "${ARR_TRACE_MASK_RE:-}" ]]; then
+    local sed_err="" sed_status=0
+    sed_err=$(printf '' | sed -E "s/${ARR_TRACE_MASK_RE}//" >/dev/null 2>&1) || sed_status=$?
+
+    if (( sed_status == 0 )); then
+      mask="${ARR_TRACE_MASK_RE}|${mask}"
+    else
+      printf '%s WARN: ignoring invalid ARR_TRACE_MASK_RE (sed status %s): %s\n' "${STACK_LABEL:-[arr]}" "$sed_status" "${ARR_TRACE_MASK_RE}" >&2
+      if [[ -n "$sed_err" ]]; then
+        sed_err="${sed_err//$'\n'/ }"
+        printf '%s WARN: sed reported: %s\n' "${STACK_LABEL:-[arr]}" "$sed_err" >&2
+      fi
+    fi
+  fi
+
+  if [[ -n "$mask" ]]; then
+    local final_err="" final_status=0
+    final_err=$(printf '' | sed -E "s/${mask}//" >/dev/null 2>&1) || final_status=$?
+    if (( final_status != 0 )); then
+      printf '%s WARN: disabling trace masking due to invalid combined expression (sed status %s).\n' "${STACK_LABEL:-[arr]}" "$final_status" >&2
+      if [[ -n "$final_err" ]]; then
+        final_err="${final_err//$'\n'/ }"
+        printf '%s WARN: sed reported: %s\n' "${STACK_LABEL:-[arr]}" "$final_err" >&2
+      fi
+      mask=""
+    fi
+  fi
 
   exec {__arr_trace_fd}> >(
     if [[ -n "$mask" ]]; then
