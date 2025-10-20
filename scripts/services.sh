@@ -232,6 +232,129 @@ service_container_name() {
   esac
 }
 
+declare -a ARR_STACK_PREVIOUS_RUNNING_SERVICES=()
+ARR_STACK_RUNTIME_STATE_CAPTURED=0
+ARR_STACK_RUNTIME_STATE_RESTORED=0
+
+arr_clear_stack_runtime_state() {
+  ARR_STACK_PREVIOUS_RUNNING_SERVICES=()
+  ARR_STACK_RUNTIME_STATE_CAPTURED=0
+  ARR_STACK_RUNTIME_STATE_RESTORED=0
+}
+
+arr_capture_stack_runtime_state() {
+  if [[ "${ARR_STACK_RUNTIME_STATE_CAPTURED:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local output
+  local project
+  project="$(arr_effective_project_name 2>/dev/null || printf '%s' "${STACK}")"
+
+  output="$(docker ps \
+    --filter "label=com.docker.compose.project=${project}" \
+    --format '{{.Label "com.docker.compose.service"}}' 2>/dev/null || printf '')"
+
+  local -a running=()
+  if [[ -n "$output" ]]; then
+    declare -A seen=()
+    local service=""
+    while IFS= read -r service; do
+      [[ -z "$service" ]] && continue
+      if [[ -z "${seen[$service]:-}" ]]; then
+        running+=("$service")
+        seen[$service]=1
+      fi
+    done <<<"$output"
+  fi
+
+  ARR_STACK_PREVIOUS_RUNNING_SERVICES=("${running[@]}")
+  ARR_STACK_RUNTIME_STATE_CAPTURED=1
+}
+
+arr_restore_stack_runtime_state() {
+  local exit_code="${1:-0}"
+
+  if [[ "$exit_code" == "0" ]]; then
+    arr_clear_stack_runtime_state
+    return 0
+  fi
+
+  if [[ "${ARR_STACK_RUNTIME_STATE_CAPTURED:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  if [[ "${ARR_STACK_RUNTIME_STATE_RESTORED:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  if ((${#ARR_STACK_PREVIOUS_RUNNING_SERVICES[@]} == 0)); then
+    arr_clear_stack_runtime_state
+    return 0
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    warn "[restore] Docker unavailable; unable to restore previously running services."
+    arr_clear_stack_runtime_state
+    return 0
+  fi
+
+  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
+    if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
+      if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
+        warn "[restore] Docker Compose unavailable; unable to restore services automatically."
+        arr_clear_stack_runtime_state
+        return 0
+      fi
+    else
+      warn "[restore] Docker Compose helper missing; unable to restore services automatically."
+      arr_clear_stack_runtime_state
+      return 0
+    fi
+  fi
+
+  warn "[restore] Installer exited with status ${exit_code}; restoring previously running services."
+
+  declare -A seen=()
+  local -a restore_order=()
+  local service=""
+
+  for service in gluetun local_dns; do
+    local item=""
+    for item in "${ARR_STACK_PREVIOUS_RUNNING_SERVICES[@]}"; do
+      if [[ "$item" == "$service" && -z "${seen[$service]:-}" ]]; then
+        restore_order+=("$service")
+        seen[$service]=1
+      fi
+    done
+  done
+
+  for service in "${ARR_STACK_PREVIOUS_RUNNING_SERVICES[@]}"; do
+    if [[ -z "${seen[$service]:-}" ]]; then
+      restore_order+=("$service")
+      seen[$service]=1
+    fi
+  done
+
+  for service in "${restore_order[@]}"; do
+    if compose_service_is_running "$service"; then
+      continue
+    fi
+
+    msg "[restore] Restarting ${service}"
+    if ! compose up -d "$service" >/dev/null 2>&1; then
+      warn "[restore] Failed to restart ${service}; check docker compose logs."
+    fi
+  done
+
+  ARR_STACK_RUNTIME_STATE_RESTORED=1
+  arr_clear_stack_runtime_state
+}
+
 restart_stack_service() {
   local service="$1"
 
@@ -740,14 +863,42 @@ arr_gluetun_connectivity_probe() {
   shift || true
 
   local -a urls=()
-  if (($# == 0)); then
-    urls=(
+  if (($# > 0)); then
+    urls=("$@")
+  else
+    local configured_urls="${GLUETUN_CONNECTIVITY_PROBE_URLS:-}"
+    if [[ -n "$configured_urls" ]] && declare -f normalize_csv >/dev/null 2>&1; then
+      local normalized=""
+      normalized="$(normalize_csv "$configured_urls")"
+      if [[ -n "$normalized" ]]; then
+        IFS=',' read -r -a urls <<<"$normalized"
+      fi
+    fi
+
+    if ((${#urls[@]} == 0)); then
+      urls=(
+        "https://api.ipify.org"
+        "https://ipconfig.io/ip"
+        "https://1.1.1.1/cdn-cgi/trace"
+      )
+    fi
+  fi
+
+  local -a sanitized_urls=()
+  local candidate=""
+  for candidate in "${urls[@]}"; do
+    candidate="${candidate//[$'\r\n\t']/}"
+    if [[ -n "$candidate" ]]; then
+      sanitized_urls+=("$candidate")
+    fi
+  done
+
+  if ((${#sanitized_urls[@]} == 0)); then
+    sanitized_urls=(
       "https://api.ipify.org"
       "https://ipconfig.io/ip"
       "https://1.1.1.1/cdn-cgi/trace"
     )
-  else
-    urls=("$@")
   fi
 
   ARR_GLUETUN_CONNECTIVITY_LAST_URL=""
@@ -787,7 +938,7 @@ arr_gluetun_connectivity_probe() {
       done
 
       exit 1
-    ' _ "${urls[@]}"
+    ' _ "${sanitized_urls[@]}"
   )"; then
     ARR_GLUETUN_CONNECTIVITY_LAST_URL="${probe_output}"
     return 0

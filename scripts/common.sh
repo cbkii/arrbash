@@ -44,6 +44,11 @@ arr_register_cleanup() {
     return 0
   fi
 
+  if [[ "${ARR_MAIN_TRAP_INSTALLED:-0}" == "1" ]]; then
+    ARR_CLEANUP_TRAP_SET=1
+    return 0
+  fi
+
   trap 'arr_global_cleanup' EXIT INT TERM HUP QUIT
   ARR_CLEANUP_TRAP_SET=1
 }
