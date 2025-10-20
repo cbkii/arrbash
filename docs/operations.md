@@ -16,6 +16,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ./arr.sh --rotate-caddy-auth   # generate new Caddy basic auth credentials
   ./arr.sh --sync-api-keys       # resync Sonarr/Radarr/Prowlarr keys into Configarr
   ./arr.sh --no-auto-api-sync    # skip automatic Configarr sync for one run
+  ./arr.sh --force-unlock        # clear a stale installer lock (override concurrency guard)
   ./arr.sh --setup-host-dns      # run the host DNS takeover helper during install
   ./arr.sh --refresh-aliases     # rebuild .aliasarr
   ```
