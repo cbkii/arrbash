@@ -106,7 +106,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 * **Authority for `.env`:** `scripts/gen-env.sh` (only).
 
   * Format: `NAME=VALUE` (no `export`), one per line.
-  * Values are produced via `envsubst`; source variables must be set before substitution. Values containing special characters (like `#` or spaces) should be unescaped and enclosed in single or double quotes in `userr.conf` to ensure they are parsed correctly in the generated `.env` file.
+  * Values are produced via `envsubst`; source variables must be set before substitution. Do not add quotes around values in `userr.conf`—Compose reads `.env` values literally, so quotes become part of the value. Spaces and `#` are allowed in values; just ensure there’s no trailing comment after the value in the template.
   * Optional blocks rely on `# @if VAR` guards so feature-scoped variables disappear entirely when falsey.
 * **YAML emission:** keep YAML-escape logic (double-quoted scalars; escape `\` → `\\`, `"` → `\"`, newlines → `\n`). Prefer list-form commands/healthchecks.
   * Feature-gated sections (Caddy, SABnzbd, Configarr, VPN helpers, etc.) must drop their services and dependent variables whenever the controlling flag is disabled.
