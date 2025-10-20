@@ -52,7 +52,7 @@ arr_trace_start() {
 
   if [[ -n "${ARR_TRACE_MASK_RE:-}" ]]; then
     local sed_err="" sed_status=0
-    sed_err=$(printf '' | sed -E "s/${ARR_TRACE_MASK_RE}//" >/dev/null 2>&1) || sed_status=$?
+    sed_err=$(printf '' | sed -E "s/${ARR_TRACE_MASK_RE}//" 2>&1 >/dev/null) || sed_status=$?
 
     if (( sed_status == 0 )); then
       mask="${ARR_TRACE_MASK_RE}|${mask}"
