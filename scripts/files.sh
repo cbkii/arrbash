@@ -54,8 +54,14 @@ arr_prompt_direct_port_exposure() {
   local lan_ip="$1"
   local ip_hint="$lan_ip"
 
-  if [[ -z "$ip_hint" || "$ip_hint" == "0.0.0.0" ]]; then
-    ip_hint="<set LAN_IP (hostname -I | awk \"{print \\\$1}\")>"
+  if [[ -z "$ip_hint" || "$ip_hint" == "0.0.0.0" ]] || ! validate_ipv4 "$ip_hint"; then
+    local detected_ip=""
+    detected_ip="$(hostname -I 2>/dev/null | awk 'NF {print $1}' | tr -d '\n')"
+    if [[ -z "$detected_ip" ]] || [[ "$detected_ip" == "0.0.0.0" ]] || ! validate_ipv4 "$detected_ip"; then
+      ip_hint="127.0.0.1"
+    else
+      ip_hint="$detected_ip"
+    fi
   fi
 
   msg "EXPOSE_DIRECT_PORTS=1 will publish the following LAN URLs:"
@@ -270,24 +276,267 @@ hydrate_caddy_auth_from_env_file() {
   fi
 }
 
-arr_safe_compose_write() {
-  local target="$1"
-  local tmp="$2"
-  local backup="${target}.backup"
+arr_prune_compose_backups() {
+  local prefix="$1"
 
-  if [[ -f "$target" ]]; then
-    cp -f "$target" "$backup" || return 1
+  local nullglob_was_set=0
+  if shopt -q nullglob; then
+    nullglob_was_set=1
+  fi
+  shopt -s nullglob
+
+  local -a backups=("${prefix}".*)
+
+  if ((nullglob_was_set == 0)); then
+    shopt -u nullglob
   fi
 
-  if mv "$tmp" "$target"; then
-    rm -f "$backup"
+  if ((${#backups[@]} <= 3)); then
     return 0
   fi
 
-  if [[ -f "$backup" ]]; then
-    mv -f "$backup" "$target" || true
+  local -a sorted_backups=()
+  mapfile -t sorted_backups < <(printf '%s\n' "${backups[@]}" | sort -r)
+
+  local idx
+  for idx in "${!sorted_backups[@]}"; do
+    if ((idx >= 3)); then
+      rm -f -- "${sorted_backups[$idx]}" 2>/dev/null || true
+    fi
+  done
+}
+
+arr_safe_compose_write() {
+  local target="$1"
+  local tmp="$2"
+  local backup_prefix="${target}.backup"
+  local backup_created=""
+
+  if [[ -f "${backup_prefix}" ]]; then
+    local legacy_name
+    legacy_name="${backup_prefix}.$(date +%Y%m%d%H%M%S%N).legacy"
+    if ! mv "${backup_prefix}" "${legacy_name}" 2>/dev/null; then
+      rm -f "${backup_prefix}" 2>/dev/null || true
+    fi
+  fi
+
+  if [[ -f "$target" ]]; then
+    local timestamp
+    timestamp="$(date +%Y%m%d%H%M%S%N)"
+    backup_created="${backup_prefix}.${timestamp}"
+    if [[ -e "$backup_created" ]]; then
+      backup_created+=".${RANDOM}"
+    fi
+    if ! cp -f "$target" "$backup_created" 2>/dev/null; then
+      warn "Failed to create compose backup at ${backup_created}"
+      return 1
+    fi
+    arr_prune_compose_backups "$backup_prefix"
+  fi
+
+  if mv "$tmp" "$target"; then
+    return 0
+  fi
+
+  warn "Failed to activate ${target}; attempting to restore previous version"
+
+  if [[ -n "$backup_created" && -f "$backup_created" ]]; then
+    cp -f "$backup_created" "$target" 2>/dev/null || true
   fi
   return 1
+}
+
+detect_compose_cmd() {
+  local compose_cmd=""
+
+  if command -v docker >/dev/null 2>&1; then
+    if docker compose version >/dev/null 2>&1 || docker compose -v >/dev/null 2>&1; then
+      compose_cmd="docker compose"
+    fi
+  fi
+
+  if [[ -z "$compose_cmd" ]] && command -v docker-compose >/dev/null 2>&1; then
+    if docker-compose version >/dev/null 2>&1 || docker-compose -v >/dev/null 2>&1; then
+      compose_cmd="docker-compose"
+    fi
+  fi
+
+  if [[ -z "$compose_cmd" ]]; then
+    warn "Docker Compose not detected; skipping syntax validation."
+    return 1
+  fi
+
+  printf '%s\n' "$compose_cmd"
+}
+
+arr_compose_log_message() {
+  local log_file="$1"
+  shift
+  if [[ -z "$log_file" || $# -eq 0 ]]; then
+    return 0
+  fi
+
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file" 2>/dev/null || true
+}
+
+arr_compose_autorepair() {
+  local staging="$1"
+  local log_file="$2"
+
+  if [[ -z "$staging" || -z "$log_file" ]]; then
+    return 1
+  fi
+
+  arr_compose_log_message "$log_file" "=== compose autorepair start ==="
+
+  local -a summary=()
+
+  if LC_ALL=C grep -q $'\r' "$staging" 2>/dev/null; then
+    if sed -i 's/\r$//' "$staging" 2>>"$log_file"; then
+      summary+=("normalized CRLF line endings")
+      arr_compose_log_message "$log_file" "Normalized CRLF line endings"
+    else
+      arr_compose_log_message "$log_file" "Failed to normalize CRLF line endings"
+    fi
+  fi
+
+  if LC_ALL=C grep -q $'\t' "$staging" 2>/dev/null; then
+    if sed -i $'s/\t/  /g' "$staging" 2>>"$log_file"; then
+      summary+=("replaced tabs with spaces")
+      arr_compose_log_message "$log_file" "Replaced hard tabs with two spaces"
+    else
+      arr_compose_log_message "$log_file" "Failed to replace hard tabs"
+    fi
+  fi
+
+  if LC_ALL=C grep -q '[[:space:]]$' "$staging" 2>/dev/null; then
+    if sed -i 's/[[:space:]]\+$//' "$staging" 2>>"$log_file"; then
+      summary+=("stripped trailing whitespace")
+      arr_compose_log_message "$log_file" "Stripped trailing whitespace"
+    else
+      arr_compose_log_message "$log_file" "Failed to strip trailing whitespace"
+    fi
+  fi
+
+  if LC_ALL=C grep -q '^[[:space:]]*\\[[:space:]]*$' "$staging" 2>/dev/null; then
+    if sed -i '/^[[:space:]]*\\[[:space:]]*$/d' "$staging" 2>>"$log_file"; then
+      summary+=("removed stray backslash lines")
+      arr_compose_log_message "$log_file" "Removed stray standalone backslash lines"
+    else
+      arr_compose_log_message "$log_file" "Failed to remove stray backslash lines"
+    fi
+  fi
+
+  local last_char=""
+  if [[ -s "$staging" ]]; then
+    last_char="$(tail -c1 "$staging" 2>/dev/null || printf '')"
+  fi
+  if [[ -z "$last_char" || "$last_char" != $'\n' ]]; then
+    if printf '\n' >>"$staging" 2>>"$log_file"; then
+      summary+=("ensured trailing newline")
+      arr_compose_log_message "$log_file" "Ensured file ends with newline"
+    else
+      arr_compose_log_message "$log_file" "Failed to append trailing newline"
+    fi
+  fi
+
+  if command -v yq >/dev/null 2>&1; then
+    local yq_tmp=""
+    if yq_tmp="$(arr_mktemp_file "${staging}.yq.XXXXXX" '')"; then
+      if yq eval --no-colors --indent 2 '.' "$staging" >"$yq_tmp" 2>>"$log_file"; then
+        if mv "$yq_tmp" "$staging" 2>>"$log_file"; then
+          summary+=("normalized YAML with yq")
+          arr_compose_log_message "$log_file" "Normalized YAML via yq round-trip"
+        else
+          arr_compose_log_message "$log_file" "Failed to replace staging file after yq normalization"
+          rm -f "$yq_tmp" 2>/dev/null || true
+        fi
+      else
+        arr_compose_log_message "$log_file" "yq normalization failed"
+        rm -f "$yq_tmp" 2>/dev/null || true
+      fi
+    else
+      arr_compose_log_message "$log_file" "Unable to allocate temporary file for yq normalization"
+    fi
+  else
+    arr_compose_log_message "$log_file" "yq not available; skipping YAML normalization"
+  fi
+
+  if command -v yamllint >/dev/null 2>&1; then
+    local lint_output=""
+    if lint_output="$(yamllint "$staging" 2>&1)"; then
+      arr_compose_log_message "$log_file" "yamllint completed without issues"
+    else
+      arr_compose_log_message "$log_file" $'yamllint reported issues:'
+      printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
+    fi
+  else
+    arr_compose_log_message "$log_file" "yamllint not available; skipping linting"
+  fi
+
+  printf '%s\n' "${summary[@]}"
+  arr_compose_log_message "$log_file" "Auto-repair completed"
+}
+
+arr_compose_autorepair_and_validate() {
+  local staging="$1"
+  local target="$2"
+
+  if [[ -z "$staging" || ! -f "$staging" || -z "$target" ]]; then
+    warn "compose autorepair requires staging and target paths"
+    return 1
+  fi
+
+  local log_dir
+  log_dir="$(arr_log_dir)"
+  ensure_dir_mode "$log_dir" "$DATA_DIR_MODE"
+
+  local log_file="${log_dir}/compose-repair.log"
+
+  local summary_output=""
+  summary_output="$(arr_compose_autorepair "$staging" "$log_file" 2>/dev/null)"
+  local -a summary_lines=()
+  if [[ -n "$summary_output" ]]; then
+    mapfile -t summary_lines <<<"$summary_output"
+  fi
+
+  local compose_cmd_raw=""
+  local -a compose_cmd=()
+  if compose_cmd_raw="$(detect_compose_cmd)"; then
+    read -r -a compose_cmd <<<"$compose_cmd_raw"
+    if ((${#compose_cmd[@]} > 0)); then
+      if ! "${compose_cmd[@]}" -f "$staging" config --quiet >/dev/null 2>&1; then
+        arr_compose_log_message "$log_file" "Compose validation failed via ${compose_cmd[*]} config --quiet"
+        warn "Docker Compose validation failed; see ${log_file}"
+        return 1
+      fi
+      arr_compose_log_message "$log_file" "Compose validation succeeded via ${compose_cmd[*]} config --quiet"
+      summary_lines+=("validated with ${compose_cmd[*]} config --quiet")
+    fi
+  else
+    arr_compose_log_message "$log_file" "Docker Compose unavailable; validation skipped"
+    summary_lines+=("validation skipped (compose command unavailable)")
+  fi
+
+  if ! arr_safe_compose_write "$target" "$staging"; then
+    arr_compose_log_message "$log_file" "Failed to install compose file at ${target}"
+    warn "Failed to install ${target}"
+    return 1
+  fi
+
+  ensure_nonsecret_file_mode "$target"
+  arr_compose_log_message "$log_file" "Installed compose file at ${target}"
+
+  local summary_message=""
+  if ((${#summary_lines[@]} > 0)); then
+    summary_message="$(printf '%s, ' "${summary_lines[@]}")"
+    summary_message="${summary_message%, }"
+    msg "Compose auto-repair summary: ${summary_message}."
+  else
+    msg "Compose auto-repair summary: validation complete (no changes required)."
+  fi
+
+  return 0
 }
 
 arr_validate_compose_prerequisites() {
@@ -310,13 +559,11 @@ arr_validate_compose_prerequisites() {
     return 0
   fi
 
-  {
-    printf '[compose-validation]\n'
-    local err
-    for err in "${errors[@]}"; do
-      printf '  - %s\n' "$err"
-    done
-  } >&2
+  warn "Compose prerequisites failed:"
+  local err
+  for err in "${errors[@]}"; do
+    warn "  - ${err}"
+  done
   return 1
 }
 # Prepares derived networking, VPN, and credential values for .env generation
@@ -1135,6 +1382,8 @@ networks:
     driver: "bridge"
 YAML
 
+  printf '\n' >>"$tmp"
+
   if ! verify_single_level_env_placeholders "$tmp"; then
     rm -f "$tmp"
     die "Generated docker-compose.yml contains nested environment placeholders"
@@ -1145,19 +1394,10 @@ YAML
     die "Generated docker-compose.yml contains unexpected environment placeholders"
   fi
 
-  if command -v docker >/dev/null 2>&1; then
-    if ! docker compose -f "$tmp" config >/dev/null 2>&1; then
-      rm -f "$tmp"
-      die "docker compose config failed (syntax)"
-    fi
-  fi
-
-  if ! arr_safe_compose_write "$compose_path" "$tmp"; then
+  if ! arr_compose_autorepair_and_validate "$tmp" "$compose_path"; then
     rm -f "$tmp"
-    die "Failed to update ${compose_path}"
+    die "Compose validation failed (see logs/compose-repair.log)"
   fi
-  ensure_nonsecret_file_mode "$compose_path"
-  sed -i 's/\r$//' "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
@@ -1668,6 +1908,8 @@ YAML
 YAML
   fi
 
+  printf '\n' >>"$tmp"
+
   if ! verify_single_level_env_placeholders "$tmp"; then
     rm -f "$tmp"
     die "Generated docker-compose.yml contains nested environment placeholders"
@@ -1678,19 +1920,10 @@ YAML
     die "Generated docker-compose.yml contains unexpected environment placeholders"
   fi
 
-  if command -v docker >/dev/null 2>&1; then
-    if ! docker compose -f "$tmp" config >/dev/null 2>&1; then
-      rm -f "$tmp"
-      die "docker compose config failed (syntax)"
-    fi
-  fi
-
-  if ! arr_safe_compose_write "$compose_path" "$tmp"; then
+  if ! arr_compose_autorepair_and_validate "$tmp" "$compose_path"; then
     rm -f "$tmp"
-    die "Failed to update ${compose_path}"
+    die "Compose validation failed (see logs/compose-repair.log)"
   fi
-  ensure_nonsecret_file_mode "$compose_path"
-  sed -i 's/\r$//' "$compose_path"
 
   msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
