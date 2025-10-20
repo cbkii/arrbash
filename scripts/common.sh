@@ -1672,8 +1672,8 @@ arr_scan_nested_placeholders() {
   local line_no=0
   local depth=0
   local max_depth=0
-  local i=0
   local char=""
+  local i=0
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     line_no=$((line_no + 1))
@@ -1737,6 +1737,7 @@ arr_replace_nested_placeholders_in_line() {
   local resolved=""
   local max_iterations=50
   local iterations=0
+  local i=0
 
   while [[ "$working" == *"\${"* ]]; do
     ((iterations++))
