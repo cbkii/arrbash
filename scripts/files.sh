@@ -379,6 +379,99 @@ arr_compose_log_message() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file" 2>/dev/null || true
 }
 
+arr_compose_ensure_document_start() {
+  local staging="$1"
+  local log_file="$2"
+
+  if [[ -z "$staging" || ! -f "$staging" ]]; then
+    return 1
+  fi
+
+  local first_content_line=""
+  while IFS= read -r line; do
+    if [[ -z "${line//[[:space:]]/}" ]]; then
+      continue
+    fi
+    if [[ "$line" =~ ^[[:space:]]*# ]]; then
+      continue
+    fi
+    first_content_line="$line"
+    break
+  done <"$staging"
+
+  if [[ "$first_content_line" == '---' ]]; then
+    return 0
+  fi
+
+  local tmp=""
+  if ! tmp="$(arr_mktemp_file "${staging}.docstart.XXXXXX" '')"; then
+    return 1
+  fi
+
+  local inserted=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if ((inserted == 0)); then
+      if [[ -n "${line//[[:space:]]/}" && ! "$line" =~ ^[[:space:]]*# ]]; then
+        printf '---\n' >>"$tmp"
+        inserted=1
+      fi
+    fi
+    printf '%s\n' "$line" >>"$tmp"
+  done <"$staging"
+
+  if ((inserted == 0)); then
+    printf '---\n' >>"$tmp"
+  fi
+
+  if mv "$tmp" "$staging" 2>/dev/null; then
+    arr_compose_log_message "$log_file" "Inserted YAML document start delimiter"
+    printf '%s' "inserted YAML document start delimiter"
+    return 0
+  fi
+
+  rm -f "$tmp" 2>/dev/null || true
+  return 1
+}
+
+arr_compose_collapse_blank_runs() {
+  local staging="$1"
+  local log_file="$2"
+
+  if [[ -z "$staging" || ! -f "$staging" ]]; then
+    return 1
+  fi
+
+  local tmp=""
+  if ! tmp="$(arr_mktemp_file "${staging}.noblanks.XXXXXX" '')"; then
+    return 1
+  fi
+
+  if awk 'BEGIN {blank=0} {
+    if ($0 ~ /^[[:space:]]*$/) {
+      blank++;
+    } else {
+      blank=0;
+    }
+    if (blank <= 1) {
+      print $0;
+    }
+  } END {exit 0}' "$staging" >"$tmp" 2>/dev/null; then
+    if ! cmp -s "$staging" "$tmp" 2>/dev/null; then
+      if mv "$tmp" "$staging" 2>/dev/null; then
+        arr_compose_log_message "$log_file" "Collapsed consecutive blank lines"
+        printf '%s' "collapsed consecutive blank lines"
+        return 0
+      fi
+    else
+      rm -f "$tmp" 2>/dev/null || true
+      return 0
+    fi
+  fi
+
+  rm -f "$tmp" 2>/dev/null || true
+  return 1
+}
+
 arr_compose_autorepair() {
   local staging="$1"
   local log_file="$2"
@@ -416,6 +509,24 @@ arr_compose_autorepair() {
     else
       arr_compose_log_message "$log_file" "Failed to strip trailing whitespace"
     fi
+  fi
+
+  local doc_start_summary=""
+  if doc_start_summary="$(arr_compose_ensure_document_start "$staging" "$log_file" 2>/dev/null)"; then
+    if [[ -n "$doc_start_summary" ]]; then
+      summary+=("$doc_start_summary")
+    fi
+  else
+    arr_compose_log_message "$log_file" "Failed to ensure YAML document start"
+  fi
+
+  local blank_summary=""
+  if blank_summary="$(arr_compose_collapse_blank_runs "$staging" "$log_file" 2>/dev/null)"; then
+    if [[ -n "$blank_summary" ]]; then
+      summary+=("$blank_summary")
+    fi
+  else
+    arr_compose_log_message "$log_file" "Failed to collapse blank line runs"
   fi
 
   if LC_ALL=C grep -q '^[[:space:]]*\\[[:space:]]*$' "$staging" 2>/dev/null; then
@@ -464,8 +575,22 @@ arr_compose_autorepair() {
 
   if command -v yamllint >/dev/null 2>&1; then
     local lint_output=""
-    if lint_output="$(yamllint "$staging" 2>&1)"; then
-      arr_compose_log_message "$log_file" "yamllint completed without issues"
+    local lint_status=0
+    local -a yamllint_cmd=(
+      yamllint
+      --config-data
+      '{extends: default, rules: {line-length: {max: 140, level: warning}}}'
+    )
+
+    lint_output="$("${yamllint_cmd[@]}" "$staging" 2>&1)" || lint_status=$?
+
+    if ((lint_status == 0)); then
+      if [[ -n "$lint_output" ]]; then
+        arr_compose_log_message "$log_file" $'yamllint reported warnings:'
+        printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
+      else
+        arr_compose_log_message "$log_file" "yamllint completed without issues"
+      fi
     else
       arr_compose_log_message "$log_file" $'yamllint reported issues:'
       printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
