@@ -1733,7 +1733,7 @@ arr_replace_nested_placeholders_in_line() {
   local placeholder=""
   local resolved=""
 
-  while [[ "$working" =~ (\$\{[^}]*\$\{[^}]*\}) ]]; do
+  while [[ "$working" =~ (\$\{[^}]*\$\{[^}]*\}\}) ]]; do
     placeholder="${BASH_REMATCH[1]}"
 
     if ! resolved="$(arr_evaluate_nested_placeholder "$placeholder")"; then
