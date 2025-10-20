@@ -502,7 +502,7 @@ arr_compose_autorepair_and_validate() {
 
   local compose_cmd_raw=""
   local -a compose_cmd=()
-  if ! compose_cmd_raw="$(detect_compose_cmd)"; then
+  if ! compose_cmd_raw="$(detect_compose_cmd)" || [[ -z "$compose_cmd_raw" ]]; then
     arr_compose_log_message "$log_file" "Docker Compose unavailable; validation skipped"
     summary_lines+=("validation skipped (compose command unavailable)")
   else
