@@ -44,48 +44,26 @@ run_one_time_migrations() {
       fi
     }
 
-    local existing_line existing_value existing_unescaped fixed_value sed_value
+    local existing_unescaped fixed_value
 
-    local existing_line_rc=0
-    if existing_line="$(grep -m1 '^OPENVPN_USER=' "${ARR_ENV_FILE}")"; then
-      existing_line_rc=0
-    else
-      existing_line_rc=$?
-      if ((existing_line_rc > 1)); then
-        warn "Unable to inspect ${ARR_ENV_FILE} for OPENVPN_USER (grep exited with ${existing_line_rc})"
-      fi
-      existing_line=""
-    fi
-
-    if ((existing_line_rc == 0)) && [[ -n "$existing_line" ]]; then
-      existing_value="${existing_line#OPENVPN_USER=}"
-      existing_unescaped="$(unescape_env_value_from_compose "$existing_value")"
+    if existing_unescaped="$(get_env_kv "OPENVPN_USER" "${ARR_ENV_FILE}" || true)" && [[ -n "$existing_unescaped" ]]; then
       fixed_value="${existing_unescaped%+pmp}+pmp"
       if [[ "$fixed_value" != "$existing_unescaped" ]]; then
         ensure_env_backup
-        sed_value="$(escape_sed_replacement "$fixed_value" '|')"
-        portable_sed "s|^OPENVPN_USER=.*$|OPENVPN_USER=${sed_value}|" "${ARR_ENV_FILE}"
+        persist_env_var "OPENVPN_USER" "$fixed_value"
         warn "OPENVPN_USER was missing '+pmp'; updated automatically in ${ARR_ENV_FILE}"
       fi
     fi
 
-    if existing_line="$(grep -m1 '^CADDY_BASIC_AUTH_HASH=' "${ARR_ENV_FILE}")"; then
-      existing_line_rc=0
-    else
-      existing_line_rc=$?
-      if ((existing_line_rc > 1)); then
-        warn "Unable to inspect ${ARR_ENV_FILE} for CADDY_BASIC_AUTH_HASH (grep exited with ${existing_line_rc})"
-      fi
-      existing_line=""
-    fi
-
-    if ((existing_line_rc == 0)) && [[ -n "$existing_line" ]]; then
-      existing_value="${existing_line#CADDY_BASIC_AUTH_HASH=}"
-      existing_unescaped="$(unescape_env_value_from_compose "$existing_value")"
-      if [[ "$existing_value" != "$existing_unescaped" ]]; then
+    local raw_hash_line=""
+    raw_hash_line="$(arr_run_sensitive_command grep -m1 '^CADDY_BASIC_AUTH_HASH=' "${ARR_ENV_FILE}" || true)"
+    if [[ -n "$raw_hash_line" ]]; then
+      local hash_value="${raw_hash_line#CADDY_BASIC_AUTH_HASH=}"
+      local hash_unescaped=""
+      hash_unescaped="$(unescape_env_value_from_compose "$hash_value")"
+      if [[ "$hash_value" != "$hash_unescaped" ]]; then
         ensure_env_backup
-        sed_value="$(escape_sed_replacement "$existing_unescaped" '|')"
-        portable_sed "s|^CADDY_BASIC_AUTH_HASH=.*$|CADDY_BASIC_AUTH_HASH=${sed_value}|" "${ARR_ENV_FILE}"
+        persist_env_var "CADDY_BASIC_AUTH_HASH" "$hash_unescaped"
         warn "Normalized CADDY_BASIC_AUTH_HASH format for Docker Compose compatibility"
       fi
     fi

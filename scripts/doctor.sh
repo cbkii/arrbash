@@ -296,7 +296,7 @@ check_network_security() {
     local qbt_conf="${ARR_DOCKER_DIR}/qbittorrent/qBittorrent.conf"
     if [[ -f "$qbt_conf" ]]; then
       local ui_port
-      ui_port="$(grep '^WebUI\\Port=' "$qbt_conf" 2>/dev/null | cut -d= -f2- | tr -d '\r' || true)"
+      ui_port="$(arr_read_sensitive_file "$qbt_conf" | grep '^WebUI\\Port=' | cut -d= -f2- | tr -d '\r' || true)"
       local host_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
       if [[ -n "$ui_port" && "$ui_port" != "$host_port" ]]; then
         echo "[doctor][warn] qBittorrent WebUI internal port is ${ui_port} but host mapping expects ${host_port}"
