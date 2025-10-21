@@ -1332,17 +1332,37 @@ atomic_write() {
   fi
 
   local moved=0
+  local moved=0
+  local used_sudo=0
+
   if mv -f "$tmp" "$target" 2>/dev/null; then
     moved=1
   else
     if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" && $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
       if sudo mv -f "$tmp" "$target" 2>/dev/null; then
         moved=1
-        if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-          sudo chown "${PUID}:${PGID}" "$target" 2>/dev/null || true
-        fi
+        used_sudo=1
       fi
     fi
+  fi
+
+  if ((moved == 0)); then
+    rm -f "$tmp"
+    die "Failed to atomically write ${target}"
+  fi
+
+  # Ensure final ownership and permissions on the target
+  if ((used_sudo == 1)); then
+    if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
+      sudo chown "${PUID}:${PGID}" "$target" 2>/dev/null || true
+    fi
+    # Re-apply mode on the final file to avoid permission mismatch after sudo mv
+    sudo chmod "$mode" "$target" 2>/dev/null || true
+  else
+    if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
+      chown "${PUID}:${PGID}" "$target" 2>/dev/null || true
+    fi
+    chmod "$mode" "$target" 2>/dev/null || true
   fi
 
   if ((moved == 0)); then
