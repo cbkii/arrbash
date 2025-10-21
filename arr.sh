@@ -288,6 +288,7 @@ Options:
   --setup-host-dns      Run the host DNS takeover helper during installation
   --refresh-aliases     Regenerate helper aliases and reload your shell
   --force-unlock        Remove an existing installer lock before continuing
+  --uninstall           Remove the ARR stack and revert host changes
   --help                Show this help message
 USAGE
 }
@@ -305,6 +306,7 @@ main() {
   # Keep custom IFS local and restore it before calling deeper helpers
   local OLDIFS="${IFS}"
   local IFS=$'\n\t'
+  local RUN_UNINSTALL=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --trace)
@@ -354,6 +356,10 @@ main() {
         REFRESH_ALIASES=1
         shift
         ;;
+      --uninstall)
+        RUN_UNINSTALL=1
+        shift
+        ;;
       --help | -h)
         help
         exit 0
@@ -366,6 +372,14 @@ main() {
 
   # Restore default word splitting so callees are not impacted
   IFS="${OLDIFS}"
+
+  if [[ "${RUN_UNINSTALL}" == "1" ]]; then
+    local -a uninstall_args=()
+    if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+      uninstall_args+=("--yes")
+    fi
+    exec "${REPO_ROOT}/scripts/uninstall.sh" "${uninstall_args[@]}"
+  fi
 
   if [[ "${ARR_TRACE:-0}" == "1" ]] && declare -f arr_trace_start >/dev/null 2>&1; then
     arr_trace_start
