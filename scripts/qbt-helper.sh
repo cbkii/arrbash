@@ -39,31 +39,26 @@ qbt_webui_ensure_conf() {
   dir="$(dirname -- "$conf")"
   mkdir -p "$dir"
   if [[ ! -f "$conf" ]]; then
-    arr_run_sensitive_command touch "$conf"
-    ensure_file_mode "$conf" 600
+    : >"$conf"
   fi
 }
 
 qbt_webui_strip_crlf() {
   local conf="$1"
-  if [[ -s "$conf" ]] && LC_ALL=C arr_run_sensitive_command grep -q $'\r' "$conf"; then
+  if [[ -s "$conf" ]] && LC_ALL=C grep -q $'\r' "$conf"; then
     local tmp
     if ! tmp=$(qbt_webui_mktemp "$conf"); then
       return 1
     fi
-    if ! arr_read_sensitive_file "$conf" | tr -d '\r' >"$tmp"; then
-      rm -f "$tmp"
-      return 1
-    fi
-    arr_run_sensitive_command mv -f "$tmp" "$conf"
+    tr -d '\r' <"$conf" >"$tmp"
+    mv "$tmp" "$conf"
   fi
 }
 
 qbt_webui_ensure_preferences() {
   local conf="$1"
-  if ! LC_ALL=C arr_run_sensitive_command grep -q '^\[Preferences\]' "$conf"; then
-    arr_sensitive_append_line "$conf" ""
-    arr_sensitive_append_line "$conf" "[Preferences]"
+  if ! LC_ALL=C grep -q '^\[Preferences\]' "$conf" 2>/dev/null; then
+    printf '\n[Preferences]\n' >>"$conf"
   fi
 }
 
@@ -75,7 +70,7 @@ qbt_webui_upsert_pref() {
   if ! tmp=$(qbt_webui_mktemp "$conf"); then
     return 1
   fi
-  if ! arr_run_sensitive_command awk -v target="$key" -v desired="$value" '
+  awk -v target="$key" -v desired="$value" '
     BEGIN {
       section = "";
       inserted = 0;
@@ -109,11 +104,8 @@ qbt_webui_upsert_pref() {
         print target "=" desired;
       }
     }
-  ' "$conf" >"$tmp"; then
-    rm -f "$tmp"
-    return 1
-  fi
-  arr_run_sensitive_command mv -f "$tmp" "$conf"
+  ' "$conf" >"$tmp"
+  mv "$tmp" "$conf"
 }
 
 qbt_webui_pref_value() {
@@ -122,7 +114,7 @@ qbt_webui_pref_value() {
 
   [[ -f "$conf" ]] || return 1
 
-  arr_run_sensitive_command awk -v target="$key" '
+  awk -v target="$key" '
     BEGIN {
       section="";
     }
@@ -145,7 +137,7 @@ qbt_webui_pref_equals() {
   local expected="$3"
   local actual
 
-  if ! actual="$(qbt_webui_pref_value "$conf" "$key" || true)"; then
+  if ! actual="$(qbt_webui_pref_value "$conf" "$key" 2>/dev/null)"; then
     return 1
   fi
 
@@ -170,12 +162,12 @@ qbt_webui_enforce() {
   qbt_webui_upsert_pref "$conf" 'WebUI\\Address' "$address" || return 1
   qbt_webui_upsert_pref "$conf" 'WebUI\\Port' "$port" || return 1
 
-  if ! LC_ALL=C arr_run_sensitive_command grep -E '^(WebUI\\Address|WebUI\\Port)=' "$conf" >/dev/null; then
+  if ! LC_ALL=C grep -E '^(WebUI\\Address|WebUI\\Port)=' "$conf" >/dev/null; then
     printf '[qbt-helper] Failed to assert WebUI prefs in %s\n' "$conf" >&2
     return 1
   fi
 
-  ensure_file_mode "$conf" 600
+  chmod 600 "$conf" 2>/dev/null || true
 }
 
 qbt_webui_restart_service() {
@@ -525,15 +517,12 @@ update_whitelist() {
     if ! tmp=$(arr_mktemp_file); then
       die "Failed to create temporary whitelist file"
     fi
-    if ! arr_run_sensitive_command awk '!(/^WebUI\\AuthSubnetWhitelistEnabled=/ || /^WebUI\\AuthSubnetWhitelist=/)' "$cfg" >"$tmp"; then
-      rm -f "$tmp"
-      die "Failed to prune existing whitelist entries"
-    fi
+    awk '!(/^WebUI\\AuthSubnetWhitelistEnabled=/ || /^WebUI\\AuthSubnetWhitelist=/)' "$cfg" >"$tmp"
     {
       printf 'WebUI\\AuthSubnetWhitelistEnabled=true\n'
       printf 'WebUI\\AuthSubnetWhitelist=%s\n' "$subnet"
     } >>"$tmp"
-    arr_run_sensitive_command mv -f "$tmp" "$cfg"
+    mv "$tmp" "$cfg"
     ensure_secret_file_mode "$cfg"
   else
     log_warn "Config file not found at $cfg; whitelist not updated"
@@ -557,10 +546,10 @@ diagnose_config() {
   fi
 
   local ui_port=""
-  ui_port="$(arr_read_sensitive_file "$cfg" | grep '^WebUI\\Port=' | tail -n1 | cut -d= -f2- | tr -d '\r' || true)"
+  ui_port="$(grep '^WebUI\\Port=' "$cfg" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r' || true)"
 
   local ui_addr=""
-  ui_addr="$(arr_read_sensitive_file "$cfg" | grep '^WebUI\\Address=' | tail -n1 | cut -d= -f2- | tr -d '\r' || true)"
+  ui_addr="$(grep '^WebUI\\Address=' "$cfg" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r' || true)"
 
   if [[ -n "$ui_port" ]]; then
     if [[ "$ui_port" != "$expected_container_port" ]]; then
