@@ -369,6 +369,57 @@ detect_compose_cmd() {
   printf '%s\n' "$compose_cmd"
 }
 
+arr_compose_trim_log() {
+  local log_file="$1"
+  local max_bytes=$((666 * 1024))
+
+  if [[ -z "$log_file" || ! -f "$log_file" ]]; then
+    return 0
+  fi
+
+  local size=0
+  size="$(wc -c <"$log_file" 2>/dev/null || printf '0')"
+  if ((size <= max_bytes)); then
+    return 0
+  fi
+
+  local tmp=""
+  if ! tmp="$(arr_mktemp_file "${log_file}.trim.XXXXXX")"; then
+    return 0
+  fi
+
+  if ! tail -c "$max_bytes" "$log_file" >"$tmp" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 0
+  fi
+
+  local first_line=""
+  first_line="$(head -n 1 "$tmp" 2>/dev/null || printf '')"
+  if [[ -n "$first_line" && ! "$first_line" =~ ^\[[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]][0-9]{2}:[0-9]{2}:[0-9]{2}\] ]]; then
+    local tmp2=""
+    if tmp2="$(arr_mktemp_file "${log_file}.trimline.XXXXXX")"; then
+      if tail -n +2 "$tmp" >"$tmp2" 2>/dev/null; then
+        mv "$tmp2" "$tmp" 2>/dev/null || rm -f "$tmp2" 2>/dev/null || true
+      else
+        rm -f "$tmp2" 2>/dev/null || true
+      fi
+    fi
+  fi
+
+  mv "$tmp" "$log_file" 2>/dev/null || rm -f "$tmp" 2>/dev/null || true
+}
+
+arr_compose_prepare_log_file() {
+  local log_file="$1"
+
+  if [[ -z "$log_file" ]]; then
+    return 1
+  fi
+
+  : >"$log_file" 2>/dev/null || return 1
+  return 0
+}
+
 arr_compose_log_message() {
   local log_file="$1"
   shift
@@ -377,6 +428,7 @@ arr_compose_log_message() {
   fi
 
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file" 2>/dev/null || true
+  arr_compose_trim_log "$log_file"
 }
 
 arr_compose_log_offending_lines() {
@@ -415,6 +467,154 @@ arr_compose_log_offending_lines() {
   done <<<"$lint_output"
 }
 
+arr_compose_save_artifact() {
+  local staging="$1"
+  local log_file="$2"
+  local label="$3"
+
+  if [[ -z "$staging" || -z "$log_file" ]]; then
+    return 1
+  fi
+
+  local log_dir="${log_file%/*}"
+  if [[ "$log_dir" == "$log_file" ]]; then
+    log_dir="."
+  fi
+
+  ensure_dir "$log_dir"
+
+  local timestamp="$(date '+%Y%m%d_%H%M%S')"
+  local sha_segment="unknown"
+  if [[ -f "$staging" ]]; then
+    sha_segment="$(sha256sum "$staging" 2>/dev/null | awk '{print substr($1,1,8)}')"
+  fi
+
+  local artifact="${log_dir}/compose-repair-${timestamp}-${sha_segment}"
+  if [[ -n "$label" ]]; then
+    artifact+="-${label}"
+  fi
+  artifact+=".yml.bak"
+
+  if cp -f "$staging" "$artifact" 2>/dev/null; then
+    arr_compose_log_message "$log_file" "Saved ${label:-snapshot} copy at ${artifact}"
+    printf '%s\n' "$artifact"
+    return 0
+  fi
+
+  return 1
+}
+
+arr_compose_run_yq_roundtrip() {
+  local staging="$1"
+  local log_file="$2"
+
+  if [[ -z "$staging" || -z "$log_file" ]]; then
+    return 1
+  fi
+
+  ARR_COMPOSE_YQ_CHANGED=0
+
+  if ! command -v yq >/dev/null 2>&1; then
+    arr_compose_log_message "$log_file" "yq not available; skipping canonicalization"
+    return 0
+  fi
+
+  local tmp=""
+  if ! tmp="$(arr_mktemp_file "${staging}.yq.XXXXXX")"; then
+    arr_compose_log_message "$log_file" "Unable to allocate temporary file for yq canonicalization"
+    return 1
+  fi
+
+  local sha_before=""
+  sha_before="$(sha256sum "$staging" 2>/dev/null | awk '{print $1}')"
+
+  if yq eval --no-colors --indent 2 '.' "$staging" >"$tmp" 2>>"$log_file"; then
+    if cmp -s "$staging" "$tmp" 2>/dev/null; then
+      rm -f "$tmp" 2>/dev/null || true
+      arr_compose_log_message "$log_file" "yq canonicalization produced no structural changes"
+      return 0
+    fi
+
+    if mv "$tmp" "$staging" 2>/dev/null; then
+      local sha_after=""
+      sha_after="$(sha256sum "$staging" 2>/dev/null | awk '{print $1}')"
+      arr_compose_log_message "$log_file" "yq canonicalization updated compose (sha ${sha_before:0:8} → ${sha_after:0:8})"
+      ARR_COMPOSE_YQ_CHANGED=1
+      return 0
+    fi
+
+    rm -f "$tmp" 2>/dev/null || true
+    arr_compose_log_message "$log_file" "Failed to promote yq canonicalization result"
+    return 1
+  fi
+
+  arr_compose_log_message "$log_file" "Primary yq canonicalization failed; attempting fallback yq -i '.'"
+  rm -f "$tmp" 2>/dev/null || true
+
+  local yq_output=""
+  local yq_status=0
+  yq_output="$(yq eval --inplace '.' "$staging" 2>&1)" || yq_status=$?
+  if ((yq_status != 0)); then
+    arr_compose_log_message "$log_file" "Fallback yq canonicalization failed"
+    if [[ -n "$yq_output" ]]; then
+      printf '%s\n' "$yq_output" >>"$log_file" 2>/dev/null || true
+    fi
+    return 1
+  fi
+
+  if [[ -n "$yq_output" ]]; then
+    printf '%s\n' "$yq_output" >>"$log_file" 2>/dev/null || true
+  fi
+
+  local sha_after=""
+  sha_after="$(sha256sum "$staging" 2>/dev/null | awk '{print $1}')"
+  arr_compose_log_message "$log_file" "Fallback yq canonicalization updated compose (sha ${sha_before:0:8} → ${sha_after:0:8})"
+  ARR_COMPOSE_YQ_CHANGED=1
+  return 0
+}
+
+arr_compose_validate_with_compose() {
+  local staging="$1"
+  local log_file="$2"
+  local compose_cmd_raw="$3"
+  local context="$4"
+
+  if [[ -z "$staging" || -z "$log_file" ]]; then
+    return 1
+  fi
+
+  if [[ -z "$compose_cmd_raw" ]]; then
+    arr_compose_log_message "$log_file" "Compose validation skipped (${context:-autorepair}; compose command unavailable)"
+    return 0
+  fi
+
+  local -a compose_cmd=()
+  read -r -a compose_cmd <<<"$compose_cmd_raw"
+  if ((${#compose_cmd[@]} == 0)); then
+    arr_compose_log_message "$log_file" "Compose validation skipped (${context:-autorepair}; compose command unavailable)"
+    return 0
+  fi
+
+  local compose_output=""
+  local compose_status=0
+  compose_output="$("${compose_cmd[@]}" -f "$staging" config --quiet 2>&1)" || compose_status=$?
+
+  if ((compose_status != 0)); then
+    arr_compose_log_message "$log_file" "Compose validation failed during ${context:-autorepair}"
+    if [[ -n "$compose_output" ]]; then
+      printf '%s\n' "$compose_output" >>"$log_file" 2>/dev/null || true
+    fi
+    return 1
+  fi
+
+  if [[ -n "$compose_output" ]]; then
+    printf '%s\n' "$compose_output" >>"$log_file" 2>/dev/null || true
+  fi
+
+  arr_compose_log_message "$log_file" "Compose validation succeeded during ${context:-autorepair} via ${compose_cmd[*]} config --quiet"
+  return 0
+}
+
 arr_compose_replace_line() {
   local target="$1"
   local line_no="$2"
@@ -433,7 +633,7 @@ arr_compose_replace_line() {
   fi
 
   local tmp=""
-  if ! tmp="$(arr_mktemp_file "${target}.repline.XXXXXX" '')"; then
+  if ! tmp="$(arr_mktemp_file "${target}.repline.XXXXXX")"; then
     return 1
   fi
 
@@ -466,101 +666,131 @@ arr_compose_attempt_yaml_fixes() {
   local lint_output="$3"
 
   if [[ -z "$staging" || -z "$log_file" || -z "$lint_output" ]]; then
+    printf 'changed=0\n'
     printf 'rerun=0\n'
     return 0
   fi
 
-  local -A seen_colon_lines=()
-  local -A seen_blank_lines=()
-  local -a colon_targets=()
-  local -a blank_targets=()
+  local -A colon_targets=()
+  local -A blank_targets=()
 
   local lint_line=""
   while IFS= read -r lint_line; do
-    if [[ "$lint_line" =~ :([0-9]+):([0-9]+): ]]; then
+    if [[ "$lint_line" =~ ^[^:]+:([0-9]+):[0-9]+:[[:space:]]*(.*)$ ]]; then
       local line_no="${BASH_REMATCH[1]}"
-      if [[ "$lint_line" == *"syntax error: could not find expected ':'"* ]]; then
-        if [[ -z "${seen_colon_lines["$line_no"]:-}" ]]; then
-          seen_colon_lines["$line_no"]=1
-          colon_targets+=("$line_no")
-        fi
-      elif [[ "$lint_line" == *"too many blank lines"* && "$lint_line" == *"(empty-lines)"* ]]; then
-        if [[ -z "${seen_blank_lines["$line_no"]:-}" ]]; then
-          seen_blank_lines["$line_no"]=1
-          blank_targets+=("$line_no")
-        fi
+      local message="${BASH_REMATCH[2]}"
+      if [[ "$message" == *"could not find expected ':'"* ]]; then
+        colon_targets["$line_no"]=1
+      elif [[ "$message" == *"(empty-lines)"* && "$message" == *"too many blank lines"* ]]; then
+        blank_targets["$line_no"]=1
       fi
     fi
   done <<<"$lint_output"
 
   local needs_rerun=0
+  local changed=0
   local -a summary_lines=()
 
-  if ((${#colon_targets[@]} > 0)); then
-    local colons_fixed=0
-    local line_no=""
-    for line_no in "${colon_targets[@]}"; do
-      local offending_line=""
-      offending_line="$(sed -n "${line_no}p" "$staging" 2>/dev/null || printf '')"
-      if [[ -z "$offending_line" ]]; then
-        arr_compose_log_message "$log_file" "Unable to correct missing colon; line ${line_no} unavailable"
-        continue
-      fi
+  local -a sorted_colon_lines=()
+  mapfile -t sorted_colon_lines < <(printf '%s\n' "${!colon_targets[@]}" | sort -n)
 
-      local new_line=""
-      if [[ "$offending_line" == *":"* ]]; then
-        continue
-      elif [[ "$offending_line" =~ ^([[:space:]]*-[[:space:]]*)([^:#[:space:]][^:]*)[[:space:]]+([^[:space:]].*)$ ]]; then
-        local prefix="${BASH_REMATCH[1]}"
-        local key="${BASH_REMATCH[2]}"
-        local value="${BASH_REMATCH[3]}"
-        new_line="${prefix}${key}: ${value}"
-      elif [[ "$offending_line" =~ ^([[:space:]]*)([^:#[:space:]][^:]*)[[:space:]]+([^[:space:]].*)$ ]]; then
-        local indent="${BASH_REMATCH[1]}"
-        local key="${BASH_REMATCH[2]}"
-        local value="${BASH_REMATCH[3]}"
-        new_line="${indent}${key}: ${value}"
-      else
-        arr_compose_log_message "$log_file" "Unable to infer missing colon fix for line ${line_no}: ${offending_line}"
-        continue
-      fi
+  local line_no=""
+  for line_no in "${sorted_colon_lines[@]}"; do
+    local offending_line=""
+    offending_line="$(sed -n "${line_no}p" "$staging" 2>/dev/null || printf '')"
 
-      if [[ "$new_line" == "$offending_line" ]]; then
-        continue
-      fi
-
-      if arr_compose_replace_line "$staging" "$line_no" "$new_line"; then
-        ((colons_fixed++))
-        needs_rerun=1
-        arr_compose_log_message "$log_file" "Inserted missing colon on line ${line_no}: ${new_line}"
-      else
-        arr_compose_log_message "$log_file" "Failed to rewrite line ${line_no} while adding missing colon"
-      fi
-    done
-
-    if ((colons_fixed > 0)); then
-      summary_lines+=("corrected missing ':' on ${colons_fixed} line(s)")
+    if [[ -z "$offending_line" ]]; then
+      arr_compose_log_message "$log_file" "Unable to inspect line ${line_no} for missing colon repair"
+      continue
     fi
-  fi
+
+    if [[ "$offending_line" == *":"* ]]; then
+      arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: existing ':' makes lint output ambiguous (${offending_line})"
+      continue
+    fi
+
+    local new_line=""
+    if [[ "$offending_line" =~ ^([[:space:]]*-[[:space:]]*)([A-Za-z0-9_.-]+)[[:space:]]+([^[:space:]].*)$ ]]; then
+      local prefix="${BASH_REMATCH[1]}"
+      local key="${BASH_REMATCH[2]}"
+      local value="${BASH_REMATCH[3]}"
+      local value_token="${value%%[[:space:]]*}"
+      if [[ "$value" == *":"* ]]; then
+        arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: sequence value contains ':' (${value})"
+        continue
+      fi
+      if [[ "$value" == *'${'* ]]; then
+        arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: sequence value contains placeholder syntax (${value})"
+        continue
+      fi
+      if [[ -n "$value_token" && "${value_token:0:1}" == "#" ]]; then
+        arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: sequence value begins with comment (${value})"
+        continue
+      fi
+      case "$value_token" in
+        '|'|'|-'|'|+'|'>'|'>-'|'>+')
+          arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: sequence value is a block scalar indicator (${value})"
+          continue
+          ;;
+      esac
+      new_line="${prefix}${key}: ${value}"
+    elif [[ "$offending_line" =~ ^([[:space:]]*)([A-Za-z0-9_.-]+)[[:space:]]+([^[:space:]].*)$ ]]; then
+      local indent="${BASH_REMATCH[1]}"
+      local key="${BASH_REMATCH[2]}"
+      local value="${BASH_REMATCH[3]}"
+      local value_token="${value%%[[:space:]]*}"
+      if [[ "$value" == *":"* ]]; then
+        arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: mapping value contains ':' (${value})"
+        continue
+      fi
+      if [[ "$value" == *'${'* ]]; then
+        arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: mapping value contains placeholder syntax (${value})"
+        continue
+      fi
+      if [[ -n "$value_token" && "${value_token:0:1}" == "#" ]]; then
+        arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: mapping value begins with comment (${value})"
+        continue
+      fi
+      case "$value_token" in
+        '|'|'|-'|'|+'|'>'|'>-'|'>+')
+          arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: mapping value is a block scalar indicator (${value})"
+          continue
+          ;;
+      esac
+      new_line="${indent}${key}: ${value}"
+    else
+      arr_compose_log_message "$log_file" "Unable to derive safe colon fix for line ${line_no}: ${offending_line}"
+      continue
+    fi
+
+    arr_compose_log_message "$log_file" "Attempting colon repair on line ${line_no}:"
+    arr_compose_log_message "$log_file" "  before: ${offending_line}"
+    arr_compose_log_message "$log_file" "  after:  ${new_line}"
+
+    if arr_compose_replace_line "$staging" "$line_no" "$new_line"; then
+      summary_lines+=("corrected missing ':' on line ${line_no}")
+      needs_rerun=1
+      changed=1
+    else
+      arr_compose_log_message "$log_file" "Failed to rewrite line ${line_no} for colon repair"
+    fi
+  done
 
   if ((${#blank_targets[@]} > 0)); then
     local removed=0
-    local line_no=""
-    if ((${#blank_targets[@]} > 1)); then
-      mapfile -t blank_targets < <(printf '%s\n' "${blank_targets[@]}" | sort -nr)
-    fi
-
-    for line_no in "${blank_targets[@]}"; do
+    local -a sorted_blank_lines=()
+    mapfile -t sorted_blank_lines < <(printf '%s\n' "${!blank_targets[@]}" | sort -nr)
+    for line_no in "${sorted_blank_lines[@]}"; do
       local blank_line=""
       blank_line="$(sed -n "${line_no}p" "$staging" 2>/dev/null || printf '')"
       if [[ -n "${blank_line//[[:space:]]/}" ]]; then
         continue
       fi
-
+      arr_compose_log_message "$log_file" "Removing yamllint empty-line violation at ${line_no}"
       if sed -i "${line_no}d" "$staging" 2>>"$log_file"; then
         ((removed++))
         needs_rerun=1
-        arr_compose_log_message "$log_file" "Removed blank line at ${line_no} to satisfy yamllint empty-lines rule"
+        changed=1
       else
         arr_compose_log_message "$log_file" "Failed to remove blank line at ${line_no}"
       fi
@@ -571,6 +801,7 @@ arr_compose_attempt_yaml_fixes() {
     fi
   fi
 
+  printf 'changed=%d\n' "$changed"
   printf 'rerun=%d\n' "$needs_rerun"
   if ((${#summary_lines[@]} > 0)); then
     printf '%s\n' "${summary_lines[@]}"
@@ -602,7 +833,7 @@ arr_compose_ensure_document_start() {
   fi
 
   local tmp=""
-  if ! tmp="$(arr_mktemp_file "${staging}.docstart.XXXXXX" '')"; then
+  if ! tmp="$(arr_mktemp_file "${staging}.docstart.XXXXXX")"; then
     return 1
   fi
 
@@ -640,7 +871,7 @@ arr_compose_collapse_blank_runs() {
   fi
 
   local tmp=""
-  if ! tmp="$(arr_mktemp_file "${staging}.noblanks.XXXXXX" '')"; then
+  if ! tmp="$(arr_mktemp_file "${staging}.noblanks.XXXXXX")"; then
     return 1
   fi
 
@@ -673,6 +904,7 @@ arr_compose_collapse_blank_runs() {
 arr_compose_autorepair() {
   local staging="$1"
   local log_file="$2"
+  local compose_cmd_raw="${3-}"
 
   if [[ -z "$staging" || -z "$log_file" ]]; then
     return 1
@@ -680,30 +912,59 @@ arr_compose_autorepair() {
 
   arr_compose_log_message "$log_file" "=== compose autorepair start ==="
 
+  local snapshot_path=""
+  snapshot_path="$(arr_compose_save_artifact "$staging" "$log_file" "snapshot" 2>/dev/null || printf '')"
+  if [[ -z "$snapshot_path" ]]; then
+    arr_compose_log_message "$log_file" "Warning: unable to persist initial snapshot; reverting will rely on staging copy"
+  fi
+
   local -a summary=()
+  local validation_needed=0
+  local yq_summary_added=0
 
   if LC_ALL=C grep -q $'\r' "$staging" 2>/dev/null; then
+    local crlf_samples=""
+    crlf_samples="$(LC_ALL=C grep -n $'\r$' "$staging" 2>/dev/null | head -n 3)"
+    if [[ -n "$crlf_samples" ]]; then
+      arr_compose_log_message "$log_file" "CRLF-terminated lines before fix (first 3):"
+      printf '%s\n' "$crlf_samples" >>"$log_file" 2>/dev/null || true
+    fi
     if sed -i 's/\r$//' "$staging" 2>>"$log_file"; then
       summary+=("normalized CRLF line endings")
       arr_compose_log_message "$log_file" "Normalized CRLF line endings"
+      validation_needed=1
     else
       arr_compose_log_message "$log_file" "Failed to normalize CRLF line endings"
     fi
   fi
 
   if LC_ALL=C grep -q $'\t' "$staging" 2>/dev/null; then
+    local tab_samples=""
+    tab_samples="$(LC_ALL=C grep -n $'\t' "$staging" 2>/dev/null | head -n 3)"
+    if [[ -n "$tab_samples" ]]; then
+      arr_compose_log_message "$log_file" "Tab characters before fix (first 3):"
+      printf '%s\n' "$tab_samples" >>"$log_file" 2>/dev/null || true
+    fi
     if sed -i $'s/\t/  /g' "$staging" 2>>"$log_file"; then
       summary+=("replaced tabs with spaces")
       arr_compose_log_message "$log_file" "Replaced hard tabs with two spaces"
+      validation_needed=1
     else
       arr_compose_log_message "$log_file" "Failed to replace hard tabs"
     fi
   fi
 
   if LC_ALL=C grep -q '[[:space:]]$' "$staging" 2>/dev/null; then
+    local trailing_samples=""
+    trailing_samples="$(LC_ALL=C grep -n '[[:space:]]$' "$staging" 2>/dev/null | head -n 3)"
+    if [[ -n "$trailing_samples" ]]; then
+      arr_compose_log_message "$log_file" "Trailing whitespace before fix (first 3):"
+      printf '%s\n' "$trailing_samples" >>"$log_file" 2>/dev/null || true
+    fi
     if sed -i 's/[[:space:]]\+$//' "$staging" 2>>"$log_file"; then
       summary+=("stripped trailing whitespace")
       arr_compose_log_message "$log_file" "Stripped trailing whitespace"
+      validation_needed=1
     else
       arr_compose_log_message "$log_file" "Failed to strip trailing whitespace"
     fi
@@ -713,6 +974,7 @@ arr_compose_autorepair() {
   if doc_start_summary="$(arr_compose_ensure_document_start "$staging" "$log_file" 2>/dev/null)"; then
     if [[ -n "$doc_start_summary" ]]; then
       summary+=("$doc_start_summary")
+      validation_needed=1
     fi
   else
     arr_compose_log_message "$log_file" "Failed to ensure YAML document start"
@@ -722,15 +984,23 @@ arr_compose_autorepair() {
   if blank_summary="$(arr_compose_collapse_blank_runs "$staging" "$log_file" 2>/dev/null)"; then
     if [[ -n "$blank_summary" ]]; then
       summary+=("$blank_summary")
+      validation_needed=1
     fi
   else
     arr_compose_log_message "$log_file" "Failed to collapse blank line runs"
   fi
 
   if LC_ALL=C grep -q '^[[:space:]]*\\[[:space:]]*$' "$staging" 2>/dev/null; then
+    local slash_samples=""
+    slash_samples="$(LC_ALL=C grep -n '^[[:space:]]*\\[[:space:]]*$' "$staging" 2>/dev/null | head -n 3)"
+    if [[ -n "$slash_samples" ]]; then
+      arr_compose_log_message "$log_file" "Standalone backslash lines before fix (first 3):"
+      printf '%s\n' "$slash_samples" >>"$log_file" 2>/dev/null || true
+    fi
     if sed -i '/^[[:space:]]*\\[[:space:]]*$/d' "$staging" 2>>"$log_file"; then
       summary+=("removed stray backslash lines")
       arr_compose_log_message "$log_file" "Removed stray standalone backslash lines"
+      validation_needed=1
     else
       arr_compose_log_message "$log_file" "Failed to remove stray backslash lines"
     fi
@@ -744,31 +1014,36 @@ arr_compose_autorepair() {
     if printf '\n' >>"$staging" 2>>"$log_file"; then
       summary+=("ensured trailing newline")
       arr_compose_log_message "$log_file" "Ensured file ends with newline"
+      validation_needed=1
     else
       arr_compose_log_message "$log_file" "Failed to append trailing newline"
     fi
   fi
 
-  if command -v yq >/dev/null 2>&1; then
-    local yq_tmp=""
-    if yq_tmp="$(arr_mktemp_file "${staging}.yq.XXXXXX" '')"; then
-      if yq eval --no-colors --indent 2 '.' "$staging" >"$yq_tmp" 2>>"$log_file"; then
-        if mv "$yq_tmp" "$staging" 2>>"$log_file"; then
-          summary+=("normalized YAML with yq")
-          arr_compose_log_message "$log_file" "Normalized YAML via yq round-trip"
-        else
-          arr_compose_log_message "$log_file" "Failed to replace staging file after yq normalization"
-          rm -f "$yq_tmp" 2>/dev/null || true
-        fi
-      else
-        arr_compose_log_message "$log_file" "yq normalization failed"
-        rm -f "$yq_tmp" 2>/dev/null || true
+  if ((validation_needed)); then
+    if ! arr_compose_run_yq_roundtrip "$staging" "$log_file"; then
+      arr_compose_save_artifact "$staging" "$log_file" "failed"
+      if [[ -n "$snapshot_path" && -f "$snapshot_path" ]]; then
+        cp -f "$snapshot_path" "$staging" 2>/dev/null || true
+        arr_compose_log_message "$log_file" "Reverted to snapshot ${snapshot_path} after yq failure"
       fi
-    else
-      arr_compose_log_message "$log_file" "Unable to allocate temporary file for yq normalization"
+      printf '%s\n' "auto-repair aborted: yq canonicalization failed"
+      return 1
     fi
-  else
-    arr_compose_log_message "$log_file" "yq not available; skipping YAML normalization"
+    if ((ARR_COMPOSE_YQ_CHANGED)) && ((yq_summary_added == 0)); then
+      summary+=("normalized YAML with yq")
+      yq_summary_added=1
+    fi
+    if ! arr_compose_validate_with_compose "$staging" "$log_file" "$compose_cmd_raw" "formatting"; then
+      arr_compose_save_artifact "$staging" "$log_file" "failed"
+      if [[ -n "$snapshot_path" && -f "$snapshot_path" ]]; then
+        cp -f "$snapshot_path" "$staging" 2>/dev/null || true
+        arr_compose_log_message "$log_file" "Reverted to snapshot ${snapshot_path} after compose validation failure"
+      fi
+      printf '%s\n' "auto-repair aborted: compose validation failed"
+      return 1
+    fi
+    validation_needed=0
   fi
 
   if command -v yamllint >/dev/null 2>&1; then
@@ -798,16 +1073,43 @@ arr_compose_autorepair() {
 
     if ((lint_status != 0)); then
       local fix_output=""
+      local fix_changed=0
       local lint_needs_rerun=0
-      if fix_output="$(arr_compose_attempt_yaml_fixes "$staging" "$log_file" "$lint_output" 2>/dev/null)"; then
-        local fix_line=""
-        while IFS= read -r fix_line; do
-          if [[ "$fix_line" =~ ^rerun=([01])$ ]]; then
-            lint_needs_rerun="${BASH_REMATCH[1]}"
-          elif [[ -n "$fix_line" ]]; then
-            summary+=("$fix_line")
+      fix_output="$(arr_compose_attempt_yaml_fixes "$staging" "$log_file" "$lint_output" 2>/dev/null)"
+      local fix_line=""
+      while IFS= read -r fix_line; do
+        if [[ "$fix_line" =~ ^changed=([01])$ ]]; then
+          fix_changed="${BASH_REMATCH[1]}"
+        elif [[ "$fix_line" =~ ^rerun=([01])$ ]]; then
+          lint_needs_rerun="${BASH_REMATCH[1]}"
+        elif [[ -n "$fix_line" ]]; then
+          summary+=("$fix_line")
+        fi
+      done <<<"$fix_output"
+
+      if ((fix_changed)); then
+        if ! arr_compose_run_yq_roundtrip "$staging" "$log_file"; then
+          arr_compose_save_artifact "$staging" "$log_file" "failed"
+          if [[ -n "$snapshot_path" && -f "$snapshot_path" ]]; then
+            cp -f "$snapshot_path" "$staging" 2>/dev/null || true
+            arr_compose_log_message "$log_file" "Reverted to snapshot ${snapshot_path} after yq failure"
           fi
-        done <<<"$fix_output"
+          printf '%s\n' "auto-repair aborted: yq canonicalization failed"
+          return 1
+        fi
+        if ((ARR_COMPOSE_YQ_CHANGED)) && ((yq_summary_added == 0)); then
+          summary+=("normalized YAML with yq")
+          yq_summary_added=1
+        fi
+        if ! arr_compose_validate_with_compose "$staging" "$log_file" "$compose_cmd_raw" "yamllint repair"; then
+          arr_compose_save_artifact "$staging" "$log_file" "failed"
+          if [[ -n "$snapshot_path" && -f "$snapshot_path" ]]; then
+            cp -f "$snapshot_path" "$staging" 2>/dev/null || true
+            arr_compose_log_message "$log_file" "Reverted to snapshot ${snapshot_path} after compose validation failure"
+          fi
+          printf '%s\n' "auto-repair aborted: compose validation failed"
+          return 1
+        fi
       fi
 
       if ((lint_needs_rerun)); then
@@ -829,13 +1131,24 @@ arr_compose_autorepair() {
           arr_compose_log_offending_lines "$log_file" "$staging" "$lint_output"
         fi
       fi
+
+      if ((lint_status != 0)); then
+        arr_compose_save_artifact "$staging" "$log_file" "failed"
+        if [[ -n "$snapshot_path" && -f "$snapshot_path" ]]; then
+          cp -f "$snapshot_path" "$staging" 2>/dev/null || true
+          arr_compose_log_message "$log_file" "Reverted to snapshot ${snapshot_path} after yamllint failure"
+        fi
+        printf '%s\n' "auto-repair aborted: yamllint errors remain"
+        return 1
+      fi
     fi
   else
     arr_compose_log_message "$log_file" "yamllint not available; skipping linting"
   fi
 
+  arr_compose_log_message "$log_file" "Auto-repair completed successfully"
   printf '%s\n' "${summary[@]}"
-  arr_compose_log_message "$log_file" "Auto-repair completed"
+  return 0
 }
 
 arr_compose_autorepair_and_validate() {
@@ -853,27 +1166,41 @@ arr_compose_autorepair_and_validate() {
 
   local log_file="${log_dir}/compose-repair.log"
 
+  if ! arr_compose_prepare_log_file "$log_file"; then
+    warn "Unable to prepare compose repair log at ${log_file}"
+  fi
+
+  local compose_cmd_raw=""
+  local compose_detect_status=0
+  compose_cmd_raw="$(detect_compose_cmd)" || compose_detect_status=$?
+  if ((compose_detect_status != 0)); then
+    compose_cmd_raw=""
+  fi
+
   local summary_output=""
-  summary_output="$(arr_compose_autorepair "$staging" "$log_file" 2>/dev/null)"
+  local autorepair_status=0
+  summary_output="$(arr_compose_autorepair "$staging" "$log_file" "$compose_cmd_raw" 2>/dev/null)" || autorepair_status=$?
   local -a summary_lines=()
   if [[ -n "$summary_output" ]]; then
     mapfile -t summary_lines <<<"$summary_output"
   fi
 
-  local compose_cmd_raw=""
+  if ((autorepair_status != 0)); then
+    warn "Compose auto-repair failed; see ${log_file}"
+    return 1
+  fi
+
   local -a compose_cmd=()
-  if ! compose_cmd_raw="$(detect_compose_cmd)" || [[ -z "$compose_cmd_raw" ]]; then
+  if [[ -z "$compose_cmd_raw" ]]; then
     arr_compose_log_message "$log_file" "Docker Compose unavailable; validation skipped"
     summary_lines+=("validation skipped (compose command unavailable)")
   else
     read -r -a compose_cmd <<<"$compose_cmd_raw"
     if ((${#compose_cmd[@]} > 0)); then
-      if ! "${compose_cmd[@]}" -f "$staging" config --quiet >/dev/null 2>&1; then
-        arr_compose_log_message "$log_file" "Compose validation failed via ${compose_cmd[*]} config --quiet"
+      if ! arr_compose_validate_with_compose "$staging" "$log_file" "$compose_cmd_raw" "final validation"; then
         warn "Docker Compose validation failed; see ${log_file}"
         return 1
       fi
-      arr_compose_log_message "$log_file" "Compose validation succeeded via ${compose_cmd[*]} config --quiet"
       summary_lines+=("validated with ${compose_cmd[*]} config --quiet")
     fi
   fi
@@ -888,12 +1215,17 @@ arr_compose_autorepair_and_validate() {
   arr_compose_log_message "$log_file" "Installed compose file at ${target}"
 
   local summary_message=""
-  if ((${#summary_lines[@]} > 0)); then
+  local applied_count="${#summary_lines[@]}"
+  if ((applied_count > 0)); then
     summary_message="$(printf '%s, ' "${summary_lines[@]}")"
     summary_message="${summary_message%, }"
-    msg "Compose auto-repair summary: ${summary_message}."
+  fi
+
+  if ((applied_count > 0)); then
+    arr_compose_log_message "$log_file" "Summary: ${summary_message}"
+    msg "compose auto-repair: applied ${applied_count} change(s); see ${log_file}"
   else
-    msg "Compose auto-repair summary: validation complete (no changes required)."
+    msg "compose auto-repair: no changes required; see ${log_file}"
   fi
 
   return 0
