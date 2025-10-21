@@ -437,11 +437,12 @@ arr_compose_replace_line() {
     return 1
   fi
 
-  if awk -v target_line="$line_no" -v replacement="$new_content" '
+  export REPLACEMENT_CONTENT="$new_content"
+  if awk -v target_line="$line_no" '
     BEGIN {status=1}
     {
       if (NR == target_line) {
-        print replacement;
+        print ENVIRON["REPLACEMENT_CONTENT"];
         status=0;
       } else {
         print $0;
@@ -449,6 +450,7 @@ arr_compose_replace_line() {
     }
     END {exit status}
   ' "$target" >"$tmp" 2>/dev/null; then
+    unset REPLACEMENT_CONTENT
     if mv "$tmp" "$target" 2>/dev/null; then
       return 0
     fi
