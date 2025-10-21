@@ -3234,7 +3234,21 @@ EOF
 
   local source_content="$default_conf"
   if [[ -f "$conf_file" ]]; then
-    source_content="$(<"$conf_file")"
+    if ! source_content="$(<"$conf_file")"; then
+      if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" && $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+        if source_content="$(sudo cat "$conf_file" 2>/dev/null)"; then
+          if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
+            sudo chown "${PUID}:${PGID}" "$conf_file" 2>/dev/null || true
+          fi
+        else
+          warn "  Unable to read ${conf_file}; falling back to defaults"
+          source_content="$default_conf"
+        fi
+      else
+        warn "  Unable to read ${conf_file}; falling back to defaults"
+        source_content="$default_conf"
+      fi
+    fi
   fi
 
   local managed_spec
