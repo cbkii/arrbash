@@ -233,7 +233,17 @@ write_pf_state() {
         --arg message "$message" \
         --arg last_checked "$last_checked" \
         --arg last_success "$last_success_json" \
-        '{"port":$port,"status":$status,"attempts":$attempts,"cycles":$cycles,"last_checked":$last_checked,"last_success":(if $last_success == "" then null else $last_success end),"message":$message}'
+        -f - <<'JQ'
+{
+  "port": $port,
+  "status": $status,
+  "attempts": $attempts,
+  "cycles": $cycles,
+  "last_checked": $last_checked,
+  "last_success": (if $last_success == "" then null else $last_success end),
+  "message": $message
+}
+JQ
     )"
     local jq_status=$?
     if ((jq_status != 0)); then
