@@ -487,6 +487,62 @@ safe_cleanup() {
     | xargs -r docker rm -f 2>/dev/null || true
 }
 
+# Ensures generated compose and environment files exist before proceeding
+validate_generated_paths() {
+  local stack_dir
+  stack_dir="$(arr_stack_dir)"
+  local compose_path
+  compose_path="${COMPOSE_FILE:-${stack_dir}/docker-compose.yml}"
+  local env_file
+  env_file="$(arr_env_file)"
+  local -a errors=()
+
+  if [[ -z "$stack_dir" ]]; then
+    errors+=("Unable to resolve stack directory (ARR_STACK_DIR=${ARR_STACK_DIR:-})")
+  elif [[ ! -d "$stack_dir" ]]; then
+    errors+=("Stack directory missing: ${stack_dir}")
+  fi
+
+  if [[ -z "$compose_path" ]]; then
+    errors+=("Compose file path could not be determined")
+  else
+    local compose_dir
+    compose_dir="$(dirname "$compose_path")"
+    if [[ ! -d "$compose_dir" ]]; then
+      errors+=("Compose output directory missing: ${compose_dir}")
+    fi
+    if [[ ! -f "$compose_path" ]]; then
+      errors+=("docker-compose.yml not found at ${compose_path}")
+    elif [[ ! -s "$compose_path" ]]; then
+      errors+=("docker-compose.yml at ${compose_path} is empty")
+    fi
+  fi
+
+  if [[ -z "$env_file" ]]; then
+    errors+=(".env file path could not be determined")
+  else
+    local env_dir
+    env_dir="$(dirname "$env_file")"
+    if [[ ! -d "$env_dir" ]]; then
+      errors+=(".env output directory missing: ${env_dir}")
+    fi
+    if [[ ! -f "$env_file" ]]; then
+      errors+=(".env not found at ${env_file}")
+    elif [[ ! -s "$env_file" ]]; then
+      errors+=(".env at ${env_file} is empty")
+    fi
+  fi
+
+  if ((${#errors[@]} > 0)); then
+    local message="Generated file validation failed:"
+    local err
+    for err in "${errors[@]}"; do
+      message+=$'\n'"  - ${err}"
+    done
+    die "$message"
+  fi
+}
+
 # Runs docker compose config to detect unresolved env placeholders before deploy
 preflight_compose_interpolation() {
   local file="${COMPOSE_FILE:-${ARR_STACK_DIR}/docker-compose.yml}"
