@@ -1332,7 +1332,6 @@ atomic_write() {
   fi
 
   local moved=0
-  local moved=0
   local used_sudo=0
 
   if mv -f "$tmp" "$target" 2>/dev/null; then
