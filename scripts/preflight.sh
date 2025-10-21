@@ -17,7 +17,7 @@ install_missing() {
     die "Docker Compose v2+ is required but not found"
   fi
 
-  require_dependencies curl jq openssl
+  require_dependencies curl jq openssl yq
 
   if ! command -v certutil >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then

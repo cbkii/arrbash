@@ -415,6 +415,168 @@ arr_compose_log_offending_lines() {
   done <<<"$lint_output"
 }
 
+arr_compose_replace_line() {
+  local target="$1"
+  local line_no="$2"
+  local new_content="$3"
+
+  if [[ -z "$target" || -z "$line_no" || -z "$new_content" ]]; then
+    return 1
+  fi
+
+  if [[ ! -f "$target" ]]; then
+    return 1
+  fi
+
+  if [[ ! "$line_no" =~ ^[0-9]+$ || "$line_no" -le 0 ]]; then
+    return 1
+  fi
+
+  local tmp=""
+  if ! tmp="$(arr_mktemp_file "${target}.repline.XXXXXX" '')"; then
+    return 1
+  fi
+
+  export REPLACEMENT_CONTENT="$new_content"
+  if awk -v target_line="$line_no" '
+    BEGIN {status=1}
+    {
+      if (NR == target_line) {
+        print ENVIRON["REPLACEMENT_CONTENT"];
+        status=0;
+      } else {
+        print $0;
+      }
+    }
+    END {exit status}
+  ' "$target" >"$tmp" 2>/dev/null; then
+    unset REPLACEMENT_CONTENT
+    if mv "$tmp" "$target" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  rm -f "$tmp" 2>/dev/null || true
+  return 1
+}
+
+arr_compose_attempt_yaml_fixes() {
+  local staging="$1"
+  local log_file="$2"
+  local lint_output="$3"
+
+  if [[ -z "$staging" || -z "$log_file" || -z "$lint_output" ]]; then
+    printf 'rerun=0\n'
+    return 0
+  fi
+
+  local -A seen_colon_lines=()
+  local -A seen_blank_lines=()
+  local -a colon_targets=()
+  local -a blank_targets=()
+
+  local lint_line=""
+  while IFS= read -r lint_line; do
+    if [[ "$lint_line" =~ :([0-9]+):([0-9]+): ]]; then
+      local line_no="${BASH_REMATCH[1]}"
+      if [[ "$lint_line" == *"syntax error: could not find expected ':'"* ]]; then
+        if [[ -z "${seen_colon_lines["$line_no"]:-}" ]]; then
+          seen_colon_lines["$line_no"]=1
+          colon_targets+=("$line_no")
+        fi
+      elif [[ "$lint_line" == *"too many blank lines"* && "$lint_line" == *"(empty-lines)"* ]]; then
+        if [[ -z "${seen_blank_lines["$line_no"]:-}" ]]; then
+          seen_blank_lines["$line_no"]=1
+          blank_targets+=("$line_no")
+        fi
+      fi
+    fi
+  done <<<"$lint_output"
+
+  local needs_rerun=0
+  local -a summary_lines=()
+
+  if ((${#colon_targets[@]} > 0)); then
+    local colons_fixed=0
+    local line_no=""
+    for line_no in "${colon_targets[@]}"; do
+      local offending_line=""
+      offending_line="$(sed -n "${line_no}p" "$staging" 2>/dev/null || printf '')"
+      if [[ -z "$offending_line" ]]; then
+        arr_compose_log_message "$log_file" "Unable to correct missing colon; line ${line_no} unavailable"
+        continue
+      fi
+
+      local new_line=""
+      if [[ "$offending_line" == *":"* ]]; then
+        continue
+      elif [[ "$offending_line" =~ ^([[:space:]]*-[[:space:]]*)([^:#[:space:]][^:]*)[[:space:]]+([^[:space:]].*)$ ]]; then
+        local prefix="${BASH_REMATCH[1]}"
+        local key="${BASH_REMATCH[2]}"
+        local value="${BASH_REMATCH[3]}"
+        new_line="${prefix}${key}: ${value}"
+      elif [[ "$offending_line" =~ ^([[:space:]]*)([^:#[:space:]][^:]*)[[:space:]]+([^[:space:]].*)$ ]]; then
+        local indent="${BASH_REMATCH[1]}"
+        local key="${BASH_REMATCH[2]}"
+        local value="${BASH_REMATCH[3]}"
+        new_line="${indent}${key}: ${value}"
+      else
+        arr_compose_log_message "$log_file" "Unable to infer missing colon fix for line ${line_no}: ${offending_line}"
+        continue
+      fi
+
+      if [[ "$new_line" == "$offending_line" ]]; then
+        continue
+      fi
+
+      if arr_compose_replace_line "$staging" "$line_no" "$new_line"; then
+        ((colons_fixed++))
+        needs_rerun=1
+        arr_compose_log_message "$log_file" "Inserted missing colon on line ${line_no}: ${new_line}"
+      else
+        arr_compose_log_message "$log_file" "Failed to rewrite line ${line_no} while adding missing colon"
+      fi
+    done
+
+    if ((colons_fixed > 0)); then
+      summary_lines+=("corrected missing ':' on ${colons_fixed} line(s)")
+    fi
+  fi
+
+  if ((${#blank_targets[@]} > 0)); then
+    local removed=0
+    local line_no=""
+    if ((${#blank_targets[@]} > 1)); then
+      mapfile -t blank_targets < <(printf '%s\n' "${blank_targets[@]}" | sort -nr)
+    fi
+
+    for line_no in "${blank_targets[@]}"; do
+      local blank_line=""
+      blank_line="$(sed -n "${line_no}p" "$staging" 2>/dev/null || printf '')"
+      if [[ -n "${blank_line//[[:space:]]/}" ]]; then
+        continue
+      fi
+
+      if sed -i "${line_no}d" "$staging" 2>>"$log_file"; then
+        ((removed++))
+        needs_rerun=1
+        arr_compose_log_message "$log_file" "Removed blank line at ${line_no} to satisfy yamllint empty-lines rule"
+      else
+        arr_compose_log_message "$log_file" "Failed to remove blank line at ${line_no}"
+      fi
+    done
+
+    if ((removed > 0)); then
+      summary_lines+=("removed ${removed} empty-line violation(s)")
+    fi
+  fi
+
+  printf 'rerun=%d\n' "$needs_rerun"
+  if ((${#summary_lines[@]} > 0)); then
+    printf '%s\n' "${summary_lines[@]}"
+  fi
+}
+
 arr_compose_ensure_document_start() {
   local staging="$1"
   local log_file="$2"
@@ -632,6 +794,41 @@ arr_compose_autorepair() {
       arr_compose_log_message "$log_file" $'yamllint reported issues:'
       printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
       arr_compose_log_offending_lines "$log_file" "$staging" "$lint_output"
+    fi
+
+    if ((lint_status != 0)); then
+      local fix_output=""
+      local lint_needs_rerun=0
+      if fix_output="$(arr_compose_attempt_yaml_fixes "$staging" "$log_file" "$lint_output" 2>/dev/null)"; then
+        local fix_line=""
+        while IFS= read -r fix_line; do
+          if [[ "$fix_line" =~ ^rerun=([01])$ ]]; then
+            lint_needs_rerun="${BASH_REMATCH[1]}"
+          elif [[ -n "$fix_line" ]]; then
+            summary+=("$fix_line")
+          fi
+        done <<<"$fix_output"
+      fi
+
+      if ((lint_needs_rerun)); then
+        arr_compose_log_message "$log_file" "Re-running yamllint after autorepair fixes"
+        lint_status=0
+        lint_output="$("${yamllint_cmd[@]}" "$staging" 2>&1)" || lint_status=$?
+
+        if ((lint_status == 0)); then
+          if [[ -n "$lint_output" ]]; then
+            arr_compose_log_message "$log_file" $'yamllint reported warnings after autorepair:'
+            printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
+            arr_compose_log_offending_lines "$log_file" "$staging" "$lint_output"
+          else
+            arr_compose_log_message "$log_file" "yamllint completed without issues after autorepair"
+          fi
+        else
+          arr_compose_log_message "$log_file" $'yamllint reported issues after autorepair:'
+          printf '%s\n' "$lint_output" >>"$log_file" 2>/dev/null || true
+          arr_compose_log_offending_lines "$log_file" "$staging" "$lint_output"
+        fi
+      fi
     fi
   else
     arr_compose_log_message "$log_file" "yamllint not available; skipping linting"
