@@ -57,12 +57,9 @@ if [[ -n "$DATA_DIR_OVERRIDE" ]]; then
 else
   ENV_FILE="$(arr_env_file)"
   if [[ -f "$ENV_FILE" ]]; then
-    env_value="$(grep '^ARR_DOCKER_DIR=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
-    if [[ -n "$env_value" ]]; then
-      arr_docker_dir="$(unescape_env_value_from_compose "$env_value")"
-      if [[ -n "$arr_docker_dir" ]]; then
-        CADDY_DATA_DIR="${arr_docker_dir}/caddy/data"
-      fi
+    arr_docker_dir="$(get_env_kv "ARR_DOCKER_DIR" "$ENV_FILE" || true)"
+    if [[ -n "$arr_docker_dir" ]]; then
+      CADDY_DATA_DIR="${arr_docker_dir}/caddy/data"
     fi
   fi
 fi

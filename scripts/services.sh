@@ -680,7 +680,7 @@ update_env_image_var() {
 
   printf -v "$var_name" '%s' "$new_value"
 
-  if [[ -f "${ARR_ENV_FILE}" ]] && grep -q "^${var_name}=" "${ARR_ENV_FILE}"; then
+  if [[ -f "${ARR_ENV_FILE}" ]] && arr_run_sensitive_command grep -q "^${var_name}=" "${ARR_ENV_FILE}"; then
     portable_sed "s|^${var_name}=.*|${var_name}=${new_value}|" "${ARR_ENV_FILE}"
   fi
 }

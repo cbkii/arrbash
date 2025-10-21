@@ -787,14 +787,10 @@ preflight() {
   simple_port_check
 
   if [[ -f "${ARR_ENV_FILE}" ]]; then
-    local existing_openvpn_user=""
-    existing_openvpn_user="$(grep '^OPENVPN_USER=' "${ARR_ENV_FILE}" | head -n1 | cut -d= -f2- | tr -d '\r' || true)"
-    if [[ -n "$existing_openvpn_user" ]]; then
-      local existing_unescaped
-      existing_unescaped="$(unescape_env_value_from_compose "$existing_openvpn_user")"
-      if [[ "$existing_unescaped" != *"+pmp" ]]; then
-        warn "OPENVPN_USER in ${ARR_ENV_FILE} is '${existing_unescaped}' and will be updated to include '+pmp'."
-      fi
+    local existing_unescaped=""
+    existing_unescaped="$(get_env_kv "OPENVPN_USER" "${ARR_ENV_FILE}" || true)"
+    if [[ -n "$existing_unescaped" && "$existing_unescaped" != *"+pmp" ]]; then
+      warn "OPENVPN_USER in ${ARR_ENV_FILE} is '${existing_unescaped}' and will be updated to include '+pmp'."
     fi
   fi
 

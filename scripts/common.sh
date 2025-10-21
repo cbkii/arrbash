@@ -702,16 +702,227 @@ arr_warn_collab_once() {
   fi
 }
 
+# Detects whether any argument targets a path requiring forced sudo handling
+arr_command_has_sensitive_arg() {
+  local arg=""
+
+  for arg in "$@"; do
+    if arr_should_force_permission_sudo "$arg"; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+# Returns the first sensitive argument from a command invocation, if any
+arr_first_sensitive_arg() {
+  local arg=""
+
+  for arg in "$@"; do
+    if arr_should_force_permission_sudo "$arg"; then
+      printf '%s' "$arg"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+# Identifies permission-denied style failures from stderr payloads
+arr_sensitive_error_is_permission() {
+  local stderr_payload="${1:-}"
+
+  if [[ -z "$stderr_payload" ]]; then
+    return 1
+  fi
+
+  if printf '%s' "$stderr_payload" | LC_ALL=C grep -qi 'permission denied'; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Runs commands touching sensitive paths with sudo fallback on permission errors
+arr_run_sensitive_command() {
+  if [[ $# -eq 0 ]]; then
+    return 0
+  fi
+
+  if ! arr_command_has_sensitive_arg "$@"; then
+    "$@"
+    return $?
+  fi
+
+  local need_sudo=0
+  if [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    need_sudo=1
+  fi
+
+  local tmp_out tmp_err status stderr_payload sensitive_arg
+
+  tmp_out="$(mktemp 2>/dev/null)" || die "Failed to allocate stdout capture for sensitive command"
+  tmp_err="$(mktemp 2>/dev/null)" || {
+    rm -f "$tmp_out"
+    die "Failed to allocate stderr capture for sensitive command"
+  }
+
+  if "$@" >"$tmp_out" 2>"$tmp_err"; then
+    cat "$tmp_out"
+    cat "$tmp_err" >&2
+    rm -f "$tmp_out" "$tmp_err"
+    return 0
+  fi
+
+  status=$?
+  stderr_payload="$(cat "$tmp_err" 2>/dev/null)"
+
+  if ((need_sudo == 1)) && arr_sensitive_error_is_permission "$stderr_payload"; then
+    # shellcheck disable=SC2024  # Redirecting to agent-owned temp files is safe with sudo
+    if sudo "$@" >"$tmp_out" 2>"$tmp_err"; then
+      cat "$tmp_out"
+      cat "$tmp_err" >&2
+      rm -f "$tmp_out" "$tmp_err"
+      return 0
+    fi
+    status=$?
+    stderr_payload="$(cat "$tmp_err" 2>/dev/null)"
+  fi
+
+  cat "$tmp_out"
+  cat "$tmp_err" >&2
+  rm -f "$tmp_out" "$tmp_err"
+
+  if arr_sensitive_error_is_permission "$stderr_payload"; then
+    sensitive_arg="$(arr_first_sensitive_arg "$@" || true)"
+    if [[ -n "$sensitive_arg" ]]; then
+      die "Permission denied while running $1 on ${sensitive_arg}"
+    fi
+    die "Permission denied while running $1"
+  fi
+
+  return "$status"
+}
+
+# Appends a line to files requiring sudo escalation when necessary
+arr_sensitive_append_line() {
+  local file="$1"
+  local line="$2"
+
+  if [[ -z "$file" ]]; then
+    return 1
+  fi
+
+  if arr_should_force_permission_sudo "$file" && [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    if ! printf '%s\n' "$line" | sudo tee -a "$file" >/dev/null; then
+      die "Failed to append to ${file}"
+    fi
+  else
+    if ! printf '%s\n' "$line" >>"$file"; then
+      if arr_should_force_permission_sudo "$file"; then
+        die "Failed to append to ${file}"
+      fi
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+# Reads sensitive files with sudo fallback when direct access is denied
+arr_read_sensitive_file() {
+  local file="$1"
+
+  if [[ -z "$file" || ! -e "$file" ]]; then
+    return 1
+  fi
+
+  if ! arr_should_force_permission_sudo "$file"; then
+    cat "$file"
+    return $?
+  fi
+
+  if cat "$file" 2>/dev/null; then
+    return 0
+  fi
+
+  if [[ -e "$file" && ! -r "$file" ]] && [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    if sudo cat "$file"; then
+      return 0
+    fi
+  fi
+
+  if [[ -e "$file" && ! -r "$file" ]]; then
+    die "Permission denied while reading ${file}"
+  fi
+
+  return 1
+}
+
+# Detects permission-sensitive targets that must succeed even when sudo is required
+arr_should_force_permission_sudo() {
+  local target="${1-}"
+  if [[ -z "$target" ]]; then
+    return 1
+  fi
+
+  local lowered="${target,,}"
+
+  if [[ "$lowered" == *"qbittorrent.conf" ]]; then
+    return 0
+  fi
+
+  if [[ "$lowered" == *.env || "$lowered" == *".env."* ]]; then
+    return 0
+  fi
+
+  if [[ "$lowered" == *.yml || "$lowered" == *".yml."* ]]; then
+    return 0
+  fi
+
+  if [[ "$lowered" == *.yaml || "$lowered" == *".yaml."* ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
 # Applies file mode if target exists, tolerating chmod failures
 ensure_file_mode() {
   local file="$1"
   local mode="$2"
 
-  if [[ ! -e "$file" ]]; then
+  if [[ ! -e "$file" || -z "$mode" ]]; then
     return 0
   fi
 
-  chmod "$mode" "$file" 2>/dev/null || warn "Could not apply mode ${mode} to ${file}"
+  if chmod "$mode" "$file" 2>/dev/null; then
+    return 0
+  fi
+
+  local allow_sudo=0
+  if arr_should_force_permission_sudo "$file"; then
+    allow_sudo=1
+  fi
+  if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
+    allow_sudo=1
+  fi
+
+  if ((allow_sudo == 1)) && [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    if sudo chmod "$mode" "$file" 2>/dev/null; then
+      if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
+        sudo chown "${PUID}:${PGID}" "$file" 2>/dev/null || true
+      fi
+      return 0
+    fi
+  fi
+
+  if arr_should_force_permission_sudo "$file"; then
+    die "Failed to apply mode ${mode} to ${file}"
+  fi
+
+  warn "Could not apply mode ${mode} to ${file}"
 }
 
 # Convenience wrapper enforcing secret file permissions consistently
@@ -1319,8 +1530,21 @@ atomic_write() {
     die "Failed to write to temporary file for ${target}"
   fi
 
+  local allow_sudo=0
+  if arr_should_force_permission_sudo "$target"; then
+    allow_sudo=1
+  fi
+  if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
+    allow_sudo=1
+  fi
+
+  local can_use_sudo=0
+  if ((allow_sudo == 1)) && [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    can_use_sudo=1
+  fi
+
   if ! chmod "$mode" "$tmp" 2>/dev/null; then
-    if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" && $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    if ((can_use_sudo == 1)); then
       if ! sudo chmod "$mode" "$tmp" 2>/dev/null; then
         rm -f "$tmp"
         die "Failed to set permissions on ${target}"
@@ -1332,17 +1556,10 @@ atomic_write() {
   fi
 
   local moved=0
-  local used_sudo=0
-
   if mv -f "$tmp" "$target" 2>/dev/null; then
     moved=1
-  else
-    if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" && $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
-      if sudo mv -f "$tmp" "$target" 2>/dev/null; then
-        moved=1
-        used_sudo=1
-      fi
-    fi
+  elif ((can_use_sudo == 1)) && sudo mv -f "$tmp" "$target" 2>/dev/null; then
+    moved=1
   fi
 
   if ((moved == 0)); then
@@ -1350,28 +1567,19 @@ atomic_write() {
     die "Failed to atomically write ${target}"
   fi
 
-  # Ensure final ownership and permissions on the target
-  if ((used_sudo == 1)); then
-    if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-      sudo chown "${PUID}:${PGID}" "$target" 2>/dev/null || true
+  if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
+    if chown "${PUID}:${PGID}" "$target" 2>/dev/null; then
+      :
+    elif ((can_use_sudo == 1)) && sudo chown "${PUID}:${PGID}" "$target" 2>/dev/null; then
+      :
+    elif arr_should_force_permission_sudo "$target"; then
+      die "Failed to set ownership on ${target}"
+    else
+      warn "Could not set ownership on ${target}"
     fi
-    # Re-apply mode on the final file to avoid permission mismatch after sudo mv
-    sudo chmod "$mode" "$target" 2>/dev/null || true
-  else
-    if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-      chown "${PUID}:${PGID}" "$target" 2>/dev/null || true
-    fi
-    chmod "$mode" "$target" 2>/dev/null || true
   fi
 
-  if ((moved == 0)); then
-    rm -f "$tmp"
-    die "Failed to atomically write ${target}"
-  fi
-
-  if ((moved == 1)) && [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-    chown "${PUID}:${PGID}" "$target" 2>/dev/null || true
-  fi
+  ensure_file_mode "$target" "$mode"
 }
 
 # Trims leading/trailing whitespace without touching inner spacing
@@ -2068,23 +2276,22 @@ portable_sed() {
 
   local perms=""
   if [ -e "$file" ]; then
-    perms="$(stat -c '%a' "$file" 2>/dev/null || echo '')"
+    perms="$(arr_run_sensitive_command stat -c '%a' "$file" || true)"
+    perms="${perms//$'\n'/}"
   fi
 
-  if sed -e "$expr" "$file" >"$tmp" 2>/dev/null; then
+  if arr_run_sensitive_command sed -e "$expr" "$file" >"$tmp"; then
     if [ -f "$file" ] && cmp -s "$file" "$tmp" 2>/dev/null; then
       rm -f "$tmp"
       return 0
     fi
 
-    if ! mv -f "$tmp" "$file" 2>/dev/null; then
+    if ! arr_run_sensitive_command mv -f "$tmp" "$file"; then
       rm -f "$tmp"
       die "Failed to update ${file}"
     fi
 
-    if [ -n "$perms" ]; then
-      chmod "$perms" "$file" 2>/dev/null || true
-    fi
+    [[ -n "$perms" ]] && ensure_file_mode "$file" "$perms"
   else
     rm -f "$tmp"
     die "sed operation failed on ${file}"
@@ -2146,7 +2353,7 @@ get_env_kv() {
   fi
 
   local line
-  line="$(grep -m1 "^${key}=" "$file" 2>/dev/null || true)"
+  line="$(arr_run_sensitive_command grep -m1 "^${key}=" "$file" || true)"
   if [[ -z "$line" ]]; then
     return 1
   fi
@@ -2182,13 +2389,15 @@ persist_env_var() {
   local line
   line="${key}=${value}"
 
-  if grep -q "^${key}=" "${ARR_ENV_FILE}"; then
+  if arr_run_sensitive_command grep -q "^${key}=" "${ARR_ENV_FILE}"; then
     local escaped
     escaped="$(escape_sed_replacement "$line" '|')"
     portable_sed "s|^${key}=.*$|${escaped}|" "${ARR_ENV_FILE}"
   else
-    printf '%s\n' "$line" >>"${ARR_ENV_FILE}"
+    arr_sensitive_append_line "${ARR_ENV_FILE}" "$line"
   fi
+
+  ensure_file_mode "${ARR_ENV_FILE}" "$SECRET_FILE_MODE"
 }
 
 # Masks secrets for logs while leaving limited prefix/suffix context visible

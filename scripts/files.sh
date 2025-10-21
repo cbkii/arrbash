@@ -230,9 +230,8 @@ generate_api_key() {
 
   if [[ -f "$ARR_ENV_FILE" ]] && [[ "$FORCE_ROTATE_API_KEY" != "1" ]]; then
     local existing
-    existing="$(grep '^GLUETUN_API_KEY=' "$ARR_ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    existing="$(get_env_kv "GLUETUN_API_KEY" "$ARR_ENV_FILE" || true)"
     if [[ -n "$existing" ]]; then
-      existing="$(unescape_env_value_from_compose "$existing")"
       GLUETUN_API_KEY="$existing"
       msg "Using existing API key"
       return
@@ -3165,13 +3164,13 @@ write_qbt_config() {
 
   if [[ -f "$legacy_conf" && ! -f "$conf_file" ]]; then
     msg "  Migrating legacy config from ${legacy_conf}"
-    mv "$legacy_conf" "$conf_file"
+    arr_run_sensitive_command mv -f "$legacy_conf" "$conf_file"
     ensure_secret_file_mode "$conf_file"
   fi
 
   if [[ -f "$legacy_conf" ]]; then
     msg "  Removing unused legacy config at ${legacy_conf}"
-    rm -f "$legacy_conf"
+    arr_run_sensitive_command rm -f "$legacy_conf"
   fi
   local default_auth_whitelist="${LOCALHOST_IP}/32,::1/128"
   local qb_lan_whitelist=""
@@ -3234,20 +3233,11 @@ EOF
 
   local source_content="$default_conf"
   if [[ -f "$conf_file" ]]; then
-    if ! source_content="$(<"$conf_file")"; then
-      if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" && $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
-        if source_content="$(sudo cat "$conf_file" 2>/dev/null)"; then
-          if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-            sudo chown "${PUID}:${PGID}" "$conf_file" 2>/dev/null || true
-          fi
-        else
-          warn "  Unable to read ${conf_file}; falling back to defaults"
-          source_content="$default_conf"
-        fi
-      else
-        warn "  Unable to read ${conf_file}; falling back to defaults"
-        source_content="$default_conf"
-      fi
+    local existing_content=""
+    if existing_content="$(arr_read_sensitive_file "$conf_file" || true)"; then
+      source_content="$existing_content"
+    else
+      warn "  Unable to read ${conf_file}; falling back to defaults"
     fi
   fi
 
