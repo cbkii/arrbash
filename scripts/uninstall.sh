@@ -966,7 +966,14 @@ PY
   fi
 
   if ((updated != 0)); then
-    if sed -i '/^# ARR Stack helper aliases$/,/^$/d' "$rc_file"; then
+    local alias_path_sed
+    alias_path_sed="$(printf '%s' "$alias_path" | sed 's/[&/\]/\\&/g')"
+    if sed -i -e "/^# ARR Stack helper aliases$/{
+  N;N;N
+  /alias ${STACK}=/d
+  /alias ${STACK}-logs=/d
+  /source \"${alias_path_sed}\"/d
+  }" "$rc_file"; then
       updated=0
     else
       return 1
