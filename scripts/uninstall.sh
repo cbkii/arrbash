@@ -913,15 +913,7 @@ for path in "${REMOVAL_PATHS[@]}"; do
   fi
 done
 
-if [[ -n "${ARR_STACK_DIR}" ]]; then
-  parent_dir_cleanup="$(dirname "$ARR_STACK_DIR")"
-  if [[ -d "$parent_dir_cleanup" ]]; then
-    rmdir "$parent_dir_cleanup" 2>/dev/null || true
-  fi
-fi
-if [[ -n "${ARR_DATA_ROOT:-}" ]]; then
-  rmdir "${ARR_DATA_ROOT}" 2>/dev/null || true
-fi
+# The rmdir calls are removed to avoid unintended side effects on shared parent directories.
 
 remove_alias_block() {
   local rc_file="$1"
