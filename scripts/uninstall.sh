@@ -351,7 +351,11 @@ resolve_project_name() {
 
 resolve_alias_targets() {
   ALIAS_RC_FILES=()
-  ALIAS_HELPER_PATH="${ARR_STACK_DIR}/.aliasarr"
+  if declare -f arr_stack_dir >/dev/null 2>&1; then
+    ALIAS_HELPER_PATH="$(arr_stack_dir)/.aliasarr"
+  else
+    ALIAS_HELPER_PATH="${ARR_STACK_DIR}/.aliasarr"
+  fi
   [[ -n "$PRIMARY_HOME" ]] || return
   local bashrc="${PRIMARY_HOME}/.bashrc"
   local zshrc="${PRIMARY_HOME}/.zshrc"

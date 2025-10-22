@@ -92,6 +92,13 @@ _arr_unique_lines() {
   printf '%s\n' "${result[@]}"
 }
 
+_arr_bool() {
+  case "$1" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 _arr_vpn_rotation_state_file() {
   local dir="${ARR_STACK_DIR}/.state"
   mkdir -p "$dir" 2>/dev/null || true
@@ -200,13 +207,6 @@ _arr_domain_suffix() {
   fi
   suffix="${suffix#.}"
   printf '%s' "$suffix"
-}
-
-_arr_bool() {
-  case "$1" in
-    1|true|TRUE|yes|YES|on|ON) return 0 ;;
-    *) return 1 ;;
-  esac
 }
 
 _arr_service_port() {

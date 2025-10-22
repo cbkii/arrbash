@@ -585,11 +585,17 @@ POLICY
     fi
   fi
 
+  local alias_helper_dir="${ARR_STACK_DIR:-}"
+  if [[ -z "$alias_helper_dir" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
+    alias_helper_dir="$(arr_stack_dir)"
+  fi
+  [[ -n "$alias_helper_dir" ]] || alias_helper_dir="$(pwd)"
+
   cat <<SUMMARY
 Gluetun control server (local only): http://${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}
 
 Helper commands:
-  source ${ARR_STACK_DIR}/.aliasarr
+  source ${alias_helper_dir}/.aliasarr
   arr.help       # Show all available aliases
   arr.vpn.status # Check VPN status and forwarded port
   arr.logs       # Follow container logs via docker compose

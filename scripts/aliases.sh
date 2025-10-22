@@ -4,6 +4,9 @@ write_aliases_file() {
   step "🛠️ Generating helper aliases file"
 
   local template_file="${REPO_ROOT}/.aliasarr"
+  if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
+    ARR_STACK_DIR="$(arr_stack_dir)"
+  fi
   local aliases_file="${ARR_STACK_DIR}/.aliasarr"
   local configured_template="${REPO_ROOT}/.aliasarr.configured"
 
@@ -17,6 +20,8 @@ write_aliases_file() {
     warn "Failed to create temporary aliases file"
     return 1
   fi
+
+  ensure_dir "$ARR_STACK_DIR"
 
   local stack_dir_escaped env_file_escaped docker_dir_escaped arrconf_dir_escaped
 
@@ -36,11 +41,17 @@ write_aliases_file() {
   env_file_escaped=${env_file_escaped//&/\&}
   env_file_escaped=${env_file_escaped//|/\|}
 
-  docker_dir_escaped=${ARR_DOCKER_DIR//\\/\\\\}
+  local docker_dir
+  docker_dir="${ARR_DOCKER_DIR:-}" 
+  [[ -n "$docker_dir" ]] || docker_dir="$(arr_docker_data_root)"
+  docker_dir_escaped=${docker_dir//\\/\\\\}
   docker_dir_escaped=${docker_dir_escaped//&/\&}
   docker_dir_escaped=${docker_dir_escaped//|/\|}
 
-  arrconf_dir_escaped=${ARRCONF_DIR//\\/\\\\}
+  local arrconf_dir
+  arrconf_dir="${ARRCONF_DIR:-}"
+  [[ -n "$arrconf_dir" ]] || arrconf_dir="$(arr_conf_dir)"
+  arrconf_dir_escaped=${arrconf_dir//\\/\\\\}
   arrconf_dir_escaped=${arrconf_dir_escaped//&/\&}
   arrconf_dir_escaped=${arrconf_dir_escaped//|/\|}
 
@@ -333,15 +344,34 @@ VPN_AUTO_ALIAS
 }
 
 install_aliases() {
+  if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
+    ARR_STACK_DIR="$(arr_stack_dir)"
+  fi
   local alias_path="${ARR_STACK_DIR}/.aliasarr"
   if ! ensure_dir "$ARR_STACK_DIR"; then
     warn "Unable to create stack directory at ${ARR_STACK_DIR}"
     return 1
   fi
-  if [[ ! -f "$alias_path" && -f "${REPO_ROOT}/.aliasarr.configured" ]]; then
-    cp "${REPO_ROOT}/.aliasarr.configured" "$alias_path"
-    ensure_secret_file_mode "$alias_path"
+  local needs_render=0
+  if [[ ! -f "$alias_path" ]]; then
+    needs_render=1
+  elif grep -q "__ARR_" "$alias_path" 2>/dev/null; then
+    needs_render=1
   fi
+
+  if [[ "$needs_render" -eq 1 ]]; then
+    if ! write_aliases_file; then
+      if [[ -f "${REPO_ROOT}/.aliasarr.configured" ]]; then
+        cp "${REPO_ROOT}/.aliasarr.configured" "$alias_path"
+        ensure_secret_file_mode "$alias_path"
+      else
+        warn "Unable to render helper aliases (${alias_path})"
+        return 1
+      fi
+    fi
+  fi
+
+  ensure_secret_file_mode "$alias_path"
 
   local kind _ rc repo_escaped alias_line source_line
   {
@@ -356,18 +386,61 @@ install_aliases() {
     repo_escaped="$(arr_shell_escape_double_quotes "${REPO_ROOT}")"
     alias_line=$(printf "alias %s='cd \"%s\" && ./arr.sh'" "${STACK}" "${repo_escaped}")
     source_line="[ -f \"${alias_path}\" ] && source \"${alias_path}\""
-    local old_comment="# source ${ARR_STACK_DIR}/.aliasarr  # Optional helper functions"
-    if grep -Fq "$old_comment" "$rc" 2>/dev/null; then
-      perl -0pi -e "s/\\Q${old_comment}\\E/[ -f \\\"${alias_path}\\\" ] && source \\\"${alias_path}\\\"/g" "$rc" 2>/dev/null || true
+    local logs_line
+    logs_line=$(printf "alias %s-logs='docker logs -f gluetun'" "$STACK")
+    local header="# ARR Stack helper aliases"
+
+    local -a rc_lines=()
+    if mapfile -t rc_lines <"$rc"; then
+      :
+    else
+      rc_lines=()
     fi
-    if ! grep -Fqx -- "$source_line" "$rc" 2>/dev/null; then
+
+    local -a filtered_lines=()
+    local line
+    for line in "${rc_lines[@]}"; do
+      if [[ "$line" == "$header" ]]; then
+        continue
+      fi
+      if [[ "$line" == "alias ${STACK}="* ]]; then
+        continue
+      fi
+      if [[ "$line" == "alias ${STACK}-logs="* ]]; then
+        continue
+      fi
+      if [[ "$line" == *".aliasarr"* ]]; then
+        if [[ "$line" == *"source"* || "$line" == "# source "* ]]; then
+          continue
+        fi
+      fi
+      filtered_lines+=("$line")
+    done
+
+    while ((${#filtered_lines[@]} > 0)) && [[ -z "${filtered_lines[-1]}" ]]; do
+      unset 'filtered_lines[-1]'
+    done
+
+    if ((${#filtered_lines[@]} > 0)); then
+      filtered_lines+=("")
+    fi
+    filtered_lines+=("$header" "$alias_line" "$logs_line" "$source_line")
+
+    local tmp_rc
+    if ! tmp_rc="$(mktemp "${rc}.XXXX")"; then
+      warn "Failed to prepare temporary rc file for ${rc}"
+    else
       {
-        printf '\n# ARR Stack helper aliases\n'
-        printf '%s\n' "$alias_line"
-        printf "alias %s-logs='docker logs -f gluetun'\n" "$STACK"
-        printf '%s\n' "$source_line"
-      } >>"$rc"
-      msg "Added helper aliases to ${rc}"
+        for line in "${filtered_lines[@]}"; do
+          printf '%s\n' "$line"
+        done
+      } >"$tmp_rc"
+      if mv "$tmp_rc" "$rc"; then
+        msg "Updated helper aliases in ${rc}"
+      else
+        rm -f "$tmp_rc" 2>/dev/null || true
+        warn "Failed to update helper aliases block in ${rc}"
+      fi
     fi
   fi
 
@@ -528,6 +601,10 @@ DIAG
 
 refresh_aliases() {
   step "🔄 Refreshing helper aliases"
+
+  if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
+    ARR_STACK_DIR="$(arr_stack_dir)"
+  fi
 
   ensure_dir "$ARR_STACK_DIR"
 
