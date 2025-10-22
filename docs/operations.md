@@ -19,9 +19,11 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ./arr.sh --force-unlock        # clear a stale installer lock (override concurrency guard)
   ./arr.sh --setup-host-dns      # run the host DNS takeover helper during install
   ./arr.sh --refresh-aliases     # rebuild .aliasarr
+  ./arr.sh --uninstall           # stop services, remove assets, and restore host defaults
   ```
 
 - The installer validates dependencies, checks port availability, and prints a summary before starting services. Cancel with `Ctrl+C` if something looks wrong and adjust `userr.conf` or your host configuration.
+- `--uninstall` delegates to `scripts/uninstall.sh`, which tears down containers, removes generated stack files, re-enables `systemd-resolved`, and deletes installed Caddy trust material. Run it with `--yes` to skip the confirmation prompt.
 
 ## Helper aliases
 After running `./arr.sh` at least once, load the generated aliases in new shells:

@@ -60,6 +60,12 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
   ./arr.sh --help
   ```
 
+To remove the stack and clean up generated assets later, run:
+
+```bash
+./arr.sh --uninstall
+```
+
 ### Minimum tested container versions (2024-08-25)
 - `qmcgaw/gluetun:v3.40.0`
 - `lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415`
