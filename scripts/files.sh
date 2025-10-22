@@ -3477,7 +3477,7 @@ WebUI\Username=${QBT_USER}
 WebUI\LocalHostAuth=true
 WebUI\AuthSubnetWhitelistEnabled=true
 WebUI\AuthSubnetWhitelist=${auth_whitelist}
-WebUI\CSRFProtection=true
+WebUI\CSRFProtection=false
 WebUI\ClickjackingProtection=true
 WebUI\HostHeaderValidation=false
 WebUI\HTTPS\Enabled=false
@@ -3504,7 +3504,7 @@ EOF
     "WebUI\\ServerDomains=*"
     "WebUI\\LocalHostAuth=true"
     "WebUI\\AuthSubnetWhitelistEnabled=true"
-    "WebUI\\CSRFProtection=true"
+    "WebUI\\CSRFProtection=false"
     "WebUI\\ClickjackingProtection=true"
     "WebUI\\HostHeaderValidation=false"
     "WebUI\\AuthSubnetWhitelist=${auth_whitelist}"
