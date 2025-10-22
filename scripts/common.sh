@@ -1680,6 +1680,27 @@ arr_hostname_private_candidates() {
   hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF'
 }
 
+arr_host_access_hint() {
+  local hint=""
+
+  if command -v hostname >/dev/null 2>&1; then
+    if hint="$(hostname -s 2>/dev/null)"; then
+      hint="$(printf '%s' "$hint" | tr -d '[:space:]')"
+    fi
+    if [[ -z "$hint" ]]; then
+      if hint="$(hostname 2>/dev/null)"; then
+        hint="$(printf '%s' "$hint" | tr -d '[:space:]')"
+      fi
+    fi
+  fi
+
+  if [[ -z "$hint" ]]; then
+    hint="<host>"
+  fi
+
+  printf '%s\n' "$hint"
+}
+
 arr_derive_dns_host_entry() {
   local ip="${LAN_IP:-}"
 
@@ -1733,16 +1754,20 @@ arr_derive_gluetun_firewall_input_ports() {
   local -a ports=()
   local port=""
 
+  # Always include the qBittorrent WebUI host port when available so Gluetun
+  # opens the matching firewall rule regardless of split/expose mode.
+  port="${QBT_PORT:-${QBT_INT_PORT:-}}"
+  if [[ -n "$port" ]]; then
+    ports+=("$port")
+  fi
+
   if [[ "$split_mode" != "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
     for port in "${CADDY_HTTP_PORT:-}" "${CADDY_HTTPS_PORT:-}"; do
       [[ -n "$port" ]] && ports+=("$port")
     done
   fi
 
-  if [[ "$split_mode" == "1" ]]; then
-    port="${QBT_PORT:-}"
-    [[ -n "$port" ]] && ports+=("$port")
-  elif [[ "$expose_direct" == "1" ]]; then
+  if [[ "$expose_direct" == "1" ]]; then
     for port in \
       "${QBT_PORT:-}" "${SONARR_PORT:-}" "${RADARR_PORT:-}" \
       "${PROWLARR_PORT:-}" "${BAZARR_PORT:-}" "${FLARR_PORT:-}"; do
@@ -1752,11 +1777,6 @@ arr_derive_gluetun_firewall_input_ports() {
       port="${SABNZBD_PORT:-}"
       [[ -n "$port" ]] && ports+=("$port")
     fi
-  fi
-
-  if ((${#ports[@]} == 0)); then
-    printf '\n'
-    return 0
   fi
 
   local -A seen=()

@@ -293,8 +293,16 @@ check_network_security() {
   fi
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
-    local qbt_conf="${ARR_DOCKER_DIR}/qbittorrent/qBittorrent.conf"
-    if [[ -f "$qbt_conf" ]]; then
+    local qbt_conf=""
+    local qbt_conf_new="${ARR_DOCKER_DIR}/qbittorrent/qBittorrent/qBittorrent.conf"
+    local qbt_conf_legacy="${ARR_DOCKER_DIR}/qbittorrent/qBittorrent.conf"
+    if [[ -f "$qbt_conf_new" ]]; then
+      qbt_conf="$qbt_conf_new"
+    elif [[ -f "$qbt_conf_legacy" ]]; then
+      qbt_conf="$qbt_conf_legacy"
+      echo "[doctor][warn] Legacy qBittorrent.conf detected at ${qbt_conf_legacy}; migrate to ${qbt_conf_new}."
+    fi
+    if [[ -n "$qbt_conf" && -f "$qbt_conf" ]]; then
       local ui_port
       ui_port="$(arr_read_sensitive_file "$qbt_conf" | grep '^WebUI\\Port=' | cut -d= -f2- | tr -d '\r' || true)"
       local host_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"

@@ -85,6 +85,10 @@ show_configuration_preview() {
     lan_ip_display="(binds to 0.0.0.0 by default)"
   fi
 
+  local host_hint
+  host_hint="$(arr_host_access_hint)"
+  local prowlarr_hint="http://${host_hint}:${QBT_PORT}"
+
   local vpn_mode_display
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
     vpn_mode_display="split (only qbittorrent behind VPN)"
@@ -294,6 +298,7 @@ Credentials & secrets
 Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
   • qBittorrent WebUI (host): ${QBT_PORT}
+  • Prowlarr → qBittorrent URL: ${prowlarr_hint}
   • Sonarr: ${SONARR_PORT}
   • Radarr: ${RADARR_PORT}
   • Prowlarr: ${PROWLARR_PORT}

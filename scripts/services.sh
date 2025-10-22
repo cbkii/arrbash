@@ -1603,6 +1603,10 @@ start_stack() {
   for service in "${services[@]}"; do
     msg "Starting $service..."
 
+    if [[ "$service" == "qbittorrent" ]]; then
+      ensure_qbt_webui_config_ready
+    fi
+
     if compose up -d "$service"; then
       if [[ "$service" == "qbittorrent" ]]; then
         qb_started=1
