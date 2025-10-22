@@ -51,29 +51,18 @@ arr_trace_start() {
   local mask="${base_mask}"
 
   if [[ -n "${ARR_TRACE_MASK_RE:-}" ]]; then
-    local sed_err="" sed_status=0
-    sed_err=$(printf '' | sed -E "s/${ARR_TRACE_MASK_RE}//" 2>&1 >/dev/null) || sed_status=$?
-
-    if (( sed_status == 0 )); then
+    if printf '' | sed -E "s/${ARR_TRACE_MASK_RE}//" >/dev/null; then
       mask="${ARR_TRACE_MASK_RE}|${mask}"
     else
+      local sed_status=$?
       printf '%s WARN: ignoring invalid ARR_TRACE_MASK_RE (sed status %s): %s\n' "${STACK_LABEL:-[arr]}" "$sed_status" "${ARR_TRACE_MASK_RE}" >&2
-      if [[ -n "$sed_err" ]]; then
-        sed_err="${sed_err//$'\n'/ }"
-        printf '%s WARN: sed reported: %s\n' "${STACK_LABEL:-[arr]}" "$sed_err" >&2
-      fi
     fi
   fi
 
   if [[ -n "$mask" ]]; then
-    local final_err="" final_status=0
-    final_err=$(printf '' | sed -E "s/${mask}//" 2>&1) || final_status=$?
-    if (( final_status != 0 )); then
+    if ! printf '' | sed -E "s/${mask}//" >/dev/null; then
+      local final_status=$?
       printf '%s WARN: disabling trace masking due to invalid combined expression (sed status %s).\n' "${STACK_LABEL:-[arr]}" "$final_status" >&2
-      if [[ -n "$final_err" ]]; then
-        final_err="${final_err//$'\n'/ }"
-        printf '%s WARN: sed reported: %s\n' "${STACK_LABEL:-[arr]}" "$final_err" >&2
-      fi
       mask=""
     fi
   fi
