@@ -91,23 +91,45 @@ fi
 resolve_path() {
   local path="$1"
   if [[ -z "$path" ]]; then
+    printf '%s\n' ""
+    return 0
+  fi
+  if [[ "$path" == '-' ]]; then
+    printf '%s\n' "$path"
     return 0
   fi
   if [[ "$path" != /* ]]; then
-    printf '%s\n' "${REPO_ROOT}/${path}"
+    local base="${PWD:-$(pwd)}"
+    if command -v realpath >/dev/null 2>&1; then
+      (
+        cd "$base" 2>/dev/null || return 1
+        realpath -m -- "$path"
+      )
+    else
+      (
+        cd "$base" 2>/dev/null || return 1
+        printf '%s/%s\n' "$(pwd -P)" "$path"
+      )
+    fi
   else
     printf '%s\n' "$path"
   fi
 }
 
-TEMPLATE_ARG="${1:-.env.template}"
+TEMPLATE_ARG="${1:-}"
+if [[ -z "$TEMPLATE_ARG" ]]; then
+  TEMPLATE_ARG="${REPO_ROOT}/.env.template"
+fi
 OUT_ARG="${2:-}"
 CONF_ARG="${3:-}"
-DEFAULTS_ARG="${USERR_DEFAULTS:-arrconf/userr.conf.defaults.sh}"
+DEFAULTS_ARG="${USERR_DEFAULTS:-}"
+if [[ -z "$DEFAULTS_ARG" ]]; then
+  DEFAULTS_ARG="${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+fi
 
 TEMPLATE_PATH="$(resolve_path "$TEMPLATE_ARG")"
 DEFAULTS_PATH="$(resolve_path "$DEFAULTS_ARG")"
-CONF_PATH="${CONF_ARG:-${USERR_CONF:-arrconf/userr.conf}}"
+CONF_PATH="${CONF_ARG:-${USERR_CONF:-${REPO_ROOT}/arrconf/userr.conf}}"
 CONF_PATH="$(resolve_path "$CONF_PATH")"
 
 if [[ ! -f "$TEMPLATE_PATH" ]]; then
@@ -294,13 +316,22 @@ for placeholder in $VARS; do
   export "$var_name"
 done
 
-mkdir -p "$(dirname -- "$OUT_PATH")"
-if [[ -n "$VARS" ]]; then
-  envsubst "$VARS" <"$filter_tmp" >"$OUT_PATH"
+if [[ "$OUT_PATH" == '-' ]]; then
+  if [[ -n "$VARS" ]]; then
+    envsubst "$VARS" <"$filter_tmp"
+  else
+    envsubst <"$filter_tmp"
+  fi
+  arr_cleanup_temp_path "$filter_tmp"
+  printf 'Generated %s from %s using %s\n' "stdout" "$TEMPLATE_PATH" "${CONF_PATH:-<none>}" >&2
 else
-  envsubst <"$filter_tmp" >"$OUT_PATH"
+  mkdir -p "$(dirname -- "$OUT_PATH")"
+  if [[ -n "$VARS" ]]; then
+    envsubst "$VARS" <"$filter_tmp" >"$OUT_PATH"
+  else
+    envsubst <"$filter_tmp" >"$OUT_PATH"
+  fi
+  arr_cleanup_temp_path "$filter_tmp"
+  chmod 600 "$OUT_PATH" 2>/dev/null || true
+  printf 'Generated %s from %s using %s\n' "$OUT_PATH" "$TEMPLATE_PATH" "${CONF_PATH:-<none>}"
 fi
-arr_cleanup_temp_path "$filter_tmp"
-chmod 600 "$OUT_PATH" 2>/dev/null || true
-
-printf 'Generated %s from %s using %s\n' "$OUT_PATH" "$TEMPLATE_PATH" "${CONF_PATH:-<none>}"
