@@ -1643,9 +1643,6 @@ arr_compose_normalize_env_name() {
   done
   name="${name#_}"
   name="${name%_}"
-  while [[ "$name" == *"__"* ]]; do
-    name="${name//__/_}"
-  done
   printf '%s' "$name"
 }
 
