@@ -34,6 +34,37 @@ qbt_webui_mktemp() {
   printf '%s\n' "$tmp"
 }
 
+qbt_webui_write_config() {
+  local target="$1"
+  local content="$2"
+  local mode="${3:-${SECRET_FILE_MODE:-600}}"
+
+  if declare -f atomic_write >/dev/null 2>&1; then
+    if atomic_write "$target" "$content" "$mode"; then
+      return 0
+    fi
+    return 1
+  fi
+
+  local tmp
+  if ! tmp=$(qbt_webui_mktemp "$target"); then
+    return 1
+  fi
+
+  if ! printf '%s' "$content" >"$tmp"; then
+    arr_cleanup_temp_path "$tmp"
+    return 1
+  fi
+
+  if arr_run_sensitive_command mv -f "$tmp" "$target"; then
+    arr_unregister_temp_path "$tmp"
+    return 0
+  fi
+
+  arr_cleanup_temp_path "$tmp"
+  return 1
+}
+
 qbt_webui_ensure_conf() {
   local conf="$1"
   local dir
@@ -53,24 +84,7 @@ qbt_webui_strip_crlf() {
       return 1
     fi
 
-    if declare -f atomic_write >/dev/null 2>&1; then
-      atomic_write "$conf" "$sanitized" "${SECRET_FILE_MODE:-600}"
-    else
-      local tmp
-      if ! tmp=$(qbt_webui_mktemp "$conf"); then
-        return 1
-      fi
-      if ! printf '%s\n' "$sanitized" >"$tmp"; then
-        arr_cleanup_temp_path "$tmp"
-        return 1
-      fi
-      if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
-        arr_unregister_temp_path "$tmp"
-      else
-        arr_cleanup_temp_path "$tmp"
-        return 1
-      fi
-    fi
+    qbt_webui_write_config "$conf" "$sanitized" || return 1
   fi
 }
 
@@ -128,24 +142,7 @@ qbt_webui_upsert_pref() {
     return 1
   fi
 
-  if declare -f atomic_write >/dev/null 2>&1; then
-    atomic_write "$conf" "$updated" "${SECRET_FILE_MODE:-600}"
-  else
-    local tmp
-    if ! tmp=$(qbt_webui_mktemp "$conf"); then
-      return 1
-    fi
-    if ! printf '%s\n' "$updated" >"$tmp"; then
-      arr_cleanup_temp_path "$tmp"
-      return 1
-    fi
-    if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
-      arr_unregister_temp_path "$tmp"
-    else
-      arr_cleanup_temp_path "$tmp"
-      return 1
-    fi
-  fi
+  qbt_webui_write_config "$conf" "$updated" || return 1
 }
 
 qbt_webui_pref_value() {
@@ -569,23 +566,8 @@ update_whitelist() {
     refreshed+=$'\n'
     refreshed+="WebUI\\AuthSubnetWhitelist=${subnet}"
 
-    if declare -f atomic_write >/dev/null 2>&1; then
-      atomic_write "$cfg" "$refreshed" "${SECRET_FILE_MODE:-600}"
-    else
-      local tmp
-      if ! tmp=$(arr_mktemp_file); then
-        die "Failed to create temporary whitelist file"
-      fi
-      if ! printf '%s\n' "$refreshed" >"$tmp"; then
-        arr_cleanup_temp_path "$tmp"
-        die "Failed to stage whitelist updates"
-      fi
-      if arr_run_sensitive_command mv -f "$tmp" "$cfg"; then
-        arr_unregister_temp_path "$tmp"
-      else
-        arr_cleanup_temp_path "$tmp"
-        die "Failed to promote whitelist changes"
-      fi
+    if ! qbt_webui_write_config "$cfg" "$refreshed"; then
+      die "Failed to apply whitelist changes"
     fi
     ensure_secret_file_mode "$cfg"
   else
