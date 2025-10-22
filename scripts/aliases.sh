@@ -391,7 +391,7 @@ install_aliases() {
     local header="# ARR Stack helper aliases"
 
     local -a rc_lines=()
-    if mapfile -t rc_lines <"$rc"; then
+    if [[ -r "$rc" ]] && mapfile -t rc_lines <"$rc" 2>/dev/null; then
       :
     else
       rc_lines=()
