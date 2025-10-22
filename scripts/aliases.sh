@@ -427,7 +427,7 @@ install_aliases() {
     filtered_lines+=("$header" "$alias_line" "$logs_line" "$source_line")
 
     local tmp_rc
-    if ! tmp_rc="$(mktemp "${rc}.XXXX")"; then
+    if ! tmp_rc="$(arr_mktemp_file "${rc}.XXXX" "$NONSECRET_FILE_MODE")"; then
       warn "Failed to prepare temporary rc file for ${rc}"
     else
       {
@@ -436,9 +436,10 @@ install_aliases() {
         done
       } >"$tmp_rc"
       if mv "$tmp_rc" "$rc"; then
+        arr_unregister_temp_path "$tmp_rc"
         msg "Updated helper aliases in ${rc}"
       else
-        rm -f "$tmp_rc" 2>/dev/null || true
+        arr_cleanup_temp_path "$tmp_rc"
         warn "Failed to update helper aliases block in ${rc}"
       fi
     fi
