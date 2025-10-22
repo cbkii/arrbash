@@ -45,22 +45,31 @@ qbt_webui_ensure_conf() {
   fi
 }
 
-qbt_webui_strip_crlf() {
+qbt_webui_strip_crlf() { 
   local conf="$1"
   if [[ -s "$conf" ]] && LC_ALL=C arr_run_sensitive_command grep -q $'\r' "$conf"; then
-    local tmp
-    if ! tmp=$(qbt_webui_mktemp "$conf"); then
+    local sanitized=""
+    if ! sanitized="$(arr_read_sensitive_file "$conf" | tr -d '\r')"; then
       return 1
     fi
-    if ! arr_read_sensitive_file "$conf" | tr -d '\r' >"$tmp"; then
-      arr_cleanup_temp_path "$tmp"
-      return 1
-    fi
-    if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
-      arr_unregister_temp_path "$tmp"
+
+    if declare -f atomic_write >/dev/null 2>&1; then
+      atomic_write "$conf" "$sanitized" "${SECRET_FILE_MODE:-600}"
     else
-      arr_cleanup_temp_path "$tmp"
-      return 1
+      local tmp
+      if ! tmp=$(qbt_webui_mktemp "$conf"); then
+        return 1
+      fi
+      if ! printf '%s\n' "$sanitized" >"$tmp"; then
+        arr_cleanup_temp_path "$tmp"
+        return 1
+      fi
+      if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
+        arr_unregister_temp_path "$tmp"
+      else
+        arr_cleanup_temp_path "$tmp"
+        return 1
+      fi
     fi
   fi
 }
@@ -77,54 +86,65 @@ qbt_webui_upsert_pref() {
   local conf="$1"
   local key="$2"
   local value="$3"
-  local tmp
-  if ! tmp=$(qbt_webui_mktemp "$conf"); then
-    return 1
-  fi
-  if ! arr_read_sensitive_file "$conf" \
-    | awk -v target="$key" -v desired="$value" '
-    BEGIN {
-      section = "";
-      inserted = 0;
-    }
-    /^\[.*\]$/ {
-      if (section == "[Preferences]" && !inserted) {
-        print target "=" desired;
-        inserted = 1;
-      }
-      section = $0;
-      print;
-      next;
-    }
-    {
-      if (section == "[Preferences]" && $0 ~ "^" target "=") {
-        if (!inserted) {
-          print target "=" desired;
-          inserted = 1;
+  local updated=""
+  if ! updated="$(
+    arr_read_sensitive_file "$conf" \
+      | awk -v target="$key" -v desired="$value" '
+        BEGIN {
+          section = "";
+          inserted = 0;
         }
-        next;
-      }
-      print;
-    }
-    END {
-      if (section == "[Preferences]" && !inserted) {
-        print target "=" desired;
-        inserted = 1;
-      }
-      if (!inserted) {
-        print "[Preferences]";
-        print target "=" desired;
-      }
-    }
-  ' >"$tmp"; then
-    arr_cleanup_temp_path "$tmp"
+        /^\[.*\]$/ {
+          if (section == "[Preferences]" && !inserted) {
+            print target "=" desired;
+            inserted = 1;
+          }
+          section = $0;
+          print;
+          next;
+        }
+        {
+          if (section == "[Preferences]" && $0 ~ "^" target "=") {
+            if (!inserted) {
+              print target "=" desired;
+              inserted = 1;
+            }
+            next;
+          }
+          print;
+        }
+        END {
+          if (section == "[Preferences]" && !inserted) {
+            print target "=" desired;
+            inserted = 1;
+          }
+          if (!inserted) {
+            print "[Preferences]";
+            print target "=" desired;
+          }
+        }
+      '
+  )"; then
     return 1
   fi
-  if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
-    arr_unregister_temp_path "$tmp"
+
+  if declare -f atomic_write >/dev/null 2>&1; then
+    atomic_write "$conf" "$updated" "${SECRET_FILE_MODE:-600}"
   else
-    arr_cleanup_temp_path "$tmp"
-    return 1
+    local tmp
+    if ! tmp=$(qbt_webui_mktemp "$conf"); then
+      return 1
+    fi
+    if ! printf '%s\n' "$updated" >"$tmp"; then
+      arr_cleanup_temp_path "$tmp"
+      return 1
+    fi
+    if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
+      arr_unregister_temp_path "$tmp"
+    else
+      arr_cleanup_temp_path "$tmp"
+      return 1
+    fi
   fi
 }
 
@@ -534,24 +554,38 @@ update_whitelist() {
   local cfg
   cfg=$(config_file_path)
   if [[ -f "$cfg" ]]; then
-    local tmp
-    if ! tmp=$(arr_mktemp_file); then
-      die "Failed to create temporary whitelist file"
-    fi
-    if ! arr_read_sensitive_file "$cfg" \
-      | awk '!(/^WebUI\\AuthSubnetWhitelistEnabled=/ || /^WebUI\\AuthSubnetWhitelist=/)' >"$tmp"; then
-      arr_cleanup_temp_path "$tmp"
+    local refreshed=""
+    if ! refreshed="$(
+      arr_read_sensitive_file "$cfg" \
+        | awk '!(/^WebUI\\AuthSubnetWhitelistEnabled=/ || /^WebUI\\AuthSubnetWhitelist=/)'
+    )"; then
       die "Failed to prune existing whitelist entries"
     fi
-    {
-      printf 'WebUI\\AuthSubnetWhitelistEnabled=true\n'
-      printf 'WebUI\\AuthSubnetWhitelist=%s\n' "$subnet"
-    } >>"$tmp"
-    if arr_run_sensitive_command mv -f "$tmp" "$cfg"; then
-      arr_unregister_temp_path "$tmp"
+
+    if [[ -n "$refreshed" ]]; then
+      refreshed+=$'\n'
+    fi
+    refreshed+='WebUI\AuthSubnetWhitelistEnabled=true'
+    refreshed+=$'\n'
+    refreshed+="WebUI\\AuthSubnetWhitelist=${subnet}"
+
+    if declare -f atomic_write >/dev/null 2>&1; then
+      atomic_write "$cfg" "$refreshed" "${SECRET_FILE_MODE:-600}"
     else
-      arr_cleanup_temp_path "$tmp"
-      die "Failed to promote whitelist changes"
+      local tmp
+      if ! tmp=$(arr_mktemp_file); then
+        die "Failed to create temporary whitelist file"
+      fi
+      if ! printf '%s\n' "$refreshed" >"$tmp"; then
+        arr_cleanup_temp_path "$tmp"
+        die "Failed to stage whitelist updates"
+      fi
+      if arr_run_sensitive_command mv -f "$tmp" "$cfg"; then
+        arr_unregister_temp_path "$tmp"
+      else
+        arr_cleanup_temp_path "$tmp"
+        die "Failed to promote whitelist changes"
+      fi
     fi
     ensure_secret_file_mode "$cfg"
   else
