@@ -914,6 +914,287 @@ arr_compose_collapse_blank_runs() {
   return 1
 }
 
+arr_compose_select_canonical_env() {
+  local candidate="$1"
+  local canonical_set_ref="$2"
+  local norm_primary_ref="$3"
+  local norm_count_ref="$4"
+  local compact_primary_ref="$5"
+  local compact_count_ref="$6"
+  local canonical_list_ref="$7"
+  local canonical_norm_ref="$8"
+  local canonical_compact_ref="$9"
+
+  declare -n canonical_set="$canonical_set_ref"
+  declare -n norm_primary="$norm_primary_ref"
+  declare -n norm_count="$norm_count_ref"
+  declare -n compact_primary="$compact_primary_ref"
+  declare -n compact_count="$compact_count_ref"
+  declare -n canonical_list="$canonical_list_ref"
+  declare -n canonical_norm="$canonical_norm_ref"
+  declare -n canonical_compact="$canonical_compact_ref"
+
+  if [[ -n "${canonical_set[$candidate]:-}" ]]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+
+  local normalized
+  normalized="$(arr_compose_normalize_env_name "$candidate")"
+  if [[ -n "${norm_primary[$normalized]:-}" && ${norm_count[$normalized]:-0} -eq 1 ]]; then
+    printf '%s' "${norm_primary[$normalized]}"
+    return 0
+  fi
+
+  local compact
+  compact="$(arr_compose_compact_env_name "$candidate")"
+  if [[ -n "${compact_primary[$compact]:-}" && ${compact_count[$compact]:-0} -eq 1 ]]; then
+    printf '%s' "${compact_primary[$compact]}"
+    return 0
+  fi
+
+  local best=""
+  local best_metric=0
+  local best_count=0
+  local canonical=""
+
+  for canonical in "${canonical_list[@]}"; do
+    local norm_value="${canonical_norm[$canonical]}"
+    local compact_value="${canonical_compact[$canonical]}"
+    local matched=0
+    local metric=0
+
+    if [[ "$norm_value" == "$normalized" ]]; then
+      matched=1
+      metric=${#norm_value}
+    elif [[ "$compact_value" == "$compact" ]]; then
+      matched=1
+      metric=${#compact_value}
+    else
+      local compact_len=${#compact}
+      local canonical_compact_len=${#compact_value}
+      local shorter_len=$compact_len
+      if ((canonical_compact_len < shorter_len)); then
+        shorter_len=$canonical_compact_len
+      fi
+      local prefix_len=0
+      while ((prefix_len < shorter_len)) && [[ "${compact:prefix_len:1}" == "${compact_value:prefix_len:1}" ]]; do
+        ((prefix_len++))
+      done
+      if ((shorter_len >= 4 && prefix_len == shorter_len)); then
+        matched=1
+        metric=$shorter_len
+      elif ((shorter_len >= 4)); then
+        if ((canonical_compact_len == compact_len + 1)); then
+          if arr_compose_is_single_insertion "$compact" "$compact_value"; then
+            matched=1
+            metric=$compact_len
+          fi
+        elif ((compact_len == canonical_compact_len + 1)); then
+          if arr_compose_is_single_insertion "$compact_value" "$compact"; then
+            matched=1
+            metric=$canonical_compact_len
+          fi
+        fi
+      fi
+    fi
+
+    if ((matched)); then
+      if ((metric > best_metric)); then
+        best="$canonical"
+        best_metric=$metric
+        best_count=1
+      elif ((metric == best_metric)); then
+        best_count=$((best_count + 1))
+      fi
+    fi
+  done
+
+  if ((best_count == 1 && best_metric >= 4)); then
+    printf '%s' "$best"
+    return 0
+  fi
+
+  if ((best_count > 1)); then
+    return 2
+  fi
+
+  return 1
+}
+
+arr_compose_autofix_env_names() {
+  local compose_file="$1"
+  local env_file="$2"
+
+  if [[ -z "$compose_file" || ! -f "$compose_file" ]]; then
+    return 1
+  fi
+
+  declare -A canonical_set=()
+  declare -a canonical_list=()
+  declare -A canonical_norm=()
+  declare -A canonical_compact=()
+  declare -A norm_primary=()
+  declare -A norm_count=()
+  declare -A compact_primary=()
+  declare -A compact_count=()
+
+  local key=""
+  while IFS= read -r key; do
+    [[ -z "$key" ]] && continue
+    if [[ -n "${canonical_set[$key]:-}" ]]; then
+      continue
+    fi
+    canonical_set["$key"]=1
+    canonical_list+=("$key")
+    local norm=""
+    norm="$(arr_compose_normalize_env_name "$key")"
+    canonical_norm["$key"]="$norm"
+    if [[ -z "${norm_primary[$norm]:-}" ]]; then
+      norm_primary["$norm"]="$key"
+      norm_count["$norm"]=1
+    else
+      norm_count["$norm"]=$(( ${norm_count[$norm]:-1} + 1 ))
+    fi
+    local compact=""
+    compact="$(arr_compose_compact_env_name "$key")"
+    canonical_compact["$key"]="$compact"
+    if [[ -z "${compact_primary[$compact]:-}" ]]; then
+      compact_primary["$compact"]="$key"
+      compact_count["$compact"]=1
+    else
+      compact_count["$compact"]=$(( ${compact_count[$compact]:-1} + 1 ))
+    fi
+  done < <(arr_compose_collect_canonical_env_names "$env_file")
+
+  if ((${#canonical_list[@]} == 0)); then
+    return 0
+  fi
+
+  declare -A replacements=()
+  declare -a replacement_keys=()
+  declare -a summary=()
+  declare -a ambiguous_tokens=()
+  declare -a unresolved_tokens=()
+
+  local template_rc=0
+  local template_matches=""
+  if ! template_matches="$(LC_ALL=C grep -oE '__[A-Za-z0-9_]+__' "$compose_file" 2>/dev/null)"; then
+    template_rc=$?
+  fi
+  if ((template_rc > 1)); then
+    return 1
+  fi
+  if ((template_rc == 0)) && [[ -n "$template_matches" ]]; then
+    template_matches="$(printf '%s\n' "$template_matches" | sort -u)"
+    while IFS= read -r token; do
+      [[ -z "$token" ]] && continue
+      local raw_name="${token#__}"
+      raw_name="${raw_name%__}"
+      local canonical_name=""
+      canonical_name="$(arr_compose_select_canonical_env "$raw_name" canonical_set norm_primary norm_count compact_primary compact_count canonical_list canonical_norm canonical_compact)"
+      local match_status=$?
+      if ((match_status == 0)); then
+        if [[ -z "${replacements[$token]+x}" ]]; then
+          replacement_keys+=("$token")
+        fi
+        local replacement_value=""
+        printf -v replacement_value "\${%s}" "$canonical_name"
+        replacements["$token"]="$replacement_value"
+        local summary_entry=""
+        printf -v summary_entry "%s → \${%s}" "$token" "$canonical_name"
+        summary+=("$summary_entry")
+      elif ((match_status == 2)); then
+        ambiguous_tokens+=("$token")
+      else
+        unresolved_tokens+=("$token")
+      fi
+    done <<<"$template_matches"
+  fi
+
+  local docker_rc=0
+  local docker_matches=""
+  if ! docker_matches="$(LC_ALL=C grep -oE '\$\{[A-Za-z0-9_]+\}' "$compose_file" 2>/dev/null)"; then
+    docker_rc=$?
+  fi
+  if ((docker_rc > 1)); then
+    return 1
+  fi
+  if ((docker_rc == 0)) && [[ -n "$docker_matches" ]]; then
+    docker_matches="$(printf '%s\n' "$docker_matches" | sort -u)"
+    while IFS= read -r token; do
+      [[ -z "$token" ]] && continue
+      local placeholder_name="${token:2:${#token}-3}"
+      if [[ -n "${canonical_set[$placeholder_name]:-}" ]]; then
+        continue
+      fi
+      local canonical_name=""
+      canonical_name="$(arr_compose_select_canonical_env "$placeholder_name" canonical_set norm_primary norm_count compact_primary compact_count canonical_list canonical_norm canonical_compact)"
+      local match_status=$?
+      if ((match_status == 0)); then
+        if [[ -z "${replacements[$token]+x}" ]]; then
+          replacement_keys+=("$token")
+        fi
+        local replacement_value=""
+        printf -v replacement_value "\${%s}" "$canonical_name"
+        replacements["$token"]="$replacement_value"
+        local summary_entry=""
+        printf -v summary_entry "%s → \${%s}" "$token" "$canonical_name"
+        summary+=("$summary_entry")
+      elif ((match_status == 2)); then
+        ambiguous_tokens+=("$token")
+      else
+        unresolved_tokens+=("$token")
+      fi
+    done <<<"$docker_matches"
+  fi
+
+  if ((${#replacement_keys[@]} > 0)); then
+    local tmp=""
+    tmp="$(arr_mktemp_file "${compose_file}.envfix.XXXXXX")" || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      local updated_line="$line"
+      local placeholder=""
+      for placeholder in "${replacement_keys[@]}"; do
+        updated_line="${updated_line//${placeholder}/${replacements[$placeholder]}}"
+      done
+      printf '%s\n' "$updated_line" >>"$tmp"
+    done <"$compose_file"
+    if mv "$tmp" "$compose_file" 2>/dev/null; then
+      arr_unregister_temp_path "$tmp"
+    else
+      arr_cleanup_temp_path "$tmp"
+      return 1
+    fi
+  fi
+
+  if ((${#summary[@]} > 0)); then
+    msg "compose env auto-repair mapped ${#summary[@]} placeholder(s):"
+    local summary_entry=""
+    for summary_entry in "${summary[@]}"; do
+      msg "  ${summary_entry}"
+    done
+  fi
+
+  if ((${#ambiguous_tokens[@]} > 0)); then
+    warn "compose env auto-repair skipped ambiguous placeholder(s):"
+    local ambiguous_entry=""
+    for ambiguous_entry in "${ambiguous_tokens[@]}"; do
+      warn "  ${ambiguous_entry}"
+    done
+  fi
+
+  if ((${#unresolved_tokens[@]} > 0)); then
+    warn "compose env auto-repair could not resolve placeholder(s):"
+    local unresolved_entry=""
+    for unresolved_entry in "${unresolved_tokens[@]}"; do
+      warn "  ${unresolved_entry}"
+    done
+  fi
+
+  return 0
+}
+
 arr_compose_autorepair() {
   local staging="$1"
   local log_file="$2"
@@ -2130,6 +2411,11 @@ YAML
     die "Generated docker-compose.yml contains nested environment placeholders"
   fi
 
+  if ! arr_compose_autofix_env_names "$tmp" "${ARR_ENV_FILE:-}"; then
+    arr_cleanup_temp_path "$tmp"
+    die "Failed to normalize compose environment placeholders"
+  fi
+
   if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
     arr_cleanup_temp_path "$tmp"
     die "Generated docker-compose.yml contains unexpected environment placeholders"
@@ -2649,6 +2935,11 @@ YAML
   if ! verify_single_level_env_placeholders "$tmp"; then
     arr_cleanup_temp_path "$tmp"
     die "Generated docker-compose.yml contains nested environment placeholders"
+  fi
+
+  if ! arr_compose_autofix_env_names "$tmp" "${ARR_ENV_FILE:-}"; then
+    arr_cleanup_temp_path "$tmp"
+    die "Failed to normalize compose environment placeholders"
   fi
 
   if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
