@@ -21,6 +21,27 @@ arr_canonical_path() {
   printf '%s\n' "${path}"
 }
 
+arr_expand_path_tokens() {
+  local raw="$1"
+  local expanded="${raw}"
+  local token
+  local value
+
+  [[ -n "${expanded}" ]] || { printf '%s\n' "${expanded}"; return 0; }
+
+  while [[ "${expanded}" =~ __([A-Z0-9_]+)__ ]]; do
+    token="${BASH_REMATCH[1]}"
+    value="${!token:-}"
+    if [[ -n "${value}" ]]; then
+      expanded="${expanded//__${token}__/${value}}"
+    else
+      expanded="${expanded//__${token}__/}"
+    fi
+  done
+
+  printf '%s\n' "${expanded}"
+}
+
 # Returns the default user configuration path derived from ARRCONF_DIR, falling
 # back to ARR_DATA_ROOT when the config directory is unset.
 arr_default_userconf_path() {
@@ -106,8 +127,11 @@ arr_resolve_userconf_paths() {
     fi
   fi
 
+  local expanded_candidate
+  expanded_candidate="$(arr_expand_path_tokens "${candidate}")"
+
   local canon_candidate
-  canon_candidate="$(arr_canonical_path "${candidate}")"
+  canon_candidate="$(arr_canonical_path "${expanded_candidate}")"
 
   if [[ "${source}" == "override" ]]; then
     override="${canon_candidate}"

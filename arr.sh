@@ -108,13 +108,14 @@ _arr_userconf_source="default"
 
 arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _arr_userconf_source
 
-_expected_base="${ARR_DATA_ROOT}"
+_expected_base="$(arr_expand_path_tokens "${ARR_DATA_ROOT}")"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
 _canon_userconf="${ARR_USERCONF_PATH}"
 
 declare -a _arr_env_override_order=()
 declare -A _arr_env_overrides=()
 declare -A _arr_env_override_seen=()
+declare -a ARR_RUNTIME_ENV_GUARDS=()
 if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
   while IFS= read -r _arr_env_var; do
     [[ -n "${_arr_env_var}" ]] || continue
@@ -142,19 +143,6 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
       _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
     else
       _arr_env_overrides["${_arr_env_var}"]=""
-    fi
-  fi
-done
-unset _arr_env_var
-
-for _arr_env_var in "${_arr_env_override_order[@]}"; do
-  if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
-    if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      if ! arr_var_is_readonly "${_arr_env_var}"; then
-        readonly "${_arr_env_var}" 2>/dev/null || :
-      fi
-    else
-      printf '%s WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${STACK_TAG}" "${_arr_env_var}" >&2
     fi
   fi
 done
@@ -222,11 +210,41 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
 done
 unset _arr_env_var
 
+for _arr_env_var in "${_arr_env_override_order[@]}"; do
+  if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+    ARR_RUNTIME_ENV_GUARDS+=("${_arr_env_var}")
+  fi
+done
+unset _arr_env_var
+
 unset _arr_env_override_order _arr_env_overrides
 
 ARR_USERCONF_PATH="${_canon_userconf}"
 unset _arr_userconf_source
 unset _canon_userconf _canon_base _expected_base
+
+arr_lock_effective_vars() {
+  local var
+  declare -A _arr_guard_seen=()
+
+  for var in "${ARR_RUNTIME_ENV_GUARDS[@]:-}"; do
+    [[ -n "${var}" ]] || continue
+    if [[ -n "${_arr_guard_seen[${var}]+x}" ]]; then
+      continue
+    fi
+    _arr_guard_seen["${var}"]=1
+    if [[ ! "${var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf '%s WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${STACK_TAG}" "${var}" >&2
+      continue
+    fi
+    if arr_var_is_readonly "${var}"; then
+      continue
+    fi
+    readonly "${var}" 2>/dev/null || :
+  done
+
+  unset _arr_guard_seen
+}
 
 if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly REPO_ROOT ARR_USERCONF_PATH
@@ -375,6 +393,8 @@ main() {
 
   # Restore default word splitting so callees are not impacted
   IFS="${OLDIFS}"
+
+  arr_lock_effective_vars
 
   if [[ "${RUN_UNINSTALL}" == "1" ]]; then
     local -a uninstall_args=()
