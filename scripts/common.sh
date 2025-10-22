@@ -1632,6 +1632,108 @@ trim_string() {
   printf '%s' "$value"
 }
 
+# Normalizes an environment variable name by uppercasing and collapsing
+# separators so variants like "arr-docker__dir" map to "ARR_DOCKER_DIR".
+arr_compose_normalize_env_name() {
+  local name="${1-}"
+  name="${name^^}"
+  name="${name//[^A-Z0-9_]/_}"
+  while [[ "$name" == *"__"* ]]; do
+    name="${name//__/_}"
+  done
+  name="${name#_}"
+  name="${name%_}"
+  while [[ "$name" == *"__"* ]]; do
+    name="${name//__/_}"
+  done
+  printf '%s' "$name"
+}
+
+# Removes underscores after normalization so fuzzy matching can compare
+# compacted variants (e.g., RADARR_DIR → RADARRDIR).
+arr_compose_compact_env_name() {
+  local name
+  name="$(arr_compose_normalize_env_name "$1")"
+  name="${name//_/}"
+  printf '%s' "$name"
+}
+
+# Determines whether two compacted names differ by a single character
+# insertion/deletion (treats RADARDIR vs RADARRDIR as a match).
+arr_compose_is_single_insertion() {
+  local shorter="$1"
+  local longer="$2"
+  local len_shorter="${#shorter}"
+  local len_longer="${#longer}"
+
+  if ((len_longer - len_shorter != 1)); then
+    return 1
+  fi
+
+  local i=0
+  local j=0
+  local skipped=0
+
+  while ((i < len_shorter && j < len_longer)); do
+    if [[ "${shorter:i:1}" == "${longer:j:1}" ]]; then
+      ((i++))
+      ((j++))
+      continue
+    fi
+
+    if ((skipped != 0)); then
+      return 1
+    fi
+
+    skipped=1
+    ((j++))
+  done
+
+  return 0
+}
+
+# Collects canonical environment keys from defaults, the generated .env, and
+# the current exported environment so compose validation has a stable catalog
+# even before .env is regenerated.
+arr_compose_collect_canonical_env_names() {
+  local env_file="${1:-}"
+  declare -A seen=()
+  local key=""
+
+  if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
+    while IFS= read -r key; do
+      [[ -z "$key" ]] && continue
+      if [[ -z "${seen[$key]:-}" ]]; then
+        printf '%s\n' "$key"
+        seen["$key"]=1
+      fi
+    done < <(arr_collect_all_expected_env_keys 2>/dev/null || true)
+  fi
+
+  if [[ -n "$env_file" && -f "$env_file" ]]; then
+    while IFS= read -r key_line || [[ -n "$key_line" ]]; do
+      [[ -z "${key_line//[[:space:]]/}" ]] && continue
+      [[ "$key_line" =~ ^[[:space:]]*# ]] && continue
+      if [[ "$key_line" == *'='* ]]; then
+        key="${key_line%%=*}"
+        key="$(trim_string "$key")"
+        if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -z "${seen[$key]:-}" ]]; then
+          printf '%s\n' "$key"
+          seen["$key"]=1
+        fi
+      fi
+    done <"$env_file"
+  fi
+
+  while IFS='=' read -r key _ || [[ -n "$key" ]]; do
+    [[ -z "$key" ]] && continue
+    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -z "${seen[$key]:-}" ]]; then
+      printf '%s\n' "$key"
+      seen["$key"]=1
+    fi
+  done < <(env)
+}
+
 arr_function_exists() {
   declare -f "$1" >/dev/null 2>&1
 }
@@ -2248,23 +2350,18 @@ arr_verify_compose_placeholders() {
     die "arr_verify_compose_placeholders requires an existing compose file"
   fi
   declare -A _arr_known_env=()
-  if [[ -n "$env_file" && -f "$env_file" ]]; then
-    while IFS= read -r _arr_line; do
-      [[ -z "$_arr_line" ]] && continue
-      [[ "$_arr_line" =~ ^[[:space:]]*# ]] && continue
-      if [[ "$_arr_line" == *'='* ]]; then
-        local _arr_key="${_arr_line%%=*}"
-        _arr_key="${_arr_key%%[[:space:]]*}"
-        [[ -n "$_arr_key" ]] && _arr_known_env["$_arr_key"]=1
-      fi
-    done <"$env_file"
-  fi
+  local _arr_key=""
+  while IFS= read -r _arr_key; do
+    [[ -z "$_arr_key" ]] && continue
+    _arr_known_env["$_arr_key"]=1
+  done < <(arr_compose_collect_canonical_env_names "$env_file")
   local _arr_unexpected=0
   local _arr_placeholder="" _arr_name="" _arr_sep=""
   local _arr_matches=""
   # Match ${VAR}, ${VAR-...}, ${VAR:-...}, ${VAR=...}, ${VAR:=...}, ${VAR?...}, ${VAR:+...}
   local _arr_matches_rc=0
   local _arr_raw_matches=""
+  local -a _arr_missing=()
 
   if ! _arr_raw_matches="$(LC_ALL=C grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*([:\-=\?+][^}]*)?\}' "$compose_file" 2>/dev/null)"; then
     _arr_matches_rc=$?
@@ -2303,8 +2400,18 @@ arr_verify_compose_placeholders() {
       continue
     fi
     printf "[placeholders] Unexpected placeholder \${%s} in %s\n" "$_arr_name" "$compose_file" >&2
+    local _arr_display=""
+    printf -v _arr_display "\${%s}" "$_arr_name"
+    _arr_missing+=("${_arr_display}")
     _arr_unexpected=1
   done <<<"$_arr_matches"
+  if ((_arr_unexpected)); then
+    warn "compose env placeholders unresolved after auto-repair:"
+    local _arr_missing_entry=""
+    for _arr_missing_entry in "${_arr_missing[@]}"; do
+      warn "  ${_arr_missing_entry}"
+    done
+  fi
   return "$_arr_unexpected"
 }
 
