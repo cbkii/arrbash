@@ -492,18 +492,19 @@ safe_cleanup() {
 
 # Ensures generated compose and environment files exist before proceeding
 validate_generated_paths() {
-  local stack_dir
-  stack_dir="$(arr_stack_dir)"
+  if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
+    ARR_STACK_DIR="$(arr_stack_dir)"
+  fi
   local compose_path
-  compose_path="${COMPOSE_FILE:-${stack_dir}/docker-compose.yml}"
+  compose_path="${COMPOSE_FILE:-${ARR_STACK_DIR}/docker-compose.yml}"
   local env_file
   env_file="$(arr_env_file)"
   local -a errors=()
 
-  if [[ -z "$stack_dir" ]]; then
+  if [[ -z "${ARR_STACK_DIR:-}" ]]; then
     errors+=("Unable to resolve stack directory (ARR_STACK_DIR=${ARR_STACK_DIR:-})")
-  elif [[ ! -d "$stack_dir" ]]; then
-    errors+=("Stack directory missing: ${stack_dir}")
+  elif [[ ! -d "$ARR_STACK_DIR" ]]; then
+    errors+=("Stack directory missing: ${ARR_STACK_DIR}")
   fi
 
   if [[ -z "$compose_path" ]]; then

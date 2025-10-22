@@ -56,6 +56,10 @@ verify_permissions() {
 
   step "🔒 Verifying file permissions"
 
+  if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
+    ARR_STACK_DIR="$(arr_stack_dir)"
+  fi
+
   local -a secret_files=(
     "${ARR_ENV_FILE}"
     "${ARR_USERCONF_PATH}"
