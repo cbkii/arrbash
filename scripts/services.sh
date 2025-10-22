@@ -496,7 +496,7 @@ validate_generated_paths() {
     ARR_STACK_DIR="$(arr_stack_dir)"
   fi
   local compose_path
-  compose_path="${COMPOSE_FILE:-${ARR_STACK_DIR:+${ARR_STACK_DIR}/docker-compose.yml}}"
+  compose_path="${COMPOSE_FILE:-${ARR_STACK_DIR}/docker-compose.yml}"
   local env_file
   env_file="$(arr_env_file)"
   local -a errors=()
