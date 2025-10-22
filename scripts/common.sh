@@ -1646,48 +1646,6 @@ arr_compose_normalize_env_name() {
   printf '%s' "$name"
 }
 
-# Removes underscores after normalization so fuzzy matching can compare
-# compacted variants (e.g., RADARR_DIR → RADARRDIR).
-arr_compose_compact_env_name() {
-  local name
-  name="$(arr_compose_normalize_env_name "$1")"
-  name="${name//_/}"
-  printf '%s' "$name"
-}
-
-# Determines whether two compacted names differ by a single character
-# insertion/deletion (treats RADARDIR vs RADARRDIR as a match).
-arr_compose_is_single_insertion() {
-  local shorter="$1"
-  local longer="$2"
-  local len_shorter="${#shorter}"
-  local len_longer="${#longer}"
-
-  if ((len_longer - len_shorter != 1)); then
-    return 1
-  fi
-
-  local i=0
-  local j=0
-  local skipped=0
-
-  while ((i < len_shorter && j < len_longer)); do
-    if [[ "${shorter:i:1}" == "${longer:j:1}" ]]; then
-      ((i++))
-      ((j++))
-      continue
-    fi
-
-    if ((skipped != 0)); then
-      return 1
-    fi
-
-    skipped=1
-    ((j++))
-  done
-
-  return 0
-}
 
 # Collects canonical environment keys from defaults, the generated .env, and
 # the current exported environment so compose validation has a stable catalog
@@ -1719,7 +1677,7 @@ arr_compose_collect_canonical_env_names() {
           seen["$key"]=1
         fi
       fi
-    done <"$env_file"
+    done < <(arr_run_sensitive_command cat "$env_file")
   fi
 
   while IFS='=' read -r key _ || [[ -n "$key" ]]; do
