@@ -69,6 +69,46 @@ ARR_MAIN_TRAP_INSTALLED=1
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
+declare -a _arr_canonical_config_vars=()
+declare -a _arr_env_override_order=()
+declare -A _arr_env_overrides=()
+
+_arr_defaults_file="${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+if [[ -f "${_arr_defaults_file}" ]]; then
+  if mapfile -t _arr_canonical_config_vars < <(
+    REPO_ROOT="${REPO_ROOT}" "${BASH:-bash}" -Eeuo pipefail - <<'EOS'
+set -Eeuo pipefail
+if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
+  # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+  . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+  if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
+    arr_collect_all_expected_env_keys
+  fi
+fi
+EOS
+  ); then
+    :
+  else
+    _arr_canonical_config_vars=()
+  fi
+fi
+
+if ((${#_arr_canonical_config_vars[@]})); then
+  declare -A _arr_env_override_seen=()
+  for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
+    [[ -n "${_arr_env_var}" ]] || continue
+    if [[ -z "${_arr_env_override_seen[${_arr_env_var}]:-}" ]]; then
+      _arr_env_override_seen["${_arr_env_var}"]=1
+      if [[ -v "${_arr_env_var}" ]]; then
+        _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
+        _arr_env_override_order+=("${_arr_env_var}")
+      fi
+      unset -v "${_arr_env_var}" 2>/dev/null || :
+    fi
+  done
+  unset _arr_env_override_seen _arr_env_var
+fi
+
 USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
 LOG_LIB="${REPO_ROOT}/scripts/logging.sh"
 if [[ -f "${USERCONF_LIB}" ]]; then
@@ -93,10 +133,63 @@ else
   exit 1
 fi
 
-if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
+arr_apply_env_overrides() {
+  local _arr_env_var=""
+  local _arr_warn_tag="${STACK_TAG:-[arr]}"
+  local _arr_declaration=""
+
+  for _arr_env_var in "${_arr_env_override_order[@]:-}"; do
+    if [[ -z "${_arr_env_var}" ]]; then
+      continue
+    fi
+    if [[ ! "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf '%s WARN: Skipping invalid environment variable name: %s\n' "${_arr_warn_tag}" "${_arr_env_var}" >&2
+      continue
+    fi
+    if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+      if declare -f arr_var_is_readonly >/dev/null 2>&1; then
+        if arr_var_is_readonly "${_arr_env_var}"; then
+          continue
+        fi
+      else
+        if _arr_declaration="$(declare -p -- "${_arr_env_var}" 2>/dev/null)"; then
+          _arr_declaration="${_arr_declaration#declare }"
+          _arr_declaration="${_arr_declaration%% *}"
+          if [[ "${_arr_declaration}" == -*r* ]]; then
+            continue
+          fi
+        fi
+      fi
+      printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
+      export "${_arr_env_var?}"
+    fi
+  done
+}
+
+if [[ -f "${_arr_defaults_file}" ]]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
-  . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+  . "${_arr_defaults_file}"
 fi
+
+if ((${#_arr_env_overrides[@]})); then
+  arr_apply_env_overrides
+
+  if [[ -f "${_arr_defaults_file}" ]]; then
+    for _arr_env_var in "${_arr_canonical_config_vars[@]:-}"; do
+      [[ -n "${_arr_env_var}" ]] || continue
+      if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+        continue
+      fi
+      unset -v "${_arr_env_var}" 2>/dev/null || :
+    done
+    unset _arr_env_var
+    # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+    . "${_arr_defaults_file}"
+  fi
+fi
+
+unset _arr_canonical_config_vars
+unset _arr_defaults_file
 
 STACK="${STACK:-arr}"
 STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
@@ -112,41 +205,7 @@ _expected_base="$(arr_expand_path_tokens "${ARR_DATA_ROOT}")"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
 _canon_userconf="${ARR_USERCONF_PATH}"
 
-declare -a _arr_env_override_order=()
-declare -A _arr_env_overrides=()
-declare -A _arr_env_override_seen=()
 declare -a ARR_RUNTIME_ENV_GUARDS=()
-if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
-  while IFS= read -r _arr_env_var; do
-    [[ -n "${_arr_env_var}" ]] || continue
-    if [[ -z "${_arr_env_override_seen[${_arr_env_var}]+x}" ]]; then
-      _arr_env_override_order+=("${_arr_env_var}")
-      _arr_env_override_seen["${_arr_env_var}"]=1
-    fi
-  done < <(arr_collect_all_expected_env_keys)
-else
-  while IFS= read -r _arr_env_line; do
-    _arr_env_var="${_arr_env_line%%=*}"
-    if [[ "${_arr_env_var}" == ARR_* ]]; then
-      if [[ -z "${_arr_env_override_seen[${_arr_env_var}]+x}" ]]; then
-        _arr_env_override_order+=("${_arr_env_var}")
-        _arr_env_override_seen["${_arr_env_var}"]=1
-      fi
-    fi
-  done < <(env)
-fi
-unset -v _arr_env_override_seen _arr_env_rest 2>/dev/null || :
-
-for _arr_env_var in "${_arr_env_override_order[@]}"; do
-  if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
-    if [[ ${!_arr_env_var+x} ]]; then
-      _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
-    else
-      _arr_env_overrides["${_arr_env_var}"]=""
-    fi
-  fi
-done
-unset _arr_env_var
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_arr_userconf_source}" != "override" && "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
@@ -194,21 +253,7 @@ if [[ -f "${_canon_userconf}" ]]; then
   arr_cleanup_temp_path "${_arr_userr_conf_errlog}"
   unset _arr_userr_conf_status _arr_userr_conf_errlog
 fi
-for _arr_env_var in "${_arr_env_override_order[@]}"; do
-  if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
-    if arr_var_is_readonly "${_arr_env_var}"; then
-      continue
-    fi
-    # Validate variable name format before assignment
-    if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
-      export "${_arr_env_var?}"
-    else
-      printf '%s WARN: Skipping invalid environment variable name: %s\n' "${STACK_TAG}" "${_arr_env_var}" >&2
-    fi
-  fi
-done
-unset _arr_env_var
+arr_apply_env_overrides
 
 for _arr_env_var in "${_arr_env_override_order[@]}"; do
   if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
