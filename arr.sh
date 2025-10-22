@@ -172,7 +172,10 @@ if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
 fi
 
 if [[ -f "${_canon_userconf}" ]]; then
-  _arr_userr_conf_errlog="$(mktemp)"
+  if ! _arr_userr_conf_errlog="$(mktemp 2>/dev/null)"; then
+    die "Failed to allocate temp file for user config diagnostics"
+  fi
+  arr_register_temp_path "${_arr_userr_conf_errlog}"
   # Save current ERR trap (if any), then disable while sourcing user config
   _prev_err_trap="$(trap -p ERR 2>/dev/null || true)"
   trap - ERR
@@ -196,11 +199,11 @@ if [[ -f "${_canon_userconf}" ]]; then
       printf '%s Failed to source user config (status=%s): %s\n' "${STACK_TAG}" "${_arr_userr_conf_status}" "${_canon_userconf}" >&2
       # Replay captured stderr to aid debugging
       cat "${_arr_userr_conf_errlog}" >&2 || :
-      rm -f "${_arr_userr_conf_errlog}"
+      arr_cleanup_temp_path "${_arr_userr_conf_errlog}"
       exit "${_arr_userr_conf_status}"
     fi
   fi
-  rm -f "${_arr_userr_conf_errlog}"
+  arr_cleanup_temp_path "${_arr_userr_conf_errlog}"
   unset _arr_userr_conf_status _arr_userr_conf_errlog
 fi
 for _arr_env_var in "${_arr_env_override_order[@]}"; do

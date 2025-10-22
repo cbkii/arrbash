@@ -62,6 +62,26 @@ Run these from the repository root:
    ```
 4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `--rotate-caddy-auth`, `scripts/qbt-helper.sh reset`).
 
+## Temporary file hygiene & privileged redirections
+
+Recent helpers in `scripts/common.sh` ensure temporary paths are tracked and cleaned even when scripts exit early:
+
+- `arr_register_temp_path` automatically runs when you call `arr_mktemp_file`/`arr_mktemp_dir`. Use `arr_unregister_temp_path` before promoting a temp file into place, and `arr_cleanup_temp_path` to delete a temp path and drop it from the registry safely.
+- `arr_run_sensitive_command` captures stdout/stderr in registered temps so elevated retries do not leak files. When writing sensitive files, keep redirections inside the privileged command (e.g., `arr_run_sensitive_command sh -c 'cmd >"$target"' sh "$target"`) or feed elevated reads into a normal writer (e.g., `arr_read_sensitive_file "$path" | tool >"$tmp"`).
+
+### Verification quick checks
+
+- Temp cleanup (normal + manual delete):
+  ```bash
+  bash -c 'source scripts/common.sh; tmp=$(arr_mktemp_file "/tmp/temp-registry.XXXXXX"); [[ -e "$tmp" ]]; arr_cleanup_temp_path "$tmp"; [[ ! -e "$tmp" ]]'
+  bash -c 'source scripts/common.sh; tmp=$(arr_mktemp_file "/tmp/temp-registry.XXXXXX"); printf "created %s\n" "$tmp" >&2'
+  # After the second command exits, confirm the printed path no longer exists (global cleanup removed it).
+  ```
+- Privileged redirection sanity check: `bash scripts/tests/privileged_redirection_test.sh`
+- Regex coverage: `bash scripts/tests/preserve_webui_port_test.sh`
+
+These checks cover the regression suite for temp registration, sudo redirections, and the WebUI port matcher.
+
 ## SABnzbd helper
 
 When `SABNZBD_ENABLED=1`, the installer copies `scripts/sab-helper.sh` into `${ARR_STACK_DIR}/scripts/` and refreshes handy aliases such as `sab-logs`, `sab-shell`, and `open-sab` (run `./arr.sh --refresh-aliases` if you need them immediately).

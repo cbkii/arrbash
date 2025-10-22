@@ -101,7 +101,7 @@ install_vuetorrent() {
 
   if ! curl "${curl_args[@]}" "$download_url" >/dev/null 2>&1; then
     local curl_status=$?
-    rm -f "$tmp_archive" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp_archive"
     warn "Failed to download VueTorrent archive (curl exit status ${curl_status})"
     vuetorrent_manual_unavailable
     return 0
@@ -114,7 +114,7 @@ install_vuetorrent() {
   fi
 
   if [[ -n "${VUETORRENT_SHA256:-}" && "$archive_sha" != "${VUETORRENT_SHA256}" ]]; then
-    rm -f "$tmp_archive" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp_archive"
     warn "Downloaded VueTorrent archive checksum mismatch"
     vuetorrent_manual_unavailable
     return 0
@@ -122,21 +122,21 @@ install_vuetorrent() {
 
   local extract_dir
   if ! extract_dir="$(arr_mktemp_dir "/tmp/vuetorrent.extract.XXXXXX")"; then
-    rm -f "$tmp_archive" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp_archive"
     warn "Unable to create extraction directory for VueTorrent"
     vuetorrent_manual_unavailable
     return 0
   fi
 
   if ! unzip -qo "$tmp_archive" -d "$extract_dir"; then
-    rm -f "$tmp_archive" 2>/dev/null || true
-    rm -rf "$extract_dir" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp_archive"
+    arr_cleanup_temp_path "$extract_dir"
     warn "Failed to unzip VueTorrent archive"
     vuetorrent_manual_unavailable
     return 0
   fi
 
-  rm -f "$tmp_archive" 2>/dev/null || true
+  arr_cleanup_temp_path "$tmp_archive"
 
   local source_root="$extract_dir"
   if [[ ! -f "$source_root/public/index.html" ]]; then
@@ -148,7 +148,7 @@ install_vuetorrent() {
   fi
 
   if [[ ! -f "$source_root/public/index.html" ]]; then
-    rm -rf "$extract_dir" 2>/dev/null || true
+    arr_cleanup_temp_path "$extract_dir"
     warn "VueTorrent archive missing public/index.html"
     vuetorrent_manual_unavailable
     return 0
@@ -156,20 +156,21 @@ install_vuetorrent() {
 
   local staging_dir
   if ! staging_dir="$(arr_mktemp_dir "/tmp/vuetorrent.staging.XXXXXX")"; then
-    rm -rf "$extract_dir" 2>/dev/null || true
+    arr_cleanup_temp_path "$extract_dir"
     warn "Unable to stage VueTorrent files"
     vuetorrent_manual_unavailable
     return 0
   fi
 
   if ! cp -a "$source_root"/. "$staging_dir"/; then
-    rm -rf "$extract_dir" "$staging_dir" 2>/dev/null || true
+    arr_cleanup_temp_path "$extract_dir"
+    arr_cleanup_temp_path "$staging_dir"
     warn "Failed to prepare VueTorrent files"
     vuetorrent_manual_unavailable
     return 0
   fi
 
-  rm -rf "$extract_dir" 2>/dev/null || true
+  arr_cleanup_temp_path "$extract_dir"
 
   ensure_dir "${ARR_DOCKER_DIR}/qbittorrent"
 
@@ -177,7 +178,7 @@ install_vuetorrent() {
   if [[ -d "$manual_dir" ]]; then
     backup_dir="${manual_dir}.bak.$$"
     if ! mv "$manual_dir" "$backup_dir"; then
-      rm -rf "$staging_dir" 2>/dev/null || true
+      arr_cleanup_temp_path "$staging_dir"
       warn "Unable to move existing VueTorrent directory"
       vuetorrent_manual_unavailable
       return 0
@@ -185,7 +186,7 @@ install_vuetorrent() {
   fi
 
   if ! mv "$staging_dir" "$manual_dir"; then
-    rm -rf "$staging_dir" 2>/dev/null || true
+    arr_cleanup_temp_path "$staging_dir"
     if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
       mv "$backup_dir" "$manual_dir" 2>/dev/null || rm -rf "$backup_dir" 2>/dev/null || true
     fi
@@ -193,6 +194,8 @@ install_vuetorrent() {
     vuetorrent_manual_unavailable
     return 0
   fi
+
+  arr_unregister_temp_path "$staging_dir"
 
   if [[ -n "$backup_dir" && -d "$backup_dir" ]]; then
     rm -rf "$backup_dir" 2>/dev/null || true
@@ -680,7 +683,7 @@ update_env_image_var() {
 
   printf -v "$var_name" '%s' "$new_value"
 
-  if [[ -f "${ARR_ENV_FILE}" ]] && arr_run_sensitive_command grep -q "^${var_name}=" "${ARR_ENV_FILE}"; then
+  if [[ -f "${ARR_ENV_FILE}" ]] && LC_ALL=C arr_run_sensitive_command grep -q "^${var_name}=" "${ARR_ENV_FILE}"; then
     portable_sed "s|^${var_name}=.*|${var_name}=${new_value}|" "${ARR_ENV_FILE}"
   fi
 }
@@ -1459,17 +1462,18 @@ PY
   fi
 
   if ((merge_status != 0)); then
-    rm -f "$tmp" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp"
     warn "[dns] Failed to merge userland-proxy setting into ${conf}"
     warn "[dns] Backup saved at ${backup}"
     return 1
   fi
 
   if ! mv "$tmp" "$conf"; then
-    rm -f "$tmp" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp"
     warn "[dns] Failed to replace ${conf}. Backup saved at ${backup}"
     return 1
   fi
+  arr_unregister_temp_path "$tmp"
   if [[ -f "$backup" ]]; then
     chmod --reference "$backup" "$conf" 2>/dev/null || ensure_nonsecret_file_mode "$conf"
   else

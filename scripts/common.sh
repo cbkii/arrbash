@@ -64,6 +64,41 @@ arr_register_temp_path() {
   ARR_TEMP_PATHS+=("$path")
 }
 
+arr_unregister_temp_path() {
+  local target="$1"
+
+  if [[ -z "$target" || -z "${ARR_TEMP_PATHS[*]:-}" ]]; then
+    return 0
+  fi
+
+  local -a remaining=()
+  local path=""
+  local removed=0
+
+  for path in "${ARR_TEMP_PATHS[@]}"; do
+    if ((removed == 0)) && [[ "$path" == "$target" ]]; then
+      removed=1
+      continue
+    fi
+    remaining+=("$path")
+  done
+
+  if ((removed == 1)); then
+    ARR_TEMP_PATHS=("${remaining[@]}")
+  fi
+}
+
+arr_cleanup_temp_path() {
+  local path="$1"
+
+  if [[ -z "$path" ]]; then
+    return 0
+  fi
+
+  arr_unregister_temp_path "$path"
+  rm -rf -- "$path" 2>/dev/null || true
+}
+
 if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   _arr_common_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   YAML_EMIT_LIB="${YAML_EMIT_LIB:-${_arr_common_dir}/yaml-emit.sh}"
@@ -763,15 +798,18 @@ arr_run_sensitive_command() {
   local tmp_out tmp_err status stderr_payload sensitive_arg
 
   tmp_out="$(mktemp 2>/dev/null)" || die "Failed to allocate stdout capture for sensitive command"
+  arr_register_temp_path "$tmp_out"
   tmp_err="$(mktemp 2>/dev/null)" || {
-    rm -f "$tmp_out"
+    arr_cleanup_temp_path "$tmp_out"
     die "Failed to allocate stderr capture for sensitive command"
   }
+  arr_register_temp_path "$tmp_err"
 
   if "$@" >"$tmp_out" 2>"$tmp_err"; then
     cat "$tmp_out"
     cat "$tmp_err" >&2
-    rm -f "$tmp_out" "$tmp_err"
+    arr_cleanup_temp_path "$tmp_out"
+    arr_cleanup_temp_path "$tmp_err"
     return 0
   fi
 
@@ -783,7 +821,8 @@ arr_run_sensitive_command() {
     if sudo "$@" >"$tmp_out" 2>"$tmp_err"; then
       cat "$tmp_out"
       cat "$tmp_err" >&2
-      rm -f "$tmp_out" "$tmp_err"
+      arr_cleanup_temp_path "$tmp_out"
+      arr_cleanup_temp_path "$tmp_err"
       return 0
     fi
     status=$?
@@ -792,7 +831,8 @@ arr_run_sensitive_command() {
 
   cat "$tmp_out"
   cat "$tmp_err" >&2
-  rm -f "$tmp_out" "$tmp_err"
+  arr_cleanup_temp_path "$tmp_out"
+  arr_cleanup_temp_path "$tmp_err"
 
   if arr_sensitive_error_is_permission "$stderr_payload"; then
     sensitive_arg="$(arr_first_sensitive_arg "$@" || true)"
@@ -1526,7 +1566,7 @@ atomic_write() {
   tmp="$(arr_mktemp_file "${target}.XXXXXX.tmp" '')" || die "Failed to create temp file for ${target}"
 
   if ! printf '%s\n' "$content" >"$tmp" 2>/dev/null; then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Failed to write to temporary file for ${target}"
   fi
 
@@ -1546,11 +1586,11 @@ atomic_write() {
   if ! chmod "$mode" "$tmp" 2>/dev/null; then
     if ((can_use_sudo == 1)); then
       if ! sudo chmod "$mode" "$tmp" 2>/dev/null; then
-        rm -f "$tmp"
+        arr_cleanup_temp_path "$tmp"
         die "Failed to set permissions on ${target}"
       fi
     else
-      rm -f "$tmp"
+      arr_cleanup_temp_path "$tmp"
       die "Failed to set permissions on ${target}"
     fi
   fi
@@ -1563,9 +1603,11 @@ atomic_write() {
   fi
 
   if ((moved == 0)); then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Failed to atomically write ${target}"
   fi
+
+  arr_unregister_temp_path "$tmp"
 
   if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
     if chown "${PUID}:${PGID}" "$target" 2>/dev/null; then
@@ -2280,20 +2322,22 @@ portable_sed() {
     perms="${perms//$'\n'/}"
   fi
 
-  if arr_run_sensitive_command sed -e "$expr" "$file" >"$tmp"; then
+  if arr_run_sensitive_command sh -c 'sed -e "$1" "$2" >"$3"' sh "$expr" "$file" "$tmp"; then
     if [ -f "$file" ] && cmp -s "$file" "$tmp" 2>/dev/null; then
-      rm -f "$tmp"
+      arr_cleanup_temp_path "$tmp"
       return 0
     fi
 
-    if ! arr_run_sensitive_command mv -f "$tmp" "$file"; then
-      rm -f "$tmp"
+    if arr_run_sensitive_command mv -f "$tmp" "$file"; then
+      arr_unregister_temp_path "$tmp"
+    else
+      arr_cleanup_temp_path "$tmp"
       die "Failed to update ${file}"
     fi
 
     [[ -n "$perms" ]] && ensure_file_mode "$file" "$perms"
   else
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "sed operation failed on ${file}"
   fi
 }
