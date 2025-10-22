@@ -262,8 +262,10 @@ if [[ -z "$OUT_PATH" ]]; then
 fi
 OUT_PATH="$(resolve_path "$OUT_PATH")"
 
-filter_tmp="$(mktemp)"
-trap 'rm -f "$filter_tmp"' EXIT
+if ! filter_tmp="$(mktemp 2>/dev/null)"; then
+  die "Failed to allocate template filter scratch file"
+fi
+arr_register_temp_path "$filter_tmp"
 
 if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
   while IFS= read -r key; do
@@ -298,6 +300,7 @@ if [[ -n "$VARS" ]]; then
 else
   envsubst <"$filter_tmp" >"$OUT_PATH"
 fi
+arr_cleanup_temp_path "$filter_tmp"
 chmod 600 "$OUT_PATH" 2>/dev/null || true
 
 printf 'Generated %s from %s using %s\n' "$OUT_PATH" "$TEMPLATE_PATH" "${CONF_PATH:-<none>}"

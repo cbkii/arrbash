@@ -52,11 +52,16 @@ write_aliases_file() {
 
   if grep -q "__ARR_" "$tmp_file"; then
     warn "Failed to replace all template placeholders in aliases file"
-    rm -f "$tmp_file"
+    arr_cleanup_temp_path "$tmp_file"
     return 1
   fi
 
-  mv "$tmp_file" "$aliases_file"
+  if mv "$tmp_file" "$aliases_file"; then
+    arr_unregister_temp_path "$tmp_file"
+  else
+    arr_cleanup_temp_path "$tmp_file"
+    return 1
+  fi
 
   if [[ "${ENABLE_CONFIGARR:-0}" == "1" ]]; then
     if ! grep -Fq "arr.config.sync" "$aliases_file" 2>/dev/null; then
@@ -502,11 +507,21 @@ DIAG
   diag_env_file=${diag_env_file//&/\&}
   diag_env_file=${diag_env_file//|/\|}
 
-  sed -e "s|__ARR_STACK_DIR__|${diag_dir_escaped}|g" \
+  if ! sed -e "s|__ARR_STACK_DIR__|${diag_dir_escaped}|g" \
     -e "s|__ARR_ENV_FILE__|${diag_env_file}|g" \
-    "$diag_script" >"$diag_tmp"
+    "$diag_script" >"$diag_tmp"; then
+    arr_cleanup_temp_path "$diag_tmp"
+    warn "Failed to render diagnostic script"
+    return 1
+  fi
 
-  mv "$diag_tmp" "$diag_script"
+  if mv "$diag_tmp" "$diag_script"; then
+    arr_unregister_temp_path "$diag_tmp"
+  else
+    arr_cleanup_temp_path "$diag_tmp"
+    warn "Failed to install diagnostic script"
+    return 1
+  fi
   ensure_file_mode "$diag_script" 755
   msg "Diagnostic script: ${diag_script}"
 }

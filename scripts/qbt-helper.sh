@@ -30,6 +30,7 @@ qbt_webui_mktemp() {
     printf '[qbt-helper] Failed to create temporary file near %s\n' "$base" >&2
     return 1
   fi
+  arr_register_temp_path "$tmp"
   printf '%s\n' "$tmp"
 }
 
@@ -52,10 +53,15 @@ qbt_webui_strip_crlf() {
       return 1
     fi
     if ! arr_read_sensitive_file "$conf" | tr -d '\r' >"$tmp"; then
-      rm -f "$tmp"
+      arr_cleanup_temp_path "$tmp"
       return 1
     fi
-    arr_run_sensitive_command mv -f "$tmp" "$conf"
+    if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
+      arr_unregister_temp_path "$tmp"
+    else
+      arr_cleanup_temp_path "$tmp"
+      return 1
+    fi
   fi
 }
 
@@ -75,7 +81,8 @@ qbt_webui_upsert_pref() {
   if ! tmp=$(qbt_webui_mktemp "$conf"); then
     return 1
   fi
-  if ! arr_run_sensitive_command awk -v target="$key" -v desired="$value" '
+  if ! arr_read_sensitive_file "$conf" \
+    | awk -v target="$key" -v desired="$value" '
     BEGIN {
       section = "";
       inserted = 0;
@@ -109,11 +116,16 @@ qbt_webui_upsert_pref() {
         print target "=" desired;
       }
     }
-  ' "$conf" >"$tmp"; then
-    rm -f "$tmp"
+  ' >"$tmp"; then
+    arr_cleanup_temp_path "$tmp"
     return 1
   fi
-  arr_run_sensitive_command mv -f "$tmp" "$conf"
+  if arr_run_sensitive_command mv -f "$tmp" "$conf"; then
+    arr_unregister_temp_path "$tmp"
+  else
+    arr_cleanup_temp_path "$tmp"
+    return 1
+  fi
 }
 
 qbt_webui_pref_value() {
@@ -170,7 +182,8 @@ qbt_webui_enforce() {
   qbt_webui_upsert_pref "$conf" 'WebUI\\Address' "$address" || return 1
   qbt_webui_upsert_pref "$conf" 'WebUI\\Port' "$port" || return 1
 
-  if ! LC_ALL=C arr_run_sensitive_command grep -E '^(WebUI\\Address|WebUI\\Port)=' "$conf" >/dev/null; then
+  if ! arr_read_sensitive_file "$conf" \
+    | LC_ALL=C grep -E '^(WebUI\\Address|WebUI\\Port)=' >/dev/null; then
     printf '[qbt-helper] Failed to assert WebUI prefs in %s\n' "$conf" >&2
     return 1
   fi
@@ -525,15 +538,21 @@ update_whitelist() {
     if ! tmp=$(arr_mktemp_file); then
       die "Failed to create temporary whitelist file"
     fi
-    if ! arr_run_sensitive_command awk '!(/^WebUI\\AuthSubnetWhitelistEnabled=/ || /^WebUI\\AuthSubnetWhitelist=/)' "$cfg" >"$tmp"; then
-      rm -f "$tmp"
+    if ! arr_read_sensitive_file "$cfg" \
+      | awk '!(/^WebUI\\AuthSubnetWhitelistEnabled=/ || /^WebUI\\AuthSubnetWhitelist=/)' >"$tmp"; then
+      arr_cleanup_temp_path "$tmp"
       die "Failed to prune existing whitelist entries"
     fi
     {
       printf 'WebUI\\AuthSubnetWhitelistEnabled=true\n'
       printf 'WebUI\\AuthSubnetWhitelist=%s\n' "$subnet"
     } >>"$tmp"
-    arr_run_sensitive_command mv -f "$tmp" "$cfg"
+    if arr_run_sensitive_command mv -f "$tmp" "$cfg"; then
+      arr_unregister_temp_path "$tmp"
+    else
+      arr_cleanup_temp_path "$tmp"
+      die "Failed to promote whitelist changes"
+    fi
     ensure_secret_file_mode "$cfg"
   else
     log_warn "Config file not found at $cfg; whitelist not updated"

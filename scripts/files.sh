@@ -334,6 +334,7 @@ arr_safe_compose_write() {
   fi
 
   if mv "$tmp" "$target"; then
+    arr_unregister_temp_path "$tmp"
     return 0
   fi
 
@@ -342,6 +343,7 @@ arr_safe_compose_write() {
   if [[ -n "$backup_created" && -f "$backup_created" ]]; then
     cp -f "$backup_created" "$target" 2>/dev/null || true
   fi
+  arr_cleanup_temp_path "$tmp"
   return 1
 }
 
@@ -388,7 +390,7 @@ arr_compose_trim_log() {
   fi
 
   if ! tail -c "$max_bytes" "$log_file" >"$tmp" 2>/dev/null; then
-    rm -f "$tmp" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp"
     return 0
   fi
 
@@ -398,14 +400,22 @@ arr_compose_trim_log() {
     local tmp2=""
     if tmp2="$(arr_mktemp_file "${log_file}.trimline.XXXXXX")"; then
       if tail -n +2 "$tmp" >"$tmp2" 2>/dev/null; then
-        mv "$tmp2" "$tmp" 2>/dev/null || rm -f "$tmp2" 2>/dev/null || true
+        if mv "$tmp2" "$tmp" 2>/dev/null; then
+          arr_unregister_temp_path "$tmp2"
+        else
+          arr_cleanup_temp_path "$tmp2"
+        fi
       else
-        rm -f "$tmp2" 2>/dev/null || true
+        arr_cleanup_temp_path "$tmp2"
       fi
     fi
   fi
 
-  mv "$tmp" "$log_file" 2>/dev/null || rm -f "$tmp" 2>/dev/null || true
+  if mv "$tmp" "$log_file" 2>/dev/null; then
+    arr_unregister_temp_path "$tmp"
+  else
+    arr_cleanup_temp_path "$tmp"
+  fi
 }
 
 arr_compose_prepare_log_file() {
@@ -529,12 +539,13 @@ arr_compose_run_yq_roundtrip() {
 
   if yq eval --no-colors --indent 2 '.' "$staging" >"$tmp" 2>>"$log_file"; then
     if cmp -s "$staging" "$tmp" 2>/dev/null; then
-      rm -f "$tmp" 2>/dev/null || true
+      arr_cleanup_temp_path "$tmp"
       arr_compose_log_message "$log_file" "yq canonicalization produced no structural changes"
       return 0
     fi
 
     if mv "$tmp" "$staging" 2>/dev/null; then
+      arr_unregister_temp_path "$tmp"
       local sha_after=""
       sha_after="$(sha256sum "$staging" 2>/dev/null | awk '{print $1}')"
       arr_compose_log_message "$log_file" "yq canonicalization updated compose (sha ${sha_before:0:8} → ${sha_after:0:8})"
@@ -542,13 +553,13 @@ arr_compose_run_yq_roundtrip() {
       return 0
     fi
 
-    rm -f "$tmp" 2>/dev/null || true
+    arr_cleanup_temp_path "$tmp"
     arr_compose_log_message "$log_file" "Failed to promote yq canonicalization result"
     return 1
   fi
 
   arr_compose_log_message "$log_file" "Primary yq canonicalization failed; attempting fallback yq -i '.'"
-  rm -f "$tmp" 2>/dev/null || true
+  arr_cleanup_temp_path "$tmp"
 
   local yq_output=""
   local yq_status=0
@@ -651,11 +662,12 @@ arr_compose_replace_line() {
   ' "$target" >"$tmp" 2>/dev/null; then
     unset REPLACEMENT_CONTENT
     if mv "$tmp" "$target" 2>/dev/null; then
+      arr_unregister_temp_path "$tmp"
       return 0
     fi
   fi
 
-  rm -f "$tmp" 2>/dev/null || true
+  arr_cleanup_temp_path "$tmp"
   return 1
 }
 
@@ -852,12 +864,13 @@ arr_compose_ensure_document_start() {
   fi
 
   if mv "$tmp" "$staging" 2>/dev/null; then
+    arr_unregister_temp_path "$tmp"
     arr_compose_log_message "$log_file" "Inserted YAML document start delimiter"
     printf '%s' "inserted YAML document start delimiter"
     return 0
   fi
 
-  rm -f "$tmp" 2>/dev/null || true
+  arr_cleanup_temp_path "$tmp"
   return 1
 }
 
@@ -886,17 +899,18 @@ arr_compose_collapse_blank_runs() {
   } END {exit 0}' "$staging" >"$tmp" 2>/dev/null; then
     if ! cmp -s "$staging" "$tmp" 2>/dev/null; then
       if mv "$tmp" "$staging" 2>/dev/null; then
+        arr_unregister_temp_path "$tmp"
         arr_compose_log_message "$log_file" "Collapsed consecutive blank lines"
         printf '%s' "collapsed consecutive blank lines"
         return 0
       fi
     else
-      rm -f "$tmp" 2>/dev/null || true
+      arr_cleanup_temp_path "$tmp"
       return 0
     fi
   fi
 
-  rm -f "$tmp" 2>/dev/null || true
+  arr_cleanup_temp_path "$tmp"
   return 1
 }
 
@@ -2078,17 +2092,17 @@ YAML
   printf '\n' >>"$tmp"
 
   if ! verify_single_level_env_placeholders "$tmp"; then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Generated docker-compose.yml contains nested environment placeholders"
   fi
 
   if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Generated docker-compose.yml contains unexpected environment placeholders"
   fi
 
   if ! arr_compose_autorepair_and_validate "$tmp" "$compose_path"; then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Compose validation failed (see logs/compose-repair.log)"
   fi
 
@@ -2604,17 +2618,17 @@ YAML
   printf '\n' >>"$tmp"
 
   if ! verify_single_level_env_placeholders "$tmp"; then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Generated docker-compose.yml contains nested environment placeholders"
   fi
 
   if ! arr_verify_compose_placeholders "$tmp" "${ARR_ENV_FILE:-}"; then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Generated docker-compose.yml contains unexpected environment placeholders"
   fi
 
   if ! arr_compose_autorepair_and_validate "$tmp" "$compose_path"; then
-    rm -f "$tmp"
+    arr_cleanup_temp_path "$tmp"
     die "Compose validation failed (see logs/compose-repair.log)"
   fi
 

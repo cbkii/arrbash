@@ -79,19 +79,16 @@ rewrite_hosts_file() {
   if ! tmp="$(arr_mktemp_file "${file}.XXXXXX")"; then
     die "Unable to create temporary file for ${file}"
   fi
-  trap 'rm -f "${tmp}"' EXIT
 
   printf '%s\n' "${content}" >"${tmp}"
   chmod 644 "${tmp}" 2>/dev/null || true
 
   if ! cat "${tmp}" >"${file}" 2>/dev/null; then
-    rm -f "${tmp}"
-    trap - EXIT
+    arr_cleanup_temp_path "${tmp}"
     die "Failed to update ${file}; try running with elevated privileges"
   fi
 
-  rm -f "${tmp}"
-  trap - EXIT
+  arr_cleanup_temp_path "${tmp}"
 }
 
 json_encode_array() {
@@ -203,7 +200,7 @@ configure_docker_dns() {
     if command -v jq >/dev/null 2>&1; then
       if ! jq --argjson dns "${dns_json}" '.dns = $dns' "${daemon_json}" >"${tmp}" 2>/dev/null; then
         warn "Failed to update ${daemon_json} with jq; leaving existing configuration untouched."
-        rm -f "${tmp}"
+        arr_cleanup_temp_path "${tmp}"
         return 1
       fi
     elif command -v python3 >/dev/null 2>&1; then
@@ -223,18 +220,18 @@ with open(target, "w", encoding="utf-8") as fh:
     json.dump(data, fh, indent=2)
 PYTHON
         warn "Failed to update ${daemon_json} with python3; leaving existing configuration untouched."
-        rm -f "${tmp}"
+        arr_cleanup_temp_path "${tmp}"
         return 1
       fi
     else
       warn "Neither jq nor python3 available; cannot update ${daemon_json}."
-      rm -f "${tmp}"
+      arr_cleanup_temp_path "${tmp}"
       return 1
     fi
   else
     if ! printf '{"dns": %s}\n' "${dns_json}" >"${tmp}" 2>/dev/null; then
       warn "Failed to write Docker daemon DNS configuration."
-      rm -f "${tmp}"
+      arr_cleanup_temp_path "${tmp}"
       return 1
     fi
   fi
@@ -242,9 +239,10 @@ PYTHON
   chmod 644 "${tmp}" 2>/dev/null || true
   if ! mv -f "${tmp}" "${daemon_json}" 2>/dev/null; then
     warn "Unable to install ${daemon_json}; check permissions."
-    rm -f "${tmp}"
+    arr_cleanup_temp_path "${tmp}"
     return 1
   fi
+  arr_unregister_temp_path "${tmp}"
 
   log "Configured Docker daemon DNS chain: ${dns_chain[*]}"
 
