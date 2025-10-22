@@ -26,17 +26,44 @@ arr_expand_path_tokens() {
   local expanded="${raw}"
   local token
   local value
+  local prev=""
+  local -A seen_states=()
+  local -a unresolved_tokens=()
+  local iteration=0
+  local max_iterations=64
 
   [[ -n "${expanded}" ]] || { printf '%s\n' "${expanded}"; return 0; }
 
   while [[ "${expanded}" =~ __([A-Z0-9_]+)__ ]]; do
-    token="${BASH_REMATCH[1]}"
-    value="${!token:-}"
-    if [[ -n "${value}" ]]; then
-      expanded="${expanded//__${token}__/${value}}"
-    else
-      expanded="${expanded//__${token}__/}"
+    ((iteration++))
+    if (( iteration > max_iterations )); then
+      break
     fi
+
+    if [[ -n "${seen_states["$expanded"]:-}" ]]; then
+      break
+    fi
+    seen_states["$expanded"]=1
+
+    token="${BASH_REMATCH[1]}"
+    value="${!token-}"
+
+    if [[ -n "${value}" ]]; then
+      prev="${expanded}"
+      expanded="${expanded//__${token}__/${value}}"
+      if [[ "${expanded}" == "${prev}" ]]; then
+        expanded="${prev//__${token}__/%%UNRESOLVED:${token}%%}"
+        unresolved_tokens+=("${token}")
+      fi
+    else
+      expanded="${expanded//__${token}__/%%UNRESOLVED:${token}%%}"
+      unresolved_tokens+=("${token}")
+    fi
+  done
+
+  local unresolved
+  for unresolved in "${unresolved_tokens[@]}"; do
+    expanded="${expanded//%%UNRESOLVED:${unresolved}%%/__${unresolved}__}"
   done
 
   printf '%s\n' "${expanded}"
