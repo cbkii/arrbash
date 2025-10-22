@@ -64,7 +64,7 @@ verify_permissions() {
     "${ARR_ENV_FILE}"
     "${ARR_USERCONF_PATH}"
     "${ARRCONF_DIR}/proton.auth"
-    "${ARR_DOCKER_DIR}/qbittorrent/qBittorrent.conf"
+    "${ARR_DOCKER_DIR}/qbittorrent/qBittorrent/qBittorrent.conf"
     "${ARR_STACK_DIR}/.aliasarr"
     "${ARR_DOCKER_DIR}/configarr/secrets.yml"
   )

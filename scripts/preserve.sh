@@ -110,14 +110,11 @@ hydrate_qbt_host_port_from_env_file() {
 hydrate_qbt_webui_port_from_config() {
   local config_dir
   config_dir="$(arr_docker_data_root)/qbittorrent"
-  local primary_conf="${config_dir}/qBittorrent.conf"
-  local legacy_conf="${config_dir}/qBittorrent/qBittorrent.conf"
+  local primary_conf="${config_dir}/qBittorrent/qBittorrent.conf"
   local candidate=""
 
   if [[ -f "$primary_conf" ]]; then
     candidate="$primary_conf"
-  elif [[ -f "$legacy_conf" ]]; then
-    candidate="$legacy_conf"
   else
     return 0
   fi

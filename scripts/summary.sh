@@ -79,9 +79,13 @@ show_summary() {
     ip_hint="<LAN_IP>"
   fi
 
+  local host_hint
+  host_hint="$(arr_host_access_hint)"
+  local prowlarr_hint="http://${host_hint}:${QBT_PORT}"
+
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
     msg "VPN Mode: split (only qbittorrent behind VPN)"
-    msg "Configure *Arr download client host as: http://${ip_hint}:${QBT_PORT}"
+    msg "Configure *Arr download client host as: ${prowlarr_hint}"
   else
     msg "VPN Mode: full-tunnel (all services through VPN)"
     warn "Consider SPLIT_VPN=1 for improved indexer reliability."

@@ -5,7 +5,7 @@ set -euo pipefail
 
 # --- qBittorrent WebUI enforcement helpers (shared by init + host modes) ---
 
-qbt_webui_conf_path_default="/config/qBittorrent.conf"
+qbt_webui_conf_path_default="/config/qBittorrent/qBittorrent.conf"
 qbt_webui_hook_path_default="/custom-cont-init.d/00-qbt-webui"
 qbt_webui_restart_state="/tmp/qbt-webui-enforce.timestamp"
 qbt_webui_restart_interval_default=60
@@ -447,7 +447,7 @@ webui_domain() {
 
 # Computes path to qBittorrent.conf within dockarr tree
 config_file_path() {
-  printf '%s/qbittorrent/qBittorrent.conf' "$DOCKER_DATA"
+  printf '%s\n' "${DOCKER_DATA}/qbittorrent/qBittorrent/qBittorrent.conf"
 }
 
 # Stops qBittorrent container quietly before config edits

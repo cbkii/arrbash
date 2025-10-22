@@ -1599,6 +1599,40 @@ prepare_env_context() {
   else
     GLUETUN_FIREWALL_INPUT_PORTS=""
   fi
+  local publish_qbt_via_gluetun=0
+  local qbt_publish_port_candidate
+  qbt_publish_port_candidate="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+  if [[ -n "$qbt_publish_port_candidate" ]]; then
+    publish_qbt_via_gluetun=1
+  fi
+  if ((publish_qbt_via_gluetun)); then
+    local qbt_publish_port
+    qbt_publish_port="$qbt_publish_port_candidate"
+    if [[ -z "$qbt_publish_port" || ! "$qbt_publish_port" =~ ^[0-9]+$ ]]; then
+      local port_display="${QBT_PORT:-${QBT_INT_PORT:-<unset>}}"
+      die "Invalid qBittorrent WebUI port '${port_display}'; set QBT_PORT in ${userconf_path} to a numeric value."
+    fi
+    local firewall_ports_csv=""
+    firewall_ports_csv="$(normalize_csv "${GLUETUN_FIREWALL_INPUT_PORTS:-}")"
+    GLUETUN_FIREWALL_INPUT_PORTS="$firewall_ports_csv"
+    local has_qbt_port=0
+    if [[ -n "$firewall_ports_csv" ]]; then
+      local -a _firewall_tokens=()
+      IFS=',' read -ra _firewall_tokens <<<"$firewall_ports_csv"
+      local token
+      for token in "${_firewall_tokens[@]}"; do
+        token="${token//[[:space:]]/}"
+        if [[ "$token" == "$qbt_publish_port" ]]; then
+          has_qbt_port=1
+          break
+        fi
+      done
+    fi
+    if ((has_qbt_port == 0)); then
+      local firewall_display="${firewall_ports_csv:-<unset>}"
+      die "Gluetun FIREWALL_INPUT_PORTS (${firewall_display}) must include qBittorrent port ${qbt_publish_port}. Update ${userconf_path} or overrides to keep the WebUI reachable."
+    fi
+  fi
   # shellcheck disable=SC2034  # consumed by env template generation
   if type -t arr_derive_compose_profiles_csv >/dev/null 2>&1; then
     COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
@@ -2226,13 +2260,8 @@ services:
     ports:
       # Centralize host exposure since all services share gluetun's namespace
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-YAML
-
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
-  fi
 
   if ((include_caddy)); then
     cat <<'YAML' >>"$tmp"
@@ -3170,22 +3199,10 @@ write_qbt_config() {
   step "🧩 Writing qBittorrent config"
   local config_dir="${ARR_DOCKER_DIR}/qbittorrent"
   local runtime_dir="${config_dir}/qBittorrent"
-  local conf_file="${config_dir}/qBittorrent.conf"
-  local legacy_conf="${runtime_dir}/qBittorrent.conf"
+  local conf_file="${runtime_dir}/qBittorrent.conf"
 
   ensure_dir "$config_dir"
   ensure_dir "$runtime_dir"
-
-  if [[ -f "$legacy_conf" && ! -f "$conf_file" ]]; then
-    msg "  Migrating legacy config from ${legacy_conf}"
-    arr_run_sensitive_command mv -f "$legacy_conf" "$conf_file"
-    ensure_secret_file_mode "$conf_file"
-  fi
-
-  if [[ -f "$legacy_conf" ]]; then
-    msg "  Removing unused legacy config at ${legacy_conf}"
-    arr_run_sensitive_command rm -f "$legacy_conf"
-  fi
   local default_auth_whitelist="${LOCALHOST_IP}/32,::1/128"
   local qb_lan_whitelist=""
   if qb_lan_whitelist="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
@@ -3323,6 +3340,28 @@ EOF
   )"
 
   atomic_write "$conf_file" "$updated_content" "$SECRET_FILE_MODE"
+}
+
+ensure_qbt_webui_config_ready() {
+  local config_root="${ARR_DOCKER_DIR}/qbittorrent"
+  local canonical_conf="${config_root}/qBittorrent/qBittorrent.conf"
+  local legacy_conf="${config_root}/qBittorrent.conf"
+
+  if [[ -f "$canonical_conf" ]]; then
+    if [[ -f "$legacy_conf" ]]; then
+      warn "Removing legacy qBittorrent.conf at ${legacy_conf}"
+      if ! arr_run_sensitive_command rm -f "$legacy_conf"; then
+        warn "Could not remove legacy qBittorrent.conf at ${legacy_conf}"
+      fi
+    fi
+    return 0
+  fi
+
+  if [[ -f "$legacy_conf" ]]; then
+    warn "Legacy qBittorrent.conf detected at ${legacy_conf}; move it to ${canonical_conf}."
+  fi
+
+  die "Missing qBittorrent WebUI config at ${canonical_conf}. Create the file before starting qbittorrent."
 }
 
 ensure_qbt_config() {
