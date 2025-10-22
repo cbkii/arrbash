@@ -1390,19 +1390,19 @@ log_error() {
   printf '[%s] ERROR: %s\n' "$(arr_timestamp)" "$*" >&2
 }
 
-# User-facing info message with optional color
+# User-facing info message without additional styling
 msg() {
   if msg_color_supported; then
-    printf '%b%s%b\n' "$CYAN" "$*" "$RESET"
+    printf '%b%s%b\n' "$BLUE" "$*" "$RESET"
   else
     printf '%s\n' "$*"
   fi
 }
 
-# User-facing step banner with bold/bright styling
+# User-facing step banner with bold styling
 step() {
   if msg_color_supported; then
-    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BOLD}${BLUE}" "$*" "$RESET"
+    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BLUE}${BOLD}" "$*" "$RESET"
   else
     printf '[STEP] %s\n' "$*"
   fi
