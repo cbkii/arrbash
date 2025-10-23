@@ -38,7 +38,7 @@ vpn_auto_reconnect_speed_threshold_bytes() {
   if ((kbps <= 0)); then
     kbps=12
   fi
-  printf '%s' $((kbps * 125))
+  printf '%s' $((kbps * 1024))
 }
 
 # Determines interval between throughput checks in seconds

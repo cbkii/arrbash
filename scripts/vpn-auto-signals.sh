@@ -8,6 +8,46 @@ if [[ -n "${__VPN_AUTO_SIGNALS_LOADED:-}" ]]; then
 fi
 __VPN_AUTO_SIGNALS_LOADED=1
 
+vpn_auto_escape_json_string() {
+  local input="${1-}"
+  local output=""
+  local char=""
+  local code=""
+  local hex=""
+  local LC_ALL=C
+
+  while IFS= read -r -n1 char || [[ -n "$char" ]]; do
+    case "$char" in
+      $'\n')
+        output+=$'\\n'
+        ;;
+      $'\r')
+        output+=$'\\r'
+        ;;
+      $'\t')
+        output+=$'\\t'
+        ;;
+      '"')
+        output+=$'\\"'
+        ;;
+      '\\')
+        output+=$'\\\\'
+        ;;
+      *)
+        printf -v code '%d' "'$char"
+        if ((code < 32)); then
+          printf -v hex '%02X' "$code"
+          output+="\\u00${hex}"
+        else
+          output+="$char"
+        fi
+        ;;
+    esac
+  done <<<"$input"
+
+  printf '%s' "$output"
+}
+
 vpn_auto_reconnect_override_path() {
   printf '%s/.vpn-auto-reconnect-%s' "${ARR_STACK_DIR:-${REPO_ROOT:-$(pwd)}}" "$1"
 }
@@ -135,16 +175,53 @@ vpn_auto_reconnect_append_history() {
         '{ts:$ts,action:$action,country:($country==""?null:$country),success:$success,reason:($reason==""?null:$reason),consecutive_low:$consecutive,retry_total:$retry,jitter:$jitter,classification:$classification}'
     )"
   else
-    local escaped_country="$country"
-    escaped_country="${escaped_country//\\/\\\\}"
-    escaped_country="${escaped_country//\"/\\\"}"
-    local escaped_reason="$reason"
-    escaped_reason="${escaped_reason//\\/\\\\}"
-    escaped_reason="${escaped_reason//\"/\\\"}"
-    line="{\"ts\":\"$ts\",\"action\":\"$action\",\"country\":\"$escaped_country\",\"success\":$success_json,\"reason\":\"$escaped_reason\",\"consecutive_low\":$consecutive,\"retry_total\":$retry_total,\"jitter\":$jitter_value,\"classification\":\"$classification_value\"}"
+    local ts_json
+    ts_json="\"$(vpn_auto_escape_json_string "$ts")\""
+    local action_json
+    action_json="\"$(vpn_auto_escape_json_string "$action")\""
+    local classification_json
+    classification_json="\"$(vpn_auto_escape_json_string "$classification_value")\""
+    local country_json="null"
+    if [[ -n "$country" ]]; then
+      country_json="\"$(vpn_auto_escape_json_string "$country")\""
+    fi
+    local reason_json="null"
+    if [[ -n "$reason" ]]; then
+      reason_json="\"$(vpn_auto_escape_json_string "$reason")\""
+    fi
+    line="{\"ts\":${ts_json},\"action\":${action_json},\"country\":${country_json},\"success\":$success_json,\"reason\":${reason_json},\"consecutive_low\":$consecutive,\"retry_total\":$retry_total,\"jitter\":$jitter_value,\"classification\":${classification_json}}"
   fi
   printf '%s\n' "$line" >>"$file"
   ensure_nonsecret_file_mode "$file"
+
+  local max_entries="${VPN_AUTO_HISTORY_MAX_LINES:-500}"
+  [[ "$max_entries" =~ ^[0-9]+$ ]] || max_entries=500
+  if ((max_entries <= 0)); then
+    max_entries=500
+  fi
+
+  local current_lines="0"
+  if current_lines="$(LC_ALL=C wc -l <"$file" 2>/dev/null | tr -d '[:space:]')"; then
+    [[ "$current_lines" =~ ^[0-9]+$ ]] || current_lines=0
+  else
+    current_lines=0
+  fi
+
+  if ((current_lines > max_entries)); then
+    local tmp_trim=""
+    if tmp_trim="$(arr_mktemp_file "${file}.trim.XXXXXX")"; then
+      if LC_ALL=C tail -n "$max_entries" "$file" >"$tmp_trim" 2>/dev/null; then
+        if mv "$tmp_trim" "$file" 2>/dev/null; then
+          arr_unregister_temp_path "$tmp_trim"
+          ensure_nonsecret_file_mode "$file"
+        else
+          arr_cleanup_temp_path "$tmp_trim"
+        fi
+      else
+        arr_cleanup_temp_path "$tmp_trim"
+      fi
+    fi
+  fi
 }
 
 # Updates failure history for a country to discourage rapid retries

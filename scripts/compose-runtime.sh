@@ -523,12 +523,24 @@ arr_compose_attempt_yaml_fixes() {
         continue
       fi
       arr_compose_log_message "$log_file" "Removing yamllint empty-line violation at ${line_no}"
-      if sed -i "${line_no}d" "$staging" 2>>"$log_file"; then
-        ((removed++))
-        needs_rerun=1
-        changed=1
+      local tmp_delete=""
+      if ! tmp_delete="$(arr_mktemp_file "${staging}.blank.XXXXXX")"; then
+        arr_compose_log_message "$log_file" "Failed to prepare temp file for blank line removal at ${line_no}"
+        continue
+      fi
+      if LC_ALL=C sed "${line_no}d" "$staging" >"$tmp_delete" 2>>"$log_file"; then
+        if mv "$tmp_delete" "$staging" 2>>"$log_file"; then
+          arr_unregister_temp_path "$tmp_delete"
+          ((removed++))
+          needs_rerun=1
+          changed=1
+        else
+          arr_compose_log_message "$log_file" "Failed to promote temp file for blank line removal at ${line_no}"
+          arr_cleanup_temp_path "$tmp_delete"
+        fi
       else
         arr_compose_log_message "$log_file" "Failed to remove blank line at ${line_no}"
+        arr_cleanup_temp_path "$tmp_delete"
       fi
     done
 
@@ -880,12 +892,24 @@ arr_compose_autorepair() {
       arr_compose_log_message "$log_file" "CRLF-terminated lines before fix (first 3):"
       printf '%s\n' "$crlf_samples" >>"$log_file" 2>/dev/null || true
     fi
-    if sed -i 's/\r$//' "$staging" 2>>"$log_file"; then
-      summary+=("normalized CRLF line endings")
-      arr_compose_log_message "$log_file" "Normalized CRLF line endings"
-      validation_needed=1
+    local tmp_crlf=""
+    if tmp_crlf="$(arr_mktemp_file "${staging}.crlf.XXXXXX")"; then
+      if LC_ALL=C sed 's/\r$//' "$staging" >"$tmp_crlf" 2>>"$log_file"; then
+        if mv "$tmp_crlf" "$staging" 2>>"$log_file"; then
+          arr_unregister_temp_path "$tmp_crlf"
+          summary+=("normalized CRLF line endings")
+          arr_compose_log_message "$log_file" "Normalized CRLF line endings"
+          validation_needed=1
+        else
+          arr_compose_log_message "$log_file" "Failed to promote temp file after CRLF normalization"
+          arr_cleanup_temp_path "$tmp_crlf"
+        fi
+      else
+        arr_compose_log_message "$log_file" "Failed to normalize CRLF line endings"
+        arr_cleanup_temp_path "$tmp_crlf"
+      fi
     else
-      arr_compose_log_message "$log_file" "Failed to normalize CRLF line endings"
+      arr_compose_log_message "$log_file" "Failed to prepare temp file for CRLF normalization"
     fi
   fi
 
@@ -896,12 +920,24 @@ arr_compose_autorepair() {
       arr_compose_log_message "$log_file" "Tab characters before fix (first 3):"
       printf '%s\n' "$tab_samples" >>"$log_file" 2>/dev/null || true
     fi
-    if sed -i $'s/\t/  /g' "$staging" 2>>"$log_file"; then
-      summary+=("replaced tabs with spaces")
-      arr_compose_log_message "$log_file" "Replaced hard tabs with two spaces"
-      validation_needed=1
+    local tmp_tabs=""
+    if tmp_tabs="$(arr_mktemp_file "${staging}.tabs.XXXXXX")"; then
+      if LC_ALL=C sed $'s/\t/  /g' "$staging" >"$tmp_tabs" 2>>"$log_file"; then
+        if mv "$tmp_tabs" "$staging" 2>>"$log_file"; then
+          arr_unregister_temp_path "$tmp_tabs"
+          summary+=("replaced tabs with spaces")
+          arr_compose_log_message "$log_file" "Replaced hard tabs with two spaces"
+          validation_needed=1
+        else
+          arr_compose_log_message "$log_file" "Failed to promote temp file after replacing hard tabs"
+          arr_cleanup_temp_path "$tmp_tabs"
+        fi
+      else
+        arr_compose_log_message "$log_file" "Failed to replace hard tabs"
+        arr_cleanup_temp_path "$tmp_tabs"
+      fi
     else
-      arr_compose_log_message "$log_file" "Failed to replace hard tabs"
+      arr_compose_log_message "$log_file" "Failed to prepare temp file for tab replacement"
     fi
   fi
 

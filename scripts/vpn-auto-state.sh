@@ -8,6 +8,46 @@ if [[ -n "${__VPN_AUTO_STATE_LOADED:-}" ]]; then
 fi
 __VPN_AUTO_STATE_LOADED=1
 
+_escape_json_string() {
+  local input="${1-}"
+  local output=""
+  local char=""
+  local code=""
+  local hex=""
+  local LC_ALL=C
+
+  while IFS= read -r -n1 char || [[ -n "$char" ]]; do
+    case "$char" in
+      $'\n')
+        output+=$'\\n'
+        ;;
+      $'\r')
+        output+=$'\\r'
+        ;;
+      $'\t')
+        output+=$'\\t'
+        ;;
+      '"')
+        output+=$'\\"'
+        ;;
+      '\\')
+        output+=$'\\\\'
+        ;;
+      *)
+        printf -v code '%d' "'$char"
+        if ((code < 32)); then
+          printf -v hex '%02X' "$code"
+          output+="\\u00${hex}"
+        else
+          output+="$char"
+        fi
+        ;;
+    esac
+  done <<<"$input"
+
+  printf '%s' "$output"
+}
+
 # shellcheck shell=bash
 # VPN auto-reconnect helpers sourced by stack components
 #
@@ -502,6 +542,45 @@ vpn_auto_reconnect_write_state() {
         '{version:$version,updated:$now,consecutive_low:$consecutive_low,rotation_index:$rotation_index,last_country:$last_country,last_reconnect:($last_reconnect==""?null:$last_reconnect),last_status:$last_status,last_activity:($last_activity==""?null:$last_activity),last_low:($last_low==""?null:$last_low),cooldown_until:$cooldown_until,disabled_until:$disabled_until,auto_disabled:$auto_disabled,retry_backoff:$retry_backoff,retry_total:$retry_total,next_decision_at:$next_decision_at,rotation_day_epoch:$rotation_day_epoch,rotation_count_day:$rotation_count_day,classification:$classification,jitter_applied:$jitter_applied,next_possible_action:$next_possible_action,restart_failures:$restart_failures,failure_history:$failure_history}'
     )"
   else
+    local last_country_json
+    last_country_json="\"$(_escape_json_string "${VPN_AUTO_STATE_LAST_COUNTRY:-}")\""
+
+    local last_reconnect_raw="${VPN_AUTO_STATE_LAST_RECONNECT:-}"
+    local last_reconnect_json="null"
+    if [[ -n "$last_reconnect_raw" ]]; then
+      last_reconnect_json="\"$(_escape_json_string "$last_reconnect_raw")\""
+    fi
+
+    local last_status_json
+    last_status_json="\"$(_escape_json_string "${VPN_AUTO_STATE_LAST_STATUS:-}")\""
+
+    local last_activity_raw="${VPN_AUTO_STATE_LAST_ACTIVITY:-}"
+    local last_activity_json="null"
+    if [[ -n "$last_activity_raw" ]]; then
+      last_activity_json="\"$(_escape_json_string "$last_activity_raw")\""
+    fi
+
+    local last_low_raw="${VPN_AUTO_STATE_LAST_LOW:-}"
+    local last_low_json="null"
+    if [[ -n "$last_low_raw" ]]; then
+      last_low_json="\"$(_escape_json_string "$last_low_raw")\""
+    fi
+
+    local classification_json
+    classification_json="\"$(_escape_json_string "${VPN_AUTO_STATE_CLASSIFICATION:-monitoring}")\""
+
+    local failure_history_value="${VPN_AUTO_STATE_FAILURE_HISTORY:-{}}"
+    local failure_history_json
+    local trimmed_failure
+    trimmed_failure="$(printf '%s' "$failure_history_value" | LC_ALL=C sed '1s/^[[:space:]]*//' 2>/dev/null || printf '')"
+    if [[ -z "$trimmed_failure" ]]; then
+      failure_history_json='{}'
+    elif [[ "$trimmed_failure" == \{* || "$trimmed_failure" == \[* ]]; then
+      failure_history_json="$failure_history_value"
+    else
+      failure_history_json="\"$(_escape_json_string "$failure_history_value")\""
+    fi
+
     json=$(
       cat <<JSON
 {
@@ -509,11 +588,11 @@ vpn_auto_reconnect_write_state() {
   "updated": $(vpn_auto_reconnect_now_epoch),
   "consecutive_low": ${VPN_AUTO_STATE_CONSECUTIVE_LOW:-0},
   "rotation_index": ${VPN_AUTO_STATE_ROTATION_INDEX:-0},
-  "last_country": "${VPN_AUTO_STATE_LAST_COUNTRY:-}",
-  "last_reconnect": "${VPN_AUTO_STATE_LAST_RECONNECT:-}",
-  "last_status": "${VPN_AUTO_STATE_LAST_STATUS:-}",
-  "last_activity": "${VPN_AUTO_STATE_LAST_ACTIVITY:-}",
-  "last_low": "${VPN_AUTO_STATE_LAST_LOW:-}",
+  "last_country": ${last_country_json},
+  "last_reconnect": ${last_reconnect_json},
+  "last_status": ${last_status_json},
+  "last_activity": ${last_activity_json},
+  "last_low": ${last_low_json},
   "cooldown_until": ${VPN_AUTO_STATE_COOLDOWN_UNTIL:-0},
   "disabled_until": ${VPN_AUTO_STATE_DISABLED_UNTIL:-0},
   "auto_disabled": ${VPN_AUTO_STATE_AUTO_DISABLED:-0},
@@ -522,11 +601,11 @@ vpn_auto_reconnect_write_state() {
   "next_decision_at": ${VPN_AUTO_STATE_NEXT_DECISION:-0},
   "rotation_day_epoch": ${VPN_AUTO_STATE_ROTATION_DAY_EPOCH:-0},
   "rotation_count_day": ${VPN_AUTO_STATE_ROTATION_COUNT_DAY:-0},
-  "classification": "${VPN_AUTO_STATE_CLASSIFICATION:-monitoring}",
+  "classification": ${classification_json},
   "jitter_applied": ${VPN_AUTO_STATE_JITTER_APPLIED:-0},
   "next_possible_action": ${VPN_AUTO_STATE_NEXT_ACTION:-0},
   "restart_failures": ${VPN_AUTO_STATE_RESTART_FAILURES:-0},
-  "failure_history": ${VPN_AUTO_STATE_FAILURE_HISTORY:-{}}
+  "failure_history": ${failure_history_json}
 }
 JSON
     )
