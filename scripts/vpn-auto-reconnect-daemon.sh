@@ -7,8 +7,8 @@ ARR_STACK_DIR="${ARR_STACK_DIR:-${REPO_ROOT}}"
 
 # shellcheck source=scripts/common.sh
 . "${REPO_ROOT}/scripts/common.sh"
-# shellcheck source=scripts/vpn-auto-reconnect.sh
-. "${REPO_ROOT}/scripts/vpn-auto-reconnect.sh"
+# shellcheck source=scripts/vpn-auto-stack.sh
+. "${REPO_ROOT}/scripts/vpn-auto-stack.sh"
 
 # Prints daemon usage/help text
 print_usage() {
