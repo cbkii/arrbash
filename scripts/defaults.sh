@@ -14,13 +14,17 @@ arr_setup_defaults() {
     ARR_DOCKER_DIR="${default_docker_root}"
   fi
 
-  if [[ -n "${previous_stack_dir}" && "${previous_stack_dir}" != "${ARR_STACK_DIR}" ]]; then
-    local previous_env_file="${previous_stack_dir%/}/.env"
-    if [[ "${ARR_ENV_FILE:-}" == "${previous_env_file}" ]]; then
+  if ! declare -f arr_var_is_readonly >/dev/null 2>&1 || ! arr_var_is_readonly ARR_ENV_FILE; then
+    if [[ -n "${previous_stack_dir}" && "${previous_stack_dir}" != "${ARR_STACK_DIR}" ]]; then
+      local previous_env_file="${previous_stack_dir%/}/.env"
+      if [[ "${ARR_ENV_FILE:-}" == "${previous_env_file}" ]]; then
+        ARR_ENV_FILE="${ARR_STACK_DIR%/}/.env"
+      fi
+    fi
+    if [[ -z "${ARR_ENV_FILE:-}" ]]; then
       ARR_ENV_FILE="${ARR_STACK_DIR%/}/.env"
     fi
   fi
-  ARR_ENV_FILE="${ARR_ENV_FILE:-${ARR_STACK_DIR%/}/.env}"
 
   if [[ -n "${LAN_DOMAIN_SUFFIX:-}" ]]; then
     LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX#.}"
