@@ -17,18 +17,13 @@ if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
 fi
 
-ARR_USERCONF_OVERRIDE_PATH="${ARR_USERCONF_OVERRIDE_PATH:-}"
-_doctor_userconf_source="default"
-
-arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _doctor_userconf_source
+arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH
 
 if [[ -f "${ARR_USERCONF_PATH}" ]]; then
   # shellcheck disable=SC1091
   # shellcheck source=/dev/null
   . "${ARR_USERCONF_PATH}"
 fi
-
-unset _doctor_userconf_source
 
 # Uses ss to determine if a port is bound at a conflicting address
 port_in_use_with_ss() {

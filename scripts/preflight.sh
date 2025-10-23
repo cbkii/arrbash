@@ -745,8 +745,7 @@ preflight() {
   default_userconf_canon="$(arr_canonical_path "$default_userconf")"
 
   if [[ -z "${ARR_USERCONF_PATH:-}" ]]; then
-    local _pf_userconf_source="default"
-    arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _pf_userconf_source
+    arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH
   fi
 
   if [[ -n "${ARR_USERCONF_OVERRIDE_PATH:-}" && "${ARR_USERCONF_OVERRIDE_PATH}" == "${default_userconf_canon}" ]]; then
