@@ -49,7 +49,7 @@ mkdirs() {
       local profile="${ARR_PERMISSION_PROFILE:-strict}"
       case "$profile" in
         collab | collaborative)
-          if [[ "${PGID:-}" == "0" ]]; then
+          if [[ -z "${PGID:-}" || "${PGID:-}" == "0" ]]; then
             fallback_mode="750"
           else
             fallback_mode="770"
