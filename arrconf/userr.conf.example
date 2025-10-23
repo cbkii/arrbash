@@ -13,26 +13,25 @@ ARR_PERMISSION_PROFILE="strict"      # default: strict; strict=600/700, collab=6
 
 # --- Essential paths ---
 ARR_DATA_ROOT="${HOME}/srv"      # default: ${HOME}/srv; stack data root (~/srv)
-ARR_STACK_DIR="${ARR_DATA_ROOT}/${STACK}"      # default: ${ARR_DATA_ROOT}/${STACK}; compose + scripts
-ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"      # default: ${ARRCONF_DIR}; config & secrets dir
-
-DOWNLOADS_DIR="${HOME}/Downloads"      # default: ${HOME}/Downloads; qBittorrent active downloads
-COMPLETED_DIR="${DOWNLOADS_DIR}/completed"      # default: ${COMPLETED_DIR}; qBittorrent completed path
-
+ARR_STACK_DIR="${ARR_DATA_ROOT}/${STACK}"      # default: ${ARR_DATA_ROOT}/${STACK}; compose stacks & scripts
+ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"      # default: ${ARR_DATA_ROOT}/${STACK}configs; config & secrets dir
+ARR_USERCONF_ALLOW_OUTSIDE="0"      # default: 0; allow userr.conf outside ARR_DATA_ROOT when 1
 MEDIA_DIR="${ARR_DATA_ROOT}/media"      # default: ${ARR_DATA_ROOT}/media; library root under ARR_DATA_ROOT
 TV_DIR="${MEDIA_DIR}/Shows"      # default: ${MEDIA_DIR}/Shows; Sonarr library
 MOVIES_DIR="${MEDIA_DIR}/Movies"      # default: ${MEDIA_DIR}/Movies; Radarr library
-# SUBS_DIR="${MEDIA_DIR}/subs"      # default: ${MEDIA_DIR}/subs; optional Bazarr subtitles path
+SUBS_DIR="${MEDIA_DIR}/subs"      # default: ${MEDIA_DIR}/subs; optional Bazarr subtitles path
+DOWNLOADS_DIR="${HOME}/Downloads"      # default: ${HOME}/Downloads; qBittorrent active downloads
+COMPLETED_DIR="${DOWNLOADS_DIR}/completed"      # default: ${DOWNLOADS_DIR}/completed; qBittorrent completed path
 
 # --- Internal/resolution paths (rarely touched) ---
-# ARR_ENV_FILE="${ARR_STACK_DIR}/.env"      # default: ${ARR_ENV_FILE}; generated secrets file
-# ARR_DOCKER_DIR="${ARR_STACK_DIR}/dockarr"      # default: ${ARR_DOCKER_DIR}; Docker volumes & persistent data
-# ARR_USERCONF_PATH="${ARRCONF_DIR}/userr.conf"      # default: ${ARRCONF_DIR}/userr.conf; location of this file
+ARR_ENV_FILE="${ARR_STACK_DIR}/.env"      # default: ${ARR_STACK_DIR}/.env; generated secrets file
+ARR_DOCKER_DIR="${ARR_STACK_DIR}/dockarr"      # default: ${ARR_STACK_DIR}/dockarr; Docker volumes & persistent data
+ARR_USERCONF_PATH="${ARRCONF_DIR}/userr.conf"      # default: ${ARRCONF_DIR}/userr.conf; location of this file
 # ARR_LOG_DIR="${ARR_STACK_DIR}/logs"      # default: ${ARR_STACK_DIR}/logs; runtime/service logs
 # ARR_INSTALL_LOG="${ARR_LOG_DIR}/${STACK}-install.log"      # default: ${ARR_LOG_DIR}/${STACK}-install.log; installer log path
 
 # --- Network basics (local machine) ---
-LAN_IP=        # default: empty; bind services to specific LAN IP (set reservation first)
+LAN_IP=      # default: empty; bind services to specific LAN IP (set reservation first)
 LOCALHOST_IP="127.0.0.1"      # default: 127.0.0.1; loopback used by Gluetun control API
 EXPOSE_DIRECT_PORTS="1"      # default: 1; publish WebUIs on http://${LAN_IP}:PORT (LAN_IP required)
 
@@ -57,6 +56,7 @@ SABNZBD_PORT="${SABNZBD_INT_PORT}"      # default: ${SABNZBD_INT_PORT} (8080); S
 CADDY_HTTP_PORT="80"      # default: 80; exposed HTTP port for health/apps
 CADDY_HTTPS_PORT="443"      # default: 443; exposed HTTPS port for proxy endpoints
 GLUETUN_CONTROL_PORT="8000"      # default: 8000; Gluetun control API port
+
 GLUETUN_CONNECTIVITY_PROBE_URLS="https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace"      # default: https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace; external URLs used to verify VPN connectivity
 
 # --- DNS & domains (if enabled) ---
@@ -75,6 +75,7 @@ CADDY_LAN_CIDRS="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"  
 # --- qBitTorrent Client credentials (change on first run) ---
 QBT_USER="admin"      # default: admin; initial qBittorrent username
 QBT_PASS="adminadmin"      # default: adminadmin; initial qBittorrent password
+QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128; CIDRs that bypass qBittorrent login
 
 # --- VPN basics (connectivity) ---
 SPLIT_VPN="1"      # default: 0=VPN for full stack; 1=restrict VPN to qBittorrent only
@@ -88,12 +89,12 @@ VPN_AUTO_RECONNECT_ENABLED="0"      # default: 0; enable background VPN monitor
 VPN_SPEED_THRESHOLD_KBPS="12"      # default: 12; kbps threshold before reconnect
 VPN_CHECK_INTERVAL_MINUTES="20"      # default: 20; minutes between throughput samples
 VPN_CONSECUTIVE_CHECKS="3"      # default: 3; low samples required before reconnecting
-VPN_ALLOWED_HOURS_START=""      # default: empty; optional rotation window start hour
-VPN_ALLOWED_HOURS_END=""      # default: empty; optional rotation window end hour
 VPN_COOLDOWN_MINUTES="60"      # default: 60; cooldown after reconnect
 VPN_MAX_RETRY_MINUTES="20"      # default: 20; retry budget before disabling
 VPN_ROTATION_MAX_PER_DAY="6"      # default: 6; max automatic reconnects per day (0=unlimited)
 VPN_ROTATION_JITTER_SECONDS="0"      # default: 0; random jitter added to reconnect timing
+VPN_ALLOWED_HOURS_START=""      # default: empty; optional rotation window start hour
+VPN_ALLOWED_HOURS_END=""      # default: empty; optional rotation window end hour
 
 # --- PF timing (advanced; optional, never blocking) ---
 PF_MAX_TOTAL_WAIT="60"      # default: 60; seconds to wait for forwarded port (legacy)
@@ -114,10 +115,10 @@ PF_ASYNC_LOG_FILE="port-forwarding.log"      # default: port-forwarding.log; asy
 SABNZBD_ENABLED="0"      # default: 0; enable SABnzbd container/helper
 SABNZBD_USE_VPN="0"      # default: 0; route SABnzbd through Gluetun
 SABNZBD_HOST="${LOCALHOST_IP}"      # default: ${LOCALHOST_IP} (127.0.0.1); sab-helper host
-SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"      # default: empty; auto-hydrated from sabnzbd.ini
 SABNZBD_CATEGORY="${STACK}"      # default: ${STACK}; helper job category
 SABNZBD_TIMEOUT="15"      # default: 15; sab-helper API timeout (seconds)
 ARRBASH_USENET_CLIENT="sabnzbd"      # default: sabnzbd; active Usenet client label
+SABNZBD_API_KEY="${SABNZBD_API_KEY:-REPLACE_WITH_SABNZBD_API_KEY}"      # default: empty; auto-hydrated from sabnzbd.ini
 
 # --- *Arr & automation defaults (ConfigArr) ---
 ENABLE_CONFIGARR="1"      # default: 1; enable ConfigArr sync container
@@ -136,9 +137,10 @@ ARR_JUNK_NEGATIVE_SCORE="-1000"      # default: -1000; junk term penalty
 ARR_X265_HD_NEGATIVE_SCORE="-200"      # default: -200; HD x265 penalty
 ARR_MULTI_NEGATIVE_SCORE="-50"      # default: -50; multi-audio penalty
 ARR_ENGLISH_POSITIVE_SCORE="50"      # default: 50; English release bonus
+ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rules
 SONARR_TRASH_TEMPLATE="sonarr-v4-quality-profile-web-1080p"      # default: sonarr-v4-quality-profile-web-1080p; Sonarr TRaSH template
 RADARR_TRASH_TEMPLATE="radarr-v5-quality-profile-hd-bluray-web"      # default: radarr-v5-quality-profile-hd-bluray-web; Radarr TRaSH template
-ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rules
+
 # --- ConfigArr custom format IDs (optional overrides; defaults in scripts/configarr-custom-formats.sh) ---
 # ARR_CF_IDS_LQ=("9c11cd3f07101cdba90a2d81cf0e56b4" "90a6f9a284dff5103f6346090e6280c8")      # default: see helper script; Low Quality formats
 # ARR_CF_IDS_LQ_TITLE=("e2315f990da2e2cbfc9fa5b7a6fcfe48" "e204b80c87be9497a8a6eaff48f72905")      # default: see helper script; Low Quality title matches
@@ -148,19 +150,18 @@ ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rul
 # ARR_CF_IDS_X265=("47435ece6b99a0b477caf360e79ba0bb" "dc98083864ea246d05a42df0d05f81cc")      # default: see helper script; x265 (HD) releases
 
 # --- Images (advanced users; specify tags in config) ---
-# GLUETUN_IMAGE="qmcgaw/gluetun:v3.40.0"      # default: qmcgaw/gluetun:v3.40.0; override Gluetun container tag
-# QBITTORRENT_IMAGE="lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415"      # default: lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415; override qBittorrent tag
-# SONARR_IMAGE="lscr.io/linuxserver/sonarr:4.0.15.2941-ls291"      # default: lscr.io/linuxserver/sonarr:4.0.15.2941-ls291; override Sonarr tag
-# RADARR_IMAGE="lscr.io/linuxserver/radarr:5.27.5.10198-ls283"      # default: lscr.io/linuxserver/radarr:5.27.5.10198-ls283; override Radarr tag
-# PROWLARR_IMAGE="lscr.io/linuxserver/prowlarr:latest"      # default: lscr.io/linuxserver/prowlarr:latest; override Prowlarr tag
-# BAZARR_IMAGE="lscr.io/linuxserver/bazarr:latest"      # default: lscr.io/linuxserver/bazarr:latest; override Bazarr tag
-# FLARR_IMAGE="ghcr.io/flaresolverr/flaresolverr:v3.3.21"      # default: ghcr.io/flaresolverr/flaresolverr:v3.3.21; override FlareSolverr tag
-# SABNZBD_IMAGE="lscr.io/linuxserver/sabnzbd:latest"      # default: lscr.io/linuxserver/sabnzbd:latest; override SABnzbd tag
-# CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"      # default: ghcr.io/raydak-labs/configarr:latest; override ConfigArr tag
+GLUETUN_IMAGE="qmcgaw/gluetun:v3.40.0"      # default: qmcgaw/gluetun:v3.40.0; override Gluetun container tag
+QBITTORRENT_IMAGE="lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415"      # default: lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415; override qBittorrent tag
+QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"      # default: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest; Vuetorrent WebUI mod
+SABNZBD_IMAGE="lscr.io/linuxserver/sabnzbd:latest"      # default: lscr.io/linuxserver/sabnzbd:latest; override SABnzbd tag
+SONARR_IMAGE="lscr.io/linuxserver/sonarr:4.0.15.2941-ls291"      # default: lscr.io/linuxserver/sonarr:4.0.15.2941-ls291; override Sonarr tag
+RADARR_IMAGE="lscr.io/linuxserver/radarr:5.27.5.10198-ls283"      # default: lscr.io/linuxserver/radarr:5.27.5.10198-ls283; override Radarr tag
+PROWLARR_IMAGE="lscr.io/linuxserver/prowlarr:latest"      # default: lscr.io/linuxserver/prowlarr:latest; override Prowlarr tag
+BAZARR_IMAGE="lscr.io/linuxserver/bazarr:latest"      # default: lscr.io/linuxserver/bazarr:latest; override Bazarr tag
+FLARR_IMAGE="ghcr.io/flaresolverr/flaresolverr:v3.3.21"      # default: ghcr.io/flaresolverr/flaresolverr:v3.3.21; override FlareSolverr tag
+CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"      # default: ghcr.io/raydak-labs/configarr:latest; override ConfigArr tag
 # CADDY_IMAGE="caddy:2.8.4"      # default: caddy:2.8.4; override Caddy tag
 # LOCALDNS_IMAGE="4km3/dnsmasq:2.90-r3"      # default: 4km3/dnsmasq:2.90-r3; override dnsmasq tag
-# QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"      # default: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest; Vuetorrent WebUI mod
-QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128; CIDRs that bypass qBittorrent login
 
 # --- Behaviour toggles ---
 # ASSUME_YES="0"      # default: 0; skip confirmation prompts when scripting installs
@@ -169,3 +170,4 @@ QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"      # default
 # SETUP_HOST_DNS="0"      # default: 0; run host DNS takeover helper
 # REFRESH_ALIASES="0"      # default: 0; regenerate helper aliases only
 ARR_COLOR_OUTPUT="1"      # default: 1; keep colorful CLI output (set 0 for monochrome)
+ARR_ALLOW_TAG_DOWNGRADE="0"      # default: 0; let ConfigArr relax image tags when 1

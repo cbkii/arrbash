@@ -35,7 +35,7 @@ arr_expand_path_tokens() {
   [[ -n "${expanded}" ]] || { printf '%s\n' "${expanded}"; return 0; }
 
   while [[ "${expanded}" =~ __([A-Z0-9_]+)__ ]]; do
-    ((iteration++))
+    ((++iteration))
     if (( iteration > max_iterations )); then
       break
     fi
