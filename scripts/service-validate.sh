@@ -72,12 +72,20 @@ preflight_compose_interpolation() {
   ensure_dir "$log_dir"
   local warn_log="${log_dir}/compose-interpolation.log"
 
+  # Truncate previous log to avoid stale reads
+  : >"$warn_log"
+
+  if ! command -v docker >/dev/null 2>&1 && ! command -v compose >/dev/null 2>&1; then
+    warn "docker/compose unavailable; skipping compose interpolation preflight."
+    return 0
+  fi
+
   if ! compose -f "$file" config >/dev/null 2>"$warn_log"; then
     printf '%s docker compose config failed; see %s\n' "$STACK_LABEL" "$warn_log" >&2
     exit 1
   fi
 
-  if LC_ALL=C grep -qE 'variable is not set' "$warn_log" 2>/dev/null; then
+  if [[ -s "$warn_log" ]] && LC_ALL=C grep -qE 'variable is not set' "$warn_log" 2>/dev/null; then
     printf '%s unresolved Compose variables detected:\n' "$STACK_LABEL" >&2
     LC_ALL=C grep -E 'variable is not set' "$warn_log" >&2 || true
     exit 1
