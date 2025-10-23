@@ -12,6 +12,16 @@
 #     • Optional jitter (VPN_ROTATION_JITTER_SECONDS) randomises restart timing for multi-host deployments.
 #     • Backoff budget persists across attempts and surfaces retry metadata in status.json.
 
+if ! declare -f arr_date_local >/dev/null 2>&1; then
+  __arr_time_guard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
+  if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
+    # shellcheck source=scripts/common.sh
+    . "${REPO_ROOT}/scripts/common.sh"
+  fi
+  unset __arr_time_guard_dir
+fi
+
 VPN_AUTO_RECONNECT_STATE_VERSION=2
 VPN_AUTO_RECONNECT_CURL_WARNED=0
 VPN_AUTO_RECONNECT_JQ_WARNED=0
@@ -205,7 +215,7 @@ vpn_auto_reconnect_pf_status_snapshot() {
 
 # UTC now helper (seconds) for consistent scheduling math
 vpn_auto_reconnect_now_epoch() {
-  date -u +%s
+  arr_now_epoch
 }
 
 # Converts epoch seconds to ISO8601; returns failure on invalid input
@@ -214,7 +224,7 @@ vpn_auto_reconnect_epoch_to_iso() {
   if [[ -z "$epoch" || ! "$epoch" =~ ^[0-9]+$ ]]; then
     return 1
   fi
-  date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ'
+  arr_epoch_to_local_iso8601 "$epoch"
 }
 
 # Parses ISO8601 string back to epoch seconds if valid
@@ -223,7 +233,7 @@ vpn_auto_reconnect_iso_to_epoch() {
   if [[ -z "$iso" ]]; then
     return 1
   fi
-  date -u -d "$iso" '+%s' 2>/dev/null || return 1
+  arr_iso_to_epoch "$iso" || return 1
 }
 
 # Splits comma-separated lists into trimmed lines for iteration
@@ -559,7 +569,7 @@ vpn_auto_reconnect_write_status() {
     VPN_AUTO_STATE_LAST_STATUS="$status_value"
   fi
   local now_iso
-  now_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  now_iso="$(arr_now_iso8601)"
   local rotation_cap
   rotation_cap="$(vpn_auto_reconnect_rotation_cap 2>/dev/null || printf '0')"
   [[ "$rotation_cap" =~ ^[0-9]+$ ]] || rotation_cap=0
@@ -716,11 +726,15 @@ vpn_auto_reconnect_jitter_seconds() {
   printf '%s' "$seconds"
 }
 
-# Normalizes current day start (UTC) for rotation counting
+# Normalizes current day start (local TZ) for rotation counting
 vpn_auto_reconnect_current_day_epoch() {
   local today
-  today="$(date -u '+%Y-%m-%d')"
-  date -u -d "${today}T00:00:00Z" '+%s' 2>/dev/null || printf '0'
+  today="$(arr_date_local '+%Y-%m-%d')"
+  if [[ -z "$today" ]]; then
+    printf '0'
+    return 0
+  fi
+  arr_date_local -d "${today} 00:00:00" '+%s' 2>/dev/null || printf '0'
 }
 
 # Resets daily rotation counters when date boundary crosses
@@ -786,7 +800,7 @@ vpn_auto_reconnect_inside_allowed_window() {
     return 0
   fi
   local now
-  now="$(date +%H)"
+  now="$(arr_date_local '+%H')"
   ((now += 0)) || true
   ((start_hour += 0)) || true
   ((end_hour += 0)) || true
@@ -905,7 +919,7 @@ vpn_auto_reconnect_append_history() {
   ensure_dir_mode "$dir" "$DATA_DIR_MODE"
 
   local ts
-  ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  ts="$(arr_now_iso8601)"
   local success_json
   if [[ "$success_flag" == "true" ]]; then
     success_json=true
@@ -1009,7 +1023,7 @@ vpn_auto_reconnect_ensure_fresh_session() {
     mtime="$(stat -c '%Y' "$cookie" 2>/dev/null || echo 0)"
     if [[ "$mtime" =~ ^[0-9]+$ ]]; then
       local now
-      now="$(date +%s)"
+      now="$(arr_now_epoch)"
       local age=$((now - mtime))
       if ((age > 3600)); then
         rm -f "$cookie"
@@ -1477,7 +1491,7 @@ vpn_auto_reconnect_process_once() {
   [[ "$previous_low" =~ ^[0-9]+$ ]] || previous_low=0
   if ((total_speed < threshold)); then
     if ((previous_low == 0)); then
-      vpn_auto_reconnect_record_low "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      vpn_auto_reconnect_record_low "$(arr_now_iso8601)"
     fi
     VPN_AUTO_STATE_CONSECUTIVE_LOW=$((previous_low + 1))
   else

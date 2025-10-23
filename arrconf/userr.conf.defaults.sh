@@ -51,6 +51,7 @@ PUID="${PUID:-$(id -u)}"
 PGID="${PGID:-$(id -g)}"
 
 # Location
+# Local timezone identifier (IANA tz database). Used for logs, scheduling, and backups.
 TIMEZONE="${TIMEZONE:-Australia/Sydney}"
 LAN_IP="${LAN_IP:-}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"

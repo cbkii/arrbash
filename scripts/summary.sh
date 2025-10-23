@@ -7,7 +7,12 @@ summary_format_epoch() {
     printf '(none)'
     return 0
   fi
-  date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf '%s' "$epoch"
+  local formatted=""
+  if ! formatted="$(arr_epoch_to_local_iso8601 "$epoch" 2>/dev/null)"; then
+    printf '%s' "$epoch"
+    return 0
+  fi
+  printf '%s' "$formatted"
 }
 
 # Presents post-install recap with access URLs, credentials, and PF status
@@ -391,7 +396,7 @@ WARNING
         msg "  Last low sample: ${auto_last_low}"
       fi
       local now_epoch
-      now_epoch="$(date +%s)"
+      now_epoch="$(arr_now_epoch)"
       if ((auto_cooldown > now_epoch)); then
         msg "  Cooldown until: $(summary_format_epoch "$auto_cooldown")"
       fi

@@ -1,5 +1,15 @@
 # shellcheck shell=bash
 
+if ! declare -f arr_date_local >/dev/null 2>&1; then
+  __arr_time_guard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
+  if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
+    # shellcheck source=scripts/common.sh
+    . "${REPO_ROOT}/scripts/common.sh"
+  fi
+  unset __arr_time_guard_dir
+fi
+
 # Collects status notes for summary output when values are preserved
 arr_record_preserve_note() {
   local note="$1"
@@ -71,7 +81,7 @@ hydrate_sab_api_key_from_config() {
   if ((placeholder)) && [[ "$current_value" != "$api_key_value" ]]; then
     if [[ -z "${ARR_SAB_INI_BACKUP:-}" ]]; then
       local timestamp backup_path
-      timestamp="$(date +%Y%m%d-%H%M%S)"
+      timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
       backup_path="${ini_path}.bak.${timestamp}"
       if cp -a "$ini_path" "$backup_path" 2>/dev/null; then
         ARR_SAB_INI_BACKUP="$backup_path"

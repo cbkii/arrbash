@@ -69,7 +69,7 @@ fi
 MODE="${DNS_DISTRIBUTION_MODE:-router}"
 
 # ---- Paths & backups ----
-TS="$(date +%Y%m%d-%H%M%S)"
+TS="$(arr_date_local '+%Y%m%d-%H%M%S')"
 BACKUP_DIR="/var/backups/${STACK}-dns-${TS}"
 ensure_dir_mode "${BACKUP_DIR}" 700
 

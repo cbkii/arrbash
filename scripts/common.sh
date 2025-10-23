@@ -1374,9 +1374,90 @@ msg_color_supported() {
   return 0
 }
 
+# Timezone helpers (prefer local TZ from configuration, fall back to UTC)
+ARR_TIMEZONE_WARNING_EMITTED="${ARR_TIMEZONE_WARNING_EMITTED:-}"
+ARR_TIMEZONE_RESOLVED="${ARR_TIMEZONE_RESOLVED:-}"
+ARR_TIMEZONE_SOURCE="${ARR_TIMEZONE_SOURCE:-}"
+
+_arr_timezone_exists() {
+  local tz="$1"
+  [[ -n "$tz" && -f "/usr/share/zoneinfo/${tz}" ]]
+}
+
+_arr_timezone_warn_once() {
+  local message="$1"
+  if [[ -n "${ARR_TIMEZONE_WARNING_EMITTED}" ]]; then
+    return 0
+  fi
+  ARR_TIMEZONE_WARNING_EMITTED=1
+  if declare -f warn >/dev/null 2>&1; then
+    warn "$message"
+  else
+    printf '[WARN]  %s\n' "$message" >&2
+  fi
+  return 0
+}
+
+arr_resolve_timezone() {
+  local configured="${TIMEZONE:-}"
+
+  if [[ -n "${ARR_TIMEZONE_RESOLVED}" && "$configured" == "${ARR_TIMEZONE_SOURCE}" ]]; then
+    printf '%s' "$ARR_TIMEZONE_RESOLVED"
+    return 0
+  fi
+
+  ARR_TIMEZONE_WARNING_EMITTED=""
+  ARR_TIMEZONE_SOURCE="$configured"
+
+  if _arr_timezone_exists "$configured"; then
+    ARR_TIMEZONE_RESOLVED="$configured"
+  else
+    ARR_TIMEZONE_RESOLVED="UTC"
+    if [[ -n "$configured" && "$configured" != "UTC" ]]; then
+      _arr_timezone_warn_once "Timezone '${configured}' not found; falling back to UTC."
+    fi
+  fi
+
+  printf '%s' "$ARR_TIMEZONE_RESOLVED"
+}
+
+arr_date_local() {
+  local tz
+  tz="$(arr_resolve_timezone)"
+  TZ="$tz" date "$@"
+}
+
+arr_date_utc() {
+  TZ="UTC" date "$@"
+}
+
+arr_now_iso8601() {
+  arr_date_local --iso-8601=seconds
+}
+
+arr_now_epoch() {
+  arr_date_utc '+%s'
+}
+
+arr_epoch_to_local_iso8601() {
+  local epoch="$1"
+  if [[ -z "$epoch" || ! "$epoch" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  arr_date_local -d "@${epoch}" --iso-8601=seconds
+}
+
+arr_iso_to_epoch() {
+  local iso="$1"
+  if [[ -z "$iso" ]]; then
+    return 1
+  fi
+  arr_date_utc -d "$iso" '+%s'
+}
+
 # Provides consistent timestamp used across log_* helpers
 arr_timestamp() {
-  date '+%H:%M:%S'
+  arr_date_local '+%H:%M:%S'
 }
 
 # Emits timestamped informational log to stdout
@@ -1478,7 +1559,7 @@ init_logging() {
   if [[ -n "${ARR_LOG_TIMESTAMP:-}" ]]; then
     timestamp="${ARR_LOG_TIMESTAMP}"
   else
-    timestamp="$(date +%Y%m%d-%H%M%S)"
+    timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
     export ARR_LOG_TIMESTAMP="$timestamp"
   fi
   LOG_FILE="${log_dir}/${STACK}-${timestamp}.log"
@@ -1506,7 +1587,7 @@ init_logging() {
   exec > >(tee -a "$LOG_FILE")
   exec 2>&1
 
-  msg "Installation started at $(date)"
+  msg "Installation started at $(arr_date_local '+%Y-%m-%d %H:%M:%S %Z')"
   msg "Log file: $LOG_FILE"
   if [[ -n "$install_hint" ]]; then
     msg "$install_hint"
@@ -2586,7 +2667,7 @@ gen_safe_password() {
     return
   fi
 
-  printf '%s' "$(date +%s%N)$$" | sha256sum | tr -dc 'A-Za-z0-9' | head -c "$len" || true
+  printf '%s' "$(arr_date_utc '+%s%N')$$" | sha256sum | tr -dc 'A-Za-z0-9' | head -c "$len" || true
   printf '\n'
 }
 

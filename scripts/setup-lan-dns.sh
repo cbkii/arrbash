@@ -190,7 +190,7 @@ configure_docker_dns() {
 
   if [[ -f "${daemon_json}" ]]; then
     local backup
-    backup="${daemon_json}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
+    backup="${daemon_json}.${STACK}.$(arr_date_local '+%Y%m%d-%H%M%S').bak"
     if cp "${daemon_json}" "${backup}" 2>/dev/null; then
       log "Backed up existing ${daemon_json} to ${backup}"
     else

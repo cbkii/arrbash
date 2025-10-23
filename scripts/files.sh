@@ -1,5 +1,15 @@
 # shellcheck shell=bash
 # Generates a bcrypt hash for Caddy credentials, preferring local openssl before docker fallback
+
+if ! declare -f arr_date_local >/dev/null 2>&1; then
+  __arr_time_guard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
+  if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
+    # shellcheck source=scripts/common.sh
+    . "${REPO_ROOT}/scripts/common.sh"
+  fi
+  unset __arr_time_guard_dir
+fi
 caddy_bcrypt() {
   local plaintext="${1-}"
 
@@ -313,7 +323,7 @@ arr_safe_compose_write() {
 
   if [[ -f "${backup_prefix}" ]]; then
     local legacy_name
-    legacy_name="${backup_prefix}.$(date +%Y%m%d%H%M%S%N).legacy"
+    legacy_name="${backup_prefix}.$(arr_date_local '+%Y%m%d%H%M%S%N').legacy"
     if ! mv "${backup_prefix}" "${legacy_name}" 2>/dev/null; then
       rm -f "${backup_prefix}" 2>/dev/null || true
     fi
@@ -321,7 +331,7 @@ arr_safe_compose_write() {
 
   if [[ -f "$target" ]]; then
     local timestamp
-    timestamp="$(date +%Y%m%d%H%M%S%N)"
+    timestamp="$(arr_date_local '+%Y%m%d%H%M%S%N')"
     backup_created="${backup_prefix}.${timestamp}"
     if [[ -e "$backup_created" ]]; then
       backup_created+=".${RANDOM}"
@@ -436,7 +446,7 @@ arr_compose_log_message() {
     return 0
   fi
 
-  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file" 2>/dev/null || true
+  printf '[%s] %s\n' "$(arr_date_local '+%Y-%m-%d %H:%M:%S %Z')" "$*" >>"$log_file" 2>/dev/null || true
   arr_compose_trim_log "$log_file"
 }
 
@@ -492,7 +502,7 @@ arr_compose_save_artifact() {
 
   ensure_dir "$log_dir"
 
-  local timestamp="$(date '+%Y%m%d_%H%M%S')"
+  local timestamp="$(arr_date_local '+%Y%m%d_%H%M%S')"
   local sha_segment="unknown"
   if [[ -f "$staging" ]]; then
     sha_segment="$(sha256sum "$staging" 2>/dev/null | awk '{print substr($1,1,8)}')"
@@ -2958,7 +2968,7 @@ EOF
 set -eu
 
 log() {
-    printf '[%s] [update-qbt-port] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1" >&2
+    printf '[%s] [update-qbt-port] %s\n' "$(arr_now_iso8601)" "$1" >&2
 }
 
 if ! command -v curl >/dev/null 2>&1; then

@@ -6,6 +6,16 @@
 #   export ARR_TRACE_FILE=/path/to/log       # (optional) override default
 #   export ARR_TRACE_MASK_RE='regex|to|mask' # (optional) add extra masking patterns
 
+if ! declare -f arr_date_local >/dev/null 2>&1; then
+  __arr_time_guard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
+  if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
+    # shellcheck source=scripts/common.sh
+    . "${REPO_ROOT}/scripts/common.sh"
+  fi
+  unset __arr_time_guard_dir
+fi
+
 arr_trace_start() {
   local base_log="${LOG_FILE:-}" trace_file=""
 
@@ -31,7 +41,7 @@ arr_trace_start() {
 
     timestamp="${ARR_LOG_TIMESTAMP:-}"
     if [[ -z "$timestamp" ]]; then
-      timestamp="$(date +%Y%m%d-%H%M%S)"
+      timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
       export ARR_LOG_TIMESTAMP="$timestamp"
     fi
 
