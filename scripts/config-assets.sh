@@ -121,10 +121,20 @@ attempt_update() {
     fi
 
     if [ -n "${QBT_USER:-}" ] && [ -n "${QBT_PASS:-}" ]; then
-        COOKIE_FILE="$(mktemp "${TMPDIR:-/tmp}/update-qbt-cookie.XXXXXX")" || {
+        local cookie_template="${TMPDIR:-/tmp}/update-qbt-cookie.XXXXXX"
+        if declare -f arr_prepare_mktemp_template >/dev/null 2>&1; then
+            cookie_template="$(arr_prepare_mktemp_template "$cookie_template")"
+        fi
+        COOKIE_FILE="$(mktemp "$cookie_template")" || {
             log "Failed to create temporary cookie file"
             return 1
         }
+        if declare -f arr_resolve_absolute_path >/dev/null 2>&1; then
+            local cookie_resolved
+            if cookie_resolved="$(arr_resolve_absolute_path "$COOKIE_FILE" 2>/dev/null)"; then
+                COOKIE_FILE="$cookie_resolved"
+            fi
+        fi
         if curl -fsS --max-time 5 -c "$COOKIE_FILE" \
             --data-urlencode "username=${QBT_USER}" \
             --data-urlencode "password=${QBT_PASS}" \

@@ -26,10 +26,32 @@ qbt_webui_init_flag_enabled() {
 qbt_webui_mktemp() {
   local base="$1"
   local tmp
-  if ! tmp=$(mktemp "${base}.XXXXXX" 2>/dev/null); then
+
+  if declare -f arr_mktemp_file >/dev/null 2>&1; then
+    if ! tmp="$(arr_mktemp_file "${base}.XXXXXX")"; then
+      printf '[qbt-helper] Failed to create temporary file near %s\n' "$base" >&2
+      return 1
+    fi
+    printf '%s\n' "$tmp"
+    return 0
+  fi
+
+  local template="${base}.XXXXXX"
+  if declare -f arr_prepare_mktemp_template >/dev/null 2>&1; then
+    template="$(arr_prepare_mktemp_template "$template")"
+  fi
+
+  if ! tmp=$(mktemp "$template" 2>/dev/null); then
     printf '[qbt-helper] Failed to create temporary file near %s\n' "$base" >&2
     return 1
   fi
+
+  if declare -f arr_resolve_absolute_path >/dev/null 2>&1; then
+    if tmp_resolved="$(arr_resolve_absolute_path "$tmp" 2>/dev/null)"; then
+      tmp="$tmp_resolved"
+    fi
+  fi
+
   arr_register_temp_path "$tmp"
   printf '%s\n' "$tmp"
 }

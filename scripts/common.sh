@@ -99,6 +99,52 @@ arr_cleanup_temp_path() {
   rm -rf -- "$path" 2>/dev/null || true
 }
 
+# Normalises mktemp templates so leading dashes are treated as literal paths
+arr_prepare_mktemp_template() {
+  local template="$1"
+
+  if [[ -z "$template" ]]; then
+    printf '%s\n' ""
+    return 0
+  fi
+
+  if [[ "$template" == -* ]]; then
+    printf './%s\n' "$template"
+    return 0
+  fi
+
+  printf '%s\n' "$template"
+}
+
+# Converts potentially relative mktemp results into absolute paths for cleanup
+arr_resolve_absolute_path() {
+  local path="$1"
+
+  if [[ -z "$path" ]]; then
+    return 1
+  fi
+
+  if [[ "$path" == /* ]]; then
+    printf '%s\n' "$path"
+    return 0
+  fi
+
+  local dir base
+  dir="$(dirname -- "$path")"
+  base="$(basename -- "$path")"
+
+  if [[ -z "$dir" ]]; then
+    dir='.'
+  fi
+
+  if dir="$(cd -- "$dir" 2>/dev/null && pwd -P)"; then
+    printf '%s/%s\n' "$dir" "$base"
+    return 0
+  fi
+
+  printf '%s\n' "$path"
+}
+
 if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   _arr_common_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   YAML_EMIT_LIB="${YAML_EMIT_LIB:-${_arr_common_dir}/yaml-emit.sh}"
@@ -991,6 +1037,7 @@ arr_mktemp_file() {
   local tmp=""
 
   if [[ -n "$template" ]]; then
+    template="$(arr_prepare_mktemp_template "$template")"
     tmp="$(mktemp "$template" 2>/dev/null)" || return 1
   else
     tmp="$(mktemp 2>/dev/null)" || return 1
@@ -1001,6 +1048,10 @@ arr_mktemp_file() {
   fi
 
   : >"$tmp"
+
+  if tmp_resolved="$(arr_resolve_absolute_path "$tmp" 2>/dev/null)"; then
+    tmp="$tmp_resolved"
+  fi
 
   arr_register_temp_path "$tmp"
 
@@ -1014,6 +1065,7 @@ arr_mktemp_dir() {
   local tmp=""
 
   if [[ -n "$template" ]]; then
+    template="$(arr_prepare_mktemp_template "$template")"
     tmp="$(mktemp -d "$template" 2>/dev/null)" || return 1
   else
     tmp="$(mktemp -d 2>/dev/null)" || return 1
@@ -1021,6 +1073,10 @@ arr_mktemp_dir() {
 
   if [[ -n "$mode" ]]; then
     chmod "$mode" "$tmp" 2>/dev/null || warn "Could not set mode ${mode} on temporary directory ${tmp}"
+  fi
+
+  if tmp_resolved="$(arr_resolve_absolute_path "$tmp" 2>/dev/null)"; then
+    tmp="$tmp_resolved"
   fi
 
   arr_register_temp_path "$tmp"
