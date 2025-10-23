@@ -17,8 +17,8 @@ arr_effective_project_name() {
   fi
 
   local -a env_candidates=()
-  # shellcheck disable=SC2155  # arr_env_file cannot fail and only returns a path string
-  local stack_env="$(arr_env_file)"
+  local stack_env
+  stack_env="$(arr_env_file)"
   if [[ -n "${ARR_ENV_FILE:-}" ]]; then
     env_candidates+=("${ARR_ENV_FILE}")
     if [[ "${ARR_ENV_FILE}" != "$stack_env" ]]; then
@@ -506,10 +506,9 @@ stop_existing_vpn_auto_reconnect_workers() {
 
   msg "[vpn-auto] Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
 
-  local attempt
   for pid in "${candidate_pids[@]}"; do
     if kill "$pid" 2>/dev/null; then
-      for attempt in 1 2 3 4 5; do
+      for _ in 1 2 3 4 5; do
         if ! kill -0 "$pid" 2>/dev/null; then
           break
         fi

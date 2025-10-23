@@ -30,7 +30,31 @@ caddy_bcrypt() {
     fi
   fi
 
-  docker run --rm "${CADDY_IMAGE}" caddy hash-password --algorithm bcrypt --plaintext "$plaintext" 2>/dev/null
+  local -a docker_hash_cmd=(
+    docker run --rm
+    --cpus=1
+    --memory=256m
+    --network=none
+    "${CADDY_IMAGE}"
+    caddy hash-password
+    --algorithm bcrypt
+    --plaintext
+    "$plaintext"
+  )
+
+  local docker_hash_output=""
+  if command -v timeout >/dev/null 2>&1; then
+    docker_hash_output="$(timeout --preserve-status 10 "${docker_hash_cmd[@]}" 2>/dev/null || true)"
+  else
+    docker_hash_output="$("${docker_hash_cmd[@]}" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$docker_hash_output" ]]; then
+    printf '%s\n' "$docker_hash_output"
+    return 0
+  fi
+
+  return 1
 }
 
 # Produces an alphanumeric token using the strongest available entropy source
@@ -68,12 +92,14 @@ generate_api_key() {
     existing="$(get_env_kv "GLUETUN_API_KEY" "$ARR_ENV_FILE" || true)"
     if [[ -n "$existing" ]]; then
       GLUETUN_API_KEY="$existing"
+      export GLUETUN_API_KEY
       msg "Using existing API key"
       return
     fi
   fi
 
   GLUETUN_API_KEY="$(safe_random_alnum 64)"
+  export GLUETUN_API_KEY
   msg "Generated new API key"
 
   if gluetun_version_requires_auth_config 2>/dev/null; then
