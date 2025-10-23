@@ -14,7 +14,7 @@ arr_prompt_direct_port_exposure() {
 
   if [[ -z "$ip_hint" || "$ip_hint" == "0.0.0.0" ]] || ! validate_ipv4 "$ip_hint"; then
     local detected_ip=""
-    detected_ip="$(hostname -I 2>/dev/null | awk 'NF {print $1}' | tr -d '\n')"
+    detected_ip="$(LC_ALL=C hostname -I 2>/dev/null | LC_ALL=C awk 'NF {print $1}' | LC_ALL=C tr -d '\n')"
     if [[ -z "$detected_ip" ]] || [[ "$detected_ip" == "0.0.0.0" ]] || ! validate_ipv4 "$detected_ip"; then
       ip_hint="127.0.0.1"
     else

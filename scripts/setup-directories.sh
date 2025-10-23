@@ -34,6 +34,18 @@ arr_report_collab_skip() {
 }
 
 mkdirs() {
+  if [[ -z "${ARR_STACK_DIR:-}" ]]; then
+    die "ARR_STACK_DIR is required for directory setup"
+  fi
+
+  if [[ -z "${ARR_DOCKER_DIR:-}" ]]; then
+    die "ARR_DOCKER_DIR is required for directory setup"
+  fi
+
+  if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 || ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
+    die "ARR_DOCKER_SERVICES must be defined before mkdirs runs"
+  fi
+
   if [[ -z "${DATA_DIR_MODE:-}" ]]; then
     local fallback_mode=""
 

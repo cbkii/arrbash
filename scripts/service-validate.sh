@@ -72,7 +72,12 @@ preflight_compose_interpolation() {
   ensure_dir "$log_dir"
   local warn_log="${log_dir}/compose-interpolation.log"
 
-  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
+  local -a compose_cmd=()
+  if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
+    compose_cmd=("${DOCKER_COMPOSE_CMD[@]}")
+  fi
+
+  if ((${#compose_cmd[@]} == 0)); then
     if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
       if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
         printf '%s Docker Compose command unavailable; cannot validate interpolation.\n' "$STACK_LABEL" >&2
@@ -86,12 +91,16 @@ preflight_compose_interpolation() {
     fi
   fi
 
-  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
+  if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
+    compose_cmd=("${DOCKER_COMPOSE_CMD[@]}")
+  fi
+
+  if ((${#compose_cmd[@]} == 0)); then
     printf '%s Docker Compose command unavailable; cannot validate interpolation.\n' "$STACK_LABEL" >&2
     exit 1
   fi
 
-  if ! "${DOCKER_COMPOSE_CMD[@]}" -f "$file" config >/dev/null 2>"$warn_log"; then
+  if ! "${compose_cmd[@]}" -f "$file" config >/dev/null 2>"$warn_log"; then
     printf '%s docker compose config failed; see %s\n' "$STACK_LABEL" "$warn_log" >&2
     exit 1
   fi
@@ -116,10 +125,37 @@ validate_compose_or_die() {
   local errlog="${log_dir}/compose.err"
   local configdump="${log_dir}/compose-config.json"
 
-  if ! compose -f "$file" config -q 2>"$errlog"; then
+  local -a compose_cmd=()
+  if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
+    compose_cmd=("${DOCKER_COMPOSE_CMD[@]}")
+  fi
+
+  if ((${#compose_cmd[@]} == 0)); then
+    if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
+      if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
+        printf '%s Docker Compose command unavailable; cannot validate.\n' "$STACK_LABEL" >&2
+        exit 1
+      fi
+    elif declare -f detect_compose_cmd >/dev/null 2>&1; then
+      local compose_cmd_raw=""
+      if compose_cmd_raw="$(detect_compose_cmd 2>/dev/null)"; then
+        read -r -a DOCKER_COMPOSE_CMD <<<"$compose_cmd_raw"
+      fi
+    fi
+    if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
+      compose_cmd=("${DOCKER_COMPOSE_CMD[@]}")
+    fi
+  fi
+
+  if ((${#compose_cmd[@]} == 0)); then
+    printf '%s Docker Compose command unavailable; cannot validate.\n' "$STACK_LABEL" >&2
+    exit 1
+  fi
+
+  if ! "${compose_cmd[@]}" -f "$file" config -q 2>"$errlog"; then
     printf '%s Compose validation failed; see %s\n' "$STACK_LABEL" "$errlog"
     local line
-    line="$(LC_ALL=C grep -oE 'line ([0-9]+)' "$errlog" | LC_ALL=C awk '{print $2}' | tail -1 || true)"
+    line="$(LC_ALL=C grep -oE 'line ([0-9]+)' "$errlog" | LC_ALL=C awk '{print $2}' | LC_ALL=C tail -1 || true)"
     if [[ -n "$line" && -r "$file" ]]; then
       local start=$((line - 5))
       local end=$((line + 5))
@@ -131,11 +167,11 @@ validate_compose_or_die() {
     local services_tmp=""
     local services_err="${errlog}.services.err"
     if services_tmp="$(arr_mktemp_file "${errlog}.services.XXXXXX" "$NONSECRET_FILE_MODE")"; then
-      if compose -f "$file" config --services >"$services_tmp" 2>"$services_err"; then
+      if "${compose_cmd[@]}" -f "$file" config --services >"$services_tmp" 2>"$services_err"; then
         while IFS= read -r service; do
           [[ -z "$service" ]] && continue
           printf '%s Checking service: %s\n' "$STACK_LABEL" "$service"
-          if ! compose -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
+          if ! "${compose_cmd[@]}" -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
             printf '%s Service %s has configuration errors:\n' "$STACK_LABEL" "$service"
             cat "${errlog}.${service}" 2>/dev/null || true
             rm -f "${errlog}.${service}" 2>/dev/null || true
@@ -156,7 +192,7 @@ validate_compose_or_die() {
     exit 1
   fi
 
-  if ! compose -f "$file" config --format=json >"$configdump" 2>"${errlog}.json"; then
+  if ! "${compose_cmd[@]}" -f "$file" config --format=json >"$configdump" 2>"${errlog}.json"; then
     printf '%s Failed to generate JSON config dump at %s\n' "$STACK_LABEL" "$configdump" >&2
     cat "${errlog}.json" 2>/dev/null >&2 || true
     rm -f "$configdump"
@@ -214,10 +250,10 @@ validate_caddy_config() {
   fi
 
   # shellcheck disable=SC2016  # literal ${ is intentional to flag unresolved placeholders
-  if grep -q '\${' "$caddyfile"; then
+  if LC_ALL=C grep -q '\${' "$caddyfile"; then
     warn "Caddyfile contains unresolved variable references that might cause issues at runtime"
     # shellcheck disable=SC2016  # literal ${ is intentional to flag unresolved placeholders
-    grep -n '\${' "$caddyfile"
+    LC_ALL=C grep -n '\${' "$caddyfile"
   fi
 
   rm -f "$logfile"
@@ -236,7 +272,8 @@ update_env_image_var() {
 
   if [[ -f "${ARR_ENV_FILE}" ]] && LC_ALL=C arr_run_sensitive_command grep -q "^${var_name}=" "${ARR_ENV_FILE}"; then
     if ! portable_sed "s|^${var_name}=.*|${var_name}=${new_value}|" "${ARR_ENV_FILE}"; then
-      warn "Failed to update ${var_name} in ${ARR_ENV_FILE}; portable_sed exited with status $?"
+      local sed_status=$?
+      die "Failed to update ${var_name} in ${ARR_ENV_FILE}; portable_sed exited with status ${sed_status}"
     fi
   fi
 }

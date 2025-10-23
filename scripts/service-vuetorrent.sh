@@ -230,19 +230,3 @@ install_vuetorrent() {
   fi
 }
 
-# Maps logical service names to compose container identifiers (handles overrides)
-service_container_name() {
-  local service="$1"
-  case "$service" in
-    local_dns)
-      printf '%s' "arr_local_dns"
-      ;;
-    *)
-      printf '%s' "$service"
-      ;;
-  esac
-}
-
-declare -a ARR_STACK_PREVIOUS_RUNNING_SERVICES=()
-ARR_STACK_RUNTIME_STATE_CAPTURED=0
-ARR_STACK_RUNTIME_STATE_RESTORED=0

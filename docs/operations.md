@@ -64,6 +64,13 @@ Run these from the repository root:
    ```
 4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `--rotate-caddy-auth`, `scripts/qbt-helper.sh reset`).
 
+## Runtime hardening conventions
+
+- **Required directories.** Installer helpers abort immediately if `ARR_STACK_DIR`, `ARR_DOCKER_DIR`, or the `ARR_DOCKER_SERVICES` array are unset. These values are exported by `arr.sh`; set them yourself only when running helpers in isolation.
+- **Locale stability.** Text parsers (`grep`, `awk`, `sed`, `tr`) force `LC_ALL=C` to keep byte-oriented behaviour. If you override locale variables in your shell, export them _before_ calling into the helpers, so the scripts can pin the parsing locale.
+- **Compose wrapper.** All Docker Compose calls flow through the resolved wrapper stored in `DOCKER_COMPOSE_CMD`. Use `arr_resolve_compose_cmd` to populate the array before invoking validation helpers manually.
+- **Bounded secrets tooling.** Secret rotation helpers (e.g., the Caddy bcrypt fallback container) run with CPU/memory limits, an 18‑second timeout, and `--network=none`. Expect them to fail fast if Docker cannot enforce these limits; retry after fixing the host configuration.
+
 ## Temporary file hygiene & privileged redirections
 
 Recent helpers in `scripts/common.sh` ensure temporary paths are tracked and cleaned even when scripts exit early:
