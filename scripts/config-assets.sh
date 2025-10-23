@@ -1115,12 +1115,21 @@ PY
     printf '%s' "$block"
   }
 
-  local -a cf_ids_lq=("9c11cd3f07101cdba90a2d81cf0e56b4" "90a6f9a284dff5103f6346090e6280c8")
-  local -a cf_ids_lq_title=("e2315f990da2e2cbfc9fa5b7a6fcfe48" "e204b80c87be9497a8a6eaff48f72905")
-  local -a cf_ids_upscaled=("23297a736ca77c0fc8e70f8edd7ee56c" "bfd8eb01832d646a0a89c4deb46f8564")
-  local -a cf_ids_language=("69aa1e159f97d860440b04cd6d590c4f" "0dc8aec3bd1c47cd6c40c46ecd27e846")
-  local -a cf_ids_multi=("7ba05c6e0e14e793538174c679126996" "4b900e171accbfb172729b63323ea8ca")
-  local -a cf_ids_x265=("47435ece6b99a0b477caf360e79ba0bb" "dc98083864ea246d05a42df0d05f81cc")
+  # It is recommended to move these to a separate configuration file.
+  # See https://trash-guides.info/ for the latest custom format IDs.
+
+  # Low Quality
+  local -a readonly CF_IDS_LQ=("9c11cd3f07101cdba90a2d81cf0e56b4" "90a6f9a284dff5103f6346090e6280c8")
+  # Low Quality (Title)
+  local -a readonly CF_IDS_LQ_TITLE=("e2315f990da2e2cbfc9fa5b7a6fcfe48" "e204b80c87be9497a8a6eaff48f72905")
+  # Upscaled
+  local -a readonly CF_IDS_UPSCALED=("23297a736ca77c0fc8e70f8edd7ee56c" "bfd8eb01832d646a0a89c4deb46f8564")
+  # Language: Not English
+  local -a readonly CF_IDS_LANGUAGE=("69aa1e159f97d860440b04cd6d590c4f" "0dc8aec3bd1c47cd6c40c46ecd27e846")
+  # MULTi
+  local -a readonly CF_IDS_MULTI=("7ba05c6e0e14e793538174c679126996" "4b900e171accbfb172729b63323ea8ca")
+  # x265 (HD)
+  local -a readonly CF_IDS_X265=("47435ece6b99a0b477caf360e79ba0bb" "dc98083864ea246d05a42df0d05f81cc")
 
   local common_cf_body=""
   local block=""
