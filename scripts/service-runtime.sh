@@ -9,6 +9,18 @@ if [[ -n "${__SERVICE_RUNTIME_LOADED:-}" ]]; then
 fi
 __SERVICE_RUNTIME_LOADED=1
 
+service_runtime_compose() {
+  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
+    return 1
+  fi
+
+  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+    ( cd "$ARR_STACK_DIR" || return 1; "${DOCKER_COMPOSE_CMD[@]}" "$@" )
+  else
+    "${DOCKER_COMPOSE_CMD[@]}" "$@"
+  fi
+}
+
 service_container_name() {
   local service="$1"
   case "$service" in
@@ -135,7 +147,7 @@ arr_restore_stack_runtime_state() {
     fi
 
     msg "[restore] Restarting ${service}"
-    if ! compose up -d "$service" >/dev/null 2>&1; then
+    if ! service_runtime_compose up -d "$service" >/dev/null 2>&1; then
       warn "[restore] Failed to restart ${service}; check docker compose logs."
     fi
   done
@@ -151,12 +163,19 @@ restart_stack_service() {
     return 0
   fi
 
-  if ! declare -f compose >/dev/null 2>&1; then
-    warn "compose helper unavailable; cannot restart ${service}"
-    return 1
+  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
+    if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
+      if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
+        warn "compose helper unavailable; cannot restart ${service}"
+        return 1
+      fi
+    else
+      warn "compose helper unavailable; cannot restart ${service}"
+      return 1
+    fi
   fi
 
-  if ! compose restart "$service" >/dev/null 2>&1; then
+  if ! service_runtime_compose restart "$service" >/dev/null 2>&1; then
     return 1
   fi
 

@@ -34,6 +34,42 @@ arr_report_collab_skip() {
 }
 
 mkdirs() {
+  if [[ -z "${DATA_DIR_MODE:-}" ]]; then
+    local fallback_mode=""
+
+    if [[ -n "${ARR_DATA_DIR_MODE_OVERRIDE:-}" ]]; then
+      if [[ "${ARR_DATA_DIR_MODE_OVERRIDE}" =~ ^[0-7]{3,4}$ ]]; then
+        fallback_mode="${ARR_DATA_DIR_MODE_OVERRIDE}"
+      else
+        warn "ARR_DATA_DIR_MODE_OVERRIDE='${ARR_DATA_DIR_MODE_OVERRIDE}' is invalid (expected octal like 770); ignoring override"
+      fi
+    fi
+
+    if [[ -z "$fallback_mode" ]]; then
+      local profile="${ARR_PERMISSION_PROFILE:-strict}"
+      case "$profile" in
+        collab | collaborative)
+          if [[ -z "${PGID:-}" || "${PGID:-}" == "0" ]]; then
+            fallback_mode="750"
+          else
+            fallback_mode="770"
+          fi
+          ;;
+        strict | *)
+          fallback_mode="700"
+          ;;
+      esac
+    fi
+
+    if [[ -z "$fallback_mode" ]]; then
+      die "DATA_DIR_MODE is required but could not be determined"
+    fi
+
+    DATA_DIR_MODE="$fallback_mode"
+    export DATA_DIR_MODE
+    warn "DATA_DIR_MODE was unset; defaulting to ${DATA_DIR_MODE}"
+  fi
+
   step "📂 Creating directories"
   ensure_dir_mode "$ARR_STACK_DIR" 755
 

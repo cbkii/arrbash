@@ -77,9 +77,9 @@ preflight_compose_interpolation() {
     exit 1
   fi
 
-  if grep -qE 'variable is not set' "$warn_log" 2>/dev/null; then
+  if LC_ALL=C grep -qE 'variable is not set' "$warn_log" 2>/dev/null; then
     printf '%s unresolved Compose variables detected:\n' "$STACK_LABEL" >&2
-    grep -E 'variable is not set' "$warn_log" >&2 || true
+    LC_ALL=C grep -E 'variable is not set' "$warn_log" >&2 || true
     exit 1
   fi
 
@@ -100,25 +100,39 @@ validate_compose_or_die() {
   if ! compose -f "$file" config -q 2>"$errlog"; then
     printf '%s Compose validation failed; see %s\n' "$STACK_LABEL" "$errlog"
     local line
-    line="$(grep -oE 'line ([0-9]+)' "$errlog" | awk '{print $2}' | tail -1 || true)"
+    line="$(LC_ALL=C grep -oE 'line ([0-9]+)' "$errlog" | LC_ALL=C awk '{print $2}' | tail -1 || true)"
     if [[ -n "$line" && -r "$file" ]]; then
       local start=$((line - 5))
       local end=$((line + 5))
       ((start < 1)) && start=1
       printf '%s Error context from docker-compose.yml:\n' "$STACK_LABEL"
-      nl -ba "$file" | sed -n "${start},${end}p"
+      nl -ba "$file" | LC_ALL=C sed -n "${start},${end}p"
     fi
 
-    while IFS= read -r service; do
-      [[ -z "$service" ]] && continue
-      printf '%s Checking service: %s\n' "$STACK_LABEL" "$service"
-      if ! compose -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
-        printf '%s Service %s has configuration errors:\n' "$STACK_LABEL" "$service"
-        cat "${errlog}.${service}" 2>/dev/null || true
+    local services_tmp=""
+    local services_err="${errlog}.services.err"
+    if services_tmp="$(arr_mktemp_file "${errlog}.services.XXXXXX" "$NONSECRET_FILE_MODE")"; then
+      if compose -f "$file" config --services >"$services_tmp" 2>"$services_err"; then
+        while IFS= read -r service; do
+          [[ -z "$service" ]] && continue
+          printf '%s Checking service: %s\n' "$STACK_LABEL" "$service"
+          if ! compose -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
+            printf '%s Service %s has configuration errors:\n' "$STACK_LABEL" "$service"
+            cat "${errlog}.${service}" 2>/dev/null || true
+            rm -f "${errlog}.${service}" 2>/dev/null || true
+          else
+            rm -f "${errlog}.${service}" 2>/dev/null || true
+          fi
+        done <"$services_tmp"
       else
-        rm -f "${errlog}.${service}" 2>/dev/null || true
+        warn "${STACK_LABEL} Failed to enumerate services for compose validation; see ${services_err}"
+        cat "$services_err" 2>/dev/null || true
       fi
-    done < <(compose -f "$file" config --services 2>/dev/null)
+      arr_cleanup_temp_path "$services_tmp"
+      rm -f "$services_err" 2>/dev/null || true
+    else
+      warn "${STACK_LABEL} Unable to create temporary file for compose service list"
+    fi
 
     exit 1
   fi
@@ -202,7 +216,9 @@ update_env_image_var() {
   printf -v "$var_name" '%s' "$new_value"
 
   if [[ -f "${ARR_ENV_FILE}" ]] && LC_ALL=C arr_run_sensitive_command grep -q "^${var_name}=" "${ARR_ENV_FILE}"; then
-    portable_sed "s|^${var_name}=.*|${var_name}=${new_value}|" "${ARR_ENV_FILE}"
+    if ! portable_sed "s|^${var_name}=.*|${var_name}=${new_value}|" "${ARR_ENV_FILE}"; then
+      warn "Failed to update ${var_name} in ${ARR_ENV_FILE}; portable_sed exited with status $?"
+    fi
   fi
 }
 
