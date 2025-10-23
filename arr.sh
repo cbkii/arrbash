@@ -72,6 +72,194 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 declare -a _arr_canonical_config_vars=()
 declare -a _arr_env_override_order=()
 declare -A _arr_env_overrides=()
+declare -A _arr_env_override_exported=()
+
+arr_is_alias_placeholder() {
+  local name="$1"
+  local value="$2"
+
+  [[ "${value}" == "__${name}__" ]]
+}
+
+arr__restore_override() {
+  local name="$1"
+  local value="$2"
+  local exported_flag="${3:-0}"
+
+  [[ -n "${name}" ]] || return 0
+
+  if [[ -z "${_arr_env_overrides[${name}]+x}" ]]; then
+    _arr_env_override_order+=("${name}")
+  fi
+
+  _arr_env_overrides["${name}"]="${value}"
+
+  if [[ "${exported_flag}" == "1" ]]; then
+    _arr_env_override_exported["${name}"]=1
+  fi
+}
+
+arr__assign_default() {
+  local name="$1"
+  local value="$2"
+
+  [[ -n "${name}" ]] || return 0
+
+  if declare -f arr_var_is_readonly >/dev/null 2>&1 && arr_var_is_readonly "${name}"; then
+    return 0
+  fi
+
+  printf -v "${name}" '%s' "${value}"
+}
+
+arr_import_override_snapshot() {
+  local payload="$1"
+
+  [[ -n "${payload}" ]] || return 0
+
+  while IFS= read -r _arr_payload_line; do
+    [[ -z "${_arr_payload_line}" ]] && continue
+    eval "${_arr_payload_line}"
+  done <<<"${payload}"
+}
+
+arr_capture_env_overrides() {
+  local -a _arr_cli_args=("$@")
+  local _arr_need_reexec=0
+  local _arr_env_var=""
+  local _arr_decl=""
+  local _arr_flags=""
+  local _arr_value=""
+  local _arr_is_exported=0
+  local _arr_is_readonly=0
+
+  for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
+    [[ -n "${_arr_env_var}" ]] || continue
+
+    if [[ -v "${_arr_env_var}" ]]; then
+      if [[ -n "${_arr_env_overrides[${_arr_env_var}]+x}" ]]; then
+        continue
+      fi
+
+      _arr_decl="$(declare -p -- "${_arr_env_var}" 2>/dev/null || true)"
+      _arr_flags="${_arr_decl#declare }"
+      _arr_flags="${_arr_flags%% *}"
+
+      _arr_is_exported=0
+      [[ "${_arr_flags}" == -*x* ]] && _arr_is_exported=1
+
+      _arr_is_readonly=0
+      [[ "${_arr_flags}" == -*r* ]] && _arr_is_readonly=1
+
+      _arr_value="${!_arr_env_var}"
+
+      if arr_is_alias_placeholder "${_arr_env_var}" "${_arr_value}"; then
+        if (( _arr_is_readonly )); then
+          _arr_need_reexec=1
+        else
+          unset -v "${_arr_env_var}" 2>/dev/null || :
+        fi
+        continue
+      fi
+
+      _arr_env_overrides["${_arr_env_var}"]="${_arr_value}"
+      _arr_env_override_order+=("${_arr_env_var}")
+      if (( _arr_is_exported )); then
+        _arr_env_override_exported["${_arr_env_var}"]=1
+      fi
+
+      if (( _arr_is_readonly )); then
+        _arr_need_reexec=1
+      else
+        unset -v "${_arr_env_var}" 2>/dev/null || :
+      fi
+    fi
+  done
+
+  if (( _arr_need_reexec )) && [[ -z "${ARR_REEXEC_SANITIZED_ENV:-}" ]]; then
+    local _arr_payload=""
+
+    for _arr_env_var in "${_arr_env_override_order[@]}"; do
+      [[ -n "${_arr_env_var}" ]] || continue
+      _arr_payload+=$(printf 'arr__restore_override %q %q %q\n' \
+        "${_arr_env_var}" "${_arr_env_overrides[${_arr_env_var}]}" "${_arr_env_override_exported[${_arr_env_var}]:-0}")
+    done
+
+    exec env -i \
+      PATH="${PATH:-}" \
+      HOME="${HOME:-}" \
+      USER="${USER:-}" \
+      SHELL="${SHELL:-}" \
+      LANG="${LANG:-}" \
+      LC_ALL="${LC_ALL:-}" \
+      TERM="${TERM:-}" \
+      ARR_REEXEC_SANITIZED_ENV=1 \
+      ARR_OVERRIDE_PAYLOAD="${_arr_payload}" \
+      bash "$0" "${_arr_cli_args[@]}"
+  fi
+}
+
+arr_restore_canonical_defaults() {
+  local -a _arr_reset_vars=()
+  local _arr_env_var=""
+  local _arr_targets_payload=""
+  local _arr_reapply=""
+
+  ((${#_arr_canonical_config_vars[@]})) || return 0
+
+  for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
+    [[ -n "${_arr_env_var}" ]] || continue
+
+    if [[ ! -v "${_arr_env_var}" ]]; then
+      if ! (declare -f arr_var_is_readonly >/dev/null 2>&1 && arr_var_is_readonly "${_arr_env_var}"); then
+        _arr_reset_vars+=("${_arr_env_var}")
+      fi
+      continue
+    fi
+
+    if arr_is_alias_placeholder "${_arr_env_var}" "${!_arr_env_var}"; then
+      if ! (declare -f arr_var_is_readonly >/dev/null 2>&1 && arr_var_is_readonly "${_arr_env_var}"); then
+        _arr_reset_vars+=("${_arr_env_var}")
+      fi
+    fi
+  done
+
+  if ((${#_arr_reset_vars[@]})) && [[ -n "${_arr_defaults_file:-}" && -f "${_arr_defaults_file}" ]]; then
+    for _arr_env_var in "${_arr_reset_vars[@]}"; do
+      unset -v "${_arr_env_var}" 2>/dev/null || :
+    done
+
+    _arr_targets_payload=$(printf '%s\n' "${_arr_reset_vars[@]}")
+
+    _arr_reapply="$({
+      ARR_RESET_TARGETS="${_arr_targets_payload}" \
+      _ARR_DEFAULTS_FILE="${_arr_defaults_file}" \
+      "${BASH:-bash}" -Eeuo pipefail - <<'EOS'
+set -Eeuo pipefail
+if [[ -z "${_ARR_DEFAULTS_FILE}" || ! -f "${_ARR_DEFAULTS_FILE}" ]]; then
+  exit 0
+fi
+while IFS= read -r _var; do
+  [[ -n "${_var}" ]] || continue
+  unset "${_var}"
+done <<<"${ARR_RESET_TARGETS}"
+# shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+. "${_ARR_DEFAULTS_FILE}"
+while IFS= read -r _var; do
+  [[ -n "${_var}" ]] || continue
+  if [[ -v "${_var}" ]]; then
+    printf 'arr__assign_default %q %q\n' "${_var}" "${!_var}"
+  fi
+done <<<"${ARR_RESET_TARGETS}"
+EOS
+    })"
+
+    while IFS= read -r _arr_line; do
+      [[ -z "${_arr_line}" ]] && continue
+      eval "${_arr_line}"
+    done <<<"${_arr_reapply}"
+  fi
+}
 
 _arr_defaults_file="${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
 if [[ -f "${_arr_defaults_file}" ]]; then
@@ -93,79 +281,13 @@ EOS
   fi
 fi
 
-# -- Canonical env normalisation: snapshot, unset (non-exported only), and (if needed) re-exec with a sanitised env --
 if ((${#_arr_canonical_config_vars[@]})); then
-  declare -A _arr_env_override_seen=()
-  declare -A _arr_env_exported=()
-  _arr_need_reexec=0
-  _arr_reexec_env_unset=()
-
-  # 1) Snapshot values + export flags. Do NOT unset exported vars yet (avoid transient inconsistencies).
-  #    Safely unset only non-exported vars now; handle readonly via re-exec.
-  for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
-    [[ -n "${_arr_env_var}" ]] || continue
-    [[ -z "${_arr_env_override_seen[${_arr_env_var}]:-}" ]] || continue
-    _arr_env_override_seen["${_arr_env_var}"]=1
-
-    if [[ -v "${_arr_env_var}" ]]; then
-      _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
-      # Record if originally exported
-      if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
-        _arr_env_exported["${_arr_env_var}"]=1
-        # If we must re-exec, drop this name from the child env
-        _arr_reexec_env_unset+=("${_arr_env_var}")
-      fi
-      _arr_env_override_order+=("${_arr_env_var}")
-    fi
-
-    # Detect readonly; if readonly, schedule re-exec (cannot unset/overwrite in this shell).
-    if _arr_decl="$(declare -p -- "${_arr_env_var}" 2>/dev/null)"; then
-      if [[ "$_arr_decl" == *" -r"* || "$_arr_decl" == declare\ -r* || "$_arr_decl" == declare\ -xr* || "$_arr_decl" == *" -xr"* ]]; then
-        _arr_need_reexec=1
-        continue
-      fi
-    fi
-
-    # Only unset non-exported variables now to avoid transient loss from the process environment.
-    if [[ -z "${_arr_env_exported[${_arr_env_var}]:-}" ]]; then
-      set +e; unset -v "${_arr_env_var}"; set -e
-    fi
-  done
-  unset _arr_env_override_seen _arr_env_var _arr_decl
-
-  # 2) If any were readonly, re-exec in a sanitised environment with those names removed.
-  if (( _arr_need_reexec )) && [[ -z "${ARR_REEXEC_SANITIZED_ENV:-}" ]]; then
-    _arr_env_cmd=(env -i)
-    # Preserve minimal runtime env
-    for _k in PATH HOME USER SHELL LANG LC_ALL TERM; do
-      [[ -v $_k ]] && _arr_env_cmd+=("$_k=${!_k}")
-    done
-    # Remove exported readonly names from the child environment
-    for _name in "${_arr_reexec_env_unset[@]}"; do
-      _arr_env_cmd+=("-u" "${_name}")
-    done
-    # Preseed exported overrides so precedence can re-apply correctly after re-exec
-    _arr_preseed_payload=""
-    for _name in "${_arr_env_override_order[@]}"; do
-      if [[ -n "${_arr_env_exported[${_name}]:-}" ]]; then
-        _arr_preseed_payload+=$(printf '%s=%q\n' "${_name}" "${_arr_env_overrides[$_name]}")
-        _arr_preseed_payload+=$'\n'
-      fi
-    done
-    _arr_env_cmd+=("ARR_REEXEC_SANITIZED_ENV=1")
-    [[ -n "$_arr_preseed_payload" ]] && _arr_env_cmd+=("ARR_PRESEED_EXPORTS=${_arr_preseed_payload}")
-    exec "${_arr_env_cmd[@]}" bash "$0" "$@"
+  if [[ -n "${ARR_OVERRIDE_PAYLOAD:-}" ]]; then
+    arr_import_override_snapshot "${ARR_OVERRIDE_PAYLOAD}"
+    unset ARR_OVERRIDE_PAYLOAD
   fi
 
-  # 3) If re-exec’d, re-hydrate exported env (if any) before normal precedence evaluation.
-  if [[ -n "${ARR_REEXEC_SANITIZED_ENV:-}" && -n "${ARR_PRESEED_EXPORTS:-}" ]]; then
-    # shellcheck disable=SC2016
-    while IFS= read -r _line; do
-      [[ -z "$_line" ]] && continue
-      eval "export ${_line}"
-    done <<<"${ARR_PRESEED_EXPORTS}"
-    unset ARR_PRESEED_EXPORTS
-  fi
+  arr_capture_env_overrides "$@"
 fi
 
 USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
@@ -195,32 +317,73 @@ fi
 arr_apply_env_overrides() {
   local _arr_env_var=""
   local _arr_warn_tag="${STACK_TAG:-[arr]}"
-  local _arr_declaration=""
+  local _arr_raw=""
+  local _arr_expanded=""
+  declare -A _arr_seen=()
 
   for _arr_env_var in "${_arr_env_override_order[@]:-}"; do
-    if [[ -z "${_arr_env_var}" ]]; then
+    if [[ -z "${_arr_env_var}" || -n "${_arr_seen[${_arr_env_var}]:-}" ]]; then
       continue
     fi
+    _arr_seen["${_arr_env_var}"]=1
+
     if [[ ! "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
       printf '%s WARN: Skipping invalid environment variable name: %s\n' "${_arr_warn_tag}" "${_arr_env_var}" >&2
       continue
     fi
-    if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
-      if declare -f arr_var_is_readonly >/dev/null 2>&1; then
-        if arr_var_is_readonly "${_arr_env_var}"; then
-          continue
-        fi
-      else
-        if _arr_declaration="$(declare -p -- "${_arr_env_var}" 2>/dev/null)"; then
-          _arr_declaration="${_arr_declaration#declare }"
-          _arr_declaration="${_arr_declaration%% *}"
-          if [[ "${_arr_declaration}" == -*r* ]]; then
-            continue
-          fi
-        fi
+
+    if [[ ! -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+      continue
+    fi
+
+    _arr_raw="${_arr_env_overrides[${_arr_env_var}]}"
+
+    if [[ "${_arr_raw}" == *"__"* ]] && declare -f arr_expand_path_tokens >/dev/null 2>&1; then
+      _arr_expanded="$(arr_expand_path_tokens "${_arr_raw}")"
+      _arr_raw="${_arr_expanded}"
+    fi
+
+    if declare -f arr_var_is_readonly >/dev/null 2>&1 && arr_var_is_readonly "${_arr_env_var}"; then
+      printf '%s WARN: Cannot override readonly variable: %s\n' "${_arr_warn_tag}" "${_arr_env_var}" >&2
+      continue
+    fi
+
+    printf -v "${_arr_env_var}" '%s' "${_arr_raw}"
+    export "${_arr_env_var?}"
+    _arr_env_overrides["${_arr_env_var}"]="${_arr_raw}"
+  done
+}
+
+arr_expand_alias_placeholders_in_env() {
+  local _arr_env_var=""
+  local _arr_raw=""
+  local _arr_expanded=""
+
+  ((${#_arr_canonical_config_vars[@]} > 0)) || return 0
+
+  if ! declare -f arr_expand_path_tokens >/dev/null 2>&1; then
+    return 0
+  fi
+
+  for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
+    [[ -n "${_arr_env_var}" ]] || continue
+    if [[ ! -v "${_arr_env_var}" ]]; then
+      continue
+    fi
+
+    _arr_raw="${!_arr_env_var}"
+
+    if [[ "${_arr_raw}" =~ __([A-Z0-9_]+)__ ]]; then
+      _arr_expanded="$(arr_expand_path_tokens "${_arr_raw}")"
+
+      if [[ "${_arr_expanded}" != "${_arr_raw}" ]]; then
+        printf -v "${_arr_env_var}" '%s' "${_arr_expanded}"
+        _arr_raw="${_arr_expanded}"
       fi
-      printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
-      export "${_arr_env_var?}"
+
+      if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+        _arr_env_overrides["${_arr_env_var}"]="${_arr_raw}"
+      fi
     fi
   done
 }
@@ -230,25 +393,9 @@ if [[ -f "${_arr_defaults_file}" ]]; then
   . "${_arr_defaults_file}"
 fi
 
-if ((${#_arr_env_overrides[@]})); then
+if ((${#_arr_env_override_order[@]})); then
   arr_apply_env_overrides
-
-  if [[ -f "${_arr_defaults_file}" ]]; then
-    for _arr_env_var in "${_arr_canonical_config_vars[@]:-}"; do
-      [[ -n "${_arr_env_var}" ]] || continue
-      if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
-        continue
-      fi
-      unset -v "${_arr_env_var}" 2>/dev/null || :
-    done
-    unset _arr_env_var
-    # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
-    . "${_arr_defaults_file}"
-  fi
 fi
-
-unset _arr_canonical_config_vars
-unset _arr_defaults_file
 
 STACK="${STACK:-arr}"
 STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
@@ -311,7 +458,13 @@ if [[ -f "${_canon_userconf}" ]]; then
   arr_cleanup_temp_path "${_arr_userr_conf_errlog}"
   unset _arr_userr_conf_status _arr_userr_conf_errlog
 fi
-arr_apply_env_overrides
+arr_restore_canonical_defaults
+
+if ((${#_arr_env_override_order[@]})); then
+  arr_apply_env_overrides
+fi
+
+arr_expand_alias_placeholders_in_env
 
 for _arr_env_var in "${_arr_env_override_order[@]}"; do
   if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
@@ -320,7 +473,9 @@ for _arr_env_var in "${_arr_env_override_order[@]}"; do
 done
 unset _arr_env_var
 
-unset _arr_env_override_order _arr_env_overrides
+unset _arr_defaults_file
+unset _arr_canonical_config_vars
+unset _arr_env_override_order _arr_env_overrides _arr_env_override_exported
 
 ARR_USERCONF_PATH="${_canon_userconf}"
 unset _canon_userconf _canon_base _expected_base
