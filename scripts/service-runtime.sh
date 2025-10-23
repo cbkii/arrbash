@@ -209,7 +209,7 @@ service_health_sabnzbd() {
     return 0
   fi
   local version
-  if version="$($helper version 2>/dev/null)"; then
+  if version="$("$helper" version 2>/dev/null)"; then
     msg "[sabnzbd] API reachable (${version})"
   else
     warn "[sabnzbd] Health check failed (verify SABNZBD_HOST/SABNZBD_PORT or container status)"
