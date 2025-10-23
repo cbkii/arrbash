@@ -618,7 +618,7 @@ main() {
     msg "🩺 Skipping LAN diagnostics (ENABLE_CADDY=0)"
   fi
 
-  msg "Installation completed at $(date)"
+  msg "Installation completed at $(arr_date_local '+%Y-%m-%d %H:%M:%S %Z')"
   show_summary
 }
 

@@ -6,7 +6,7 @@
 
 # --- Quick start — who & when ---
 STACK="${STACK:-arr}"      # default: arr; project identifier for dirs/logs/labels
-TIMEZONE="Australia/Sydney"      # default: Australia/Sydney; container timezone
+TIMEZONE="Australia/Sydney"      # default: Australia/Sydney; local timezone for logs/backups/scheduling
 PUID="$(id -u)"      # default: $(id -u); container user ID
 PGID="$(id -g)"      # default: $(id -g); container group ID (match media group for collab)
 ARR_PERMISSION_PROFILE="strict"      # default: strict; strict=600/700, collab=660/770

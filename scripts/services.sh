@@ -1,5 +1,15 @@
 # shellcheck shell=bash
 
+if ! declare -f arr_date_local >/dev/null 2>&1; then
+  __arr_time_guard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
+  if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
+    # shellcheck source=scripts/common.sh
+    . "${REPO_ROOT}/scripts/common.sh"
+  fi
+  unset __arr_time_guard_dir
+fi
+
 # Confirms manual VueTorrent install has required assets before activation
 vuetorrent_manual_is_complete() {
   local dir="$1"
@@ -1416,7 +1426,7 @@ PY
   fi
 
   local backup
-  backup="${conf}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
+  backup="${conf}.${STACK}.$(arr_date_local '+%Y%m%d-%H%M%S').bak"
   if [[ -f "$conf" ]]; then
     if ! cp -p "$conf" "$backup"; then
       warn "[dns] Failed to create backup at ${backup}"

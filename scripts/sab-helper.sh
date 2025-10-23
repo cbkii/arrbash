@@ -323,7 +323,7 @@ sab_delete_job() {
 sab_postprocess() {
   local -a args=("$@")
   local timestamp
-  timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date)"
+  timestamp="$(arr_now_iso8601 2>/dev/null || arr_date_local '+%Y-%m-%d %H:%M:%S %Z')"
 
   log_info "[sab.postprocess] invoked at ${timestamp}"
 

@@ -16,6 +16,16 @@
 : "${GLUETUN_PF_STRICT:=0}"
 : "${PF_ENABLE_CYCLE:=1}"
 
+if ! declare -f arr_date_local >/dev/null 2>&1; then
+  __arr_time_guard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
+  if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
+    # shellcheck source=scripts/common.sh
+    . "${REPO_ROOT}/scripts/common.sh"
+  fi
+  unset __arr_time_guard_dir
+fi
+
 # GLUETUN_PF_STRICT
 #   0 (default): Port forwarding timeout is soft (status=timeout-soft) and does not
 #                cause a non-zero exit for the async worker.
@@ -156,7 +166,7 @@ _pf_normalize_int() {
 pf_log() {
   local message="$*"
   local timestamp
-  timestamp="$(date '+%Y-%m-%dT%H:%M:%S')"
+  timestamp="$(arr_now_iso8601)"
   local formatted="[${timestamp}] [pf] ${message}"
   local log_path
   log_path="$(pf_log_path)"
@@ -199,7 +209,7 @@ write_pf_state() {
   local message="${5:-}"
   local last_success_input="${6:-}"
   local last_checked
-  last_checked="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  last_checked="$(arr_now_iso8601)"
   local state_file
   state_file="$(pf_state_path)"
 
@@ -388,7 +398,7 @@ async_port_forward_worker() {
   fi
 
   local start_time current_time elapsed=0 attempts=0 cycles=0
-  start_time=$(date +%s)
+  start_time="$(arr_now_epoch)"
   local last_success=""
 
   pf_log "Worker started (budget=${total_budget}s quick=${quick_wait}s cycles=${max_cycles})"
@@ -398,7 +408,7 @@ async_port_forward_worker() {
   local initial_port
   initial_port="$(safe_fetch_port)"
   if [[ "$initial_port" != "0" ]]; then
-    last_success="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    last_success="$(arr_now_iso8601)"
     pf_log "Detected existing forwarded port ${initial_port}"
     pf_write_with_lock "$initial_port" "acquired" 0 0 "forwarded port already assigned" "$last_success"
     pf_store_forwarded_port "$initial_port"
@@ -411,14 +421,14 @@ async_port_forward_worker() {
   local budget_deadline=$((start_time + total_budget))
   local next_cycle_time=$((start_time + cycle_interval))
 
-  while ((current_time = $(date +%s), current_time <= budget_deadline)); do
+  while ((current_time = $(arr_now_epoch), current_time <= budget_deadline)); do
     local port
     port="$(safe_fetch_port)"
     attempts=$((attempts + 1))
-    current_time=$(date +%s)
+    current_time="$(arr_now_epoch)"
     elapsed=$((current_time - start_time))
     if [[ "$port" != "0" ]]; then
-      last_success="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      last_success="$(arr_now_iso8601)"
       pf_log "Forwarded port acquired: ${port} (attempts=${attempts} cycles=${cycles} elapsed=${elapsed}s)"
       pf_write_with_lock "$port" "acquired" "$attempts" "$cycles" "forwarded port acquired" "$last_success"
       pf_store_forwarded_port "$port"
@@ -909,7 +919,7 @@ ensure_proton_port_forwarding_ready() {
   msg "[pf] Waiting for Proton port forwarding (budget ${max_wait}s)..."
 
   local start_time
-  start_time=$(date +%s)
+  start_time="$(arr_now_epoch)"
   local cycled=0
 
   while :; do
@@ -923,7 +933,7 @@ ensure_proton_port_forwarding_ready() {
     fi
 
     local now
-    now=$(date +%s)
+    now="$(arr_now_epoch)"
     local elapsed=$((now - start_time))
 
     if ((elapsed >= max_wait)); then

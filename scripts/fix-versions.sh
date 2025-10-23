@@ -29,7 +29,7 @@ USE_LATEST=(
   "lscr.io/linuxserver/bazarr"
 )
 
-backup="${ENV_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
+backup="${ENV_FILE}.bak.$(arr_date_local '+%Y%m%d_%H%M%S')"
 cp "$ENV_FILE" "$backup"
 log_info "Backed up .env to $backup"
 

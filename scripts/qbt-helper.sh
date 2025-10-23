@@ -236,7 +236,7 @@ qbt_webui_rate_limited_restart() {
 
   if [[ -f "$state_file" ]]; then
     if last="$(<"$state_file" 2>/dev/null)" && [[ "$last" =~ ^[0-9]+$ ]]; then
-      if now="$(date +%s 2>/dev/null)"; then
+      if now="$(arr_now_epoch 2>/dev/null)"; then
         if ((now - last < interval)); then
           return 0
         fi
@@ -244,7 +244,7 @@ qbt_webui_rate_limited_restart() {
     fi
   fi
 
-  if now="$(date +%s 2>/dev/null)"; then
+  if now="$(arr_now_epoch 2>/dev/null)"; then
     printf '%s\n' "$now" >"$state_file" 2>/dev/null || true
   fi
 
@@ -515,7 +515,7 @@ reset_auth() {
   cfg=$(config_file_path)
   if [[ -f "$cfg" ]]; then
     local backup
-    backup="${cfg}.bak.$(date +%Y%m%d_%H%M%S)"
+    backup="${cfg}.bak.$(arr_date_local '+%Y%m%d_%H%M%S')"
     cp "$cfg" "$backup"
     log_info "  Backed up config to $backup"
     sed -i '/WebUI\\Password_PBKDF2/d' "$cfg" || true

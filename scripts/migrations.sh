@@ -9,7 +9,7 @@ run_one_time_migrations() {
 
       if [[ -f "$auth_config" ]]; then
         local auth_backup=""
-        auth_backup="${auth_config}.bak.$(date +%s)"
+        auth_backup="${auth_config}.bak.$(arr_now_epoch)"
         if mv "$auth_config" "$auth_backup" 2>/dev/null; then
           msg "  Backed up existing auth config to ${auth_backup}"
         else
@@ -33,7 +33,7 @@ run_one_time_migrations() {
     # Captures a single backup of the env file before mutating entries
     ensure_env_backup() {
       if ((env_backup_created == 0)); then
-        env_backup_path="${ARR_ENV_FILE}.bak.$(date +%s)"
+        env_backup_path="${ARR_ENV_FILE}.bak.$(arr_now_epoch)"
         if cp "${ARR_ENV_FILE}" "$env_backup_path" 2>/dev/null; then
           chmod 600 "$env_backup_path" 2>/dev/null || true
           warn "Backed up existing .env to ${env_backup_path} before applying migrations"
