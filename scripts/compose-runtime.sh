@@ -920,12 +920,49 @@ arr_compose_autorepair() {
       arr_compose_log_message "$log_file" "Trailing whitespace before fix (first 3):"
       printf '%s\n' "$trailing_samples" >>"$log_file" 2>/dev/null || true
     fi
-    if sed -i 's/[[:space:]]\+$//' "$staging" 2>>"$log_file"; then
-      summary+=("stripped trailing whitespace")
-      arr_compose_log_message "$log_file" "Stripped trailing whitespace"
-      validation_needed=1
-    else
-      arr_compose_log_message "$log_file" "Failed to strip trailing whitespace"
+    # Strip trailing whitespace except inside YAML block scalars
+    local tmp_strip=""
+    if tmp_strip="$(arr_mktemp_file "${staging}.strip.XXXXXX")"; then
+      if awk '
+        function is_block_start(line) {
+          return (line ~ /^[[:space:]]*([|>])([+-])?[[:space:]]*$/);
+        }
+        {
+          line=$0;
+          # Track indentation and block scalar regions
+          if (is_block_start(line)) {
+            in_block=1;
+            block_indent=match(line, /[^[:space:]]/)-1;
+            print line; next;
+          }
+          if (in_block) {
+            # End block when indentation drops below block_indent
+            curr_indent=match(line, /[^[:space:]]/)-1;
+            if (curr_indent < block_indent) {
+              in_block=0;
+            }
+          }
+          if (in_block) {
+            print line; # preserve as-is
+          } else {
+            sub(/[[:space:]]+$/, "", line);
+            print line;
+          }
+        }
+      ' "$staging" >"$tmp_strip" 2>>"$log_file"; then
+        if mv "$tmp_strip" "$staging" 2>/dev/null; then
+          arr_unregister_temp_path "$tmp_strip"
+          summary+=("stripped trailing whitespace (safe mode)")
+          arr_compose_log_message "$log_file" "Stripped trailing whitespace (excluding YAML block scalars)"
+          validation_needed=1
+        else
+          arr_cleanup_temp_path "$tmp_strip"
+          arr_compose_log_message "$log_file" "Failed to promote stripped file"
+        fi
+      else
+        arr_cleanup_temp_path "$tmp_strip"
+        arr_compose_log_message "$log_file" "Failed to strip trailing whitespace (awk error)"
+      fi
     fi
   fi
 
