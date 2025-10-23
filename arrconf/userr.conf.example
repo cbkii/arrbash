@@ -139,6 +139,13 @@ ARR_ENGLISH_POSITIVE_SCORE="50"      # default: 50; English release bonus
 SONARR_TRASH_TEMPLATE="sonarr-v4-quality-profile-web-1080p"      # default: sonarr-v4-quality-profile-web-1080p; Sonarr TRaSH template
 RADARR_TRASH_TEMPLATE="radarr-v5-quality-profile-hd-bluray-web"      # default: radarr-v5-quality-profile-hd-bluray-web; Radarr TRaSH template
 ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rules
+# --- ConfigArr custom format IDs (optional overrides; defaults in scripts/configarr-custom-formats.sh) ---
+# ARR_CF_IDS_LQ=("9c11cd3f07101cdba90a2d81cf0e56b4" "90a6f9a284dff5103f6346090e6280c8")      # default: see helper script; Low Quality formats
+# ARR_CF_IDS_LQ_TITLE=("e2315f990da2e2cbfc9fa5b7a6fcfe48" "e204b80c87be9497a8a6eaff48f72905")      # default: see helper script; Low Quality title matches
+# ARR_CF_IDS_UPSCALED=("23297a736ca77c0fc8e70f8edd7ee56c" "bfd8eb01832d646a0a89c4deb46f8564")      # default: see helper script; Upscaled releases
+# ARR_CF_IDS_LANGUAGE=("69aa1e159f97d860440b04cd6d590c4f" "0dc8aec3bd1c47cd6c40c46ecd27e846")      # default: see helper script; Not English language
+# ARR_CF_IDS_MULTI=("7ba05c6e0e14e793538174c679126996" "4b900e171accbfb172729b63323ea8ca")      # default: see helper script; MULTi releases
+# ARR_CF_IDS_X265=("47435ece6b99a0b477caf360e79ba0bb" "dc98083864ea246d05a42df0d05f81cc")      # default: see helper script; x265 (HD) releases
 
 # --- Images (advanced users; specify tags in config) ---
 # GLUETUN_IMAGE="qmcgaw/gluetun:v3.40.0"      # default: qmcgaw/gluetun:v3.40.0; override Gluetun container tag

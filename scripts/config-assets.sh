@@ -1115,56 +1115,60 @@ PY
     printf '%s' "$block"
   }
 
-  # It is recommended to move these to a separate configuration file.
-  # See https://trash-guides.info/ for the latest custom format IDs.
+  local configarr_helper_dir
+  configarr_helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # shellcheck source=scripts/configarr-custom-formats.sh
+  source "${configarr_helper_dir}/configarr-custom-formats.sh"
 
-  # Low Quality
-  local -a readonly CF_IDS_LQ=("9c11cd3f07101cdba90a2d81cf0e56b4" "90a6f9a284dff5103f6346090e6280c8")
-  # Low Quality (Title)
-  local -a readonly CF_IDS_LQ_TITLE=("e2315f990da2e2cbfc9fa5b7a6fcfe48" "e204b80c87be9497a8a6eaff48f72905")
-  # Upscaled
-  local -a readonly CF_IDS_UPSCALED=("23297a736ca77c0fc8e70f8edd7ee56c" "bfd8eb01832d646a0a89c4deb46f8564")
-  # Language: Not English
-  local -a readonly CF_IDS_LANGUAGE=("69aa1e159f97d860440b04cd6d590c4f" "0dc8aec3bd1c47cd6c40c46ecd27e846")
-  # MULTi
-  local -a readonly CF_IDS_MULTI=("7ba05c6e0e14e793538174c679126996" "4b900e171accbfb172729b63323ea8ca")
-  # x265 (HD)
-  local -a readonly CF_IDS_X265=("47435ece6b99a0b477caf360e79ba0bb" "dc98083864ea246d05a42df0d05f81cc")
+  local -a CF_IDS_LQ=()
+  local -a CF_IDS_LQ_TITLE=()
+  local -a CF_IDS_UPSCALED=()
+  local -a CF_IDS_LANGUAGE=()
+  local -a CF_IDS_MULTI=()
+  local -a CF_IDS_X265=()
+
+  configarr_load_custom_format_ids \
+    CF_IDS_LQ \
+    CF_IDS_LQ_TITLE \
+    CF_IDS_UPSCALED \
+    CF_IDS_LANGUAGE \
+    CF_IDS_MULTI \
+    CF_IDS_X265
 
   local common_cf_body=""
   local block=""
 
   if ((strict_junk_block)); then
-    block="$(append_cf_block "$junk_score" "LQ releases" "${cf_ids_lq[@]}")"
+    block="$(append_cf_block "$junk_score" "LQ releases" "${CF_IDS_LQ[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
-    block="$(append_cf_block "$junk_score" "LQ (Release Title)" "${cf_ids_lq_title[@]}")"
+    block="$(append_cf_block "$junk_score" "LQ (Release Title)" "${CF_IDS_LQ_TITLE[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
-    block="$(append_cf_block "$junk_score" "Upscaled flags" "${cf_ids_upscaled[@]}")"
+    block="$(append_cf_block "$junk_score" "Upscaled flags" "${CF_IDS_UPSCALED[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
   fi
 
   if ((english_only)); then
-    block="$(append_cf_block "$english_penalty_score" "Language: Not English" "${cf_ids_language[@]}")"
+    block="$(append_cf_block "$english_penalty_score" "Language: Not English" "${CF_IDS_LANGUAGE[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
   fi
 
   if ((discourage_multi)); then
-    block="$(append_cf_block "$multi_score" "MULTi releases" "${cf_ids_multi[@]}")"
+    block="$(append_cf_block "$multi_score" "MULTi releases" "${CF_IDS_MULTI[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
   fi
 
   if ((penalize_hd_x265)); then
-    block="$(append_cf_block "$x265_score" "x265 (HD)" "${cf_ids_x265[@]}")"
+    block="$(append_cf_block "$x265_score" "x265 (HD)" "${CF_IDS_X265[@]}")"
     if [[ -n "$block" ]]; then
       common_cf_body+="$block\n"
     fi
