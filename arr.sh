@@ -265,18 +265,14 @@ declare -a ARR_RUNTIME_ENV_GUARDS=()
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ -z "${ARR_USERCONF_OVERRIDE_PATH:-}" && -n "${_canon_base}" ]]; then
-    case "${_canon_userconf}" in
-      "${_canon_base}"|"${_canon_base}"/*)
-        ;;
-      *)
-        if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
-          printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
-          exit 1
-        else
-          printf '%s WARN: user config outside expected base (%s): %s\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
-        fi
-        ;;
-    esac
+    if ! [[ "${_canon_userconf}" == "${_canon_base}" || "${_canon_userconf}" == "${_canon_base}/"* ]]; then
+      if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
+        printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
+        exit 1
+      else
+        printf '%s WARN: user config outside expected base (%s): %s\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
+      fi
+    fi
   fi
 fi
 
