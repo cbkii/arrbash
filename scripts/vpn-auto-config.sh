@@ -3,6 +3,7 @@
 # Inputs: Reads environment variables such as VPN_AUTO_RECONNECT_ENABLED, VPN_SPEED_THRESHOLD_KBPS, and rotation limits.
 # Outputs: Normalizes numeric thresholds and updates global state tracking windows for reconnect attempts.
 # Exit codes: Functions return non-zero when configuration values are invalid or exceed safety guards.
+# Manual override flag helpers live in vpn-auto-signals.sh.
 if [[ -n "${__VPN_AUTO_CONFIG_LOADED:-}" ]]; then
   return 0
 fi
@@ -190,4 +191,3 @@ vpn_auto_reconnect_inside_allowed_window() {
   return 1
 }
 
-# Computes override flag path for manual pause/force triggers
