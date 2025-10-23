@@ -115,8 +115,6 @@ if [[ -z "${PRIMARY_HOME}" ]]; then
   warn "Unable to resolve home directory for ${PRIMARY_USER}; shell rc cleanup will be skipped."
 fi
 
-ARR_USERCONF_PATH="${ARR_USERCONF_PATH:-}"
-ARR_USERCONF_OVERRIDE_PATH="${ARR_USERCONF_OVERRIDE_PATH:-}"
 arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH
 
 source_user_conf() {

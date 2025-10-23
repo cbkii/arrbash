@@ -255,10 +255,7 @@ STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
 STACK_TAG="[${STACK}]"
 
 # Resolve and optionally constrain user config
-ARR_USERCONF_OVERRIDE_PATH="${ARR_USERCONF_OVERRIDE_PATH:-}"
-_arr_userconf_source="default"
-
-arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _arr_userconf_source
+arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH
 
 _expected_base="$(arr_expand_path_tokens "${ARR_DATA_ROOT}")"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
@@ -267,12 +264,14 @@ _canon_userconf="${ARR_USERCONF_PATH}"
 declare -a ARR_RUNTIME_ENV_GUARDS=()
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
-  if [[ "${_arr_userconf_source}" != "override" && "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
-    if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
-      printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
-      exit 1
-    else
-      printf '%s WARN: user config outside expected base (%s): %s\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
+  if [[ -z "${ARR_USERCONF_OVERRIDE_PATH:-}" && -n "${_canon_base}" ]]; then
+    if ! [[ "${_canon_userconf}" == "${_canon_base}" || "${_canon_userconf}" == "${_canon_base}/"* ]]; then
+      if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
+        printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
+        exit 1
+      else
+        printf '%s WARN: user config outside expected base (%s): %s\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
+      fi
     fi
   fi
 fi
@@ -324,7 +323,6 @@ unset _arr_env_var
 unset _arr_env_override_order _arr_env_overrides
 
 ARR_USERCONF_PATH="${_canon_userconf}"
-unset _arr_userconf_source
 unset _canon_userconf _canon_base _expected_base
 
 arr_lock_effective_vars() {
