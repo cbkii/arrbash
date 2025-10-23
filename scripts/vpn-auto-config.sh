@@ -170,11 +170,14 @@ vpn_auto_reconnect_inside_allowed_window() {
   if [[ ! "$start_hour" =~ ^[0-9]+$ || ! "$end_hour" =~ ^[0-9]+$ ]]; then
     return 0
   fi
-  local now
-  now="$(date +%H)"
-  ((now += 0)) || true
-  ((start_hour += 0)) || true
-  ((end_hour += 0)) || true
+  local now_raw
+  now_raw="$(LC_ALL=C arr_date_local +%H 2>/dev/null || printf '00')"
+  if [[ ! "$now_raw" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  local now=$((10#${now_raw}))
+  start_hour=$((10#${start_hour}))
+  end_hour=$((10#${end_hour}))
   if ((start_hour == end_hour)); then
     return 0
   fi

@@ -106,7 +106,7 @@ vpn_auto_reconnect_append_history() {
   ensure_dir_mode "$dir" "$DATA_DIR_MODE"
 
   local ts
-  ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  ts="$(LC_ALL=C date -u '+%Y-%m-%dT%H:%M:%SZ')"
   local success_json
   if [[ "$success_flag" == "true" ]]; then
     success_json=true
@@ -135,7 +135,13 @@ vpn_auto_reconnect_append_history() {
         '{ts:$ts,action:$action,country:($country==""?null:$country),success:$success,reason:($reason==""?null:$reason),consecutive_low:$consecutive,retry_total:$retry,jitter:$jitter,classification:$classification}'
     )"
   else
-    line="{\"ts\":\"$ts\",\"action\":\"$action\",\"country\":\"$country\",\"success\":$success_json,\"reason\":\"$reason\",\"consecutive_low\":$consecutive,\"retry_total\":$retry_total,\"jitter\":$jitter_value,\"classification\":\"$classification_value\"}"
+    local escaped_country="$country"
+    escaped_country="${escaped_country//\\/\\\\}"
+    escaped_country="${escaped_country//\"/\\\"}"
+    local escaped_reason="$reason"
+    escaped_reason="${escaped_reason//\\/\\\\}"
+    escaped_reason="${escaped_reason//\"/\\\"}"
+    line="{\"ts\":\"$ts\",\"action\":\"$action\",\"country\":\"$escaped_country\",\"success\":$success_json,\"reason\":\"$escaped_reason\",\"consecutive_low\":$consecutive,\"retry_total\":$retry_total,\"jitter\":$jitter_value,\"classification\":\"$classification_value\"}"
   fi
   printf '%s\n' "$line" >>"$file"
   ensure_nonsecret_file_mode "$file"

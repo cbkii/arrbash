@@ -72,7 +72,26 @@ preflight_compose_interpolation() {
   ensure_dir "$log_dir"
   local warn_log="${log_dir}/compose-interpolation.log"
 
-  if ! compose -f "$file" config >/dev/null 2>"$warn_log"; then
+  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
+    if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
+      if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
+        printf '%s Docker Compose command unavailable; cannot validate interpolation.\n' "$STACK_LABEL" >&2
+        exit 1
+      fi
+    elif declare -f detect_compose_cmd >/dev/null 2>&1; then
+      local compose_cmd_raw=""
+      if compose_cmd_raw="$(detect_compose_cmd 2>/dev/null)"; then
+        read -r -a DOCKER_COMPOSE_CMD <<<"$compose_cmd_raw"
+      fi
+    fi
+  fi
+
+  if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
+    printf '%s Docker Compose command unavailable; cannot validate interpolation.\n' "$STACK_LABEL" >&2
+    exit 1
+  fi
+
+  if ! "${DOCKER_COMPOSE_CMD[@]}" -f "$file" config >/dev/null 2>"$warn_log"; then
     printf '%s docker compose config failed; see %s\n' "$STACK_LABEL" "$warn_log" >&2
     exit 1
   fi

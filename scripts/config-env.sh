@@ -94,7 +94,8 @@ prepare_env_context() {
   local direct_ports_raw="${EXPOSE_DIRECT_PORTS:-0}"
   EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "$direct_ports_raw")"
   local split_vpn_raw="${SPLIT_VPN:-0}"
-  local split_vpn="$(arr_normalize_bool "$split_vpn_raw")"
+  local split_vpn
+  split_vpn="$(arr_normalize_bool "$split_vpn_raw")"
   case "$split_vpn_raw" in
     ''|0|1|true|TRUE|false|FALSE|yes|YES|no|NO|on|ON|off|OFF) ;;
     *)

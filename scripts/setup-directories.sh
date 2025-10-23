@@ -96,11 +96,11 @@ mkdirs() {
     arr_report_collab_skip
   fi
 
-  local -a collab_setup_dirs=("$DOWNLOADS_DIR" "$COMPLETED_DIR") collab_setup_labels=("Downloads" "Completed")
-  local idx
-  for idx in "${!collab_setup_dirs[@]}"; do
-    local dir="${collab_setup_dirs[$idx]}"
-    local label="${collab_setup_labels[$idx]}"
+  local -a collab_setup_pairs=("${DOWNLOADS_DIR}|Downloads" "${COMPLETED_DIR}|Completed")
+  local pair
+  for pair in "${collab_setup_pairs[@]}"; do
+    local dir="${pair%%|*}"
+    local label="${pair#*|}"
     ensure_dir "$dir"
     if ((collab_enabled)) && [[ -d "$dir" ]]; then
       chmod "$DATA_DIR_MODE" "$dir" 2>/dev/null || true

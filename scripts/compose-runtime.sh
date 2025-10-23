@@ -380,20 +380,12 @@ arr_compose_replace_line() {
     return 1
   fi
 
-  export REPLACEMENT_CONTENT="$new_content"
-  if awk -v target_line="$line_no" '
-    BEGIN {status=1}
-    {
-      if (NR == target_line) {
-        print ENVIRON["REPLACEMENT_CONTENT"];
-        status=0;
-      } else {
-        print $0;
-      }
-    }
-    END {exit status}
-  ' "$target" >"$tmp" 2>/dev/null; then
-    unset REPLACEMENT_CONTENT
+  local escaped="$new_content"
+  escaped="${escaped//\\/\\\\}"
+  escaped="${escaped//&/\\&}"
+  escaped="${escaped//\//\/}"
+
+  if LC_ALL=C sed "${line_no}s/.*/${escaped}/" "$target" >"$tmp" 2>/dev/null; then
     if mv "$tmp" "$target" 2>/dev/null; then
       arr_unregister_temp_path "$tmp"
       return 0
