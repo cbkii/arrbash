@@ -156,12 +156,16 @@ arr_resolve_color_output
 arr_var_is_readonly() {
   local varname="$1"
   local declaration=""
+  local flags=""
 
   if ! declaration=$(declare -p -- "$varname" 2>/dev/null); then
     return 1
   fi
 
-  [[ ${declaration} == declare\ -*r* ]]
+  flags="${declaration#declare }"
+  flags="${flags%% *}"
+
+  [[ ${flags} == -*r* ]]
 }
 
 # Checks command availability without emitting output (used for optional deps)

@@ -69,6 +69,105 @@ ARR_MAIN_TRAP_INSTALLED=1
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
+declare -a _arr_canonical_config_vars=()
+declare -a _arr_env_override_order=()
+declare -A _arr_env_overrides=()
+
+_arr_defaults_file="${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+if [[ -f "${_arr_defaults_file}" ]]; then
+  if mapfile -t _arr_canonical_config_vars < <(
+    REPO_ROOT="${REPO_ROOT}" "${BASH:-bash}" -Eeuo pipefail - <<'EOS'
+set -Eeuo pipefail
+if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
+  # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+  . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+  if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
+    arr_collect_all_expected_env_keys
+  fi
+fi
+EOS
+  ); then
+    :
+  else
+    _arr_canonical_config_vars=()
+  fi
+fi
+
+# -- Canonical env normalisation: snapshot, unset (non-exported only), and (if needed) re-exec with a sanitised env --
+if ((${#_arr_canonical_config_vars[@]})); then
+  declare -A _arr_env_override_seen=()
+  declare -A _arr_env_exported=()
+  _arr_need_reexec=0
+  _arr_reexec_env_unset=()
+
+  # 1) Snapshot values + export flags. Do NOT unset exported vars yet (avoid transient inconsistencies).
+  #    Safely unset only non-exported vars now; handle readonly via re-exec.
+  for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
+    [[ -n "${_arr_env_var}" ]] || continue
+    [[ -z "${_arr_env_override_seen[${_arr_env_var}]:-}" ]] || continue
+    _arr_env_override_seen["${_arr_env_var}"]=1
+
+    if [[ -v "${_arr_env_var}" ]]; then
+      _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
+      # Record if originally exported
+      if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
+        _arr_env_exported["${_arr_env_var}"]=1
+        # If we must re-exec, drop this name from the child env
+        _arr_reexec_env_unset+=("${_arr_env_var}")
+      fi
+      _arr_env_override_order+=("${_arr_env_var}")
+    fi
+
+    # Detect readonly; if readonly, schedule re-exec (cannot unset/overwrite in this shell).
+    if _arr_decl="$(declare -p -- "${_arr_env_var}" 2>/dev/null)"; then
+      if [[ "$_arr_decl" == *" -r"* || "$_arr_decl" == declare\ -r* || "$_arr_decl" == declare\ -xr* || "$_arr_decl" == *" -xr"* ]]; then
+        _arr_need_reexec=1
+        continue
+      fi
+    fi
+
+    # Only unset non-exported variables now to avoid transient loss from the process environment.
+    if [[ -z "${_arr_env_exported[${_arr_env_var}]:-}" ]]; then
+      set +e; unset -v "${_arr_env_var}"; set -e
+    fi
+  done
+  unset _arr_env_override_seen _arr_env_var _arr_decl
+
+  # 2) If any were readonly, re-exec in a sanitised environment with those names removed.
+  if (( _arr_need_reexec )) && [[ -z "${ARR_REEXEC_SANITIZED_ENV:-}" ]]; then
+    _arr_env_cmd=(env -i)
+    # Preserve minimal runtime env
+    for _k in PATH HOME USER SHELL LANG LC_ALL TERM; do
+      [[ -v $_k ]] && _arr_env_cmd+=("$_k=${!_k}")
+    done
+    # Remove exported readonly names from the child environment
+    for _name in "${_arr_reexec_env_unset[@]}"; do
+      _arr_env_cmd+=("-u" "${_name}")
+    done
+    # Preseed exported overrides so precedence can re-apply correctly after re-exec
+    _arr_preseed_payload=""
+    for _name in "${_arr_env_override_order[@]}"; do
+      if [[ -n "${_arr_env_exported[${_name}]:-}" ]]; then
+        _arr_preseed_payload+=$(printf '%s=%q\n' "${_name}" "${_arr_env_overrides[$_name]}")
+        _arr_preseed_payload+=$'\n'
+      fi
+    done
+    _arr_env_cmd+=("ARR_REEXEC_SANITIZED_ENV=1")
+    [[ -n "$_arr_preseed_payload" ]] && _arr_env_cmd+=("ARR_PRESEED_EXPORTS=${_arr_preseed_payload}")
+    exec "${_arr_env_cmd[@]}" bash "$0" "$@"
+  fi
+
+  # 3) If re-exec’d, re-hydrate exported env (if any) before normal precedence evaluation.
+  if [[ -n "${ARR_REEXEC_SANITIZED_ENV:-}" && -n "${ARR_PRESEED_EXPORTS:-}" ]]; then
+    # shellcheck disable=SC2016
+    while IFS= read -r _line; do
+      [[ -z "$_line" ]] && continue
+      eval "export ${_line}"
+    done <<<"${ARR_PRESEED_EXPORTS}"
+    unset ARR_PRESEED_EXPORTS
+  fi
+fi
+
 USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
 LOG_LIB="${REPO_ROOT}/scripts/logging.sh"
 if [[ -f "${USERCONF_LIB}" ]]; then
@@ -93,10 +192,63 @@ else
   exit 1
 fi
 
-if [ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]; then
+arr_apply_env_overrides() {
+  local _arr_env_var=""
+  local _arr_warn_tag="${STACK_TAG:-[arr]}"
+  local _arr_declaration=""
+
+  for _arr_env_var in "${_arr_env_override_order[@]:-}"; do
+    if [[ -z "${_arr_env_var}" ]]; then
+      continue
+    fi
+    if [[ ! "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf '%s WARN: Skipping invalid environment variable name: %s\n' "${_arr_warn_tag}" "${_arr_env_var}" >&2
+      continue
+    fi
+    if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+      if declare -f arr_var_is_readonly >/dev/null 2>&1; then
+        if arr_var_is_readonly "${_arr_env_var}"; then
+          continue
+        fi
+      else
+        if _arr_declaration="$(declare -p -- "${_arr_env_var}" 2>/dev/null)"; then
+          _arr_declaration="${_arr_declaration#declare }"
+          _arr_declaration="${_arr_declaration%% *}"
+          if [[ "${_arr_declaration}" == -*r* ]]; then
+            continue
+          fi
+        fi
+      fi
+      printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
+      export "${_arr_env_var?}"
+    fi
+  done
+}
+
+if [[ -f "${_arr_defaults_file}" ]]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
-  . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+  . "${_arr_defaults_file}"
 fi
+
+if ((${#_arr_env_overrides[@]})); then
+  arr_apply_env_overrides
+
+  if [[ -f "${_arr_defaults_file}" ]]; then
+    for _arr_env_var in "${_arr_canonical_config_vars[@]:-}"; do
+      [[ -n "${_arr_env_var}" ]] || continue
+      if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
+        continue
+      fi
+      unset -v "${_arr_env_var}" 2>/dev/null || :
+    done
+    unset _arr_env_var
+    # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+    . "${_arr_defaults_file}"
+  fi
+fi
+
+unset _arr_canonical_config_vars
+unset _arr_defaults_file
 
 STACK="${STACK:-arr}"
 STACK_UPPER="${STACK_UPPER:-${STACK^^}}"
@@ -108,57 +260,11 @@ _arr_userconf_source="default"
 
 arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH _arr_userconf_source
 
-_expected_base="${ARR_DATA_ROOT}"
+_expected_base="$(arr_expand_path_tokens "${ARR_DATA_ROOT}")"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
 _canon_userconf="${ARR_USERCONF_PATH}"
 
-declare -a _arr_env_override_order=()
-declare -A _arr_env_overrides=()
-declare -A _arr_env_override_seen=()
-if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
-  while IFS= read -r _arr_env_var; do
-    [[ -n "${_arr_env_var}" ]] || continue
-    if [[ -z "${_arr_env_override_seen[${_arr_env_var}]+x}" ]]; then
-      _arr_env_override_order+=("${_arr_env_var}")
-      _arr_env_override_seen["${_arr_env_var}"]=1
-    fi
-  done < <(arr_collect_all_expected_env_keys)
-else
-  while IFS= read -r _arr_env_line; do
-    _arr_env_var="${_arr_env_line%%=*}"
-    if [[ "${_arr_env_var}" == ARR_* ]]; then
-      if [[ -z "${_arr_env_override_seen[${_arr_env_var}]+x}" ]]; then
-        _arr_env_override_order+=("${_arr_env_var}")
-        _arr_env_override_seen["${_arr_env_var}"]=1
-      fi
-    fi
-  done < <(env)
-fi
-unset -v _arr_env_override_seen _arr_env_rest 2>/dev/null || :
-
-for _arr_env_var in "${_arr_env_override_order[@]}"; do
-  if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
-    if [[ ${!_arr_env_var+x} ]]; then
-      _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
-    else
-      _arr_env_overrides["${_arr_env_var}"]=""
-    fi
-  fi
-done
-unset _arr_env_var
-
-for _arr_env_var in "${_arr_env_override_order[@]}"; do
-  if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
-    if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      if ! arr_var_is_readonly "${_arr_env_var}"; then
-        readonly "${_arr_env_var}" 2>/dev/null || :
-      fi
-    else
-      printf '%s WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${STACK_TAG}" "${_arr_env_var}" >&2
-    fi
-  fi
-done
-unset _arr_env_var
+declare -a ARR_RUNTIME_ENV_GUARDS=()
 
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ "${_arr_userconf_source}" != "override" && "${_canon_userconf}" != "${_canon_base}/userr.conf" ]]; then
@@ -206,18 +312,11 @@ if [[ -f "${_canon_userconf}" ]]; then
   arr_cleanup_temp_path "${_arr_userr_conf_errlog}"
   unset _arr_userr_conf_status _arr_userr_conf_errlog
 fi
+arr_apply_env_overrides
+
 for _arr_env_var in "${_arr_env_override_order[@]}"; do
   if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
-    if arr_var_is_readonly "${_arr_env_var}"; then
-      continue
-    fi
-    # Validate variable name format before assignment
-    if [[ "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      printf -v "${_arr_env_var}" '%s' "${_arr_env_overrides[${_arr_env_var}]}"
-      export "${_arr_env_var?}"
-    else
-      printf '%s WARN: Skipping invalid environment variable name: %s\n' "${STACK_TAG}" "${_arr_env_var}" >&2
-    fi
+    ARR_RUNTIME_ENV_GUARDS+=("${_arr_env_var}")
   fi
 done
 unset _arr_env_var
@@ -227,6 +326,29 @@ unset _arr_env_override_order _arr_env_overrides
 ARR_USERCONF_PATH="${_canon_userconf}"
 unset _arr_userconf_source
 unset _canon_userconf _canon_base _expected_base
+
+arr_lock_effective_vars() {
+  local var
+  declare -A _arr_guard_seen=()
+
+  for var in "${ARR_RUNTIME_ENV_GUARDS[@]:-}"; do
+    [[ -n "${var}" ]] || continue
+    if [[ -n "${_arr_guard_seen[${var}]+x}" ]]; then
+      continue
+    fi
+    _arr_guard_seen["${var}"]=1
+    if [[ ! "${var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      printf '%s WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${STACK_TAG}" "${var}" >&2
+      continue
+    fi
+    if arr_var_is_readonly "${var}"; then
+      continue
+    fi
+    readonly "${var}" 2>/dev/null || :
+  done
+
+  unset _arr_guard_seen
+}
 
 if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
   readonly REPO_ROOT ARR_USERCONF_PATH
@@ -375,6 +497,8 @@ main() {
 
   # Restore default word splitting so callees are not impacted
   IFS="${OLDIFS}"
+
+  arr_lock_effective_vars
 
   if [[ "${RUN_UNINSTALL}" == "1" ]]; then
     local -a uninstall_args=()

@@ -21,6 +21,54 @@ arr_canonical_path() {
   printf '%s\n' "${path}"
 }
 
+arr_expand_path_tokens() {
+  local raw="$1"
+  local expanded="${raw}"
+  local token
+  local value
+  local prev=""
+  local -A seen_states=()
+  local -a unresolved_tokens=()
+  local iteration=0
+  local max_iterations=64
+
+  [[ -n "${expanded}" ]] || { printf '%s\n' "${expanded}"; return 0; }
+
+  while [[ "${expanded}" =~ __([A-Z0-9_]+)__ ]]; do
+    ((iteration++))
+    if (( iteration > max_iterations )); then
+      break
+    fi
+
+    if [[ -n "${seen_states["$expanded"]:-}" ]]; then
+      break
+    fi
+    seen_states["$expanded"]=1
+
+    token="${BASH_REMATCH[1]}"
+    value="${!token-}"
+
+    if [[ -n "${value}" ]]; then
+      prev="${expanded}"
+      expanded="${expanded//__${token}__/${value}}"
+      if [[ "${expanded}" == "${prev}" ]]; then
+        expanded="${prev//__${token}__/%%UNRESOLVED:${token}%%}"
+        unresolved_tokens+=("${token}")
+      fi
+    else
+      expanded="${expanded//__${token}__/%%UNRESOLVED:${token}%%}"
+      unresolved_tokens+=("${token}")
+    fi
+  done
+
+  local unresolved
+  for unresolved in "${unresolved_tokens[@]}"; do
+    expanded="${expanded//%%UNRESOLVED:${unresolved}%%/__${unresolved}__}"
+  done
+
+  printf '%s\n' "${expanded}"
+}
+
 # Returns the default user configuration path derived from ARRCONF_DIR, falling
 # back to ARR_DATA_ROOT when the config directory is unset.
 arr_default_userconf_path() {
@@ -106,8 +154,11 @@ arr_resolve_userconf_paths() {
     fi
   fi
 
+  local expanded_candidate
+  expanded_candidate="$(arr_expand_path_tokens "${candidate}")"
+
   local canon_candidate
-  canon_candidate="$(arr_canonical_path "${candidate}")"
+  canon_candidate="$(arr_canonical_path "${expanded_candidate}")"
 
   if [[ "${source}" == "override" ]]; then
     override="${canon_candidate}"
