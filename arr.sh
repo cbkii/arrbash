@@ -95,12 +95,17 @@ fi
 
 if ((${#_arr_canonical_config_vars[@]})); then
   declare -A _arr_env_override_seen=()
+  declare -A _arr_env_exported=()
   for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
     [[ -n "${_arr_env_var}" ]] || continue
     if [[ -z "${_arr_env_override_seen[${_arr_env_var}]:-}" ]]; then
       _arr_env_override_seen["${_arr_env_var}"]=1
       if [[ -v "${_arr_env_var}" ]]; then
         _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
+        # Record if originally exported
+        if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
+          _arr_env_exported["${_arr_env_var}"]=1
+        fi
         _arr_env_override_order+=("${_arr_env_var}")
       fi
       unset -v "${_arr_env_var}" 2>/dev/null || :
