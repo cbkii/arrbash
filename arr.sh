@@ -375,10 +375,10 @@ modules=(
   "permissions.sh"
   "preflight.sh"
   "preserve.sh"
-  "files.sh"
+  "compose-stack.sh"
   "migrations.sh"
-  "vpn-auto-reconnect.sh"
-  "services.sh"
+  "service-stack.sh"
+  "vpn-auto-stack.sh"
   "apikeys.sh"
   "aliases.sh"
   "dns.sh"
@@ -452,12 +452,12 @@ main() {
         shift
         ;;
       --rotate-api-key)
-        # shellcheck disable=SC2034 # consumed in scripts/files.sh
+        # shellcheck disable=SC2034 # consumed in scripts/compose-stack.sh
         FORCE_ROTATE_API_KEY=1
         shift
         ;;
       --rotate-caddy-auth)
-        # shellcheck disable=SC2034 # consumed in scripts/files.sh
+        # shellcheck disable=SC2034 # consumed in scripts/compose-stack.sh
         FORCE_REGEN_CADDY_AUTH=1
         shift
         ;;
