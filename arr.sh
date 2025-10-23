@@ -93,25 +93,79 @@ EOS
   fi
 fi
 
+# -- Canonical env normalisation: snapshot, unset (non-exported only), and (if needed) re-exec with a sanitised env --
 if ((${#_arr_canonical_config_vars[@]})); then
   declare -A _arr_env_override_seen=()
   declare -A _arr_env_exported=()
+  _arr_need_reexec=0
+  _arr_reexec_env_unset=()
+
+  # 1) Snapshot values + export flags. Do NOT unset exported vars yet (avoid transient inconsistencies).
+  #    Safely unset only non-exported vars now; handle readonly via re-exec.
   for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
     [[ -n "${_arr_env_var}" ]] || continue
-    if [[ -z "${_arr_env_override_seen[${_arr_env_var}]:-}" ]]; then
-      _arr_env_override_seen["${_arr_env_var}"]=1
-      if [[ -v "${_arr_env_var}" ]]; then
-        _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
-        # Record if originally exported
-        if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
-          _arr_env_exported["${_arr_env_var}"]=1
-        fi
-        _arr_env_override_order+=("${_arr_env_var}")
+    [[ -z "${_arr_env_override_seen[${_arr_env_var}]:-}" ]] || continue
+    _arr_env_override_seen["${_arr_env_var}"]=1
+
+    if [[ -v "${_arr_env_var}" ]]; then
+      _arr_env_overrides["${_arr_env_var}"]="${!_arr_env_var}"
+      # Record if originally exported
+      if [[ "$(declare -p -- "${_arr_env_var}" 2>/dev/null)" == "declare -x "* ]]; then
+        _arr_env_exported["${_arr_env_var}"]=1
+        # If we must re-exec, drop this name from the child env
+        _arr_reexec_env_unset+=("${_arr_env_var}")
       fi
-      unset -v "${_arr_env_var}" 2>/dev/null || :
+      _arr_env_override_order+=("${_arr_env_var}")
+    fi
+
+    # Detect readonly; if readonly, schedule re-exec (cannot unset/overwrite in this shell).
+    if _arr_decl="$(declare -p -- "${_arr_env_var}" 2>/dev/null)"; then
+      if [[ "$_arr_decl" == *" -r"* || "$_arr_decl" == declare\ -r* || "$_arr_decl" == declare\ -xr* || "$_arr_decl" == *" -xr"* ]]; then
+        _arr_need_reexec=1
+        continue
+      fi
+    fi
+
+    # Only unset non-exported variables now to avoid transient loss from the process environment.
+    if [[ -z "${_arr_env_exported[${_arr_env_var}]:-}" ]]; then
+      set +e; unset -v "${_arr_env_var}"; set -e
     fi
   done
-  unset _arr_env_override_seen _arr_env_var
+  unset _arr_env_override_seen _arr_env_var _arr_decl
+
+  # 2) If any were readonly, re-exec in a sanitised environment with those names removed.
+  if (( _arr_need_reexec )) && [[ -z "${ARR_REEXEC_SANITIZED_ENV:-}" ]]; then
+    _arr_env_cmd=(env -i)
+    # Preserve minimal runtime env
+    for _k in PATH HOME USER SHELL LANG LC_ALL TERM; do
+      [[ -v $_k ]] && _arr_env_cmd+=("$_k=${!_k}")
+    done
+    # Remove exported readonly names from the child environment
+    for _name in "${_arr_reexec_env_unset[@]}"; do
+      _arr_env_cmd+=("-u" "${_name}")
+    done
+    # Preseed exported overrides so precedence can re-apply correctly after re-exec
+    _arr_preseed_payload=""
+    for _name in "${_arr_env_override_order[@]}"; do
+      if [[ -n "${_arr_env_exported[${_name}]:-}" ]]; then
+        _arr_preseed_payload+=$(printf '%s=%q\n' "${_name}" "${_arr_env_overrides[$_name]}")
+        _arr_preseed_payload+=$'\n'
+      fi
+    done
+    _arr_env_cmd+=("ARR_REEXEC_SANITIZED_ENV=1")
+    [[ -n "$_arr_preseed_payload" ]] && _arr_env_cmd+=("ARR_PRESEED_EXPORTS=${_arr_preseed_payload}")
+    exec "${_arr_env_cmd[@]}" bash "$0" "$@"
+  fi
+
+  # 3) If re-exec’d, re-hydrate exported env (if any) before normal precedence evaluation.
+  if [[ -n "${ARR_REEXEC_SANITIZED_ENV:-}" && -n "${ARR_PRESEED_EXPORTS:-}" ]]; then
+    # shellcheck disable=SC2016
+    while IFS= read -r _line; do
+      [[ -z "$_line" ]] && continue
+      eval "export ${_line}"
+    done <<<"${ARR_PRESEED_EXPORTS}"
+    unset ARR_PRESEED_EXPORTS
+  fi
 fi
 
 USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
