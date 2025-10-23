@@ -104,6 +104,8 @@ install_vuetorrent() {
     --location
     --silent
     --show-error
+    --connect-timeout 10
+    --max-time 120
     --output "$tmp_archive"
   )
 
