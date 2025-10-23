@@ -282,4 +282,3 @@ vpn_auto_reconnect_failure_recent() {
   fi
   return 1
 }
-
