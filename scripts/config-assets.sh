@@ -23,6 +23,7 @@ write_gluetun_control_assets() {
 
   # Only write role-based auth for Gluetun >=3.40 to avoid confusing older builds
   if gluetun_version_requires_auth_config 2>/dev/null && [[ -n "${GLUETUN_API_KEY:-}" ]]; then
+    # Sanitise GLUETUN_API_KEY for safe heredoc embedding: strip CR/newlines, escape backslash & quote
     local sanitized_key
     sanitized_key=${GLUETUN_API_KEY//$'\r'/}
     if [[ "$sanitized_key" == *$'\n'* ]]; then
