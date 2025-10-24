@@ -157,6 +157,7 @@ mkdirs() {
 
   manage_media_dir "$TV_DIR" "TV"
   manage_media_dir "$MOVIES_DIR" "Movies"
+  manage_media_dir "$MUSIC_DIR" "Music"
 
   if [[ -n "${SUBS_DIR:-}" ]]; then
     manage_media_dir "$SUBS_DIR" "Subtitles"

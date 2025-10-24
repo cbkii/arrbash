@@ -301,6 +301,7 @@ Ports
   • Prowlarr → qBittorrent URL: ${prowlarr_hint}
   • Sonarr: ${SONARR_PORT}
   • Radarr: ${RADARR_PORT}
+  • Lidarr: ${LIDARR_PORT}
   • Prowlarr: ${PROWLARR_PORT}
   • Bazarr: ${BAZARR_PORT}
   • FlareSolverr: ${FLARR_PORT}
@@ -342,6 +343,7 @@ validate_config() {
   validate_port "${QBT_PORT}" || die "Invalid QBT_PORT: ${QBT_PORT}"
   validate_port "${SONARR_PORT}" || die "Invalid SONARR_PORT: ${SONARR_PORT}"
   validate_port "${RADARR_PORT}" || die "Invalid RADARR_PORT: ${RADARR_PORT}"
+  validate_port "${LIDARR_PORT}" || die "Invalid LIDARR_PORT: ${LIDARR_PORT}"
   validate_port "${PROWLARR_PORT}" || die "Invalid PROWLARR_PORT: ${PROWLARR_PORT}"
   validate_port "${BAZARR_PORT}" || die "Invalid BAZARR_PORT: ${BAZARR_PORT}"
   validate_port "${FLARR_PORT}" || die "Invalid FLARR_PORT: ${FLARR_PORT}"

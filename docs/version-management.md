@@ -14,6 +14,7 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
 | qBittorrent | `lscr.io/linuxserver/qbittorrent` | `5.1.2-r2-ls415` | Falls back to `:latest` if the pin disappears. |
 | Sonarr | `lscr.io/linuxserver/sonarr` | `4.0.15.2941-ls291` | Installer switches to `:latest` when a tag vanishes. |
 | Radarr | `lscr.io/linuxserver/radarr` | `5.27.5.10198-ls283` | Same fallback as Sonarr. |
+| Lidarr | `lscr.io/linuxserver/lidarr` | `latest` | Floating tag to avoid churn. |
 | Prowlarr | `lscr.io/linuxserver/prowlarr` | `latest` | Floating tag to avoid churn. |
 | Bazarr | `lscr.io/linuxserver/bazarr` | `latest` | Floating tag to avoid churn. |
 | FlareSolverr | `ghcr.io/flaresolverr/flaresolverr` | `v3.3.21` | Keep pinned to a stable release. |

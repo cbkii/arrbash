@@ -545,7 +545,7 @@ else
 fi
 
 log_info "Checking service health..."
-for service in qbittorrent sonarr radarr prowlarr bazarr; do
+for service in qbittorrent sonarr radarr lidarr prowlarr bazarr; do
   STATUS="$(docker inspect "$service" --format '{{.State.Status}}' 2>/dev/null || echo "not found")"
   if [[ "$STATUS" == "running" ]]; then
     log_info "  $service: ✅ running"

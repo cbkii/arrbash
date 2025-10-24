@@ -1556,6 +1556,40 @@ YAML
         max-size: "1m"
         max-file: "2"
 
+  lidarr:
+    image: "${LIDARR_IMAGE}"
+    container_name: "lidarr"
+    profiles:
+      - "ipdirect"
+    networks:
+      - "arr_net"
+YAML
+
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    cat <<'YAML' >>"$tmp"
+    ports:
+      - "${LAN_IP}:${LIDARR_PORT}:${LIDARR_INT_PORT}"
+YAML
+  fi
+
+  cat <<'YAML' >>"$tmp"
+    environment:
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
+    volumes:
+      - "${ARR_DOCKER_DIR}/lidarr:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${MUSIC_DIR}:/music"
+    restart: "unless-stopped"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+
   prowlarr:
     image: "${PROWLARR_IMAGE}"
     container_name: "prowlarr"
@@ -2065,6 +2099,32 @@ YAML
       - "${DOWNLOADS_DIR}:/downloads"
       - "${COMPLETED_DIR}:/completed"
       - "${MOVIES_DIR}:/movies"
+    depends_on:
+      gluetun:
+        condition: "service_healthy"
+    restart: "unless-stopped"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+
+  lidarr:
+    image: "${LIDARR_IMAGE}"
+    container_name: "lidarr"
+    profiles:
+      - "ipdirect"
+    network_mode: "service:gluetun"
+    environment:
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
+    volumes:
+      - "${ARR_DOCKER_DIR}/lidarr:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${MUSIC_DIR}:/music"
     depends_on:
       gluetun:
         condition: "service_healthy"

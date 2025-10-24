@@ -307,7 +307,7 @@ main() {
   local sanitized
   sanitized="$(fuzzy_remove_entries "${hosts_file}" "${begin_marker}" "${end_marker}")"
 
-  local services=(qbittorrent sonarr radarr prowlarr bazarr flaresolverr gluetun caddy)
+  local services=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr gluetun caddy)
   local host_line
   host_line="${lan_ip}"
   local service

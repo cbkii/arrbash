@@ -369,7 +369,7 @@ test_lan_connectivity() {
   fi
 
   local service
-  for service in qbittorrent sonarr radarr prowlarr bazarr; do
+  for service in qbittorrent sonarr radarr lidarr prowlarr bazarr; do
     if curl -fsS -m 5 -H "Host: ${service}.${SUFFIX}" "http://${LAN_IP}/" >/dev/null 2>&1; then
       echo "[doctor][ok] ${service} accessible via Caddy on ${LAN_IP}"
     else

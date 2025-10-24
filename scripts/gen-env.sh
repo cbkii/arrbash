@@ -189,11 +189,13 @@ filter_conditionals() {
 : "${ARR_LOG_DIR:=${ARR_STACK_DIR}/logs}"
 : "${ARR_INSTALL_LOG:=${ARR_LOG_DIR}/${STACK}-install.log}"
 : "${ARR_USERCONF_PATH:=${ARRCONF_DIR}/userr.conf}"
+: "${MUSIC_DIR:=${MEDIA_DIR}/Music}"
 
 : "${QBT_INT_PORT:=8082}"
 : "${QBT_PORT:=${QBT_INT_PORT}}"
 : "${SONARR_INT_PORT:=8989}"
 : "${RADARR_INT_PORT:=7878}"
+: "${LIDARR_INT_PORT:=8686}"
 : "${PROWLARR_INT_PORT:=9696}"
 : "${BAZARR_INT_PORT:=6767}"
 : "${FLARR_INT_PORT:=8191}"
@@ -220,6 +222,7 @@ export ENABLE_CADDY EXPOSE_DIRECT_PORTS SABNZBD_ENABLED
 
 if [[ -z "${SONARR_PORT:-}" ]]; then SONARR_PORT="$SONARR_INT_PORT"; fi
 if [[ -z "${RADARR_PORT:-}" ]]; then RADARR_PORT="$RADARR_INT_PORT"; fi
+if [[ -z "${LIDARR_PORT:-}" ]]; then LIDARR_PORT="$LIDARR_INT_PORT"; fi
 if [[ -z "${PROWLARR_PORT:-}" ]]; then PROWLARR_PORT="$PROWLARR_INT_PORT"; fi
 if [[ -z "${BAZARR_PORT:-}" ]]; then BAZARR_PORT="$BAZARR_INT_PORT"; fi
 if [[ -z "${FLARR_PORT:-}" ]]; then FLARR_PORT="$FLARR_INT_PORT"; fi

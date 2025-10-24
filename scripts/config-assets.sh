@@ -385,6 +385,7 @@ write_caddy_assets() {
     "qbittorrent|${QBT_INT_PORT}|${default_upstream_host}"
     "sonarr|${SONARR_PORT}|${default_upstream_host}"
     "radarr|${RADARR_PORT}|${default_upstream_host}"
+    "lidarr|${LIDARR_PORT}|${default_upstream_host}"
     "prowlarr|${PROWLARR_PORT}|${default_upstream_host}"
     "bazarr|${BAZARR_PORT}|${default_upstream_host}"
     "flaresolverr|${FLARR_PORT}|${default_upstream_host}"
