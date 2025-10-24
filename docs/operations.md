@@ -10,6 +10,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
 
   ```bash
   ./arr.sh --yes                 # non-interactive mode
+  ./arr.sh --trace               # emit Bash trace logs for deeper debugging
   ./arr.sh --enable-caddy        # temporary toggle for ENABLE_CADDY=1
   ./arr.sh --enable-sab          # temporary toggle for SABNZBD_ENABLED=1
   ./arr.sh --rotate-api-key      # issue a new Gluetun API key
