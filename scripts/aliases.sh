@@ -343,6 +343,93 @@ VPN_AUTO_ALIAS
   msg "   Repo copy updated: $configured_template"
 }
 
+update_alias_rc_block() {
+  local alias_path="$1"
+
+  local rc_path="$(arr_shell_resolve_rc_path)"
+  if [[ -z "${rc_path}" ]]; then
+    warn "Unable to determine shell rc for alias installation"
+    return 1
+  fi
+
+  if ! touch "${rc_path}" 2>/dev/null; then
+    warn "Unable to update shell rc at ${rc_path}"
+    return 1
+  fi
+
+  local header="# ARR Stack helper aliases"
+  local repo_escaped alias_line source_line logs_line
+  repo_escaped="$(arr_shell_escape_double_quotes "${REPO_ROOT}")"
+  alias_line=$(printf "alias %s='cd \"%s\" && ./arr.sh'" "${STACK}" "${repo_escaped}")
+  logs_line=$(printf "alias %s-logs='docker logs -f gluetun'" "${STACK}")
+  source_line="[ -f \"${alias_path}\" ] && source \"${alias_path}\""
+
+  local -a rc_lines=()
+  if [[ -r "${rc_path}" ]] && mapfile -t rc_lines <"${rc_path}" 2>/dev/null; then
+    :
+  else
+    rc_lines=()
+  fi
+
+  local -a filtered_lines=()
+  local idx=0
+  local total=${#rc_lines[@]}
+
+  while (( idx < total )); do
+    local line="${rc_lines[idx]}"
+    if [[ "${line}" == "${header}" ]]; then
+      ((idx++))
+      if (( idx < total )) && [[ "${rc_lines[idx]}" == "alias ${STACK}="* ]]; then
+        ((idx++))
+      fi
+      if (( idx < total )) && [[ "${rc_lines[idx]}" == "alias ${STACK}-logs="* ]]; then
+        ((idx++))
+      fi
+      if (( idx < total )) && [[ "${rc_lines[idx]}" == *".aliasarr"* ]]; then
+        ((idx++))
+      fi
+      if (( idx < total )) && [[ -z "${rc_lines[idx]}" ]]; then
+        ((idx++))
+      fi
+      continue
+    fi
+    filtered_lines+=("${line}")
+    ((idx++))
+  done
+
+  while (( ${#filtered_lines[@]} > 0 )) && [[ -z "${filtered_lines[-1]}" ]]; do
+    unset 'filtered_lines[-1]'
+  done
+
+  if (( ${#filtered_lines[@]} > 0 )); then
+    filtered_lines+=("")
+  fi
+
+  filtered_lines+=("${header}" "${alias_line}" "${logs_line}" "${source_line}")
+
+  local tmp_rc=""
+  if ! tmp_rc="$(arr_mktemp_file "${rc_path}.XXXX" "$NONSECRET_FILE_MODE")"; then
+    warn "Failed to prepare temporary rc file for ${rc_path}"
+    return 1
+  fi
+
+  {
+    for line in "${filtered_lines[@]}"; do
+      printf '%s\n' "${line}"
+    done
+  } >"${tmp_rc}"
+
+  if mv "${tmp_rc}" "${rc_path}"; then
+    arr_unregister_temp_path "${tmp_rc}"
+    msg "Updated helper aliases in ${rc_path}"
+    return 0
+  fi
+
+  arr_cleanup_temp_path "${tmp_rc}"
+  warn "Failed to update helper aliases block in ${rc_path}"
+  return 1
+}
+
 install_aliases() {
   if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
     ARR_STACK_DIR="$(arr_stack_dir)"
@@ -373,83 +460,8 @@ install_aliases() {
 
   ensure_secret_file_mode "$alias_path"
 
-  local kind _ rc repo_escaped alias_line source_line
-  {
-    local IFS=' '
-    read -r kind _ <<<"$(detect_shell_kind)"
-  }
-  rc="${HOME}/.bashrc"
-  [[ "$kind" == "zsh" ]] && rc="${HOME}/.zshrc"
-  if ! touch "$rc" 2>/dev/null; then
-    warn "Unable to update shell rc at ${rc}"
-  else
-    repo_escaped="$(arr_shell_escape_double_quotes "${REPO_ROOT}")"
-    alias_line=$(printf "alias %s='cd \"%s\" && ./arr.sh'" "${STACK}" "${repo_escaped}")
-    source_line="[ -f \"${alias_path}\" ] && source \"${alias_path}\""
-    local logs_line
-    logs_line=$(printf "alias %s-logs='docker logs -f gluetun'" "$STACK")
-    local header="# ARR Stack helper aliases"
-
-    local -a rc_lines=()
-    if [[ -r "$rc" ]] && mapfile -t rc_lines <"$rc" 2>/dev/null; then
-      :
-    else
-      rc_lines=()
-    fi
-
-    local -a filtered_lines=()
-    local line
-    for line in "${rc_lines[@]}"; do
-      if [[ "$line" == "$header" ]]; then
-        continue
-      fi
-      if [[ "$line" == "alias ${STACK}="* ]]; then
-        continue
-      fi
-      if [[ "$line" == "alias ${STACK}-logs="* ]]; then
-        continue
-      fi
-      if [[ "$line" == *".aliasarr"* ]]; then
-        if [[ "$line" == *"source"* || "$line" == "# source "* ]]; then
-          continue
-        fi
-      fi
-      filtered_lines+=("$line")
-    done
-
-    while ((${#filtered_lines[@]} > 0)) && [[ -z "${filtered_lines[-1]}" ]]; do
-      unset 'filtered_lines[-1]'
-    done
-
-    if ((${#filtered_lines[@]} > 0)); then
-      filtered_lines+=("")
-    fi
-    filtered_lines+=("$header" "$alias_line" "$logs_line" "$source_line")
-
-    local tmp_rc
-    if ! tmp_rc="$(arr_mktemp_file "${rc}.XXXX" "$NONSECRET_FILE_MODE")"; then
-      warn "Failed to prepare temporary rc file for ${rc}"
-    else
-      {
-        for line in "${filtered_lines[@]}"; do
-          printf '%s\n' "$line"
-        done
-      } >"$tmp_rc"
-      if mv "$tmp_rc" "$rc"; then
-        arr_unregister_temp_path "$tmp_rc"
-        msg "Updated helper aliases in ${rc}"
-      else
-        arr_cleanup_temp_path "$tmp_rc"
-        warn "Failed to update helper aliases block in ${rc}"
-      fi
-    fi
-  fi
-
-  if reload_shell_rc --force; then
-    msg "♻️ Shell configuration reloaded"
-  else
-    warn "Reload your shell configuration to activate ARR aliases"
-  fi
+  update_alias_rc_block "${alias_path}" || true
+  arr_mark_shell_reload_pending
 
   ensure_dir_mode "${ARR_STACK_DIR}/scripts" 755
 
@@ -614,11 +626,8 @@ refresh_aliases() {
     return 1
   fi
 
-  if reload_shell_rc; then
+  arr_mark_shell_reload_pending
+  if reload_shell_rc --clear-env; then
     msg "♻️ Shell configuration reloaded"
-  else
-    local alias_path="${ARR_STACK_DIR}/.aliasarr"
-    warn "Could not automatically reload your shell configuration"
-    warn "Run 'source ${alias_path}' manually to pick up the latest aliases"
   fi
 }
