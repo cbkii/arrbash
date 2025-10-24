@@ -1261,6 +1261,241 @@ arr_compose_autorepair_and_validate() {
   return 0
 }
 
+arr_compose_emit_qbittorrent_service() {
+  local dest="$1"
+  local qb_image="\${QBITTORRENT_IMAGE}"
+  local puid_placeholder="\${PUID}"
+  local pgid_placeholder="\${PGID}"
+  local tz_placeholder="\${TIMEZONE}"
+  local qbt_int_placeholder="\${QBT_INT_PORT}"
+  local qbt_bind_placeholder="\${QBT_BIND_ADDR}"
+  local qbt_enforce_placeholder="\${QBT_ENFORCE_WEBUI}"
+
+  {
+    printf '  qbittorrent:\n'
+    printf '    image: "%s"\n' "$qb_image"
+    printf '    container_name: "qbittorrent"\n'
+    printf '    profiles:\n'
+    printf '      - "ipdirect"\n'
+    printf '    network_mode: "service:gluetun"\n'
+    printf '    environment:\n'
+    printf '      PUID: "%s"\n' "$puid_placeholder"
+    printf '      PGID: "%s"\n' "$pgid_placeholder"
+    printf '      TZ: "%s"\n' "$tz_placeholder"
+    printf '      LANG: "en_US.UTF-8"\n'
+    printf '      QBT_INT_PORT: "%s"\n' "$qbt_int_placeholder"
+    printf '      QBT_BIND_ADDR: "%s"\n' "$qbt_bind_placeholder"
+    printf '      QBT_ENFORCE_WEBUI: "%s"\n' "$qbt_enforce_placeholder"
+    printf '      QBT_WEBUI_INIT_HOOK: "1"\n'
+  } >>"$dest"
+
+  if [[ -n "${QBT_DOCKER_MODS:-}" ]]; then
+    arr_yaml_kv "      " "DOCKER_MODS" "\${QBT_DOCKER_MODS}" >>"$dest"
+  fi
+
+  cat <<'YAML' >>"$dest"
+    volumes:
+      - "${ARR_DOCKER_DIR}/qbittorrent:/config"
+      - "${DOWNLOADS_DIR}:/downloads"
+      - "${COMPLETED_DIR}:/completed"
+      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
+    depends_on:
+      gluetun:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
+      interval: "30s"
+      timeout: "10s"
+      retries: "3"
+    restart: "unless-stopped"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+
+  printf '\n' >>"$dest"
+}
+
+arr_compose_emit_media_service() {
+  local dest="$1"
+  local service="$2"
+  local mode="$3"
+
+  local image=""
+  local container=""
+  local port_mapping=""
+  local -a volumes=()
+  local lan_placeholder="\${LAN_IP}"
+
+  case "$service" in
+    sonarr)
+      image="\${SONARR_IMAGE}"
+      container='sonarr'
+      port_mapping="\${SONARR_PORT}:\${SONARR_INT_PORT}"
+      volumes=(
+        "\${ARR_DOCKER_DIR}/sonarr:/config"
+        "\${DOWNLOADS_DIR}:/downloads"
+        "\${COMPLETED_DIR}:/completed"
+        "\${TV_DIR}:/tv"
+      )
+      ;;
+    radarr)
+      image="\${RADARR_IMAGE}"
+      container='radarr'
+      port_mapping="\${RADARR_PORT}:\${RADARR_INT_PORT}"
+      volumes=(
+        "\${ARR_DOCKER_DIR}/radarr:/config"
+        "\${DOWNLOADS_DIR}:/downloads"
+        "\${COMPLETED_DIR}:/completed"
+        "\${MOVIES_DIR}:/movies"
+      )
+      ;;
+    lidarr)
+      image="\${LIDARR_IMAGE}"
+      container='lidarr'
+      port_mapping="\${LIDARR_PORT}:\${LIDARR_INT_PORT}"
+      volumes=(
+        "\${ARR_DOCKER_DIR}/lidarr:/config"
+        "\${DOWNLOADS_DIR}:/downloads"
+        "\${COMPLETED_DIR}:/completed"
+        "\${MUSIC_DIR}:/music"
+      )
+      ;;
+    prowlarr)
+      image="\${PROWLARR_IMAGE}"
+      container='prowlarr'
+      port_mapping="\${PROWLARR_PORT}:\${PROWLARR_INT_PORT}"
+      volumes=(
+        "\${ARR_DOCKER_DIR}/prowlarr:/config"
+      )
+      ;;
+    bazarr)
+      image="\${BAZARR_IMAGE}"
+      container='bazarr'
+      port_mapping="\${BAZARR_PORT}:\${BAZARR_INT_PORT}"
+      volumes=(
+        "\${ARR_DOCKER_DIR}/bazarr:/config"
+        "\${TV_DIR}:/tv"
+        "\${MOVIES_DIR}:/movies"
+      )
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  {
+    printf '  %s:\n' "$service"
+    printf '    image: "%s"\n' "$image"
+    printf '    container_name: "%s"\n' "$container"
+    printf '    profiles:\n'
+    printf '      - "ipdirect"\n'
+  } >>"$dest"
+
+  if [[ "$mode" == "split" ]]; then
+    cat <<'YAML' >>"$dest"
+    networks:
+      - "arr_net"
+YAML
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" && -n "$port_mapping" ]]; then
+      {
+        printf '    ports:\n'
+        printf '      - "%s:%s"\n' "$lan_placeholder" "$port_mapping"
+      } >>"$dest"
+    fi
+  else
+    cat <<'YAML' >>"$dest"
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: "service_healthy"
+YAML
+  fi
+
+  cat <<'YAML' >>"$dest"
+    environment:
+      PUID: "${PUID}"
+      PGID: "${PGID}"
+      TZ: "${TIMEZONE}"
+      LANG: "en_US.UTF-8"
+    volumes:
+YAML
+
+  local volume=""
+  for volume in "${volumes[@]}"; do
+    printf '      - "%s"\n' "$volume" >>"$dest"
+  done
+
+  if [[ "$service" == "bazarr" && -n "${SUBS_DIR:-}" ]]; then
+    printf '      - "%s"\n' "\${SUBS_DIR}:/subs" >>"$dest"
+  fi
+
+  cat <<'YAML' >>"$dest"
+    restart: "unless-stopped"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+
+  printf '\n' >>"$dest"
+}
+
+arr_compose_emit_flaresolverr_service() {
+  local dest="$1"
+  local mode="$2"
+  local flarr_image="\${FLARR_IMAGE}"
+  local lan_placeholder="\${LAN_IP}"
+
+  {
+    printf '  flaresolverr:\n'
+    printf '    image: "%s"\n' "$flarr_image"
+    printf '    container_name: "flaresolverr"\n'
+    printf '    profiles:\n'
+    printf '      - "ipdirect"\n'
+  } >>"$dest"
+
+  if [[ "$mode" == "split" ]]; then
+    cat <<'YAML' >>"$dest"
+    networks:
+      - "arr_net"
+YAML
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+      printf '    ports:\n' >>"$dest"
+      printf '      - "%s:%s"\n' "$lan_placeholder" "\${FLARR_PORT}:\${FLARR_INT_PORT}" >>"$dest"
+    fi
+  else
+    cat <<'YAML' >>"$dest"
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: "service_healthy"
+YAML
+  fi
+
+  cat <<'YAML' >>"$dest"
+    environment:
+      LOG_LEVEL: "info"
+    healthcheck:
+      test: ["CMD-SHELL", "if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health; elif command -v wget >/dev/null 2>&1; then wget -q --timeout=10 -O- http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health; else exit 1; fi"]
+      interval: "30s"
+      timeout: "10s"
+      retries: "3"
+      start_period: "40s"
+    restart: "unless-stopped"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+YAML
+
+  printf '\n' >>"$dest"
+}
+
 arr_validate_compose_prerequisites() {
   local -a errors=()
 
@@ -1443,258 +1678,34 @@ YAML
 
 YAML
 
-  cat <<'YAML' >>"$tmp"
-  qbittorrent:
-    image: "${QBITTORRENT_IMAGE}"
-    container_name: "qbittorrent"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-      QBT_INT_PORT: "${QBT_INT_PORT}"
-      QBT_BIND_ADDR: "${QBT_BIND_ADDR}"
-      QBT_ENFORCE_WEBUI: "${QBT_ENFORCE_WEBUI}"
-      QBT_WEBUI_INIT_HOOK: 1
-YAML
-
-  if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
-    # shellcheck disable=SC2016  # intentional literal for compose placeholder
-    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
+  printf '\n' >>"$tmp"
+  if ! arr_compose_emit_qbittorrent_service "$tmp"; then
+    die "Failed to emit qBittorrent service definition"
   fi
 
-  cat <<'YAML' >>"$tmp"
-    volumes:
-      - "${ARR_DOCKER_DIR}/qbittorrent:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    healthcheck:
-      test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
-      interval: "30s"
-      timeout: "10s"
-      retries: "3"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  sonarr:
-    image: "${SONARR_IMAGE}"
-    container_name: "sonarr"
-    profiles:
-      - "ipdirect"
-    networks:
-      - "arr_net"
-YAML
-
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${SONARR_PORT}:${SONARR_INT_PORT}"
-YAML
+  if ! arr_compose_emit_media_service "$tmp" "sonarr" "split"; then
+    die "Failed to emit sonarr service definition"
   fi
 
-  cat <<'YAML' >>"$tmp"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/sonarr:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${TV_DIR}:/tv"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  radarr:
-    image: "${RADARR_IMAGE}"
-    container_name: "radarr"
-    profiles:
-      - "ipdirect"
-    networks:
-      - "arr_net"
-YAML
-
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${RADARR_PORT}:${RADARR_INT_PORT}"
-YAML
+  if ! arr_compose_emit_media_service "$tmp" "radarr" "split"; then
+    die "Failed to emit radarr service definition"
   fi
 
-  cat <<'YAML' >>"$tmp"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/radarr:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${MOVIES_DIR}:/movies"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  lidarr:
-    image: "${LIDARR_IMAGE}"
-    container_name: "lidarr"
-    profiles:
-      - "ipdirect"
-    networks:
-      - "arr_net"
-YAML
-
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${LIDARR_PORT}:${LIDARR_INT_PORT}"
-YAML
+  if ! arr_compose_emit_media_service "$tmp" "lidarr" "split"; then
+    die "Failed to emit lidarr service definition"
   fi
 
-  cat <<'YAML' >>"$tmp"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/lidarr:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${MUSIC_DIR}:/music"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  prowlarr:
-    image: "${PROWLARR_IMAGE}"
-    container_name: "prowlarr"
-    profiles:
-      - "ipdirect"
-    networks:
-      - "arr_net"
-YAML
-
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${PROWLARR_PORT}:${PROWLARR_INT_PORT}"
-YAML
+  if ! arr_compose_emit_media_service "$tmp" "prowlarr" "split"; then
+    die "Failed to emit prowlarr service definition"
   fi
 
-  cat <<'YAML' >>"$tmp"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/prowlarr:/config"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  bazarr:
-    image: "${BAZARR_IMAGE}"
-    container_name: "bazarr"
-    profiles:
-      - "ipdirect"
-    networks:
-      - "arr_net"
-YAML
-
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${BAZARR_PORT}:${BAZARR_INT_PORT}"
-YAML
+  if ! arr_compose_emit_media_service "$tmp" "bazarr" "split"; then
+    die "Failed to emit bazarr service definition"
   fi
 
-  cat <<'YAML' >>"$tmp"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/bazarr:/config"
-      - "${TV_DIR}:/tv"
-      - "${MOVIES_DIR}:/movies"
-YAML
-
-  if [[ -n "${SUBS_DIR:-}" ]]; then
-    cat <<'YAML' >>"$tmp"
-      - "${SUBS_DIR}:/subs"
-YAML
+  if ! arr_compose_emit_flaresolverr_service "$tmp" "split"; then
+    die "Failed to emit flaresolverr service definition"
   fi
-
-  cat <<'YAML' >>"$tmp"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  flaresolverr:
-    image: "${FLARR_IMAGE}"
-    container_name: "flaresolverr"
-    profiles:
-      - "ipdirect"
-    networks:
-      - "arr_net"
-YAML
-
-  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
-    cat <<'YAML' >>"$tmp"
-    ports:
-      - "${LAN_IP}:${FLARR_PORT}:${FLARR_INT_PORT}"
-YAML
-  fi
-
-  cat <<'YAML' >>"$tmp"
-    environment:
-      LOG_LEVEL: "info"
-    healthcheck:
-      test: ["CMD-SHELL", "if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health; elif command -v wget >/dev/null 2>&1; then wget -q --timeout=10 -O- http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health; else exit 1; fi"]
-      interval: "30s"
-      timeout: "10s"
-      retries: "3"
-      start_period: "40s"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
@@ -2014,208 +2025,34 @@ YAML
 YAML
   fi
 
-  cat <<'YAML' >>"$tmp"
-  qbittorrent:
-    image: "${QBITTORRENT_IMAGE}"
-    container_name: "qbittorrent"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-      QBT_INT_PORT: "${QBT_INT_PORT}"
-      QBT_BIND_ADDR: "${QBT_BIND_ADDR}"
-      QBT_ENFORCE_WEBUI: "${QBT_ENFORCE_WEBUI}"
-      QBT_WEBUI_INIT_HOOK: "1"
-YAML
-  if [[ -n "${QBT_DOCKER_MODS}" ]]; then
-    #  write the literal ${QBT_DOCKER_MODS} token instead of expanding it at generation time
-    # shellcheck disable=SC2016  # intentional literal for compose placeholder
-    arr_yaml_kv "      " "DOCKER_MODS" '${QBT_DOCKER_MODS}' >>"$tmp"
-  fi
-  cat <<'YAML' >>"$tmp"
-    volumes:
-      - "${ARR_DOCKER_DIR}/qbittorrent:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    healthcheck:
-      test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
-      interval: "30s"
-      timeout: "10s"
-      retries: "3"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  sonarr:
-    image: "${SONARR_IMAGE}"
-    container_name: "sonarr"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/sonarr:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${TV_DIR}:/tv"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  radarr:
-    image: "${RADARR_IMAGE}"
-    container_name: "radarr"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/radarr:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${MOVIES_DIR}:/movies"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  lidarr:
-    image: "${LIDARR_IMAGE}"
-    container_name: "lidarr"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/lidarr:/config"
-      - "${DOWNLOADS_DIR}:/downloads"
-      - "${COMPLETED_DIR}:/completed"
-      - "${MUSIC_DIR}:/music"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  prowlarr:
-    image: "${PROWLARR_IMAGE}"
-    container_name: "prowlarr"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/prowlarr:/config"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-
-  bazarr:
-    image: "${BAZARR_IMAGE}"
-    container_name: "bazarr"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      PUID: "${PUID}"
-      PGID: "${PGID}"
-      TZ: "${TIMEZONE}"
-      LANG: "en_US.UTF-8"
-    volumes:
-      - "${ARR_DOCKER_DIR}/bazarr:/config"
-      - "${TV_DIR}:/tv"
-      - "${MOVIES_DIR}:/movies"
-YAML
-
-  if [[ -n "${SUBS_DIR:-}" ]]; then
-    cat <<'YAML' >>"$tmp"
-      - "${SUBS_DIR}:/subs"
-YAML
+  printf '\n' >>"$tmp"
+  if ! arr_compose_emit_qbittorrent_service "$tmp"; then
+    die "Failed to emit qBittorrent service definition"
   fi
 
-  cat <<'YAML' >>"$tmp"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
+  if ! arr_compose_emit_media_service "$tmp" "sonarr" "full"; then
+    die "Failed to emit sonarr service definition"
+  fi
 
-  flaresolverr:
-    image: "${FLARR_IMAGE}"
-    container_name: "flaresolverr"
-    profiles:
-      - "ipdirect"
-    network_mode: "service:gluetun"
-    environment:
-      LOG_LEVEL: "info"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || wget -q --timeout=10 -O- http://${LOCALHOST_IP}:${FLARR_INT_PORT}/health || exit 1"]
-      interval: "30s"
-      timeout: "10s"
-      retries: "3"
-      start_period: "40s"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-YAML
+  if ! arr_compose_emit_media_service "$tmp" "radarr" "full"; then
+    die "Failed to emit radarr service definition"
+  fi
+
+  if ! arr_compose_emit_media_service "$tmp" "lidarr" "full"; then
+    die "Failed to emit lidarr service definition"
+  fi
+
+  if ! arr_compose_emit_media_service "$tmp" "prowlarr" "full"; then
+    die "Failed to emit prowlarr service definition"
+  fi
+
+  if ! arr_compose_emit_media_service "$tmp" "bazarr" "full"; then
+    die "Failed to emit bazarr service definition"
+  fi
+
+  if ! arr_compose_emit_flaresolverr_service "$tmp" "full"; then
+    die "Failed to emit flaresolverr service definition"
+  fi
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
