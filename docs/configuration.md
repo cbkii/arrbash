@@ -68,7 +68,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 | `ARR_LOG_DIR` | `${ARR_STACK_DIR}/logs` | Installer logs, Compose validation output, VPN reconnect history. |
 | `DOWNLOADS_DIR` | `${HOME}/Downloads` | Active download location for qBittorrent. |
 | `COMPLETED_DIR` | `${DOWNLOADS_DIR}/completed` | Destination for finished downloads. |
-| `MEDIA_DIR` | `${ARR_DATA_ROOT}/media` | Library root used by Sonarr/Radarr/Bazarr. |
+| `MEDIA_DIR` | `${ARR_DATA_ROOT}/media` | Library root used by Lidarr/Radarr/Sonarr/Bazarr. |
 | `TV_DIR` | `${MEDIA_DIR}/Shows` | Default Sonarr library path. |
 | `MOVIES_DIR` | `${MEDIA_DIR}/Movies` | Default Radarr library path. |
 | `MUSIC_DIR` | `${MEDIA_DIR}/Music` | Default Lidarr library path. |
