@@ -1679,19 +1679,33 @@ YAML
 YAML
 
   printf '\n' >>"$tmp"
-  arr_compose_emit_qbittorrent_service "$tmp"
+  if ! arr_compose_emit_qbittorrent_service "$tmp"; then
+    die "Failed to emit qBittorrent service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "sonarr" "split"
+  if ! arr_compose_emit_media_service "$tmp" "sonarr" "split"; then
+    die "Failed to emit sonarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "radarr" "split"
+  if ! arr_compose_emit_media_service "$tmp" "radarr" "split"; then
+    die "Failed to emit radarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "lidarr" "split"
+  if ! arr_compose_emit_media_service "$tmp" "lidarr" "split"; then
+    die "Failed to emit lidarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "prowlarr" "split"
+  if ! arr_compose_emit_media_service "$tmp" "prowlarr" "split"; then
+    die "Failed to emit prowlarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "bazarr" "split"
+  if ! arr_compose_emit_media_service "$tmp" "bazarr" "split"; then
+    die "Failed to emit bazarr service definition"
+  fi
 
-  arr_compose_emit_flaresolverr_service "$tmp" "split"
+  if ! arr_compose_emit_flaresolverr_service "$tmp" "split"; then
+    die "Failed to emit flaresolverr service definition"
+  fi
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
@@ -2012,19 +2026,33 @@ YAML
   fi
 
   printf '\n' >>"$tmp"
-  arr_compose_emit_qbittorrent_service "$tmp"
+  if ! arr_compose_emit_qbittorrent_service "$tmp"; then
+    die "Failed to emit qBittorrent service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "sonarr" "full"
+  if ! arr_compose_emit_media_service "$tmp" "sonarr" "full"; then
+    die "Failed to emit sonarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "radarr" "full"
+  if ! arr_compose_emit_media_service "$tmp" "radarr" "full"; then
+    die "Failed to emit radarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "lidarr" "full"
+  if ! arr_compose_emit_media_service "$tmp" "lidarr" "full"; then
+    die "Failed to emit lidarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "prowlarr" "full"
+  if ! arr_compose_emit_media_service "$tmp" "prowlarr" "full"; then
+    die "Failed to emit prowlarr service definition"
+  fi
 
-  arr_compose_emit_media_service "$tmp" "bazarr" "full"
+  if ! arr_compose_emit_media_service "$tmp" "bazarr" "full"; then
+    die "Failed to emit bazarr service definition"
+  fi
 
-  arr_compose_emit_flaresolverr_service "$tmp" "full"
+  if ! arr_compose_emit_flaresolverr_service "$tmp" "full"; then
+    die "Failed to emit flaresolverr service definition"
+  fi
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
