@@ -246,6 +246,7 @@ Example payload for Sonarr (`Settings → Download Clients → qBittorrent → T
   "initialState": 0
 }
 ```
+
 Repeat with the same host/port in Radarr, Prowlarr, and Lidarr so they all reuse the credentials.
 
 ## Connectivity checklist (inside containers)
