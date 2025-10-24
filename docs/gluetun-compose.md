@@ -233,6 +233,7 @@ Use the same host/port in every Arr app:
 | Enable SSL | Off unless you terminate TLS elsewhere |
 
 Example payload for Sonarr (`Settings → Download Clients → qBittorrent → Test`):
+
 ```json
 {
   "name": "qBittorrent",
