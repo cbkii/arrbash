@@ -556,6 +556,7 @@ help() {
 Usage: ./arr.sh [options]
 
 Options:
+  --trace              Enable detailed tracing and write a log for debugging
   --yes                 Run non-interactively and assume yes to prompts
   --enable-caddy        Enable the optional Caddy reverse proxy (sets ENABLE_CADDY=1)
   --enable-sab          Enable SABnzbd for this run (sets SABNZBD_ENABLED=1)
