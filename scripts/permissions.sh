@@ -64,10 +64,21 @@ verify_permissions() {
     "${ARR_ENV_FILE}"
     "${ARR_USERCONF_PATH}"
     "${ARRCONF_DIR}/proton.auth"
-    "${ARR_DOCKER_DIR}/qbittorrent/qBittorrent/qBittorrent.conf"
     "${ARR_STACK_DIR}/.aliasarr"
     "${ARR_DOCKER_DIR}/configarr/secrets.yml"
   )
+
+  local qbt_conf_path=""
+  if declare -f arr_qbt_conf_path >/dev/null 2>&1; then
+    local docker_root
+    docker_root="$(arr_docker_data_root)"
+    arr_qbt_migrate_legacy_conf "$docker_root"
+    qbt_conf_path="$(arr_qbt_conf_path "$docker_root")"
+  else
+    qbt_conf_path="${ARR_DOCKER_DIR}/qbittorrent/qBittorrent/qBittorrent.conf"
+  fi
+
+  secret_files+=("${qbt_conf_path}")
 
   local file
   for file in "${secret_files[@]}"; do

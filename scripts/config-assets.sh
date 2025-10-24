@@ -561,9 +561,18 @@ write_qbt_helper_script() {
 # Reconciles qBittorrent configuration defaults while preserving user customizations
 write_qbt_config() {
   step "🧩 Writing qBittorrent config"
-  local config_dir="${ARR_DOCKER_DIR}/qbittorrent"
-  local runtime_dir="${config_dir}/qBittorrent"
-  local conf_file="${runtime_dir}/qBittorrent.conf"
+  local docker_root
+  docker_root="$(arr_docker_data_root)"
+
+  local config_dir
+  local runtime_dir
+  local conf_file
+
+  config_dir="$(arr_qbt_config_root "$docker_root")"
+  runtime_dir="$(arr_qbt_runtime_dir "$docker_root")"
+  conf_file="$(arr_qbt_conf_path "$docker_root")"
+
+  arr_qbt_migrate_legacy_conf "$docker_root"
 
   ensure_dir "$config_dir"
   ensure_dir "$runtime_dir"
@@ -707,22 +716,22 @@ EOF
 }
 
 ensure_qbt_webui_config_ready() {
-  local config_root="${ARR_DOCKER_DIR}/qbittorrent"
-  local canonical_conf="${config_root}/qBittorrent/qBittorrent.conf"
-  local legacy_conf="${config_root}/qBittorrent.conf"
+  local docker_root
+  docker_root="$(arr_docker_data_root)"
+
+  arr_qbt_migrate_legacy_conf "$docker_root"
+
+  local canonical_conf
+  canonical_conf="$(arr_qbt_conf_path "$docker_root")"
 
   if [[ -f "$canonical_conf" ]]; then
-    if [[ -f "$legacy_conf" ]]; then
-      warn "Removing legacy qBittorrent.conf at ${legacy_conf}"
-      if ! arr_run_sensitive_command rm -f "$legacy_conf"; then
-        warn "Could not remove legacy qBittorrent.conf at ${legacy_conf}"
-      fi
-    fi
     return 0
   fi
 
+  local legacy_conf
+  legacy_conf="$(arr_qbt_legacy_conf_path "$docker_root")"
   if [[ -f "$legacy_conf" ]]; then
-    warn "Legacy qBittorrent.conf detected at ${legacy_conf}; move it to ${canonical_conf}."
+    warn "Legacy qBittorrent.conf detected at ${legacy_conf}; remove it so the canonical config at ${canonical_conf} can be used."
   fi
 
   die "Missing qBittorrent WebUI config at ${canonical_conf}. Create the file before starting qbittorrent."

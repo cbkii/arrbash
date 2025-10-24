@@ -289,8 +289,15 @@ check_network_security() {
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
     local qbt_conf=""
-    local qbt_conf_new="${ARR_DOCKER_DIR}/qbittorrent/qBittorrent/qBittorrent.conf"
-    local qbt_conf_legacy="${ARR_DOCKER_DIR}/qbittorrent/qBittorrent.conf"
+    local docker_root
+    docker_root="$(arr_docker_data_root)"
+
+    arr_qbt_migrate_legacy_conf "$docker_root"
+    local qbt_conf_new
+    local qbt_conf_legacy
+
+    qbt_conf_new="$(arr_qbt_conf_path "$docker_root")"
+    qbt_conf_legacy="$(arr_qbt_legacy_conf_path "$docker_root")"
     if [[ -f "$qbt_conf_new" ]]; then
       qbt_conf="$qbt_conf_new"
     elif [[ -f "$qbt_conf_legacy" ]]; then

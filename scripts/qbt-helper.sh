@@ -469,7 +469,20 @@ webui_domain() {
 
 # Computes path to qBittorrent.conf within dockarr tree
 config_file_path() {
-  printf '%s\n' "${DOCKER_DATA}/qbittorrent/qBittorrent/qBittorrent.conf"
+  local root="${DOCKER_DATA:-}"
+  local sanitized_root
+  sanitized_root="${root%/}"
+
+  if declare -f arr_qbt_migrate_legacy_conf >/dev/null 2>&1; then
+    arr_qbt_migrate_legacy_conf "$sanitized_root"
+  fi
+
+  if declare -f arr_qbt_conf_path >/dev/null 2>&1; then
+    printf '%s\n' "$(arr_qbt_conf_path "$sanitized_root")"
+    return 0
+  fi
+
+  printf '%s\n' "${sanitized_root}/qbittorrent/qBittorrent/qBittorrent.conf"
 }
 
 # Stops qBittorrent container quietly before config edits

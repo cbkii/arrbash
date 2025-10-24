@@ -450,6 +450,67 @@ arr_docker_data_root() {
   printf '%s' "${resolved%/}"
 }
 
+# Resolves qBittorrent configuration directories and paths
+arr_qbt_config_root() {
+  local root="${1:-$(arr_docker_data_root)}"
+  root="${root%/}"
+  printf '%s/qbittorrent' "$root"
+}
+
+arr_qbt_runtime_dir() {
+  local root="${1:-$(arr_docker_data_root)}"
+  printf '%s/qBittorrent' "$(arr_qbt_config_root "$root")"
+}
+
+arr_qbt_conf_path() {
+  local root="${1:-$(arr_docker_data_root)}"
+  printf '%s/qBittorrent.conf' "$(arr_qbt_runtime_dir "$root")"
+}
+
+arr_qbt_legacy_conf_path() {
+  local root="${1:-$(arr_docker_data_root)}"
+  printf '%s/qBittorrent.conf' "$(arr_qbt_config_root "$root")"
+}
+
+arr_qbt_migrate_legacy_conf() {
+  local root="${1:-$(arr_docker_data_root)}"
+  root="${root%/}"
+
+  local canonical legacy runtime_dir
+  canonical="$(arr_qbt_conf_path "$root")"
+  legacy="$(arr_qbt_legacy_conf_path "$root")"
+  runtime_dir="$(dirname "$canonical")"
+
+  ensure_dir "$runtime_dir"
+
+  if [[ -f "$legacy" ]]; then
+    if [[ -f "$canonical" ]]; then
+      if [[ -z "${ARR_QBT_LEGACY_REMOVED:-}" ]]; then
+        warn "Removing legacy qBittorrent.conf at ${legacy}"
+        ARR_QBT_LEGACY_REMOVED=1
+      fi
+      if ! arr_run_sensitive_command rm -f "$legacy"; then
+        warn "Could not remove legacy qBittorrent.conf at ${legacy}"
+      fi
+    else
+      if arr_run_sensitive_command mv "$legacy" "$canonical"; then
+        if [[ -z "${ARR_QBT_LEGACY_MOVED:-}" ]]; then
+          warn "Moved legacy qBittorrent.conf from ${legacy} to ${canonical}"
+          ARR_QBT_LEGACY_MOVED=1
+        fi
+      else
+        warn "Failed to migrate legacy qBittorrent.conf from ${legacy} to ${canonical}"
+      fi
+    fi
+  fi
+
+  if [[ -f "$canonical" ]]; then
+    ensure_file_mode "$canonical" "$SECRET_FILE_MODE"
+  fi
+
+  return 0
+}
+
 # Resolves the Gluetun data directory under the dockarr root
 arr_gluetun_dir() {
   printf '%s/gluetun' "$(arr_docker_data_root)"
