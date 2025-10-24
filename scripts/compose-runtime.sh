@@ -721,6 +721,9 @@ arr_compose_autofix_env_names() {
     canonical_set["$key"]=1
     local norm=""
     norm="$(arr_compose_normalize_env_name "$key")"
+    if [[ -z "$norm" ]]; then
+      continue
+    fi
     if [[ -n "${canonical_by_norm[$norm]:-}" && "${canonical_by_norm[$norm]}" != "$key" ]]; then
       norm_conflicts["$norm"]=1
     else
@@ -757,6 +760,9 @@ arr_compose_autofix_env_names() {
       else
         local normalized=""
         normalized="$(arr_compose_normalize_env_name "$raw_name")"
+        if [[ -z "$normalized" ]]; then
+          continue
+        fi
         if [[ -n "${norm_conflicts[$normalized]:-}" ]]; then
           match_status=2
         elif [[ -n "${canonical_by_norm[$normalized]:-}" ]]; then
@@ -799,6 +805,9 @@ arr_compose_autofix_env_names() {
       local match_status=1
       local normalized=""
       normalized="$(arr_compose_normalize_env_name "$placeholder_name")"
+      if [[ -z "$normalized" ]]; then
+        continue
+      fi
       if [[ -n "${norm_conflicts[$normalized]:-}" ]]; then
         match_status=2
       elif [[ -n "${canonical_by_norm[$normalized]:-}" ]]; then
