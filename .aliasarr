@@ -383,14 +383,6 @@ _arr_query_suffix_from_args() {
 
 _arr_urlencode() {
   local value="$1"
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - <<'PY' "$value"
-import sys
-from urllib.parse import quote
-print(quote(sys.argv[1]))
-PY
-    return
-  fi
   if _arr_has_cmd jq; then
     printf '%s' "$value" | jq -sRr @uri
     return

@@ -13,29 +13,21 @@ arr_detect_api_key_from_config() {
 
   local api_key=""
 
-  if have_command python3; then
-    api_key="$(
-      python3 <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-
-path = sys.argv[1]
-try:
-    tree = ET.parse(path)
-except Exception:
-    sys.exit(1)
-root = tree.getroot()
-for element in root.iter():
-    if element.tag and element.tag.lower() == "apikey":
-        value = (element.text or "").strip()
-        if value:
-            print(value)
-            sys.exit(0)
-sys.exit(1)
-PY
-      "$config_path" 2>/dev/null || true
-    )"
-  fi
+  api_key="$(
+    awk '
+      BEGIN {
+        IGNORECASE = 1
+        RS = "<[[:space:]]*apikey[[:space:]]*>|</[[:space:]]*apikey[[:space:]]*>"
+      }
+      NR == 2 {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+        if (length($0) > 0) {
+          print
+        }
+        exit
+      }
+    ' "$config_path" 2>/dev/null || true
+  )"
 
   if [[ -z "$api_key" ]]; then
     api_key="$(sed -n 's:.*<ApiKey>\([^<]*\)</ApiKey>.*:\1:p' "$config_path" | head -n1 | tr -d '\r\n' || true)"
