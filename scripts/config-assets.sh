@@ -79,7 +79,7 @@ EOF
 set -eu
 
 log() {
-    printf '[%s] [update-qbt-port] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1" >&2
+    printf '[%s] [update-qbt-port] %s\n' "$(LC_ALL=C date '+%Y-%m-%dT%H:%M:%S')" "$1" >&2
 }
 
 if ! command -v curl >/dev/null 2>&1; then

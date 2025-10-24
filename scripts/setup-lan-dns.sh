@@ -51,7 +51,7 @@ fuzzy_remove_entries() {
 
   local -r managed_marker="${STACK}-managed"
 
-  awk -v begin="$begin_marker" -v end="$end_marker" -v marker="$managed_marker" '
+  LC_ALL=C awk -v begin="${begin_marker}" -v end="${end_marker}" -v marker="${managed_marker}" '
     BEGIN {
       skip = 0
       marker_lower = tolower(marker)
