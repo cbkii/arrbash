@@ -798,7 +798,10 @@ write_configarr_assets() {
     ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS:-}" \
     awk '
       function abs_val(x) { return x < 0 ? -x : x }
-      function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, ""); return s }
+      function trim(s) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+        return s
+      }
       function warn_msg(msg) { warnings[++warn_count] = msg }
       function sanitize_resolution(name, default_value, raw, lowered, i) {
         raw = trim(ENVIRON[name])
@@ -950,6 +953,12 @@ write_configarr_assets() {
     done <<<"$policy_eval_output"
   else
     warn "Configarr: failed to evaluate policy heuristics; using defaults"
+    sanitized_video_min_res="720p"
+    sanitized_video_max_res="1080p"
+    episode_max_mbmin="113.8"
+    sanitized_ep_max_gb="5"
+    sanitized_runtime_min="45"
+    sanitized_season_max_gb="30"
   fi
 
   local resolution_display="${sanitized_video_min_res}–${sanitized_video_max_res}"
