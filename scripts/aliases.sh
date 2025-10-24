@@ -61,7 +61,7 @@ write_aliases_file() {
     -e "s|__ARRCONF_DIR__|${arrconf_dir_escaped}|g" \
     "$template_file" >"$tmp_file"
 
-  if grep -q "__ARR_" "$tmp_file"; then
+  if grep -Eq '__ARR_[A-Z0-9_]+__' "$tmp_file"; then
     warn "Failed to replace all template placeholders in aliases file"
     arr_cleanup_temp_path "$tmp_file"
     return 1
