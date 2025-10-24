@@ -8,6 +8,36 @@ if [[ -n "${__CONFIG_ASSETS_LOADED:-}" ]]; then
 fi
 __CONFIG_ASSETS_LOADED=1
 
+_configarr_sanitize_score() {
+  local label="$1"
+  local raw_value="$2"
+  local default_value="$3"
+  local min_value="${4:-}"
+  local max_value="${5:-}"
+  local value="$raw_value"
+  local display="${raw_value:-<empty>}"
+
+  if [[ -z "$value" ]]; then
+    value="$default_value"
+  fi
+
+  if [[ ! "$value" =~ ^-?[0-9]+$ ]]; then
+    warn "Configarr: ${label}=${display} is not an integer; using ${default_value}"
+    value="$default_value"
+  else
+    if [[ -n "$min_value" ]] && (( value < min_value )); then
+      warn "Configarr: ${label}=${value} below minimum ${min_value}; clamping"
+      value="$min_value"
+    fi
+    if [[ -n "$max_value" ]] && (( value > max_value )); then
+      warn "Configarr: ${label}=${value} above maximum ${max_value}; clamping"
+      value="$max_value"
+    fi
+  fi
+
+  printf '%s\n' "$value"
+}
+
 write_gluetun_control_assets() {
   msg "[pf] Preparing Gluetun control assets"
 
@@ -770,13 +800,52 @@ write_configarr_assets() {
   step "🧾 Preparing Configarr assets"
 
   local configarr_root="${ARR_DOCKER_DIR}/configarr"
-  local runtime_config="${configarr_root}/config.yml"
-  local runtime_secrets="${configarr_root}/secrets.yml"
   local runtime_cfs="${configarr_root}/cfs"
   local -A configarr_policy=()
 
   ensure_dir_mode "$configarr_root" "$DATA_DIR_MODE"
   ensure_dir_mode "$runtime_cfs" "$DATA_DIR_MODE"
+
+  local english_only
+  english_only="$(arr_normalize_bool "${ARR_ENGLISH_ONLY:-1}")"
+
+  local discourage_multi
+  discourage_multi="$(arr_normalize_bool "${ARR_DISCOURAGE_MULTI:-1}")"
+
+  local penalize_hd_x265
+  penalize_hd_x265="$(arr_normalize_bool "${ARR_PENALIZE_HD_X265:-1}")"
+
+  local strict_junk_block
+  strict_junk_block="$(arr_normalize_bool "${ARR_STRICT_JUNK_BLOCK:-1}")"
+
+  local english_penalty_score
+  english_penalty_score="$(_configarr_sanitize_score 'ARR_ENGLISH_POSITIVE_SCORE' "${ARR_ENGLISH_POSITIVE_SCORE:-}" 50 0 1000)"
+
+  local multi_score
+  multi_score="$(_configarr_sanitize_score 'ARR_MULTI_NEGATIVE_SCORE' "${ARR_MULTI_NEGATIVE_SCORE:-}" -50 '' 0)"
+
+  local x265_score
+  x265_score="$(_configarr_sanitize_score 'ARR_X265_HD_NEGATIVE_SCORE' "${ARR_X265_HD_NEGATIVE_SCORE:-}" -200 '' 0)"
+
+  local junk_score
+  junk_score="$(_configarr_sanitize_score 'ARR_JUNK_NEGATIVE_SCORE' "${ARR_JUNK_NEGATIVE_SCORE:-}" -1000 '' 0)"
+
+  local common_cf_exists=0
+  local -a _configarr_cf_search=()
+  if [[ -n "${ARRCONF_DIR:-}" ]]; then
+    _configarr_cf_search+=("${ARRCONF_DIR}/configarr/cfs")
+  fi
+  _configarr_cf_search+=("$runtime_cfs")
+
+  local search_dir
+  for search_dir in "${_configarr_cf_search[@]}"; do
+    [[ -d "$search_dir" ]] || continue
+    if compgen -G "${search_dir%/}/common*.yml" >/dev/null 2>&1 || \
+      compgen -G "${search_dir%/}/common*.yaml" >/dev/null 2>&1; then
+      common_cf_exists=1
+      break
+    fi
+  done
 
   local sanitized_video_min_res=""
   local sanitized_video_max_res=""
