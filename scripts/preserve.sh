@@ -118,14 +118,16 @@ hydrate_qbt_host_port_from_env_file() {
 # Reads qBittorrent's configured WebUI port so compose generation honors
 # existing deployments that override the default port.
 hydrate_qbt_webui_port_from_config() {
-  local config_dir
-  config_dir="$(arr_docker_data_root)/qbittorrent"
-  local primary_conf="${config_dir}/qBittorrent/qBittorrent.conf"
-  local candidate=""
+  local docker_root
+  docker_root="$(arr_docker_data_root)"
+  if declare -f arr_qbt_migrate_legacy_conf >/dev/null 2>&1; then
+    arr_qbt_migrate_legacy_conf "$docker_root"
+  fi
 
-  if [[ -f "$primary_conf" ]]; then
-    candidate="$primary_conf"
-  else
+  local candidate=""
+  candidate="$(arr_qbt_conf_path "$docker_root")"
+
+  if [[ ! -f "$candidate" ]]; then
     return 0
   fi
 
