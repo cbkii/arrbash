@@ -1615,6 +1615,8 @@ services:
     container_name: "gluetun"
     profiles:
       - "ipdirect"
+    networks:
+      - "arr_net"
 YAML
 
   cat <<'YAML' >>"$tmp"
@@ -1892,6 +1894,8 @@ services:
     container_name: "gluetun"
     profiles:
       - "ipdirect"
+    networks:
+      - "arr_net"
     cap_add:
       - "NET_ADMIN"
     devices:
