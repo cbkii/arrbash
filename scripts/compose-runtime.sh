@@ -721,7 +721,11 @@ arr_compose_autofix_env_names() {
     canonical_set["$key"]=1
     local norm=""
     norm="$(arr_compose_normalize_env_name "$key")"
-    if [[ -n "${canonical_by_norm[$norm]:-}" && "${canonical_by_norm[$norm]}" != "$key" ]]; then
+    if [[ -z "$norm" ]]; then
+      continue
+    fi
+    local existing="${canonical_by_norm[$norm]-}"
+    if [[ -n "$existing" && "$existing" != "$key" ]]; then
       norm_conflicts["$norm"]=1
     else
       canonical_by_norm["$norm"]="$key"
@@ -757,11 +761,13 @@ arr_compose_autofix_env_names() {
       else
         local normalized=""
         normalized="$(arr_compose_normalize_env_name "$raw_name")"
-        if [[ -n "${norm_conflicts[$normalized]:-}" ]]; then
-          match_status=2
-        elif [[ -n "${canonical_by_norm[$normalized]:-}" ]]; then
-          canonical_name="${canonical_by_norm[$normalized]}"
-          match_status=0
+        if [[ -n "$normalized" ]]; then
+          if [[ -n "${norm_conflicts[$normalized]:-}" ]]; then
+            match_status=2
+          elif [[ -n "${canonical_by_norm[$normalized]:-}" ]]; then
+            canonical_name="${canonical_by_norm[$normalized]}"
+            match_status=0
+          fi
         fi
       fi
       if ((match_status == 0)); then
@@ -799,11 +805,13 @@ arr_compose_autofix_env_names() {
       local match_status=1
       local normalized=""
       normalized="$(arr_compose_normalize_env_name "$placeholder_name")"
-      if [[ -n "${norm_conflicts[$normalized]:-}" ]]; then
-        match_status=2
-      elif [[ -n "${canonical_by_norm[$normalized]:-}" ]]; then
-        canonical_name="${canonical_by_norm[$normalized]}"
-        match_status=0
+      if [[ -n "$normalized" ]]; then
+        if [[ -n "${norm_conflicts[$normalized]:-}" ]]; then
+          match_status=2
+        elif [[ -n "${canonical_by_norm[$normalized]:-}" ]]; then
+          canonical_name="${canonical_by_norm[$normalized]}"
+          match_status=0
+        fi
       fi
       if ((match_status == 0)); then
         if [[ -z "${replacements[$token]+x}" ]]; then
