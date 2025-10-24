@@ -10,6 +10,26 @@ ARRCONF_DIR=${ARRCONF_DIR:-__ARRCONF_DIR__}
 : "${ARR_ENV_FILE:=${ARR_STACK_DIR}/.env}"
 : "${ARR_DOCKER_DIR:=${ARR_STACK_DIR}/docker-data}"
 : "${ARRCONF_DIR:=${ARR_STACK_DIR}/arrconf}"
+
+_arr_alias_template_guard() {
+  local source_name="${BASH_SOURCE[0]##*/}"
+  local name value
+  for name in ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR; do
+    value="${!name-}"
+    if [[ ${value} == __ARR_*__ ]]; then
+      printf 'arr: refusing to source %s because %s is still set to placeholder %s.\n' \
+        "${source_name}" "${name}" "${value}" >&2
+      printf 'arr: run ./arr.sh --refresh-aliases and source the generated .aliasarr instead.\n' >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
+if ! _arr_alias_template_guard; then
+  return 1 2>/dev/null || exit 1
+fi
+
 export ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR
 
 if [ -f "$ARR_ENV_FILE" ]; then

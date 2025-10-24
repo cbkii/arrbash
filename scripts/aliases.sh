@@ -3,7 +3,7 @@
 write_aliases_file() {
   step "🛠️ Generating helper aliases file"
 
-  local template_file="${REPO_ROOT}/.aliasarr"
+  local template_file="${REPO_ROOT}/.aliasarr.template"
   if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
     ARR_STACK_DIR="$(arr_stack_dir)"
   fi
