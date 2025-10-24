@@ -929,69 +929,71 @@ write_configarr_assets() {
       function round_value(value) { return (value >= 0 ? int(value + 0.5) : int(value - 0.5)) }
       function max_value(a, b) { return a > b ? a : b }
       function min_value(a, b) { return a < b ? a : b }
-      warn_count = 0
-      allowed_count = split("480p 576p 720p 1080p 2160p", allowed, " ")
-      for (i = 1; i <= allowed_count; i++) {
-        res_index[allowed[i]] = i
-      }
-      min_res = sanitize_resolution("ARR_VIDEO_MIN_RES", "720p")
-      max_res = sanitize_resolution("ARR_VIDEO_MAX_RES", "1080p")
-      if (res_index[min_res] > res_index[max_res]) {
-        warn_msg("ARR_VIDEO_MIN_RES='" min_res "' and ARR_VIDEO_MAX_RES='" max_res "' conflict; using 720p–1080p")
-        min_res = "720p"
-        max_res = "1080p"
-      }
-      max_gb = parse_float("ARR_EP_MAX_GB", 5.0, 1, 1.0, 1, 20.0)
-      min_mb = parse_float("ARR_EP_MIN_MB", 250.0, 1, 1.0, 0, 0)
-      runtime = parse_float("ARR_TV_RUNTIME_MIN", 45.0, 1, 1.0, 0, 0)
-      season_cap = parse_float("ARR_SEASON_MAX_GB", 30.0, 1, 1.0, 0, 0)
-      dec_raw = ENVIRON["ARR_MBMIN_DECIMALS"]
-      if (dec_raw == "") {
-        dec_raw = "1"
-      }
-      dec_trim = trim(dec_raw)
-      if (dec_trim == "") {
-        dec_trim = "1"
-      }
-      if (dec_trim !~ /^[-+]?[0-9]+$/) {
-        warn_msg("ARR_MBMIN_DECIMALS='" dec_raw "' invalid; using 1")
-        decimals = 1
-      } else {
-        decimals = dec_trim + 0
-      }
-      if (decimals < 0) {
-        warn_msg("ARR_MBMIN_DECIMALS below 0; clamping to 0")
-        decimals = 0
-      } else if (decimals > 3) {
-        warn_msg("ARR_MBMIN_DECIMALS above 3; clamping to 3")
-        decimals = 3
-      }
-      max_total_mb = max_gb * 1024.0
-      if (min_mb >= max_total_mb) {
-        warn_msg("ARR_EP_MIN_MB=" min_mb " must be smaller than ARR_EP_MAX_GB*1024=" max_total_mb "; reducing")
-        min_mb = min_value(250.0, max_total_mb * 0.5)
-        if (min_mb <= 0) {
-          min_mb = max_total_mb * 0.25
+      BEGIN {
+        warn_count = 0
+        allowed_count = split("480p 576p 720p 1080p 2160p", allowed, " ")
+        for (i = 1; i <= allowed_count; i++) {
+          res_index[allowed[i]] = i
         }
-      }
-      episode_max_mbmin = max_total_mb / runtime
-      episode_min_mbmin = min_mb / runtime
-      if (episode_max_mbmin < 20.0) {
-        warn_msg("Derived episode max " sprintf("%.2f", episode_max_mbmin) " MB/min is too small; using 60")
-        episode_max_mbmin = 60.0
-      }
-      if (episode_min_mbmin >= episode_max_mbmin) {
-        episode_min_mbmin = max_value(episode_max_mbmin * 0.5, 1.0)
-      }
-      episode_pref_mbmin = (episode_min_mbmin + episode_max_mbmin) / 2.0
-      printf("sanitized_video_min_res=%s\n", min_res)
-      printf("sanitized_video_max_res=%s\n", max_res)
-      printf("episode_max_mbmin=%s\n", sprintf("%.*f", decimals, episode_max_mbmin))
-      printf("sanitized_ep_max_gb=%s\n", trim_float(max_gb, 2))
-      printf("sanitized_runtime_min=%s\n", trim_float(runtime, 1))
-      printf("sanitized_season_max_gb=%s\n", trim_float(season_cap, 1))
-      for (i = 1; i <= warn_count; i++) {
-        printf("warn::%s\n", warnings[i])
+        min_res = sanitize_resolution("ARR_VIDEO_MIN_RES", "720p")
+        max_res = sanitize_resolution("ARR_VIDEO_MAX_RES", "1080p")
+        if (res_index[min_res] > res_index[max_res]) {
+          warn_msg("ARR_VIDEO_MIN_RES='" min_res "' and ARR_VIDEO_MAX_RES='" max_res "' conflict; using 720p–1080p")
+          min_res = "720p"
+          max_res = "1080p"
+        }
+        max_gb = parse_float("ARR_EP_MAX_GB", 5.0, 1, 1.0, 1, 20.0)
+        min_mb = parse_float("ARR_EP_MIN_MB", 250.0, 1, 1.0, 0, 0)
+        runtime = parse_float("ARR_TV_RUNTIME_MIN", 45.0, 1, 1.0, 0, 0)
+        season_cap = parse_float("ARR_SEASON_MAX_GB", 30.0, 1, 1.0, 0, 0)
+        dec_raw = ENVIRON["ARR_MBMIN_DECIMALS"]
+        if (dec_raw == "") {
+          dec_raw = "1"
+        }
+        dec_trim = trim(dec_raw)
+        if (dec_trim == "") {
+          dec_trim = "1"
+        }
+        if (dec_trim !~ /^[-+]?[0-9]+$/) {
+          warn_msg("ARR_MBMIN_DECIMALS='" dec_raw "' invalid; using 1")
+          decimals = 1
+        } else {
+          decimals = dec_trim + 0
+        }
+        if (decimals < 0) {
+          warn_msg("ARR_MBMIN_DECIMALS below 0; clamping to 0")
+          decimals = 0
+        } else if (decimals > 3) {
+          warn_msg("ARR_MBMIN_DECIMALS above 3; clamping to 3")
+          decimals = 3
+        }
+        max_total_mb = max_gb * 1024.0
+        if (min_mb >= max_total_mb) {
+          warn_msg("ARR_EP_MIN_MB=" min_mb " must be smaller than ARR_EP_MAX_GB*1024=" max_total_mb "; reducing")
+          min_mb = min_value(250.0, max_total_mb * 0.5)
+          if (min_mb <= 0) {
+            min_mb = max_total_mb * 0.25
+          }
+        }
+        episode_max_mbmin = max_total_mb / runtime
+        episode_min_mbmin = min_mb / runtime
+        if (episode_max_mbmin < 20.0) {
+          warn_msg("Derived episode max " sprintf("%.2f", episode_max_mbmin) " MB/min is too small; using 60")
+          episode_max_mbmin = 60.0
+        }
+        if (episode_min_mbmin >= episode_max_mbmin) {
+          episode_min_mbmin = max_value(episode_max_mbmin * 0.5, 1.0)
+        }
+        episode_pref_mbmin = (episode_min_mbmin + episode_max_mbmin) / 2.0
+        printf("sanitized_video_min_res=%s\n", min_res)
+        printf("sanitized_video_max_res=%s\n", max_res)
+        printf("episode_max_mbmin=%s\n", sprintf("%.*f", decimals, episode_max_mbmin))
+        printf("sanitized_ep_max_gb=%s\n", trim_float(max_gb, 2))
+        printf("sanitized_runtime_min=%s\n", trim_float(runtime, 1))
+        printf("sanitized_season_max_gb=%s\n", trim_float(season_cap, 1))
+        for (i = 1; i <= warn_count; i++) {
+          printf("warn::%s\n", warnings[i])
+        }
       }
     '
   )"; then
