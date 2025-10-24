@@ -781,14 +781,9 @@ write_configarr_assets() {
   local sanitized_video_min_res=""
   local sanitized_video_max_res=""
   local episode_max_mbmin=""
-  local episode_min_mbmin=""
-  local episode_pref_mbmin=""
-  local episode_cap_mb=""
   local sanitized_ep_max_gb=""
-  local sanitized_ep_min_mb=""
   local sanitized_runtime_min=""
   local sanitized_season_max_gb=""
-  local sanitized_mbmin_decimals=""
 
   local policy_eval_output=""
 
@@ -920,14 +915,9 @@ write_configarr_assets() {
       printf("sanitized_video_min_res=%s\n", min_res)
       printf("sanitized_video_max_res=%s\n", max_res)
       printf("episode_max_mbmin=%s\n", sprintf("%.*f", decimals, episode_max_mbmin))
-      printf("episode_min_mbmin=%s\n", sprintf("%.*f", decimals, episode_min_mbmin))
-      printf("episode_pref_mbmin=%s\n", sprintf("%.*f", decimals, episode_pref_mbmin))
-      printf("episode_cap_mb=%d\n", round_value(max_total_mb))
       printf("sanitized_ep_max_gb=%s\n", trim_float(max_gb, 2))
-      printf("sanitized_ep_min_mb=%s\n", trim_float(min_mb, 1))
       printf("sanitized_runtime_min=%s\n", trim_float(runtime, 1))
       printf("sanitized_season_max_gb=%s\n", trim_float(season_cap, 1))
-      printf("sanitized_mbmin_decimals=%d\n", decimals)
       for (i = 1; i <= warn_count; i++) {
         printf("warn::%s\n", warnings[i])
       }
@@ -947,29 +937,14 @@ write_configarr_assets() {
         episode_max_mbmin=*)
           episode_max_mbmin="${line#*=}"
           ;;
-        episode_min_mbmin=*)
-          episode_min_mbmin="${line#*=}"
-          ;;
-        episode_pref_mbmin=*)
-          episode_pref_mbmin="${line#*=}"
-          ;;
-        episode_cap_mb=*)
-          episode_cap_mb="${line#*=}"
-          ;;
         sanitized_ep_max_gb=*)
           sanitized_ep_max_gb="${line#*=}"
-          ;;
-        sanitized_ep_min_mb=*)
-          sanitized_ep_min_mb="${line#*=}"
           ;;
         sanitized_runtime_min=*)
           sanitized_runtime_min="${line#*=}"
           ;;
         sanitized_season_max_gb=*)
           sanitized_season_max_gb="${line#*=}"
-          ;;
-        sanitized_mbmin_decimals=*)
-          sanitized_mbmin_decimals="${line#*=}"
           ;;
       esac
     done <<<"$policy_eval_output"

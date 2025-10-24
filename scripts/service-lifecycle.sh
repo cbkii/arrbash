@@ -654,6 +654,9 @@ ensure_docker_userland_proxy_disabled() {
   fi
 
   local backup
+  # Any edits to ${conf} are reversible: restore the generated backup over ${conf}
+  # (e.g. `sudo cp "${backup}" "${conf}"`) and restart Docker to roll back the DNS
+  # userland-proxy change if needed.
   backup="${conf}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
   if [[ -f "$conf" ]]; then
     if ! cp -p "$conf" "$backup"; then
@@ -707,6 +710,7 @@ ensure_docker_userland_proxy_disabled() {
     if command -v systemctl >/dev/null 2>&1; then
       if ! systemctl restart docker >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo systemctl restart docker' manually."
+        warn "[dns] Rollback available at: ${backup}"
         return 1
       fi
       if ! systemctl is-active --quiet docker; then
@@ -717,6 +721,7 @@ ensure_docker_userland_proxy_disabled() {
     elif command -v service >/dev/null 2>&1; then
       if ! service docker restart >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo service docker restart' manually."
+        warn "[dns] Rollback available at: ${backup}"
         return 1
       fi
       msg "[dns] Docker daemon restarted to apply userland-proxy change"
