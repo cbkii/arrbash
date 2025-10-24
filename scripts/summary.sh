@@ -84,15 +84,14 @@ show_summary() {
     ip_hint="<LAN_IP>"
   fi
 
-  local host_hint
-  host_hint="$(arr_host_access_hint)"
-  local prowlarr_hint="http://${host_hint}:${QBT_PORT}"
+  local prowlarr_hint="http://gluetun:${QBT_INT_PORT}"
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
     msg "VPN Mode: split (only qbittorrent behind VPN)"
     msg "Configure *Arr download client host as: ${prowlarr_hint}"
   else
     msg "VPN Mode: full-tunnel (all services through VPN)"
+    msg "Configure *Arr download client host as: ${prowlarr_hint}"
     warn "Consider SPLIT_VPN=1 for improved indexer reliability."
   fi
 
@@ -101,6 +100,7 @@ show_summary() {
 qBittorrent Access Information:
 ================================================
 WebUI:    http://${ip_hint}:${QBT_PORT}
+Arr URL:  ${prowlarr_hint}
 Username: ${QBT_USER}
 ${qbt_pass_msg}
 ================================================
