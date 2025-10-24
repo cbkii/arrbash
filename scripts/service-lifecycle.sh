@@ -572,7 +572,7 @@ start_vpn_auto_reconnect_if_enabled() {
 # Prints container runtime status and port-forward summary for quick health glance
 show_service_status() {
   msg "Service status summary:"
-  local -a services=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr)
+  local -a services=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
   if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     services+=(caddy)
   fi
@@ -862,7 +862,7 @@ start_stack() {
   if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
     services+=(caddy)
   fi
-  services+=(qbittorrent sonarr radarr prowlarr bazarr flaresolverr)
+  services+=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     services+=(sabnzbd)
   fi

@@ -4,7 +4,7 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
 
 ## What you get
 - qBittorrent routed through Gluetun with Proton VPN port forwarding.
-- Sonarr, Radarr, Prowlarr, Bazarr, and FlareSolverr on the LAN bridge.
+- Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, and FlareSolverr on the LAN bridge.
 - Optional extras: Caddy HTTPS proxy, local DNS resolver, Configarr sync, SABnzbd downloader, and the VueTorrent WebUI.
 
 ## Prerequisites
@@ -33,7 +33,7 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
 4. **Create your overrides.**
    ```bash
    cp arrconf/userr.conf.example ../arrconfigs/userr.conf
-   nano ../arrconfigs/userr.conf     # set LAN_IP and point DOWNLOADS_DIR/COMPLETED_DIR/MEDIA_DIR to your storage
+   nano ../arrconfigs/userr.conf     # set LAN_IP and point DOWNLOADS_DIR/COMPLETED_DIR/MEDIA_DIR/MUSIC_DIR to your storage
    ```
 5. **Run the installer.**
    ```bash
@@ -51,7 +51,7 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
 - Check these values first:
   - `LAN_IP`: private address of the host. Set this before exposing ports.
   - `STACK`: project label used for generated paths and logs (defaults to `arr`).
-  - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`: defaults sit under `${ARR_DATA_ROOT}`, but point each one at your actual storage.
+  - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`, `MUSIC_DIR`: defaults sit under `${ARR_DATA_ROOT}`, but point each one at your actual storage.
   - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent. Leave `0` for full VPN mode.
   - `ENABLE_CADDY`, `ENABLE_LOCAL_DNS`, `ENABLE_CONFIGARR`, `SABNZBD_ENABLED`: toggle optional services. See [Optional services and containers](./docs/configuration.md#optional-services-and-containers) for tips.
 - Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arr.sh --rotate-api-key` or `./arr.sh --rotate-caddy-auth`.
@@ -71,6 +71,7 @@ To remove the stack and clean up generated assets later, run:
 - `lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415`
 - `lscr.io/linuxserver/sonarr:4.0.15.2941-ls291`
 - `lscr.io/linuxserver/radarr:5.27.5.10198-ls283`
+- `lscr.io/linuxserver/lidarr:latest`
 - `ghcr.io/flaresolverr/flaresolverr:v3.3.21`
 - `caddy:2.8.4`
 - `4km3/dnsmasq:2.90-r3`

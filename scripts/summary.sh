@@ -159,6 +159,7 @@ QBT_INFO
     printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
     printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
     printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
+    printf '  %-11s → http://%s:%s\n' "Lidarr" "$ip_hint" "$LIDARR_PORT"
     printf '  %-11s → http://%s:%s\n' "Prowlarr" "$ip_hint" "$PROWLARR_PORT"
     printf '  %-11s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
     printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
@@ -174,6 +175,12 @@ QBT_INFO
 Proxy profile enabled (Caddy reverse proxy):
   http://qbittorrent.${domain_suffix}
   https://qbittorrent.${domain_suffix} (trust the internal CA)
+  http://sonarr.${domain_suffix}
+  http://radarr.${domain_suffix}
+  http://lidarr.${domain_suffix}
+  http://prowlarr.${domain_suffix}
+  http://bazarr.${domain_suffix}
+  http://flaresolverr.${domain_suffix}
   Health endpoint: http://${ip_hint}/healthz
 Remote clients must authenticate with '${CADDY_BASIC_AUTH_USER}' using the password stored in ${ARR_DOCKER_DIR}/caddy/credentials.
 CADDY_INFO

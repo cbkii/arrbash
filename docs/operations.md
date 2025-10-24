@@ -34,6 +34,7 @@ Common helpers include:
 - `arr.vpn.status` – display Gluetun health.
 - `arr.vpn.port`, `arr.vpn.port.state`, `arr.vpn.port.watch` – inspect Proton port forwarding.
 - `arr.logs` – follow stack logs.
+- `arr.open` – print LAN or Caddy URLs for qBittorrent, Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, and FlareSolverr.
 - `arr.config.sync` – trigger Configarr after manual API key updates.
 - `arr.vpn.auto.*` – manage the VPN auto-reconnect daemon.
 

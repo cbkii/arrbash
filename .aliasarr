@@ -181,7 +181,7 @@ _arr_loopback() {
   printf '%s' "$host"
 }
 
-_arr_services=(gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr configarr caddy local_dns)
+_arr_services=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr configarr caddy local_dns)
 if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
   _arr_services+=(sabnzbd)
 fi
@@ -215,6 +215,7 @@ _arr_service_port() {
     qbittorrent) env_var=QBT_PORT; default=8082 ;;
     sonarr)      env_var=SONARR_PORT;        default=8989 ;;
     radarr)      env_var=RADARR_PORT;        default=7878 ;;
+    lidarr)      env_var=LIDARR_PORT;        default=8686 ;;
     prowlarr)    env_var=PROWLARR_PORT;      default=9696 ;;
     bazarr)      env_var=BAZARR_PORT;        default=6767 ;;
     flaresolverr)env_var=FLARR_PORT;  default=8191 ;;
@@ -257,7 +258,7 @@ _arr_service_base() {
 
   if [ "$enable_caddy" = "1" ]; then
     case "$svc" in
-      qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr|sabnzbd)
+      qbittorrent|sonarr|radarr|lidarr|prowlarr|bazarr|flaresolverr|sabnzbd)
         printf 'http://%s.%s' "$svc" "$(_arr_domain_suffix)"
         return
         ;;
@@ -265,7 +266,7 @@ _arr_service_base() {
   fi
 
   case "$svc" in
-    qbittorrent|sonarr|radarr|prowlarr|bazarr|flaresolverr|sabnzbd)
+    qbittorrent|sonarr|radarr|lidarr|prowlarr|bazarr|flaresolverr|sabnzbd)
       if [ "$svc" = "sabnzbd" ]; then
         host="${SABNZBD_HOST:-$(_arr_env_get SABNZBD_HOST)}"
         if [ -z "$host" ] || [ "$host" = "0.0.0.0" ]; then
@@ -643,7 +644,7 @@ arr.health() {
 arr.backup() {
   local dest="${1:-${ARR_STACK_DIR}/backups/$(date +%Y%m%d-%H%M%S)}"
   mkdir -p "$dest"
-  for svc in gluetun qbittorrent sonarr radarr prowlarr bazarr caddy; do
+  for svc in gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr caddy; do
     if [ -d "${ARR_DOCKER_DIR}/${svc}" ]; then
       tar -czf "${dest}/${svc}.tgz" -C "${ARR_DOCKER_DIR}" "$svc"
     fi
@@ -737,6 +738,7 @@ arr.open() {
     entries='qBittorrent qbittorrent
 Sonarr sonarr
 Radarr radarr
+Lidarr lidarr
 Prowlarr prowlarr
 Bazarr bazarr
 FlareSolverr flaresolverr'
@@ -755,11 +757,12 @@ EOF
     return
   fi
 
-  local host qbt_port sonarr_port radarr_port prowlarr_port bazarr_port flaresolverr_port
+  local host qbt_port sonarr_port radarr_port lidarr_port prowlarr_port bazarr_port flaresolverr_port
   host="$(_arr_host)"
   qbt_port="${QBT_PORT:-$(_arr_env_get QBT_PORT)}"
   sonarr_port="${SONARR_PORT:-$(_arr_env_get SONARR_PORT)}"
   radarr_port="${RADARR_PORT:-$(_arr_env_get RADARR_PORT)}"
+  lidarr_port="${LIDARR_PORT:-$(_arr_env_get LIDARR_PORT)}"
   prowlarr_port="${PROWLARR_PORT:-$(_arr_env_get PROWLARR_PORT)}"
   bazarr_port="${BAZARR_PORT:-$(_arr_env_get BAZARR_PORT)}"
   flaresolverr_port="${FLARR_PORT:-$(_arr_env_get FLARR_PORT)}"
@@ -769,6 +772,7 @@ EOF
     "qBittorrent" "http://${host}:${qbt_port}"
     "Sonarr" "http://${host}:${sonarr_port}"
     "Radarr" "http://${host}:${radarr_port}"
+    "Lidarr" "http://${host}:${lidarr_port}"
     "Prowlarr" "http://${host}:${prowlarr_port}"
     "Bazarr" "http://${host}:${bazarr_port}"
     "FlareSolverr" "http://${host}:${flaresolverr_port}"
@@ -1647,6 +1651,39 @@ arr.rad.tag.list()      { _arr_service_call radarr GET /api/v3/tag              
 arr.rad.command()       { _arr_service_call radarr POST /api/v3/command --data "${1:?JSON}" | _arr_pretty_json; }
 arr.rad.backups()       { _arr_service_call radarr GET /api/v3/system/backup        | _arr_pretty_json; }
 
+arr.lid.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get LIDARR_PORT)"; }
+arr.lid.logs() { docker logs -f lidarr; }
+arr.lid.restart() { docker restart lidarr; }
+arr.lid.refresh() {
+  local key="$(_arr_api_key lidarr)"
+  if [ -z "$key" ]; then echo 'Lidarr API key unavailable'; return 1; fi
+  local host="$(_arr_host)"
+  local port="$(_arr_env_get LIDARR_PORT)"
+  [ -n "$port" ] || port=8686
+  curl -fsS -X POST "http://${host}:${port}/api/v1/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
+}
+
+arr.lid.help() {
+  cat <<'EOF'
+Lidarr helpers:
+  arr.lid.status             GET /api/v1/system/status
+  arr.lid.health             GET /api/v1/health
+  arr.lid.artist.list        GET /api/v1/artist
+  arr.lid.artist.get <id>
+  arr.lid.album.list         GET /api/v1/album
+  arr.lid.command '{...}'    POST /api/v1/command
+  arr.lid.backups            GET /api/v1/system/backup
+EOF
+}
+
+arr.lid.status()        { _arr_service_call lidarr GET /api/v1/system/status      | _arr_pretty_json; }
+arr.lid.health()        { _arr_service_call lidarr GET /api/v1/health             | _arr_pretty_json; }
+arr.lid.artist.list()   { _arr_service_call lidarr GET /api/v1/artist            | _arr_pretty_json; }
+arr.lid.artist.get()    { _arr_service_call lidarr GET "/api/v1/artist/${1:?id}" | _arr_pretty_json; }
+arr.lid.album.list()    { _arr_service_call lidarr GET /api/v1/album             | _arr_pretty_json; }
+arr.lid.command()       { _arr_service_call lidarr POST /api/v1/command --data "${1:?JSON}" | _arr_pretty_json; }
+arr.lid.backups()       { _arr_service_call lidarr GET /api/v1/system/backup      | _arr_pretty_json; }
+
 arr.prowl.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get PROWLARR_PORT)"; }
 arr.prowl.logs() { docker logs -f prowlarr; }
 arr.prowl.restart() { docker restart prowlarr; }
@@ -1793,6 +1830,10 @@ _arr_clone_alias_group rad radarr \
   moviefile.get queue history blocklist indexers downloadclients \
   profile.list qualitydef remotepath.list tag.list command backups
 
+_arr_clone_alias_group lid lidarr \
+  url logs restart refresh help status health artist.list artist.get \
+  album.list command backups
+
 _arr_clone_alias_group baz bazarr \
   url logs restart help info series.wanted series.history \
   movies.wanted movies.history
@@ -1812,6 +1853,7 @@ arr.all.health() {
   _arr_section_exec "qBittorrent transfer" arr.qbt.transfer || rc=1
   _arr_section_exec "Sonarr health" arr.son.health || rc=1
   _arr_section_exec "Radarr health" arr.rad.health || rc=1
+  _arr_section_exec "Lidarr health" arr.lid.health || rc=1
   _arr_section_exec "Prowlarr health" arr.prowl.health || rc=1
   _arr_section_exec "Bazarr info" arr.baz.info || rc=1
   _arr_section_exec "FlareSolverr health" arr.fsolv.health || rc=1
@@ -1825,6 +1867,7 @@ arr.all.status() {
   _arr_section_exec "qBittorrent version" arr.qbt.version || rc=1
   _arr_section_exec "Sonarr status" arr.son.status || rc=1
   _arr_section_exec "Radarr status" arr.rad.status || rc=1
+  _arr_section_exec "Lidarr status" arr.lid.status || rc=1
   _arr_section_exec "Prowlarr status" arr.prowl.status || rc=1
   _arr_section_exec "Bazarr info" arr.baz.info || rc=1
   _arr_section_exec "FlareSolverr health" arr.fsolv.health || rc=1
@@ -1838,14 +1881,14 @@ arr.all.urls() {
     printf 'Caddy URLs (http):\n'
     local suffix="$(_arr_domain_suffix)"
     local svc
-    for svc in qbittorrent sonarr radarr prowlarr bazarr flaresolverr; do
+    for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
       printf '  %-13s http://%s.%s\n' "$svc" "$svc" "$suffix"
     done
     printf '  %-13s %s\n' "caddy" "$(_arr_service_base caddy)/healthz"
   else
     printf 'Direct service endpoints:\n'
     local svc
-    for svc in qbittorrent sonarr radarr prowlarr bazarr flaresolverr; do
+    for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
       printf '  %-13s %s\n' "$svc" "$(_arr_service_base "$svc")"
     done
     printf '  %-13s %s\n' "caddy" "$(_arr_service_base caddy)/healthz"
@@ -1864,7 +1907,7 @@ arr.check.ports() {
     fi
   fi
   local svc base http rc=0
-  for svc in qbittorrent sonarr radarr prowlarr bazarr flaresolverr; do
+  for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
     base="$(_arr_service_base "$svc")"
     local -a cmd=(curl -sS -o /dev/null -w '%{http_code}' --max-time 5)
     local -a resolve
@@ -1899,7 +1942,7 @@ arr.diag.env() {
   printf 'SPLIT_VPN:           %s\n' "${split_vpn:-unset}"
   printf 'Services:\n'
   local svc
-  for svc in gluetun qbittorrent sonarr radarr prowlarr bazarr flaresolverr caddy; do
+  for svc in gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr caddy; do
     case "$svc" in
       gluetun)
         printf '  %-13s host=%s port=%s key=%s\n' "$svc" "$(_arr_gluetun_host)" "$(_arr_gluetun_port)" "$( [ -n "$(_arr_gluetun_key)" ] && echo 'set' || echo 'missing')"

@@ -38,6 +38,25 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 | `DNS_DISTRIBUTION_MODE` | `router` | Choose `router` to push DNS via DHCP Option 6 or `per-device` to configure each client manually. |
 | `ARR_PORT_CHECK_MODE` | `enforce` | Controls port conflict handling: `enforce`, `warn`, `skip`, or `fix` (attempt to clear blockers then warn). |
 
+#### Service ports
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `QBT_PORT` | `${QBT_INT_PORT}` | Host port for qBittorrent/VueTorrent. |
+| `QBT_INT_PORT` | `8082` | Container WebUI port for qBittorrent. |
+| `SONARR_PORT` | `${SONARR_INT_PORT}` | Host port for Sonarr when `EXPOSE_DIRECT_PORTS=1`. |
+| `SONARR_INT_PORT` | `8989` | Container port for Sonarr. |
+| `RADARR_PORT` | `${RADARR_INT_PORT}` | Host port for Radarr when exposed on the LAN. |
+| `RADARR_INT_PORT` | `7878` | Container port for Radarr. |
+| `LIDARR_PORT` | `${LIDARR_INT_PORT}` | Host port for Lidarr when exposed on the LAN. |
+| `LIDARR_INT_PORT` | `8686` | Container port for Lidarr. |
+| `PROWLARR_PORT` | `${PROWLARR_INT_PORT}` | Host port for Prowlarr. |
+| `PROWLARR_INT_PORT` | `9696` | Container port for Prowlarr. |
+| `BAZARR_PORT` | `${BAZARR_INT_PORT}` | Host port for Bazarr. |
+| `BAZARR_INT_PORT` | `6767` | Container port for Bazarr. |
+| `FLARR_PORT` | `${FLARR_INT_PORT}` | Host port for FlareSolverr. |
+| `FLARR_INT_PORT` | `8191` | Container port for FlareSolverr. |
+
 ### Paths & storage
 
 | Setting | Default | Notes |
@@ -49,12 +68,24 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 | `ARR_LOG_DIR` | `${ARR_STACK_DIR}/logs` | Installer logs, Compose validation output, VPN reconnect history. |
 | `DOWNLOADS_DIR` | `${HOME}/Downloads` | Active download location for qBittorrent. |
 | `COMPLETED_DIR` | `${DOWNLOADS_DIR}/completed` | Destination for finished downloads. |
-| `MEDIA_DIR` | `${ARR_DATA_ROOT}/media` | Library root used by Sonarr/Radarr/Bazarr. |
+| `MEDIA_DIR` | `${ARR_DATA_ROOT}/media` | Library root used by Lidarr/Radarr/Sonarr/Bazarr. |
 | `TV_DIR` | `${MEDIA_DIR}/Shows` | Default Sonarr library path. |
 | `MOVIES_DIR` | `${MEDIA_DIR}/Movies` | Default Radarr library path. |
+| `MUSIC_DIR` | `${MEDIA_DIR}/Music` | Default Lidarr library path. |
 | `SUBS_DIR` | `${MEDIA_DIR}/subs` | Optional Bazarr subtitles directory. |
 
 Changing `ARR_DOCKER_DIR` moves all service state directories. Rerun `./arr.sh --yes` after editing `userr.conf` so compose, hooks, and helpers pick up the new location. Adjust `ARR_STACK_DIR`, `ARRCONF_DIR`, or `ARR_LOG_DIR` similarly to relocate the working tree, configuration, or logs.
+
+### Container images
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `SONARR_IMAGE` | `lscr.io/linuxserver/sonarr:4.0.15.2941-ls291` | Override to pin a different Sonarr release. |
+| `RADARR_IMAGE` | `lscr.io/linuxserver/radarr:5.27.5.10198-ls283` | Override to test upcoming Radarr builds. |
+| `LIDARR_IMAGE` | `lscr.io/linuxserver/lidarr:latest` | Set a fixed Lidarr tag when you need reproducible builds. |
+| `PROWLARR_IMAGE` | `lscr.io/linuxserver/prowlarr:latest` | Floating tag by default; pin if required. |
+| `BAZARR_IMAGE` | `lscr.io/linuxserver/bazarr:latest` | Floating tag by default; pin if required. |
+| `FLARR_IMAGE` | `ghcr.io/flaresolverr/flaresolverr:v3.3.21` | Keep pinned for deterministic behaviour. |
 
 ### Credentials & preservation
 

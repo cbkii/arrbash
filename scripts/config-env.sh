@@ -26,6 +26,7 @@ arr_prompt_direct_port_exposure() {
   printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
   printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
   printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
+  printf '  %-11s → http://%s:%s\n' "Lidarr" "$ip_hint" "$LIDARR_PORT"
   printf '  %-11s → http://%s:%s\n' "Prowlarr" "$ip_hint" "$PROWLARR_PORT"
   printf '  %-11s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
   printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"

@@ -12,7 +12,7 @@ Use these settings to choose how traffic flows, manage Proton VPN forwarding, an
 
 **Switching modes**
 1. Edit `${ARRCONF_DIR}/userr.conf` and set `SPLIT_VPN` as needed.
-2. (Optional, Recommended) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/etc. publish LAN ports in split mode.
+2. (Optional, Recommended) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/Lidarr/etc. publish LAN ports in split mode.
 3. Rerun the installer:
 ```bash
    ./arr.sh --yes
@@ -30,7 +30,7 @@ SABnzbd stays off by default. When you enable it, choose where it lives so downl
 
 | Mode | `SABNZBD_USE_VPN` | Network namespace | Host port exposure | Notes |
 | --- | --- | --- | --- | --- |
-| Direct LAN (default) | `0` | `arr_net` (LAN bridge) | Controlled by `EXPOSE_DIRECT_PORTS` and `SABNZBD_PORT`. | Keeps SAB reachable by Sonarr/Radarr/Prowlarr over the LAN. |
+| Direct LAN (default) | `0` | `arr_net` (LAN bridge) | Controlled by `EXPOSE_DIRECT_PORTS` and `SABNZBD_PORT`. | Keeps SAB reachable by Sonarr/Radarr/Lidarr/Prowlarr over the LAN. |
 | Split-VPN direct | `0` | `arr_net` while qBittorrent stays in Gluetun | Optional | Works well with the default qBittorrent port (`8082`) so SAB can keep port 8080. |
 | VPN attached | `1` | Shares Gluetun (`network_mode: "service:gluetun"`) | No host port; access via Gluetun network only. | Use when Usenet providers must see the VPN exit IP. |
 
