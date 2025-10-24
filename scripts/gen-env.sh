@@ -60,6 +60,10 @@ fi
 if ! type -t normalize_csv >/dev/null 2>&1; then
   normalize_csv() {
     local input="${1:-}"
+    input="${input//$'\r'/}"
+    input="${input//$'\n'/,}"
+    input="${input//$'\t'/,}"
+    input="${input// /,}"
     local IFS=','
     local -a parts=()
     read -r -a parts <<<"$input"
