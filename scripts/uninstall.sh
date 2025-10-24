@@ -121,8 +121,12 @@ source_user_conf() {
   local conf_path="$1"
   [[ -f "$conf_path" ]] || return 0
 
-  local errlog
-  errlog="$(mktemp)"
+  local errlog=""
+  if ! errlog="$(arr_mktemp_file "/tmp/arr-uninstall-userconf.XXXXXX" 600)"; then
+    warn "Unable to create temporary log for sourcing ${conf_path}; aborting uninstall."
+    exit 1
+  fi
+
   local prev_trap
   prev_trap="$(trap -p ERR 2>/dev/null || true)"
   trap - ERR
@@ -141,10 +145,11 @@ source_user_conf() {
     if [[ -s "$errlog" ]]; then
       cat "$errlog" >&2 || true
     fi
-    rm -f "$errlog"
+    arr_cleanup_temp_path "$errlog"
     exit "$status"
   fi
-  rm -f "$errlog"
+
+  arr_cleanup_temp_path "$errlog"
 }
 
 source_user_conf "${ARR_USERCONF_PATH}" || true
@@ -223,7 +228,10 @@ collect_env_candidates() {
   for candidate in "${candidates[@]}"; do
     [[ -n "$candidate" ]] || continue
     local canon
-    canon="$(arr_canonical_path "$candidate")"
+    canon="$(arr_canonical_path "$candidate" 2>/dev/null || true)"
+    if [[ -z "$canon" ]]; then
+      continue
+    fi
     if [[ -f "$canon" && -z "${seen[$canon]:-}" ]]; then
       apply_env_overrides "$canon"
       seen[$canon]=1
@@ -250,11 +258,33 @@ UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS:-}"
 UPSTREAM_DNS_1="${UPSTREAM_DNS_1:-}"
 UPSTREAM_DNS_2="${UPSTREAM_DNS_2:-}"
 
+is_protected_removal_path() {
+  local path="$1"
+  case "$path" in
+    ''|/|/bin|/boot|/etc|/home|/lib|/lib64|/opt|/root|/sbin|/usr|/usr/local|/var)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 add_unique_path() {
   local path="$1"
   [[ -n "$path" ]] || return 0
   local canon
-  canon="$(arr_canonical_path "$path")"
+  canon="$(arr_canonical_path "$path" 2>/dev/null || true)"
+  if [[ -z "$canon" ]]; then
+    warn "Skipping removal target ${path} (unable to resolve canonical path)."
+    return 0
+  fi
+  if is_protected_removal_path "$canon"; then
+    warn "Skipping removal of protected path ${canon}."
+    return 0
+  fi
+  if [[ "$canon" == "/" ]]; then
+    warn "Skipping removal of root directory /."
+    return 0
+  fi
   [[ -e "$canon" ]] || return 0
   if [[ -n "$REPO_CANON" && "$canon" == "$REPO_CANON"* ]]; then
     if [[ "$canon" != "$REPO_CANON" ]]; then
@@ -389,46 +419,46 @@ install_file_with_privileges() {
   fi
 
   if [[ ! -d "$dest_dir" ]]; then
-    if mkdir -p "$dest_dir" 2>/dev/null; then
+    if mkdir -p -- "$dest_dir" 2>/dev/null; then
       :
     elif command -v sudo >/dev/null 2>&1; then
-      sudo mkdir -p "$dest_dir" 2>/dev/null || return 1
+      sudo mkdir -p -- "$dest_dir" 2>/dev/null || return 1
     else
       return 1
     fi
   fi
 
-  if cp -f "$src" "$dest" 2>/dev/null; then
+  if cp -f -- "$src" "$dest" 2>/dev/null; then
     :
   elif command -v sudo >/dev/null 2>&1; then
-    sudo cp -f "$src" "$dest" 2>/dev/null || return 1
+    sudo cp -f -- "$src" "$dest" 2>/dev/null || return 1
   else
     return 1
   fi
 
   if [[ -n "$preserve_uid" && -n "$preserve_gid" ]]; then
-    if chown "${preserve_uid}:${preserve_gid}" "$dest" 2>/dev/null; then
+    if chown "${preserve_uid}:${preserve_gid}" -- "$dest" 2>/dev/null; then
       :
     elif command -v sudo >/dev/null 2>&1; then
-      sudo chown "${preserve_uid}:${preserve_gid}" "$dest" 2>/dev/null || warn "Could not restore ownership on ${dest}"
+      sudo chown "${preserve_uid}:${preserve_gid}" -- "$dest" 2>/dev/null || warn "Could not restore ownership on ${dest}"
     else
       warn "Could not restore ownership on ${dest}"
     fi
   fi
 
   if [[ -n "$mode" ]]; then
-    if chmod "$mode" "$dest" 2>/dev/null; then
+    if chmod "$mode" -- "$dest" 2>/dev/null; then
       :
     elif command -v sudo >/dev/null 2>&1; then
-      sudo chmod "$mode" "$dest" 2>/dev/null || return 1
+      sudo chmod "$mode" -- "$dest" 2>/dev/null || return 1
     else
       return 1
     fi
   elif [[ -n "$preserve_mode" ]]; then
-    if chmod "$preserve_mode" "$dest" 2>/dev/null; then
+    if chmod "$preserve_mode" -- "$dest" 2>/dev/null; then
       :
     elif command -v sudo >/dev/null 2>&1; then
-      sudo chmod "$preserve_mode" "$dest" 2>/dev/null || warn "Could not restore mode on ${dest}"
+      sudo chmod "$preserve_mode" -- "$dest" 2>/dev/null || warn "Could not restore mode on ${dest}"
     else
       warn "Could not restore mode on ${dest}"
     fi
@@ -479,90 +509,47 @@ remove_managed_hosts_entries() {
     return 1
   fi
 
-  local tmp
+  local tmp status
   tmp="$(arr_mktemp_file "${hosts_file}.XXXXXX" 644)" || return 2
+  status=0
 
-  if have_command python3; then
-    if ! python3 - "$hosts_file" "$tmp" "$STACK" <<'PY'
-import os
-import sys
-
-src, dst, stack = sys.argv[1:4]
-begin = f"# >>> {stack}-managed hosts >>>"
-end = f"# <<< {stack}-managed hosts <<<"
-marker = f"{stack}-managed"
-
-try:
-    with open(src, "r", encoding="utf-8") as fh:
-        lines = fh.readlines()
-except OSError:
-    sys.exit(1)
-
-skip = False
-out = []
-marker_lower = marker.lower()
-for line in lines:
-    stripped = line.rstrip("\n")
-    if stripped == begin:
-        skip = True
-        continue
-    if stripped == end:
-        skip = False
-        continue
-    if marker_lower in stripped.lower():
-        continue
-    if not skip:
-        out.append(line)
-
-try:
-    with open(dst, "w", encoding="utf-8") as fh:
-        fh.writelines(out)
-except OSError:
-    sys.exit(1)
-PY
-    then
-      rm -f "$tmp"
-      return 2
+  if awk -v begin="# >>> ${STACK}-managed hosts >>>" \
+    -v end="# <<< ${STACK}-managed hosts <<<" \
+    -v marker="${STACK}-managed" '
+    BEGIN {
+      skip = 0
+      marker_lower = tolower(marker)
+    }
+    {
+      line = $0
+      stripped = gensub(/[[:space:]]+$/, "", "g", line)
+      if (stripped == begin) {
+        skip = 1
+        next
+      }
+      if (stripped == end) {
+        skip = 0
+        next
+      }
+      if (index(tolower(line), marker_lower) > 0) {
+        next
+      }
+      if (!skip) {
+        print line
+      }
+    }
+  ' "$hosts_file" >"$tmp"; then
+    if cmp -s "$hosts_file" "$tmp" 2>/dev/null; then
+      status=1
+    elif ! install_file_with_privileges "$tmp" "$hosts_file" 644; then
+      status=2
     fi
   else
-    if ! awk -v begin="# >>> ${STACK}-managed hosts >>>" \
-      -v end="# <<< ${STACK}-managed hosts <<<" \
-      -v marker="${STACK}-managed" '
-      BEGIN {
-        skip = 0
-        marker_lower = tolower(marker)
-      }
-      {
-        line = $0
-        stripped = gensub(/[[:space:]]+$/, "", "g", line)
-        if (stripped == begin) {
-          skip = 1
-          next
-        }
-        if (stripped == end) {
-          skip = 0
-          next
-        }
-        if (index(tolower(line), marker_lower) > 0) {
-          next
-        }
-        if (!skip) {
-          print line
-        }
-      }
-    ' "$hosts_file" >"$tmp"; then
-      rm -f "$tmp"
-      return 2
-    fi
+    status=2
   fi
 
-  if ! install_file_with_privileges "$tmp" "$hosts_file" 644; then
-    rm -f "$tmp"
-    return 2
-  fi
-
-  rm -f "$tmp"
-  return 0
+  arr_cleanup_temp_path "$tmp"
+  return $status
 }
 
 verify_hosts_removal() {
@@ -595,93 +582,49 @@ restore_docker_daemon_dns() {
     break
   done < <(ls -1t "${daemon_json}.${STACK}"*.bak 2>/dev/null || true)
 
-  local tmp=""
+  local tmp="" status=0
   if [[ -n "$backup" && -f "$backup" ]]; then
     tmp="$(arr_mktemp_file "${daemon_json}.XXXXXX" 644)" || return 2
-    if ! cp -f "$backup" "$tmp" 2>/dev/null; then
-      if command -v sudo >/dev/null 2>&1; then
-        sudo cp -f "$backup" "$tmp" 2>/dev/null || {
-          rm -f "$tmp"
-          return 2
-        }
-      else
-        rm -f "$tmp"
-        return 2
+    if cp -f -- "$backup" "$tmp" 2>/dev/null; then
+      :
+    elif command -v sudo >/dev/null 2>&1; then
+      if ! sudo cp -f -- "$backup" "$tmp" 2>/dev/null; then
+        status=2
       fi
+    else
+      status=2
     fi
   else
     if [[ -z "$LAN_IP_EFFECTIVE" || "$LAN_IP_EFFECTIVE" == "0.0.0.0" ]]; then
       return 1
     fi
     tmp="$(arr_mktemp_file "${daemon_json}.XXXXXX" 644)" || return 2
-    if have_command python3; then
-      if ! LAN_IP_VALUE="$LAN_IP_EFFECTIVE" python3 - "$daemon_json" "$tmp" <<'PY'
-import json
-import os
-import sys
-
-src, dst = sys.argv[1:3]
-lan_ip = os.environ.get("LAN_IP_VALUE", "")
-
-try:
-    with open(src, "r", encoding="utf-8") as fh:
-        data = json.load(fh)
-except FileNotFoundError:
-    data = {}
-except json.JSONDecodeError:
-    data = {}
-
-changed = False
-if isinstance(data, dict) and "dns" in data:
-    dns_value = data.get("dns")
-    if isinstance(dns_value, list):
-        filtered = [entry for entry in dns_value if entry != lan_ip]
-        if len(filtered) != len(dns_value):
-            changed = True
-        dns_value = [entry for entry in filtered if entry]
-        if dns_value:
-            data["dns"] = dns_value
-        else:
-            data.pop("dns", None)
-            changed = True
-
-if not changed:
-    sys.exit(1)
-
-with open(dst, "w", encoding="utf-8") as fh:
-    json.dump(data, fh, indent=2)
-    fh.write("\n")
-PY
-      then
-        rm -f "$tmp"
-        return 1
-      fi
-    elif have_command jq; then
-      if ! jq --arg lan "$LAN_IP_EFFECTIVE" 'if (.dns // []) | type == "array" then
+    if have_command jq; then
+      if jq --arg lan "$LAN_IP_EFFECTIVE" 'if (.dns // []) | type == "array" then
           (.dns |= map(select(. != $lan))) | if (.dns | length) == 0 then del(.dns) else . end
         else
           empty
         end' "$daemon_json" 2>/dev/null >"$tmp"; then
-        rm -f "$tmp"
-        return 1
-      fi
-      if cmp -s "$daemon_json" "$tmp" 2>/dev/null; then
-        rm -f "$tmp"
-        return 1
+        if cmp -s "$daemon_json" "$tmp" 2>/dev/null; then
+          arr_cleanup_temp_path "$tmp"
+          return 1
+        fi
+      else
+        status=2
       fi
     else
-      rm -f "$tmp"
-      return 2
+      status=2
     fi
   fi
 
-  if ! install_file_with_privileges "$tmp" "$daemon_json" 644; then
-    rm -f "$tmp"
-    return 2
+  if ((status == 0)); then
+    if ! install_file_with_privileges "$tmp" "$daemon_json" 644; then
+      status=2
+    fi
   fi
 
-  rm -f "$tmp"
-  return 0
+  arr_cleanup_temp_path "$tmp"
+  return $status
 }
 
 verify_docker_dns_state() {
@@ -697,33 +640,13 @@ verify_docker_dns_state() {
     return 1
   fi
 
-  if have_command python3; then
-    if LAN_IP_VALUE="$LAN_IP_EFFECTIVE" python3 - "$daemon_json" <<'PY'
-import json
-import os
-import sys
-
-daemon = sys.argv[1]
-lan_ip = os.environ.get("LAN_IP_VALUE", "")
-
-try:
-    with open(daemon, "r", encoding="utf-8") as fh:
-        data = json.load(fh)
-except Exception:
-    sys.exit(1)
-
-dns_value = data.get("dns")
-if isinstance(dns_value, list) and lan_ip in dns_value:
-    sys.exit(1)
-
-sys.exit(0)
-PY
-    then
+  if have_command jq; then
+    if jq -e --arg lan "$LAN_IP_EFFECTIVE" '(.dns // []) | index($lan) | not' "$daemon_json" >/dev/null 2>&1; then
       msg "  Verified Docker daemon.json no longer references ${LAN_IP_EFFECTIVE}"
       return 0
     fi
-  elif have_command jq; then
-    if jq -e --arg lan "$LAN_IP_EFFECTIVE" '(.dns // []) | index($lan) | not' "$daemon_json" >/dev/null 2>&1; then
+  else
+    if ! grep -Fq "\"${LAN_IP_EFFECTIVE}\"" "$daemon_json" 2>/dev/null; then
       msg "  Verified Docker daemon.json no longer references ${LAN_IP_EFFECTIVE}"
       return 0
     fi
@@ -798,19 +721,86 @@ if ((${#REMOVAL_PATHS[@]} == 0)); then
   warn "No managed files or directories were detected."
 fi
 
-if [[ "$ASSUME_YES" != "1" ]]; then
-  printf '%s Proceed with removing the ARR stack and related assets? [y/N]: ' "$STACK_LABEL"
-  if ! read -r response; then
-    die "Failed to read confirmation input"
+prompt_confirmation() {
+  local prompt="$1"
+  local response=""
+
+  if [[ "$ASSUME_YES" == "1" ]]; then
+    return 0
   fi
+
+  if [[ -t 0 ]]; then
+    printf '%s ' "$prompt"
+    if ! read -r response; then
+      return 2
+    fi
+  elif [[ -t 1 && -r /dev/tty ]]; then
+    printf '%s ' "$prompt" >/dev/tty || true
+    if ! read -r response </dev/tty; then
+      return 2
+    fi
+  else
+    warn "No interactive terminal available; re-run with --yes to skip confirmation."
+    return 2
+  fi
+
   case "${response,,}" in
-    y|yes) ;;
+    y|yes)
+      return 0
+      ;;
     *)
+      return 1
+      ;;
+  esac
+}
+
+if [[ "$ASSUME_YES" != "1" ]]; then
+  prompt_confirmation "${STACK_LABEL} Proceed with removing the ARR stack and related assets? [y/N]:"
+  confirmation_status=$?
+  case "$confirmation_status" in
+    0)
+      ;;
+    1)
       msg "Uninstall aborted."
       exit 0
       ;;
+    *)
+      die "Failed to read confirmation input; use --yes to skip prompts."
+      ;;
   esac
 fi
+
+remove_path_with_privileges() {
+  local target="$1"
+  [[ -n "$target" ]] || return 1
+
+  local canon
+  canon="$(arr_canonical_path "$target" 2>/dev/null || true)"
+  if [[ -z "$canon" ]]; then
+    warn "Unable to resolve canonical path for ${target}; skipping removal."
+    return 1
+  fi
+  if is_protected_removal_path "$canon"; then
+    warn "Refusing to remove protected path ${canon}."
+    return 1
+  fi
+  if [[ "$canon" == "/" ]]; then
+    warn "Refusing to remove ${target}; resolved path is root directory."
+    return 1
+  fi
+
+  if rm -rf -- "$target" 2>/dev/null; then
+    return 0
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    if sudo rm -rf -- "$target" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
 
 compose_command=()
 detect_compose_command() {
@@ -911,7 +901,9 @@ esac
 step "Removing installer files"
 for path in "${REMOVAL_PATHS[@]}"; do
   if [[ -e "$path" ]]; then
-    rm -rf "$path" 2>/dev/null || warn "Unable to remove ${path}"
+    if ! remove_path_with_privileges "$path"; then
+      warn "Unable to remove ${path}"
+    fi
   fi
 done
 
@@ -924,66 +916,55 @@ remove_alias_block() {
   if ! grep -Fq "# ARR Stack helper aliases" "$rc_file" 2>/dev/null; then
     return 1
   fi
-  local restore_uid=""
-  local restore_gid=""
-  local restore_mode=""
-  if have_command stat; then
-    restore_uid="$(stat -c '%u' "$rc_file" 2>/dev/null || printf '')"
-    restore_gid="$(stat -c '%g' "$rc_file" 2>/dev/null || printf '')"
-    restore_mode="$(stat -c '%a' "$rc_file" 2>/dev/null || printf '')"
+  local tmp=""
+  tmp="$(arr_mktemp_file "${rc_file}.XXXXXX" 600)" || return 2
+
+  if ! awk -v stack="$STACK" -v alias_path="$alias_path" '
+    BEGIN {
+      last_blank = 0
+      pattern = "\\[ -f \"" alias_path "\" \\] && source \"" alias_path "\"[[:space:]]*$"
+    }
+    {
+      if ($0 ~ /^# ARR Stack helper aliases[[:space:]]*$/) {
+        next
+      }
+      if ($0 ~ ("^alias " stack "='")) {
+        next
+      }
+      if ($0 ~ ("^alias " stack "-logs='")) {
+        next
+      }
+      if ($0 ~ pattern) {
+        next
+      }
+      if ($0 ~ /^[[:space:]]*$/) {
+        if (last_blank) {
+          next
+        }
+        last_blank = 1
+        print
+        next
+      }
+      last_blank = 0
+      print
+    }
+  ' "$rc_file" >"$tmp"; then
+    arr_cleanup_temp_path "$tmp"
+    return 2
   fi
 
-  local updated=1
-  if have_command python3; then
-    if python3 - "$rc_file" "$STACK" "$alias_path" <<'PY'
-import re
-import sys
-path, stack, alias_path = sys.argv[1:4]
-try:
-    data = open(path, 'r', encoding='utf-8').read()
-except OSError:
-    sys.exit(1)
-pattern = (r"\n# ARR Stack helper aliases\n"
-           + rf"alias {re.escape(stack)}='[^\n]*'\n"
-           + rf"alias {re.escape(stack)}-logs='[^\n]*'\n"
-           + rf"\[ -f \"{re.escape(alias_path)}\" \] && source \"{re.escape(alias_path)}\"\n?")
-new_data, count = re.subn(pattern, '\n', data)
-if count:
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(new_data)
-    sys.exit(0)
-sys.exit(1)
-PY
-    then
-      updated=0
-    fi
+  if cmp -s "$rc_file" "$tmp" 2>/dev/null; then
+    arr_cleanup_temp_path "$tmp"
+    return 1
   fi
 
-  if ((updated != 0)); then
-    local alias_path_sed
-    alias_path_sed="$(printf '%s' "$alias_path" | sed 's/[&/\]/\\&/g')"
-    if sed -i -e "/^# ARR Stack helper aliases$/{
-  N;N;N
-  /alias ${STACK}=/d
-  /alias ${STACK}-logs=/d
-  /source \"${alias_path_sed}\"/d
-  }" "$rc_file"; then
-      updated=0
-    else
-      return 1
-    fi
+  if ! install_file_with_privileges "$tmp" "$rc_file"; then
+    arr_cleanup_temp_path "$tmp"
+    return 2
   fi
 
-  if ((updated == 0)); then
-    if [[ -n "$restore_uid" && -n "$restore_gid" ]]; then
-      chown "${restore_uid}:${restore_gid}" "$rc_file" 2>/dev/null || warn "Unable to restore ownership on ${rc_file}"
-    fi
-    if [[ -n "$restore_mode" ]]; then
-      chmod "$restore_mode" "$rc_file" 2>/dev/null || warn "Unable to restore permissions on ${rc_file}"
-    fi
-  fi
-
-  return $updated
+  arr_cleanup_temp_path "$tmp"
+  return 0
 }
 
 if [[ -n "${ALIAS_HELPER_PATH}" && -n "${PRIMARY_HOME}" ]]; then
@@ -996,11 +977,11 @@ if [[ -n "${ALIAS_HELPER_PATH}" && -n "${PRIMARY_HOME}" ]]; then
     fi
   done
   if [[ -f "$ALIAS_HELPER_PATH" ]]; then
-    rm -f "$ALIAS_HELPER_PATH" 2>/dev/null || true
+    remove_path_with_privileges "$ALIAS_HELPER_PATH" || true
   fi
   legacy_alias_file="${ARR_STACK_DIR}/.arraliases"
   if [[ -f "$legacy_alias_file" ]]; then
-    rm -f "$legacy_alias_file" 2>/dev/null || true
+    remove_path_with_privileges "$legacy_alias_file" || true
   fi
   if [[ "$removed_any" != 1 ]]; then
     msg "  No ARR alias blocks found in shell rc files."
@@ -1011,11 +992,11 @@ remove_caddy_ca() {
   local target="$1"
   [[ -f "$target" ]] || return 1
   if [[ $EUID -eq 0 ]]; then
-    rm -f "$target"
+    rm -f -- "$target"
     return $?
   fi
   if command -v sudo >/dev/null 2>&1; then
-    sudo rm -f "$target"
+    sudo rm -f -- "$target"
     return $?
   fi
   warn "Run manually to remove ${target} (requires root)."
