@@ -34,8 +34,8 @@ _arr_alias_source_if_present() {
   [ -f "$file" ] && . "$file"
 }
 
-_arr_alias_source_if_present "${ARRCONF_DIR}/userconf.defaults.sh"
-_arr_alias_source_if_present "${ARRCONF_DIR}/userconf.sh"
+_arr_alias_source_if_present "${ARRCONF_DIR}/userr.conf.defaults.sh"
+_arr_alias_source_if_present "${ARRCONF_DIR}/userr.conf"
 
 _arr_gluetun_lib="${ARR_STACK_DIR}/scripts/gluetun.sh"
 if [ -f "${_arr_gluetun_lib}" ]; then
