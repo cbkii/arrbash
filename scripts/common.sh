@@ -2148,6 +2148,7 @@ normalize_csv() {
   csv="${csv//$'\r'/}"
   csv="${csv//$'\n'/,}"
   csv="${csv//$'\t'/,}"
+  csv="${csv// /,}"
 
   local -A seen=()
   local -a ordered=()
