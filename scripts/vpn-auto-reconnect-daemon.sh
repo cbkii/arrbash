@@ -25,6 +25,7 @@ run_once() {
   if ! [[ "$interval_once" =~ ^[0-9]+$ ]]; then
     interval_once=1200
   fi
+  # shellcheck disable=SC2034 # exported for metrics and other helpers
   VPN_AUTO_RECONNECT_CURRENT_INTERVAL="$interval_once"
   if ! vpn_auto_reconnect_process_once; then
     log_warn "[vpn-auto] iteration reported errors"
@@ -59,28 +60,40 @@ main() {
   fi
 
   log_info "[vpn-auto] daemon starting"
+  local -i max_loops=0
+  if [[ -n "${VPN_AUTO_RECONNECT_MAX_LOOPS:-}" && "${VPN_AUTO_RECONNECT_MAX_LOOPS}" =~ ^[0-9]+$ ]]; then
+    max_loops="${VPN_AUTO_RECONNECT_MAX_LOOPS}"
+  fi
+  local -i loop_count=0
   while true; do
-    local interval
+    if ((max_loops > 0 && loop_count >= max_loops)); then
+      log_info "[vpn-auto] daemon stopping after ${loop_count} iteration(s)"
+      break
+    fi
+    loop_count+=1
     vpn_auto_reconnect_load_env
-    interval="$(vpn_auto_reconnect_check_interval_seconds 2>/dev/null || printf '1200')"
-    if ! [[ "$interval" =~ ^[0-9]+$ ]]; then
-      interval=1200
+    local interval_raw=""
+    interval_raw="$(vpn_auto_reconnect_check_interval_seconds 2>/dev/null || printf '1200')"
+    local -i interval=1200
+    if [[ "$interval_raw" =~ ^[0-9]+$ ]]; then
+      interval=$interval_raw
     fi
     if ((interval <= 0)); then
       interval=1200
     fi
+    # shellcheck disable=SC2034 # exported for metrics and other helpers
     VPN_AUTO_RECONNECT_CURRENT_INTERVAL="$interval"
 
     if ! run_once; then
       log_warn "[vpn-auto] iteration failed"
     fi
-    local wake_window=60
+    local -i wake_window=60
     if ((interval < wake_window)); then
       wake_window="$interval"
     fi
-    local slept=0
-    local wake_triggered=0
-    local wake_step=5
+    local -i slept=0
+    local -i wake_triggered=0
+    local -i wake_step=5
     local wake_file
     wake_file="$(vpn_auto_reconnect_wake_file 2>/dev/null || printf '')"
     while ((slept < wake_window)); do
@@ -90,21 +103,25 @@ main() {
         log_info "[vpn-auto] wake file detected; running early"
         break
       fi
-      local chunk=$wake_step
+      local -i chunk=$wake_step
       if ((wake_window - slept < wake_step)); then
         chunk=$((wake_window - slept))
       fi
-      sleep "$chunk"
+      if ((chunk > 0)); then
+        sleep "$chunk"
+      fi
       slept=$((slept + chunk))
     done
     if ((wake_triggered)); then
       continue
     fi
-    local remaining=$((interval - wake_window))
+    local -i remaining=$((interval - wake_window))
     if ((remaining > 0)); then
       sleep "$remaining"
     fi
   done
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

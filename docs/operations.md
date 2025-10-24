@@ -86,10 +86,8 @@ Recent helpers in `scripts/common.sh` ensure temporary paths are tracked and cle
   bash -c 'source scripts/common.sh; tmp=$(arr_mktemp_file "/tmp/temp-registry.XXXXXX"); printf "created %s\n" "$tmp" >&2'
   # After the second command exits, confirm the printed path no longer exists (global cleanup removed it).
   ```
-- Privileged redirection sanity check: `bash scripts/tests/privileged_redirection_test.sh`
-- Regex coverage: `bash scripts/tests/preserve_webui_port_test.sh`
 
-These checks cover the regression suite for temp registration, sudo redirections, and the WebUI port matcher.
+These commands cover manual verification for temp registration, sudo redirections, and the WebUI port matcher.
 
 ## SABnzbd helper
 

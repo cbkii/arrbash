@@ -45,16 +45,17 @@ arr_safe_compose_write() {
   local backup_created=""
 
   if [[ -f "${backup_prefix}" ]]; then
-    local legacy_name
-    legacy_name="${backup_prefix}.$(date +%Y%m%d%H%M%S%N).legacy"
+    local legacy_timestamp=""
+    legacy_timestamp="$(LC_ALL=C date +%Y%m%d%H%M%S%N)"
+    local legacy_name="${backup_prefix}.${legacy_timestamp}.legacy"
     if ! mv "${backup_prefix}" "${legacy_name}" 2>/dev/null; then
       rm -f "${backup_prefix}" 2>/dev/null || true
     fi
   fi
 
   if [[ -f "$target" ]]; then
-    local timestamp
-    timestamp="$(date +%Y%m%d%H%M%S%N)"
+    local timestamp=""
+    timestamp="$(LC_ALL=C date +%Y%m%d%H%M%S%N)"
     backup_created="${backup_prefix}.${timestamp}"
     if [[ -e "$backup_created" ]]; then
       backup_created+=".${RANDOM}"
@@ -225,10 +226,15 @@ arr_compose_save_artifact() {
 
   ensure_dir "$log_dir"
 
-  local timestamp="$(date '+%Y%m%d_%H%M%S')"
+  local timestamp=""
+  timestamp="$(LC_ALL=C date '+%Y%m%d_%H%M%S')"
   local sha_segment="unknown"
   if [[ -f "$staging" ]]; then
-    sha_segment="$(sha256sum "$staging" 2>/dev/null | awk '{print substr($1,1,8)}')"
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha_segment="$(LC_ALL=C sha256sum "$staging" 2>/dev/null | awk '{print substr($1,1,8)}')"
+    else
+      arr_compose_log_message "$log_file" "sha256sum not available; using 'unknown' digest marker"
+    fi
   fi
 
   local artifact="${log_dir}/compose-repair-${timestamp}-${sha_segment}"
@@ -455,7 +461,7 @@ arr_compose_attempt_yaml_fixes() {
         arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: sequence value contains ':' (${value})"
         continue
       fi
-      if [[ "$value" == *'${'* ]]; then
+      if [[ "$value" == *"\${"* ]]; then
         arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: sequence value contains placeholder syntax (${value})"
         continue
       fi
@@ -479,7 +485,7 @@ arr_compose_attempt_yaml_fixes() {
         arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: mapping value contains ':' (${value})"
         continue
       fi
-      if [[ "$value" == *'${'* ]]; then
+      if [[ "$value" == *"\${"* ]]; then
         arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: mapping value contains placeholder syntax (${value})"
         continue
       fi
