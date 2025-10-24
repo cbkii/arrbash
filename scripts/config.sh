@@ -85,9 +85,7 @@ show_configuration_preview() {
     lan_ip_display="(binds to 0.0.0.0 by default)"
   fi
 
-  local host_hint
-  host_hint="$(arr_host_access_hint)"
-  local prowlarr_hint="http://${host_hint}:${QBT_PORT}"
+  local prowlarr_hint="http://gluetun:${QBT_INT_PORT}"
 
   local vpn_mode_display
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
@@ -299,6 +297,8 @@ Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
   • qBittorrent WebUI (host): ${QBT_PORT}
   • Prowlarr → qBittorrent URL: ${prowlarr_hint}
+  • Sonarr/Radarr/Lidarr → qBittorrent URL: ${prowlarr_hint}
+  • Download client credentials: ${QBT_USER} / refer to QBT_PASS above
   • Sonarr: ${SONARR_PORT}
   • Radarr: ${RADARR_PORT}
   • Lidarr: ${LIDARR_PORT}

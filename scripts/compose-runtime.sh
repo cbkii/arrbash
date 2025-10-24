@@ -1417,11 +1417,17 @@ YAML
   else
     cat <<'YAML' >>"$dest"
     network_mode: "service:gluetun"
+YAML
+  fi
+
+  cat <<'YAML' >>"$dest"
+    # split-mode on/off: wait for Gluetun and qBittorrent before Arr apps boot
     depends_on:
       gluetun:
         condition: "service_healthy"
+      qbittorrent:
+        condition: "service_started"
 YAML
-  fi
 
   cat <<'YAML' >>"$dest"
     environment:
@@ -1646,6 +1652,7 @@ YAML
       HEALTH_SUCCESS_WAIT_DURATION: "10s"
       DNS_KEEP_NAMESERVER: "off"
       FIREWALL_OUTBOUND_SUBNETS: "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}"
+      # VPN forwarded ports (FIREWALL_INPUT_PORTS) stay separate from docker port-mapping below
       FIREWALL_INPUT_PORTS: "${GLUETUN_FIREWALL_INPUT_PORTS}"
       UPDATER_PERIOD: "24h"
       PUID: "${PUID}"
@@ -1655,6 +1662,7 @@ YAML
       - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
+      # split-mode on: publish qBittorrent via Gluetun so Arr apps reach http://gluetun:${QBT_INT_PORT}
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
 
@@ -1922,6 +1930,7 @@ services:
       HEALTH_SUCCESS_WAIT_DURATION: "10s"
       DNS_KEEP_NAMESERVER: "off"
       FIREWALL_OUTBOUND_SUBNETS: "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}"
+      # VPN forwarded ports (FIREWALL_INPUT_PORTS) stay separate from docker port-mapping below
       FIREWALL_INPUT_PORTS: "${GLUETUN_FIREWALL_INPUT_PORTS}"
       UPDATER_PERIOD: "24h"
       PUID: "${PUID}"
@@ -1930,7 +1939,7 @@ services:
     volumes:
       - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
     ports:
-      # Centralize host exposure since all services share gluetun's namespace
+      # split-mode off: Gluetun publishes shared service ports for the namespace
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML

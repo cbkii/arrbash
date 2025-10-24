@@ -102,6 +102,7 @@ To remove the stack and clean up generated assets later, run:
 - [Troubleshooting](./docs/troubleshooting.md) – diagnostic steps and targeted fixes.
 - [Version management](./docs/version-management.md) – process for adjusting image tags safely.
 - [FAQ](./docs/faq.md) and [Glossary](./docs/glossary.md) – quick answers and terminology.
+- [Arr + Gluetun reference layouts](./docs/gluetun-compose.md) – split/full VPN Compose examples, connectivity checks, and port exposure guidance.
 
 ## Support & contributions
 Open an issue or PR for bugs or documentation gaps. Review `./arr.sh --help` and the docs before filing reports to confirm behaviour.
