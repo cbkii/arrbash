@@ -4,6 +4,20 @@
 
 Follow these checks when services fail to start, DNS stops resolving, or VPN helpers misbehave.
 
+## Purge placeholder-polluted sessions
+Source the installed `.aliasarr` only (never `.aliasarr.template`). Run Compose from the project directory so `.env` overrides `arrconf/userr.conf`, which overrides `arrconf/userr.conf.defaults.sh`. The last four commands clear optional systemd user and tmux environments.
+```bash
+env | grep -E '^ARR_' | sed 's/^/ENV: /'
+export -n ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR 2>/dev/null || true
+unset ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR 2>/dev/null || true
+. ./.aliasarr 2>/dev/null || true
+docker compose config | grep -n '__ARR_' && echo "❌ placeholder present" || echo "✅ no placeholders"
+systemctl --user show-environment | grep -E '^ARR_' || true
+systemctl --user unset-environment ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR 2>/dev/null || true
+tmux show-environment | grep -E '^ARR_' 2>/dev/null || true
+tmux set-environment -ur ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR 2>/dev/null || true
+```
+
 ## DNS and HTTPS issues
 ### `ERR_NAME_NOT_RESOLVED`
 - Applies only when local DNS is enabled. Ensure clients point at the arrbash host first (DHCP Option 6 or per-device settings). See [Networking](networking.md) for setup guidance.

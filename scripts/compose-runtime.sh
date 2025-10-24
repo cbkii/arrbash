@@ -1304,10 +1304,10 @@ arr_compose_emit_qbittorrent_service() {
 
   cat <<'YAML' >>"$dest"
     volumes:
-      - "${ARR_DOCKER_DIR}/qbittorrent:/config"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/qbittorrent:/config"
       - "${DOWNLOADS_DIR}:/downloads"
       - "${COMPLETED_DIR}:/completed"
-      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
+      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
     depends_on:
       gluetun:
         condition: "service_healthy"
@@ -1344,7 +1344,7 @@ arr_compose_emit_media_service() {
       container='sonarr'
       port_mapping="\${SONARR_PORT}:\${SONARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR}/sonarr:/config"
+        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sonarr:/config"
         "\${DOWNLOADS_DIR}:/downloads"
         "\${COMPLETED_DIR}:/completed"
         "\${TV_DIR}:/tv"
@@ -1355,7 +1355,7 @@ arr_compose_emit_media_service() {
       container='radarr'
       port_mapping="\${RADARR_PORT}:\${RADARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR}/radarr:/config"
+        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/radarr:/config"
         "\${DOWNLOADS_DIR}:/downloads"
         "\${COMPLETED_DIR}:/completed"
         "\${MOVIES_DIR}:/movies"
@@ -1366,7 +1366,7 @@ arr_compose_emit_media_service() {
       container='lidarr'
       port_mapping="\${LIDARR_PORT}:\${LIDARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR}/lidarr:/config"
+        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/lidarr:/config"
         "\${DOWNLOADS_DIR}:/downloads"
         "\${COMPLETED_DIR}:/completed"
         "\${MUSIC_DIR}:/music"
@@ -1377,7 +1377,7 @@ arr_compose_emit_media_service() {
       container='prowlarr'
       port_mapping="\${PROWLARR_PORT}:\${PROWLARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR}/prowlarr:/config"
+        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/prowlarr:/config"
       )
       ;;
     bazarr)
@@ -1385,7 +1385,7 @@ arr_compose_emit_media_service() {
       container='bazarr'
       port_mapping="\${BAZARR_PORT}:\${BAZARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR}/bazarr:/config"
+        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/bazarr:/config"
         "\${TV_DIR}:/tv"
         "\${MOVIES_DIR}:/movies"
       )
@@ -1551,9 +1551,9 @@ append_sabnzbd_service_body() {
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
     volumes:
-      - "${ARR_DOCKER_DIR}/sab/config:/config"
-      - "${ARR_DOCKER_DIR}/sab/incomplete:/incomplete"
-      - "${ARR_DOCKER_DIR}/sab/downloads:/downloads"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sab/config:/config"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sab/incomplete:/incomplete"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sab/downloads:/downloads"
 YAML
 
   if [[ "$include_direct_port" == "1" ]]; then
@@ -1652,7 +1652,7 @@ YAML
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
     volumes:
-      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
     ports:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
@@ -1764,9 +1764,9 @@ YAML
       radarr:
         condition: "service_started"
     volumes:
-      - "${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro"
-      - "${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro"
-      - "${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/config.yml:/app/config.yml:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/secrets.yml:/app/secrets.yml:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/cfs:/app/cfs:ro"
     working_dir: "/app"
     entrypoint: ["/bin/sh","-lc","node dist/index.js || exit 1"]
     environment:
@@ -1928,7 +1928,7 @@ services:
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
     volumes:
-      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
     ports:
       # Centralize host exposure since all services share gluetun's namespace
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
@@ -2110,9 +2110,9 @@ YAML
       radarr:
         condition: "service_started"
     volumes:
-      - "${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro"
-      - "${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro"
-      - "${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/config.yml:/app/config.yml:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/secrets.yml:/app/secrets.yml:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/cfs:/app/cfs:ro"
     working_dir: "/app"
     entrypoint: ["/bin/sh","-lc","node dist/index.js || exit 1"]
     environment:
@@ -2135,10 +2135,10 @@ YAML
       - "proxy"
     network_mode: "service:gluetun"
     volumes:
-      - "${ARR_DOCKER_DIR}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
-      - "${ARR_DOCKER_DIR}/caddy/data:/data"
-      - "${ARR_DOCKER_DIR}/caddy/config:/config"
-      - "${ARR_DOCKER_DIR}/caddy/ca-pub:/ca-pub:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/data:/data"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/config:/config"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/ca-pub:/ca-pub:ro"
     depends_on:
       gluetun:
         condition: "service_healthy"
