@@ -785,10 +785,8 @@ write_configarr_assets() {
   local episode_pref_mbmin=""
   local episode_cap_mb=""
   local sanitized_ep_max_gb=""
-  local sanitized_ep_min_mb=""
   local sanitized_runtime_min=""
   local sanitized_season_max_gb=""
-  local sanitized_mbmin_decimals=""
 
   if have_command python3; then
     local py_output=""
@@ -902,10 +900,8 @@ print(f"episode_min_mbmin={fmt.format(episode_min_mbmin)}")
 print(f"episode_pref_mbmin={fmt.format(episode_pref_mbmin)}")
 print(f"episode_cap_mb={int(round(max_total_mb))}")
 print(f"sanitized_ep_max_gb={trim_float(max_gb)}")
-print(f"sanitized_ep_min_mb={trim_float(min_mb, 1)}")
 print(f"sanitized_runtime_min={trim_float(runtime, 1)}")
 print(f"sanitized_season_max_gb={trim_float(season_cap, 1)}")
-print(f"sanitized_mbmin_decimals={decimals}")
 
 for warning in warnings:
     print("warn::" + warning)
@@ -937,17 +933,11 @@ PY
           sanitized_ep_max_gb=*)
             sanitized_ep_max_gb="${line#*=}"
             ;;
-          sanitized_ep_min_mb=*)
-            sanitized_ep_min_mb="${line#*=}"
-            ;;
           sanitized_runtime_min=*)
             sanitized_runtime_min="${line#*=}"
             ;;
           sanitized_season_max_gb=*)
             sanitized_season_max_gb="${line#*=}"
-            ;;
-          sanitized_mbmin_decimals=*)
-            sanitized_mbmin_decimals="${line#*=}"
             ;;
         esac
       done <<<"$py_output"
@@ -965,10 +955,8 @@ PY
   : "${episode_pref_mbmin:=59.7}"
   : "${episode_cap_mb:=5120}"
   : "${sanitized_ep_max_gb:=5}"
-  : "${sanitized_ep_min_mb:=250}"
   : "${sanitized_runtime_min:=45}"
   : "${sanitized_season_max_gb:=30}"
-  : "${sanitized_mbmin_decimals:=1}"
 
   declare -A res_index=(
     [480p]=0

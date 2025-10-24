@@ -696,6 +696,8 @@ PY
     printf '{}\n' >"$backup" 2>/dev/null || true
   fi
 
+  # Rollback plan: restore "${backup}" over "${conf}" (e.g., sudo cp) and restart Docker to revert DNS tweaks.
+
   local tmp
   if ! tmp="$(arr_mktemp_file "${conf}.XXXXXX.tmp")"; then
     warn "[dns] Failed to create temporary file for ${conf}"
@@ -760,6 +762,7 @@ PY
     if command -v systemctl >/dev/null 2>&1; then
       if ! systemctl restart docker >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo systemctl restart docker' manually."
+        warn "[dns] Rollback available at: ${backup}"
         return 1
       fi
       if ! systemctl is-active --quiet docker; then
@@ -770,6 +773,7 @@ PY
     elif command -v service >/dev/null 2>&1; then
       if ! service docker restart >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo service docker restart' manually."
+        warn "[dns] Rollback available at: ${backup}"
         return 1
       fi
       msg "[dns] Docker daemon restarted to apply userland-proxy change"
