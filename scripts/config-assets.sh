@@ -781,545 +781,184 @@ write_configarr_assets() {
   local sanitized_video_min_res=""
   local sanitized_video_max_res=""
   local episode_max_mbmin=""
-  local episode_min_mbmin=""
-  local episode_pref_mbmin=""
-  local episode_cap_mb=""
   local sanitized_ep_max_gb=""
-  local sanitized_ep_min_mb=""
   local sanitized_runtime_min=""
   local sanitized_season_max_gb=""
-  local sanitized_mbmin_decimals=""
 
-  if have_command python3; then
-    local py_output=""
-    if py_output=$(
-      python3 <<'PY'
-import math
-import os
+  local policy_eval_output=""
 
 
-def trim_float(value: float, precision: int = 2) -> str:
-    if math.isclose(value, round(value)):
-        return str(int(round(value)))
-    fmt = "{:." + str(precision) + "f}"
-    text = fmt.format(value)
-    return text.rstrip("0").rstrip(".")
-
-
-def sanitize_resolution(name: str, default: str, allowed: list[str], warnings: list[str]) -> str:
-    raw = (os.environ.get(name, "") or "").strip()
-    if not raw:
-        return default
-    lowered = raw.lower()
-    for candidate in allowed:
-        if candidate.lower() == lowered:
-            return candidate
-    warnings.append(f"{name}='{raw}' not supported; using {default}")
-    return default
-
-
-def parse_float(name: str, default: float, warnings: list[str], minimum: float | None = None, maximum: float | None = None) -> float:
-    raw = os.environ.get(name, "")
-    if raw is None or raw == "":
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        warnings.append(f"{name}='{raw}' is not numeric; using {default}")
-        return default
-    if minimum is not None and value < minimum:
-        warnings.append(f"{name}={raw} below minimum {minimum}; clamping")
-        value = minimum
-    if maximum is not None and value > maximum:
-        warnings.append(f"{name}={raw} above maximum {maximum}; clamping")
-        value = maximum
-    return value
-
-
-warnings: list[str] = []
-allowed_res = ["480p", "576p", "720p", "1080p", "2160p"]
-res_index = {res: idx for idx, res in enumerate(allowed_res)}
-
-min_res = sanitize_resolution("ARR_VIDEO_MIN_RES", "720p", allowed_res, warnings)
-max_res = sanitize_resolution("ARR_VIDEO_MAX_RES", "1080p", allowed_res, warnings)
-
-if res_index[min_res] > res_index[max_res]:
-    warnings.append(
-        f"ARR_VIDEO_MIN_RES='{min_res}' and ARR_VIDEO_MAX_RES='{max_res}' conflict; using 720p–1080p"
-    )
-    min_res = "720p"
-    max_res = "1080p"
-
-max_gb = parse_float("ARR_EP_MAX_GB", 5.0, warnings, minimum=1.0, maximum=20.0)
-min_mb = parse_float("ARR_EP_MIN_MB", 250.0, warnings, minimum=1.0)
-runtime = parse_float("ARR_TV_RUNTIME_MIN", 45.0, warnings, minimum=1.0)
-season_cap = parse_float("ARR_SEASON_MAX_GB", 30.0, warnings, minimum=1.0)
-
-dec_raw = os.environ.get("ARR_MBMIN_DECIMALS", "1") or "1"
-try:
-    decimals = int(dec_raw)
-except ValueError:
-    warnings.append(f"ARR_MBMIN_DECIMALS='{dec_raw}' invalid; using 1")
-    decimals = 1
-
-if decimals < 0:
-    warnings.append("ARR_MBMIN_DECIMALS below 0; clamping to 0")
-    decimals = 0
-elif decimals > 3:
-    warnings.append("ARR_MBMIN_DECIMALS above 3; clamping to 3")
-    decimals = 3
-
-max_total_mb = max_gb * 1024.0
-
-if min_mb >= max_total_mb:
-    warnings.append(
-        f"ARR_EP_MIN_MB={min_mb} must be smaller than ARR_EP_MAX_GB*1024={max_total_mb}; reducing"
-    )
-    min_mb = min(250.0, max_total_mb * 0.5)
-    if min_mb <= 0:
-        min_mb = max_total_mb * 0.25
-
-episode_max_mbmin = max_total_mb / runtime
-episode_min_mbmin = min_mb / runtime
-
-if episode_max_mbmin < 20.0:
-    warnings.append(
-        f"Derived episode max {episode_max_mbmin:.2f} MB/min is too small; using 60"
-    )
-    episode_max_mbmin = 60.0
-
-if episode_min_mbmin >= episode_max_mbmin:
-    episode_min_mbmin = max(episode_max_mbmin * 0.5, 1.0)
-
-episode_pref_mbmin = (episode_min_mbmin + episode_max_mbmin) / 2.0
-
-fmt = "{:." + str(decimals) + "f}"
-
-print(f"sanitized_video_min_res={min_res}")
-print(f"sanitized_video_max_res={max_res}")
-print(f"episode_max_mbmin={fmt.format(episode_max_mbmin)}")
-print(f"episode_min_mbmin={fmt.format(episode_min_mbmin)}")
-print(f"episode_pref_mbmin={fmt.format(episode_pref_mbmin)}")
-print(f"episode_cap_mb={int(round(max_total_mb))}")
-print(f"sanitized_ep_max_gb={trim_float(max_gb)}")
-print(f"sanitized_ep_min_mb={trim_float(min_mb, 1)}")
-print(f"sanitized_runtime_min={trim_float(runtime, 1)}")
-print(f"sanitized_season_max_gb={trim_float(season_cap, 1)}")
-print(f"sanitized_mbmin_decimals={decimals}")
-
-for warning in warnings:
-    print("warn::" + warning)
-PY
-    ); then
-      while IFS= read -r line; do
-        case "$line" in
-          warn::*)
-            warn "Configarr: ${line#warn::}"
-            ;;
-          sanitized_video_min_res=*)
-            sanitized_video_min_res="${line#*=}"
-            ;;
-          sanitized_video_max_res=*)
-            sanitized_video_max_res="${line#*=}"
-            ;;
-          episode_max_mbmin=*)
-            episode_max_mbmin="${line#*=}"
-            ;;
-          episode_min_mbmin=*)
-            episode_min_mbmin="${line#*=}"
-            ;;
-          episode_pref_mbmin=*)
-            episode_pref_mbmin="${line#*=}"
-            ;;
-          episode_cap_mb=*)
-            episode_cap_mb="${line#*=}"
-            ;;
-          sanitized_ep_max_gb=*)
-            sanitized_ep_max_gb="${line#*=}"
-            ;;
-          sanitized_ep_min_mb=*)
-            sanitized_ep_min_mb="${line#*=}"
-            ;;
-          sanitized_runtime_min=*)
-            sanitized_runtime_min="${line#*=}"
-            ;;
-          sanitized_season_max_gb=*)
-            sanitized_season_max_gb="${line#*=}"
-            ;;
-          sanitized_mbmin_decimals=*)
-            sanitized_mbmin_decimals="${line#*=}"
-            ;;
-        esac
-      done <<<"$py_output"
-    else
-      warn "Configarr: failed to evaluate policy heuristics via python3; using defaults"
-    fi
+  if policy_eval_output="$(
+    ARR_VIDEO_MIN_RES="${ARR_VIDEO_MIN_RES:-}" \
+    ARR_VIDEO_MAX_RES="${ARR_VIDEO_MAX_RES:-}" \
+    ARR_EP_MAX_GB="${ARR_EP_MAX_GB:-}" \
+    ARR_EP_MIN_MB="${ARR_EP_MIN_MB:-}" \
+    ARR_TV_RUNTIME_MIN="${ARR_TV_RUNTIME_MIN:-}" \
+    ARR_SEASON_MAX_GB="${ARR_SEASON_MAX_GB:-}" \
+    ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS:-}" \
+    awk '
+      function abs_val(x) { return x < 0 ? -x : x }
+      function trim(s) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+        return s
+      }
+      function warn_msg(msg) { warnings[++warn_count] = msg }
+      function sanitize_resolution(name, default_value, raw, lowered, i) {
+        raw = trim(ENVIRON[name])
+        if (raw == "") {
+          return default_value
+        }
+        lowered = tolower(raw)
+        for (i = 1; i <= allowed_count; i++) {
+          if (tolower(allowed[i]) == lowered) {
+            return allowed[i]
+          }
+        }
+        warn_msg(name "='" raw "' not supported; using " default_value)
+        return default_value
+      }
+      function parse_float(name, default_value, min_set, minimum, max_set, maximum, raw, trimmed, value) {
+        if (!(name in ENVIRON)) {
+          return default_value
+        }
+        raw = ENVIRON[name]
+        trimmed = trim(raw)
+        if (trimmed == "" && raw != "0") {
+          return default_value
+        }
+        if (trimmed == "" && raw == "0") {
+          trimmed = "0"
+        }
+        if (trimmed !~ /^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/) {
+          warn_msg(name "='" raw "' is not numeric; using " default_value)
+          return default_value
+        }
+        value = trimmed + 0
+        if (min_set && value < minimum) {
+          warn_msg(name "=" raw " below minimum " minimum "; clamping")
+          value = minimum
+        }
+        if (max_set && value > maximum) {
+          warn_msg(name "=" raw " above maximum " maximum "; clamping")
+          value = maximum
+        }
+        return value
+      }
+      function trim_float(value, precision, rounded, text) {
+        if (precision == "") {
+          precision = 2
+        }
+        rounded = (value >= 0 ? int(value + 0.5) : int(value - 0.5))
+        if (abs_val(value - rounded) < 1e-9) {
+          return sprintf("%d", rounded)
+        }
+        text = sprintf("%.*f", precision, value)
+        sub(/0+$/, "", text)
+        sub(/\.$/, "", text)
+        return text
+      }
+      function round_value(value) { return (value >= 0 ? int(value + 0.5) : int(value - 0.5)) }
+      function max_value(a, b) { return a > b ? a : b }
+      function min_value(a, b) { return a < b ? a : b }
+      warn_count = 0
+      allowed_count = split("480p 576p 720p 1080p 2160p", allowed, " ")
+      for (i = 1; i <= allowed_count; i++) {
+        res_index[allowed[i]] = i
+      }
+      min_res = sanitize_resolution("ARR_VIDEO_MIN_RES", "720p")
+      max_res = sanitize_resolution("ARR_VIDEO_MAX_RES", "1080p")
+      if (res_index[min_res] > res_index[max_res]) {
+        warn_msg("ARR_VIDEO_MIN_RES='" min_res "' and ARR_VIDEO_MAX_RES='" max_res "' conflict; using 720p–1080p")
+        min_res = "720p"
+        max_res = "1080p"
+      }
+      max_gb = parse_float("ARR_EP_MAX_GB", 5.0, 1, 1.0, 1, 20.0)
+      min_mb = parse_float("ARR_EP_MIN_MB", 250.0, 1, 1.0, 0, 0)
+      runtime = parse_float("ARR_TV_RUNTIME_MIN", 45.0, 1, 1.0, 0, 0)
+      season_cap = parse_float("ARR_SEASON_MAX_GB", 30.0, 1, 1.0, 0, 0)
+      dec_raw = ENVIRON["ARR_MBMIN_DECIMALS"]
+      if (dec_raw == "") {
+        dec_raw = "1"
+      }
+      dec_trim = trim(dec_raw)
+      if (dec_trim == "") {
+        dec_trim = "1"
+      }
+      if (dec_trim !~ /^[-+]?[0-9]+$/) {
+        warn_msg("ARR_MBMIN_DECIMALS='" dec_raw "' invalid; using 1")
+        decimals = 1
+      } else {
+        decimals = dec_trim + 0
+      }
+      if (decimals < 0) {
+        warn_msg("ARR_MBMIN_DECIMALS below 0; clamping to 0")
+        decimals = 0
+      } else if (decimals > 3) {
+        warn_msg("ARR_MBMIN_DECIMALS above 3; clamping to 3")
+        decimals = 3
+      }
+      max_total_mb = max_gb * 1024.0
+      if (min_mb >= max_total_mb) {
+        warn_msg("ARR_EP_MIN_MB=" min_mb " must be smaller than ARR_EP_MAX_GB*1024=" max_total_mb "; reducing")
+        min_mb = min_value(250.0, max_total_mb * 0.5)
+        if (min_mb <= 0) {
+          min_mb = max_total_mb * 0.25
+        }
+      }
+      episode_max_mbmin = max_total_mb / runtime
+      episode_min_mbmin = min_mb / runtime
+      if (episode_max_mbmin < 20.0) {
+        warn_msg("Derived episode max " sprintf("%.2f", episode_max_mbmin) " MB/min is too small; using 60")
+        episode_max_mbmin = 60.0
+      }
+      if (episode_min_mbmin >= episode_max_mbmin) {
+        episode_min_mbmin = max_value(episode_max_mbmin * 0.5, 1.0)
+      }
+      episode_pref_mbmin = (episode_min_mbmin + episode_max_mbmin) / 2.0
+      printf("sanitized_video_min_res=%s\n", min_res)
+      printf("sanitized_video_max_res=%s\n", max_res)
+      printf("episode_max_mbmin=%s\n", sprintf("%.*f", decimals, episode_max_mbmin))
+      printf("sanitized_ep_max_gb=%s\n", trim_float(max_gb, 2))
+      printf("sanitized_runtime_min=%s\n", trim_float(runtime, 1))
+      printf("sanitized_season_max_gb=%s\n", trim_float(season_cap, 1))
+      for (i = 1; i <= warn_count; i++) {
+        printf("warn::%s\n", warnings[i])
+      }
+    '
+  )"; then
+    while IFS= read -r line; do
+      case "$line" in
+        warn::*)
+          warn "Configarr: ${line#warn::}"
+          ;;
+        sanitized_video_min_res=*)
+          sanitized_video_min_res="${line#*=}"
+          ;;
+        sanitized_video_max_res=*)
+          sanitized_video_max_res="${line#*=}"
+          ;;
+        episode_max_mbmin=*)
+          episode_max_mbmin="${line#*=}"
+          ;;
+        sanitized_ep_max_gb=*)
+          sanitized_ep_max_gb="${line#*=}"
+          ;;
+        sanitized_runtime_min=*)
+          sanitized_runtime_min="${line#*=}"
+          ;;
+        sanitized_season_max_gb=*)
+          sanitized_season_max_gb="${line#*=}"
+          ;;
+      esac
+    done <<<"$policy_eval_output"
   else
-    warn "Configarr: python3 unavailable; using default policy heuristics"
-  fi
-
-  : "${sanitized_video_min_res:=720p}"
-  : "${sanitized_video_max_res:=1080p}"
-  : "${episode_max_mbmin:=113.8}"
-  : "${episode_min_mbmin:=5.6}"
-  : "${episode_pref_mbmin:=59.7}"
-  : "${episode_cap_mb:=5120}"
-  : "${sanitized_ep_max_gb:=5}"
-  : "${sanitized_ep_min_mb:=250}"
-  : "${sanitized_runtime_min:=45}"
-  : "${sanitized_season_max_gb:=30}"
-  : "${sanitized_mbmin_decimals:=1}"
-
-  declare -A res_index=(
-    [480p]=0
-    [576p]=1
-    [720p]=2
-    [1080p]=3
-    [2160p]=4
-  )
-
-  local min_idx="${res_index[$sanitized_video_min_res]:-${res_index[720p]}}"
-  local max_idx="${res_index[$sanitized_video_max_res]:-${res_index[1080p]}}"
-
-  local include_720=0
-  local include_1080=0
-
-  if ((min_idx <= res_index[720p] && max_idx >= res_index[720p])); then
-    include_720=1
-  fi
-  if ((min_idx <= res_index[1080p] && max_idx >= res_index[1080p])); then
-    include_1080=1
-  fi
-
-  if ((include_720 == 0 && include_1080 == 0)); then
-    include_1080=1
-    sanitized_video_min_res="1080p"
+    warn "Configarr: failed to evaluate policy heuristics; using defaults"
+    sanitized_video_min_res="720p"
     sanitized_video_max_res="1080p"
-    min_idx="${res_index[1080p]}"
-    max_idx="${res_index[1080p]}"
-  fi
-
-  local -a sonarr_qualities=()
-  local -a radarr_qualities=()
-
-  if ((include_720)); then
-    sonarr_qualities+=("HDTV-720p" "WEBRip-720p" "WEBDL-720p" "Bluray-720p")
-    radarr_qualities+=("HDTV-720p" "WEBRip-720p" "WEBDL-720p" "Bluray-720p")
-  fi
-  if ((include_1080)); then
-    sonarr_qualities+=("HDTV-1080p" "WEBRip-1080p" "WEBDL-1080p" "Bluray-1080p" "Bluray-1080p Remux")
-    radarr_qualities+=("HDTV-1080p" "WEBRip-1080p" "WEBDL-1080p" "Bluray-1080p" "Remux-1080p")
-  fi
-
-  if ((${#sonarr_qualities[@]} == 0)); then
-    sonarr_qualities=("WEBRip-1080p" "WEBDL-1080p")
-  fi
-  if ((${#radarr_qualities[@]} == 0)); then
-    radarr_qualities=("WEBRip-1080p" "WEBDL-1080p")
-  fi
-
-  local sonarr_quality_yaml=""
-  local radarr_quality_yaml=""
-  local quality
-
-  for quality in "${sonarr_qualities[@]}"; do
-    sonarr_quality_yaml+="    - quality: \"${quality}\"\n"
-    sonarr_quality_yaml+="      min: \"${episode_min_mbmin}\"\n"
-    sonarr_quality_yaml+="      preferred: \"${episode_pref_mbmin}\"\n"
-    sonarr_quality_yaml+="      max: \"${episode_max_mbmin}\"\n"
-  done
-
-  for quality in "${radarr_qualities[@]}"; do
-    radarr_quality_yaml+="    - quality: \"${quality}\"\n"
-    radarr_quality_yaml+="      min: \"${episode_min_mbmin}\"\n"
-    radarr_quality_yaml+="      preferred: \"${episode_pref_mbmin}\"\n"
-    radarr_quality_yaml+="      max: \"${episode_max_mbmin}\"\n"
-  done
-
-  local sonarr_override_path="${runtime_cfs}/sonarr-quality-definition-override.yml"
-  local radarr_override_path="${runtime_cfs}/radarr-quality-definition-override.yml"
-  local common_cf_path="${runtime_cfs}/common-negative-formats.yml"
-
-  if [[ ! -f "$sonarr_override_path" ]]; then
-    local sonarr_content
-    sonarr_content="# Auto-generated by ${STACK}.sh for Configarr size guardrails\n"
-    sonarr_content+="# Derived from ARR_EP_MAX_GB=${sanitized_ep_max_gb} (~${episode_cap_mb} MB) and ARR_TV_RUNTIME_MIN=${sanitized_runtime_min} minutes.\n"
-    sonarr_content+="quality_definition:\n"
-    sonarr_content+="  qualities:\n"
-    sonarr_content+="${sonarr_quality_yaml}"
-    atomic_write "$sonarr_override_path" "$sonarr_content" "$NONSECRET_FILE_MODE"
-    msg "  Created Sonarr quality override: ${sonarr_override_path}"
-  else
-    ensure_nonsecret_file_mode "$sonarr_override_path"
-  fi
-
-  if [[ ! -f "$radarr_override_path" ]]; then
-    local radarr_content
-    radarr_content="# Auto-generated by ${STACK}.sh for Configarr size guardrails\n"
-    radarr_content+="# Derived from ARR_EP_MAX_GB=${sanitized_ep_max_gb} (~${episode_cap_mb} MB) and ARR_TV_RUNTIME_MIN=${sanitized_runtime_min} minutes.\n"
-    radarr_content+="quality_definition:\n"
-    radarr_content+="  qualities:\n"
-    radarr_content+="${radarr_quality_yaml}"
-    atomic_write "$radarr_override_path" "$radarr_content" "$NONSECRET_FILE_MODE"
-    msg "  Created Radarr quality override: ${radarr_override_path}"
-  else
-    ensure_nonsecret_file_mode "$radarr_override_path"
-  fi
-
-  normalize_toggle() {
-    local value="${1:-0}"
-    case "$value" in
-      1 | true | TRUE | yes | YES | on | ON)
-        printf '1'
-        ;;
-      *)
-        printf '0'
-        ;;
-    esac
-  }
-
-  sanitize_score() {
-    local value="${1:-0}"
-    local default="${2:-0}"
-    if [[ "$value" =~ ^-?[0-9]+$ ]]; then
-      printf '%s' "$value"
-    else
-      warn "Configarr: invalid score '${value}', using ${default}"
-      printf '%s' "$default"
-    fi
-  }
-
-  local english_only
-  english_only="$(normalize_toggle "${ARR_ENGLISH_ONLY:-1}")"
-  local discourage_multi
-  discourage_multi="$(normalize_toggle "${ARR_DISCOURAGE_MULTI:-1}")"
-  local penalize_hd_x265
-  penalize_hd_x265="$(normalize_toggle "${ARR_PENALIZE_HD_X265:-1}")"
-  local strict_junk_block
-  strict_junk_block="$(normalize_toggle "${ARR_STRICT_JUNK_BLOCK:-1}")"
-
-  local junk_score
-  junk_score="$(sanitize_score "${ARR_JUNK_NEGATIVE_SCORE:- -1000}" "-1000")"
-  local x265_score
-  x265_score="$(sanitize_score "${ARR_X265_HD_NEGATIVE_SCORE:- -200}" "-200")"
-  local multi_score
-  multi_score="$(sanitize_score "${ARR_MULTI_NEGATIVE_SCORE:- -50}" "-50")"
-  local english_bias_raw
-  english_bias_raw="$(sanitize_score "${ARR_ENGLISH_POSITIVE_SCORE:-50}" "50")"
-
-  local english_penalty_score="-${english_bias_raw#-}"
-
-  local -a policy_profile_targets=("WEB-1080p" "HD Bluray + WEB")
-  append_cf_block() {
-    local score="$1"
-    local label="$2"
-    shift 2 || return 0
-    local -a ids=("$@")
-    if [[ -z "$score" || "$score" == "0" ]]; then
-      return 0
-    fi
-    if ((${#ids[@]} == 0)); then
-      return 0
-    fi
-    local block="  # ${label}\n  - trash_ids:\n"
-    local id
-    for id in "${ids[@]}"; do
-      block+="      - $(arr_yaml_escape "${id}")\n"
-    done
-    block+="    assign_scores_to:\n"
-    local target
-    for target in "${policy_profile_targets[@]}"; do
-      block+="      - name: $(arr_yaml_escape "${target}")\n"
-      block+="        score: $(arr_yaml_escape "${score}")\n"
-    done
-    printf '%s' "$block"
-  }
-
-  local configarr_helper_dir
-  configarr_helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  # shellcheck source=scripts/configarr-custom-formats.sh
-  source "${configarr_helper_dir}/configarr-custom-formats.sh"
-
-  local -a CF_IDS_LQ=()
-  local -a CF_IDS_LQ_TITLE=()
-  local -a CF_IDS_UPSCALED=()
-  local -a CF_IDS_LANGUAGE=()
-  local -a CF_IDS_MULTI=()
-  local -a CF_IDS_X265=()
-
-  configarr_load_custom_format_ids \
-    CF_IDS_LQ \
-    CF_IDS_LQ_TITLE \
-    CF_IDS_UPSCALED \
-    CF_IDS_LANGUAGE \
-    CF_IDS_MULTI \
-    CF_IDS_X265
-
-  local common_cf_body=""
-  local block=""
-
-  if ((strict_junk_block)); then
-    block="$(append_cf_block "$junk_score" "LQ releases" "${CF_IDS_LQ[@]}")"
-    if [[ -n "$block" ]]; then
-      common_cf_body+="$block\n"
-    fi
-    block="$(append_cf_block "$junk_score" "LQ (Release Title)" "${CF_IDS_LQ_TITLE[@]}")"
-    if [[ -n "$block" ]]; then
-      common_cf_body+="$block\n"
-    fi
-    block="$(append_cf_block "$junk_score" "Upscaled flags" "${CF_IDS_UPSCALED[@]}")"
-    if [[ -n "$block" ]]; then
-      common_cf_body+="$block\n"
-    fi
-  fi
-
-  if ((english_only)); then
-    block="$(append_cf_block "$english_penalty_score" "Language: Not English" "${CF_IDS_LANGUAGE[@]}")"
-    if [[ -n "$block" ]]; then
-      common_cf_body+="$block\n"
-    fi
-  fi
-
-  if ((discourage_multi)); then
-    block="$(append_cf_block "$multi_score" "MULTi releases" "${CF_IDS_MULTI[@]}")"
-    if [[ -n "$block" ]]; then
-      common_cf_body+="$block\n"
-    fi
-  fi
-
-  if ((penalize_hd_x265)); then
-    block="$(append_cf_block "$x265_score" "x265 (HD)" "${CF_IDS_X265[@]}")"
-    if [[ -n "$block" ]]; then
-      common_cf_body+="$block\n"
-    fi
-  fi
-
-  local common_cf_exists=0
-  if [[ -n "$common_cf_body" ]]; then
-    local cf_payload="# Auto-generated by ${STACK}.sh to reinforce Configarr scoring\n"
-    cf_payload+="# Adjust ARR_* environment variables to regenerate; delete this file to rebuild.\n"
-    cf_payload+="custom_formats:\n"
-    cf_payload+="$common_cf_body"
-    if [[ ! -f "$common_cf_path" ]]; then
-      atomic_write "$common_cf_path" "$cf_payload" "$NONSECRET_FILE_MODE"
-      msg "  Created shared custom-format reinforcements: ${common_cf_path}"
-    else
-      ensure_nonsecret_file_mode "$common_cf_path"
-    fi
-    common_cf_exists=1
-  elif [[ -f "$common_cf_path" ]]; then
-    ensure_nonsecret_file_mode "$common_cf_path"
-    common_cf_exists=1
-  fi
-
-  local -a sonarr_templates=("sonarr-quality-definition-series")
-  local sonarr_profile_template="${SONARR_TRASH_TEMPLATE:-sonarr-v4-quality-profile-web-1080p}"
-  if [[ -n "$sonarr_profile_template" ]]; then
-    sonarr_templates+=("${sonarr_profile_template}")
-  fi
-  sonarr_templates+=("sonarr-v4-custom-formats-web-1080p")
-  if [[ -f "$sonarr_override_path" ]]; then
-    sonarr_templates+=("sonarr-quality-definition-override")
-  fi
-  if ((common_cf_exists)); then
-    sonarr_templates+=("common-negative-formats")
-  fi
-
-  local -a radarr_templates=("radarr-quality-definition")
-  local radarr_profile_template="${RADARR_TRASH_TEMPLATE:-radarr-v5-quality-profile-hd-bluray-web}"
-  if [[ -n "$radarr_profile_template" ]]; then
-    radarr_templates+=("${radarr_profile_template}")
-  fi
-  radarr_templates+=("radarr-v5-custom-formats-hd-bluray-web")
-  if [[ -f "$radarr_override_path" ]]; then
-    radarr_templates+=("radarr-quality-definition-override")
-  fi
-  if ((common_cf_exists)); then
-    radarr_templates+=("common-negative-formats")
-  fi
-
-  local sonarr_include_yaml=""
-  local template
-  for template in "${sonarr_templates[@]}"; do
-    sonarr_include_yaml+="      - template: $(arr_yaml_escape "${template}")\n"
-  done
-  sonarr_include_yaml+="      # - template: sonarr-v4-quality-profile-web-2160p\n"
-  sonarr_include_yaml+="      # - template: sonarr-v4-custom-formats-web-2160p\n"
-
-  local radarr_include_yaml=""
-  for template in "${radarr_templates[@]}"; do
-    radarr_include_yaml+="      - template: $(arr_yaml_escape "${template}")\n"
-  done
-  radarr_include_yaml+="      # - template: radarr-v5-quality-profile-uhd-bluray-web\n"
-  radarr_include_yaml+="      # - template: radarr-v5-custom-formats-uhd-bluray-web\n"
-
-  local default_config
-  default_config=$(
-    cat <<EOF_CFG
-# Auto-generated by the stack script. Edit cautiously or disable via ENABLE_CONFIGARR=0.
-version: 1
-
-localConfigTemplatesPath: /app/cfs
-# localCustomFormatsPath: /app/cfs
-
-sonarr:
-  main:
-    define: true
-    host: http://${LOCALHOST_IP}:${SONARR_PORT}
-    apiKey: !secret SONARR_API_KEY
-    include:
-${sonarr_include_yaml}    custom_formats: []
-
-radarr:
-  main:
-    define: true
-    host: http://${LOCALHOST_IP}:${RADARR_PORT}
-    apiKey: !secret RADARR_API_KEY
-    include:
-${radarr_include_yaml}    custom_formats: []
-EOF_CFG
-  )
-
-  if [[ ! -f "$runtime_config" ]]; then
-    atomic_write "$runtime_config" "$default_config" "$NONSECRET_FILE_MODE"
-    msg "  Installed default config: ${runtime_config}"
-  else
-    ensure_nonsecret_file_mode "$runtime_config"
-  fi
-
-  if [[ ! -f "$runtime_secrets" ]]; then
-    local secrets_stub
-    secrets_stub=$(
-      cat <<'EOF'
-SONARR_API_KEY: "REPLACE_WITH_SONARR_API_KEY"
-RADARR_API_KEY: "REPLACE_WITH_RADARR_API_KEY"
-PROWLARR_API_KEY: "REPLACE_WITH_PROWLARR_API_KEY"
-SABNZBD_API_KEY: "REPLACE_WITH_SABNZBD_API_KEY"
-EOF
-    )
-    atomic_write "$runtime_secrets" "$secrets_stub" "$SECRET_FILE_MODE"
-    msg "  Stubbed secrets file: ${runtime_secrets}"
-  else
-    ensure_secret_file_mode "$runtime_secrets"
-  fi
-
-  if [[ -f "$runtime_secrets" ]]; then
-    if ! grep -q '^SABNZBD_API_KEY:' "$runtime_secrets" 2>/dev/null; then
-      printf 'SABNZBD_API_KEY: "REPLACE_WITH_SABNZBD_API_KEY"\n' >>"$runtime_secrets"
-      ensure_secret_file_mode "$runtime_secrets"
-      msg "  Added SABnzbd placeholder to Configarr secrets"
-    fi
-
-    if [[ "${ARR_SAB_API_KEY_STATE:-}" == "set" ]]; then
-      local sab_secret_result=""
-      if sab_secret_result="$(arr_update_secret_line "$runtime_secrets" "SABNZBD_API_KEY" "$SABNZBD_API_KEY" 0 2>/dev/null)"; then
-        case "$sab_secret_result" in
-          updated | created | appended)
-            msg "  Configarr secrets: synced SABnzbd API key"
-            ;;
-        esac
-      fi
-    fi
+    episode_max_mbmin="113.8"
+    sanitized_ep_max_gb="5"
+    sanitized_runtime_min="45"
+    sanitized_season_max_gb="30"
   fi
 
   local resolution_display="${sanitized_video_min_res}–${sanitized_video_max_res}"

@@ -91,6 +91,38 @@ rewrite_hosts_file() {
   arr_cleanup_temp_path "${tmp}"
 }
 
+json_escape_string() {
+  local input="$1"
+  local output=""
+  local char code
+  local i
+  local length=${#input}
+
+  for ((i = 0; i < length; i++)); do
+    char=${input:i:1}
+    case "${char}" in
+      '"') output+='\"' ;;
+      '\') output+='\\' ;;
+      $'\b') output+='\\b' ;;
+      $'\f') output+='\\f' ;;
+      $'\n') output+='\\n' ;;
+      $'\r') output+='\\r' ;;
+      $'\t') output+='\\t' ;;
+      *)
+        printf -v code '%d' "'${char}"
+        if ((code < 32)); then
+          printf -v char '\\u%04X' "${code}"
+          output+="${char}"
+        else
+          output+="${char}"
+        fi
+        ;;
+    esac
+  done
+
+  printf '%s' "${output}"
+}
+
 json_encode_array() {
   local -a values=("$@")
 
@@ -106,15 +138,22 @@ json_encode_array() {
     return 0
   fi
 
-  if have_command python3; then
-    if ! printf '%s\0' "${values[@]}" | python3 -c $'import json, sys\ndata = sys.stdin.buffer.read()\nitems = data.split(b"\\0")\nif items and items[-1] == b"":\n    items = items[:-1]\nprint(json.dumps([x.decode("utf-8", "replace") for x in items]))'; then
-      return 1
+  local output='['
+  local first=1 value escaped
+  for value in "${values[@]}"; do
+    escaped="$(json_escape_string "${value}")"
+    if ((first)); then
+      output+='"'"${escaped}"'"'
+      first=0
+    else
+      output+=',"'"${escaped}"'"'
     fi
-    return 0
-  fi
+  done
+  output+=']'
 
-  return 1
+  printf '%s' "${output}"
 }
+
 
 configure_docker_dns() {
   local lan_ip="$1"
@@ -203,28 +242,8 @@ configure_docker_dns() {
         arr_cleanup_temp_path "${tmp}"
         return 1
       fi
-    elif command -v python3 >/dev/null 2>&1; then
-      if ! DNS_JSON="${dns_json}" python3 - "${daemon_json}" "${tmp}" <<'PYTHON'; then
-import json, os, sys
-source = sys.argv[1]
-target = sys.argv[2]
-dns = json.loads(os.environ["DNS_JSON"])
-try:
-    with open(source, "r", encoding="utf-8") as fh:
-        data = json.load(fh)
-except (FileNotFoundError, json.JSONDecodeError):
-    data = {}
-
-data["dns"] = dns
-with open(target, "w", encoding="utf-8") as fh:
-    json.dump(data, fh, indent=2)
-PYTHON
-        warn "Failed to update ${daemon_json} with python3; leaving existing configuration untouched."
-        arr_cleanup_temp_path "${tmp}"
-        return 1
-      fi
     else
-      warn "Neither jq nor python3 available; cannot update ${daemon_json}."
+      warn "jq is required to update ${daemon_json}; install jq and rerun."
       arr_cleanup_temp_path "${tmp}"
       return 1
     fi

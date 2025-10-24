@@ -616,16 +616,15 @@ ensure_docker_userland_proxy_disabled() {
 
   local merge_tool_preference="${ARR_DAEMON_JSON_TOOL:-}"
   local merge_tool=""
-  if [[ "$merge_tool_preference" == "python" ]] && command -v python3 >/dev/null 2>&1; then
-    merge_tool="python"
-  elif [[ "$merge_tool_preference" == "jq" ]] && command -v jq >/dev/null 2>&1; then
+
+  if [[ -n "$merge_tool_preference" && "$merge_tool_preference" != "jq" ]]; then
+    warn "[dns] Only jq is supported for editing ${conf}; ignoring ARR_DAEMON_JSON_TOOL=${merge_tool_preference}"
+  fi
+
+  if command -v jq >/dev/null 2>&1; then
     merge_tool="jq"
-  elif command -v jq >/dev/null 2>&1; then
-    merge_tool="jq"
-  elif command -v python3 >/dev/null 2>&1; then
-    merge_tool="python"
   else
-    warn "[dns] jq or python3 is required to edit ${conf}. Install one of them and rerun."
+    warn "[dns] jq is required to edit ${conf}. Install jq and rerun."
     return 1
   fi
 
@@ -651,41 +650,13 @@ ensure_docker_userland_proxy_disabled() {
       warn "[dns] ${conf} contains invalid JSON; fix the file manually before continuing."
       return 1
     fi
-  elif [[ "$merge_tool" == "python" && -s "$conf" ]]; then
-    local python_status=0
-    python3 - "$conf" <<'PY' || python_status=$?
-import json
-import pathlib
-import sys
 
-path = pathlib.Path(sys.argv[1])
-try:
-    data = json.loads(path.read_text()) if path.stat().st_size else {}
-except json.JSONDecodeError as exc:  # pragma: no cover
-    print(f"Invalid JSON: {exc}", file=sys.stderr)
-    sys.exit(2)
-
-if data.get("userland-proxy") is False:
-    sys.exit(0)
-
-sys.exit(1)
-PY
-    case "$python_status" in
-      0)
-        msg "[dns] Docker userland-proxy already disabled"
-        return 0
-        ;;
-      1)
-        :
-        ;;
-      *)
-        warn "[dns] ${conf} contains invalid JSON; fix the file manually before continuing."
-        return 1
-        ;;
-    esac
   fi
 
   local backup
+  # Any edits to ${conf} are reversible: restore the generated backup over ${conf}
+  # (e.g. `sudo cp "${backup}" "${conf}"`) and restart Docker to roll back the DNS
+  # userland-proxy change if needed.
   backup="${conf}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
   if [[ -f "$conf" ]]; then
     if ! cp -p "$conf" "$backup"; then
@@ -709,27 +680,6 @@ PY
     else
       printf '{\n  "userland-proxy": false\n}\n' >"$tmp" || merge_status=1
     fi
-  else
-    python3 - "$conf" "$tmp" <<'PY' || merge_status=$?
-import json
-import pathlib
-import sys
-
-source = pathlib.Path(sys.argv[1])
-dest = pathlib.Path(sys.argv[2])
-
-data = {}
-if source.exists() and source.stat().st_size:
-    try:
-        data = json.loads(source.read_text())
-    except json.JSONDecodeError as exc:
-        print(f"Invalid JSON: {exc}", file=sys.stderr)
-        sys.exit(2)
-
-data["userland-proxy"] = False
-
-dest.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
-PY
   fi
 
   if ((merge_status != 0)); then
@@ -760,6 +710,7 @@ PY
     if command -v systemctl >/dev/null 2>&1; then
       if ! systemctl restart docker >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo systemctl restart docker' manually."
+        warn "[dns] Rollback available at: ${backup}"
         return 1
       fi
       if ! systemctl is-active --quiet docker; then
@@ -770,6 +721,7 @@ PY
     elif command -v service >/dev/null 2>&1; then
       if ! service docker restart >/dev/null 2>&1; then
         warn "[dns] Failed to restart Docker; run 'sudo service docker restart' manually."
+        warn "[dns] Rollback available at: ${backup}"
         return 1
       fi
       msg "[dns] Docker daemon restarted to apply userland-proxy change"
