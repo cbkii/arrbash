@@ -29,7 +29,7 @@ qbt_webui_mktemp() {
 
   if declare -f arr_mktemp_file >/dev/null 2>&1; then
     if ! tmp="$(arr_mktemp_file "${base}.XXXXXX")"; then
-      printf 'Failed to create temporary file near %s\n' "$base" >&2
+      warn "Failed to create temporary file near ${base}"
       return 1
     fi
     printf '%s\n' "$tmp"
