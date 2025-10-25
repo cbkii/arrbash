@@ -64,7 +64,6 @@ verify_permissions() {
     "${ARR_ENV_FILE}"
     "${ARR_USERCONF_PATH}"
     "${ARRCONF_DIR}/proton.auth"
-    "${ARR_STACK_DIR}/.aliasarr"
     "${ARR_DOCKER_DIR}/configarr/secrets.yml"
   )
 
@@ -88,6 +87,13 @@ verify_permissions() {
       fi
     fi
   done
+
+  local alias_helper="${ARR_STACK_DIR}/.aliasarr"
+  if [[ -f "${alias_helper}" ]]; then
+    if ! check_and_fix_mode "${alias_helper}" "$ALIAS_HELPER_FILE_MODE" "Unexpected permissions"; then
+      ((issues++))
+    fi
+  fi
 
   local -a nonsecret_files=(
     "${ARR_STACK_DIR}/docker-compose.yml"
