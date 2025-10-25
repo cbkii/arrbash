@@ -330,7 +330,7 @@ VPN_AUTO_ALIAS
     } >>"$aliases_file"
   fi
 
-  ensure_secret_file_mode "$aliases_file"
+  ensure_file_mode "$aliases_file" "$ALIAS_HELPER_FILE_MODE"
   cp "$aliases_file" "$configured_template"
   ensure_nonsecret_file_mode "$configured_template"
 
@@ -450,7 +450,7 @@ install_aliases() {
     if ! write_aliases_file; then
       if [[ -f "${REPO_ROOT}/.aliasarr.configured" ]]; then
         cp "${REPO_ROOT}/.aliasarr.configured" "$alias_path"
-        ensure_secret_file_mode "$alias_path"
+        ensure_file_mode "$alias_path" "$ALIAS_HELPER_FILE_MODE"
       else
         warn "Unable to render helper aliases (${alias_path})"
         return 1
@@ -458,7 +458,7 @@ install_aliases() {
     fi
   fi
 
-  ensure_secret_file_mode "$alias_path"
+  ensure_file_mode "$alias_path" "$ALIAS_HELPER_FILE_MODE"
 
   update_alias_rc_block "${alias_path}" || true
   arr_mark_shell_reload_pending
