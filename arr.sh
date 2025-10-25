@@ -423,8 +423,6 @@ _expected_base="$(arr_expand_path_tokens "${ARR_DATA_ROOT}")"
 _canon_base="$(arr_canonical_path "${_expected_base}")"
 _canon_userconf="${ARR_USERCONF_PATH}"
 
-declare -a ARR_RUNTIME_ENV_GUARDS=()
-
 if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ -z "${ARR_USERCONF_OVERRIDE_PATH:-}" && -n "${_canon_base}" ]]; then
     if ! [[ "${_canon_userconf}" == "${_canon_base}" || "${_canon_userconf}" == "${_canon_base}/"* ]]; then
@@ -481,13 +479,6 @@ fi
 
 arr_expand_alias_placeholders_in_env
 
-for _arr_env_var in "${_arr_env_override_order[@]}"; do
-  if [[ -v "_arr_env_overrides[${_arr_env_var}]" ]]; then
-    ARR_RUNTIME_ENV_GUARDS+=("${_arr_env_var}")
-  fi
-done
-unset _arr_env_var
-
 unset _arr_defaults_file
 unset _arr_canonical_config_vars
 unset _arr_env_override_order _arr_env_overrides _arr_env_override_exported
@@ -495,37 +486,92 @@ unset _arr_env_override_order _arr_env_overrides _arr_env_override_exported
 ARR_USERCONF_PATH="${_canon_userconf}"
 unset _canon_userconf _canon_base _expected_base
 
-arr_lock_effective_vars() {
-  local var
-  declare -A _arr_guard_seen=()
+# Config classes:
+#   ARR_IMMUTABLE_KEYS – user intent values; snapshot and warn on drift only.
+#   ARR_SESSION_KEYS   – derived values noted for reference, not enforced.
+#   ARR_RUNTIME_KEYS   – regenerated secrets that must remain writable.
+declare -a ARR_IMMUTABLE_KEYS=(
+  ARR_DATA_ROOT
+  ARR_STACK_DIR
+  ARRCONF_DIR
+  ARR_ENV_FILE
+  ARR_USERCONF_PATH
+  DOWNLOADS_DIR
+  COMPLETED_DIR
+  MEDIA_DIR
+  MUSIC_DIR
+  TV_DIR
+  MOVIES_DIR
+  SUBS_DIR
+  PUID
+  PGID
+)
 
-  for var in "${ARR_RUNTIME_ENV_GUARDS[@]:-}"; do
-    [[ -n "${var}" ]] || continue
-    if [[ -n "${_arr_guard_seen[${var}]+x}" ]]; then
-      continue
+# shellcheck disable=SC2034 # Documented for maintainers; not enforced at runtime
+declare -a ARR_SESSION_KEYS=(
+  STACK
+  STACK_UPPER
+  STACK_TAG
+  COMPOSE_PROJECT_NAME
+  COMPOSE_PROFILES
+)
+
+# shellcheck disable=SC2034 # Runtime secrets remain mutable; tracked for clarity
+declare -a ARR_RUNTIME_KEYS=(
+  GLUETUN_API_KEY
+  QBT_PASS
+  SABNZBD_API_KEY
+  CADDY_BASIC_AUTH_HASH
+  CADDY_BASIC_AUTH_USER
+)
+
+declare -A ARR_IMMUTABLE_SNAPSHOT=()
+
+arr_snapshot_immutable_vars() {
+  local key=""
+
+  ARR_IMMUTABLE_SNAPSHOT=()
+
+  for key in "${ARR_IMMUTABLE_KEYS[@]}"; do
+    [[ -n "${key}" ]] || continue
+    if [[ -v "${key}" ]]; then
+      ARR_IMMUTABLE_SNAPSHOT["${key}"]="${!key}"
+    else
+      ARR_IMMUTABLE_SNAPSHOT["${key}"]=""
     fi
-    _arr_guard_seen["${var}"]=1
-    if [[ ! "${var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      warn "Skipping readonly guard for invalid environment variable name: ${var} (must start with letter or underscore and contain only alphanumeric characters and underscores)"
-      continue
-    fi
-    if arr_var_is_readonly "${var}"; then
-      continue
-    fi
-    readonly "${var}" 2>/dev/null || :
   done
-
-  unset _arr_guard_seen
 }
 
-if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
-  readonly REPO_ROOT ARR_USERCONF_PATH
-fi
+check_immutable_integrity() {
+  # MUST return 0; set -e would otherwise recreate the old readonly crash.
+  local context="${1:-unspecified}"
+  local key=""
+  local expected=""
+  local current=""
+  local _arr_integrity_msg=""
+
+  for key in "${!ARR_IMMUTABLE_SNAPSHOT[@]}"; do
+    expected="${ARR_IMMUTABLE_SNAPSHOT[${key}]}"
+    if [[ -v "${key}" ]]; then
+      current="${!key}"
+    else
+      current=""
+    fi
+    if [[ "${current}" != "${expected}" ]]; then
+      printf -v _arr_integrity_msg "[IMMUTABLE-DRIFT %s] %s: '%s' -> '%s'" \
+        "${context}" "${key}" "${expected}" "${current}"
+      warn "${_arr_integrity_msg}"
+    fi
+  done
+
+  return 0
+}
+
+# Snapshot immutables after config parse/normalisation but before secret hydration.
+# Earlier captures pre-normalised values; later misses user intent before scripts mutate.
+arr_snapshot_immutable_vars
 
 SCRIPT_LIB_DIR="${REPO_ROOT}/scripts"
-if [[ "${ARR_HARDEN_READONLY:-0}" == "1" ]]; then
-  readonly SCRIPT_LIB_DIR
-fi
 
 YAML_EMIT_LIB="${REPO_ROOT}/scripts/yaml-emit.sh"
 if [[ -f "${YAML_EMIT_LIB}" ]]; then
@@ -667,8 +713,6 @@ main() {
   # Restore default word splitting so callees are not impacted
   IFS="${OLDIFS}"
 
-  arr_lock_effective_vars
-
   if [[ "${RUN_UNINSTALL}" == "1" ]]; then
     local -a uninstall_args=()
     if [[ "${ASSUME_YES:-0}" == "1" ]]; then
@@ -705,9 +749,13 @@ main() {
   local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
   local template_path="${REPO_ROOT}/.env.template"
   local user_conf_path="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
+  check_immutable_integrity "pre-.env"
+
   if ! "${REPO_ROOT}/scripts/gen-env.sh" "${template_path}" "${env_target}" "${user_conf_path}"; then
     die "Failed to generate ${env_target}"
   fi
+  check_immutable_integrity "pre-compose"
+
   write_compose
   validate_generated_paths
   preflight_compose_interpolation
@@ -739,7 +787,10 @@ main() {
   write_configarr_assets
   verify_permissions
   install_aliases
+  check_immutable_integrity "pre-start"
   start_stack
+
+  check_immutable_integrity "post-start"
 
   # shellcheck disable=SC2034 # consumed by scripts/summary.sh
   API_KEYS_SYNCED_DETAILS=""
