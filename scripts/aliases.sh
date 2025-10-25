@@ -90,7 +90,7 @@ arr.config.sync() {
     elif command -v docker-compose >/dev/null 2>&1; then
       compose_cmd=(docker-compose)
     else
-      echo "[arr.config.sync] docker compose command not found" >&2
+      warn "Config sync: docker compose command not found"
       return 1
     fi
     "${compose_cmd[@]}" run --rm configarr
@@ -114,7 +114,7 @@ arr.sab._helper() {
     helper="${ARR_STACK_DIR}/../scripts/sab-helper.sh"
   fi
   if [ ! -x "$helper" ]; then
-    echo "[arr.sab] helper not found: ${helper}" >&2
+    warn "SAB helper not found: ${helper}"
     return 1
   fi
   ARR_STACK_DIR="${ARR_STACK_DIR}" bash "$helper" "$cmd" "$@"
@@ -175,7 +175,7 @@ open-sab() {
   local base
   base="$(_arr_service_base sabnzbd)"
   if [ -z "$base" ]; then
-    echo "[open-sab] unable to resolve SABnzbd base URL" >&2
+    printf 'Unable to resolve SABnzbd base URL\n' >&2
     return 1
   fi
   if command -v xdg-open >/dev/null 2>&1; then
@@ -200,7 +200,7 @@ arr_vpn_auto_status() {
   if [ -f "$status_file" ]; then
     cat "$status_file"
   else
-    echo "[arr.vpn.auto.status] status file not found: $status_file" >&2
+    warn "VPN auto status file not found: $status_file"
     return 1
   fi
 }
@@ -209,9 +209,9 @@ arr_vpn_auto_force() {
   local flag
   flag="$(_arr_vpn_auto_override_path once)"
   if touch "$flag"; then
-    echo "[arr.vpn.auto.force] override flag created: $flag"
+    msg "Override flag created: $flag"
   else
-    echo "[arr.vpn.auto.force] failed to create $flag" >&2
+    warn "Failed to create override flag: $flag"
     return 1
   fi
 }
@@ -220,9 +220,9 @@ arr_vpn_auto_pause() {
   local flag
   flag="$(_arr_vpn_auto_override_path pause)"
   if touch "$flag"; then
-    echo "[arr.vpn.auto.pause] pause flag created: $flag"
+    msg "Pause flag created: $flag"
   else
-    echo "[arr.vpn.auto.pause] failed to create $flag" >&2
+    warn "Failed to create pause flag: $flag"
     return 1
   fi
 }
@@ -231,9 +231,9 @@ arr_vpn_auto_resume() {
   local flag
   flag="$(_arr_vpn_auto_override_path pause)"
   if rm -f "$flag"; then
-    echo "[arr.vpn.auto.resume] pause flag removed (${flag})"
+    msg "Pause flag removed (${flag})"
   else
-    echo "[arr.vpn.auto.resume] failed to remove $flag" >&2
+    warn "Failed to remove pause flag: $flag"
     return 1
   fi
 }
@@ -245,7 +245,7 @@ arr_vpn_auto_history() {
   if [ -f "$history" ]; then
     tail -n 50 "$history"
   else
-    echo "[arr.vpn.auto.history] history file not found: $history" >&2
+    warn "VPN auto history file not found: $history"
     return 1
   fi
 }
@@ -266,7 +266,7 @@ arr_vpn_auto_watch() {
     done
   fi
   if [ ${#files[@]} -eq 0 ]; then
-    echo "[arr.vpn.auto.watch] no log files found under ${state_dir}" >&2
+    warn "No VPN auto log files found under ${state_dir}"
     return 1
   fi
   tail -f "${files[@]}"
@@ -276,9 +276,9 @@ arr_vpn_auto_wake() {
   local flag
   flag="$(_arr_vpn_auto_override_path wake)"
   if touch "$flag"; then
-    echo "[arr.vpn.auto.wake] wake trigger created: $flag"
+    msg "Wake trigger created: $flag"
   else
-    echo "[arr.vpn.auto.wake] failed to touch $flag" >&2
+    warn "Failed to touch wake trigger: $flag"
     return 1
   fi
 }
@@ -286,10 +286,10 @@ arr_vpn_auto_wake() {
 arr_vpn_auto_enable() {
   local result
   if result="$(arr.env.set VPN_AUTO_RECONNECT_ENABLED 1 2>&1)"; then
-    echo "[arr.vpn.auto.enable] ${result}"
+    msg "${result}"
     arr_vpn_auto_wake >/dev/null 2>&1 || true
   else
-    echo "[arr.vpn.auto.enable] failed: ${result}" >&2
+    warn "Enable failed: ${result}"
     return 1
   fi
 }
@@ -297,10 +297,10 @@ arr_vpn_auto_enable() {
 arr_vpn_auto_disable() {
   local result
   if result="$(arr.env.set VPN_AUTO_RECONNECT_ENABLED 0 2>&1)"; then
-    echo "[arr.vpn.auto.disable] ${result}"
+    msg "${result}"
     arr_vpn_auto_wake >/dev/null 2>&1 || true
   else
-    echo "[arr.vpn.auto.disable] failed: ${result}" >&2
+    warn "Disable failed: ${result}"
     return 1
   fi
 }
@@ -311,7 +311,7 @@ arr_vpn_port_status() {
   if [ -f "$file" ]; then
     cat "$file"
   else
-    echo "[arr.vpn.port.status] state file not found: $file" >&2
+    warn "VPN port status file not found: $file"
     return 1
   fi
 }
@@ -478,7 +478,7 @@ if [[ -f "${SCRIPT_LIB_DIR}/common.sh" ]]; then
   # shellcheck source=/dev/null
   . "${SCRIPT_LIB_DIR}/common.sh"
 else
-  printf '[diagnose-vpn] ERROR: common helpers missing at %s\n' "${SCRIPT_LIB_DIR}/common.sh" >&2
+  printf '[ERROR] Common helpers missing at %s\n' "${SCRIPT_LIB_DIR}/common.sh" >&2
   exit 1
 fi
 

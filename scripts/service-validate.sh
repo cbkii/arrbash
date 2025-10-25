@@ -80,7 +80,7 @@ preflight_compose_interpolation() {
   if ((${#compose_cmd[@]} == 0)); then
     if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
       if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
-        printf '%s Docker Compose command unavailable; cannot validate interpolation.\n' "$STACK_LABEL" >&2
+        warn "[ERROR] Docker Compose command unavailable; cannot validate interpolation."
         exit 1
       fi
     elif declare -f detect_compose_cmd >/dev/null 2>&1; then
@@ -96,18 +96,23 @@ preflight_compose_interpolation() {
   fi
 
   if ((${#compose_cmd[@]} == 0)); then
-    printf '%s Docker Compose command unavailable; cannot validate interpolation.\n' "$STACK_LABEL" >&2
+    warn "[ERROR] Docker Compose command unavailable; cannot validate interpolation."
     exit 1
   fi
 
   if ! "${compose_cmd[@]}" -f "$file" config >/dev/null 2>"$warn_log"; then
-    printf '%s docker compose config failed; see %s\n' "$STACK_LABEL" "$warn_log" >&2
+    warn "[ERROR] docker compose config failed; see ${warn_log}"
     exit 1
   fi
 
   if LC_ALL=C grep -qE 'variable is not set' "$warn_log" 2>/dev/null; then
-    printf '%s unresolved Compose variables detected:\n' "$STACK_LABEL" >&2
-    LC_ALL=C grep -E 'variable is not set' "$warn_log" >&2 || true
+    warn "[ERROR] Unresolved Compose variables detected:"
+    if LC_ALL=C grep -E 'variable is not set' "$warn_log" >/dev/null 2>&1; then
+      while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        msg "  ${line}"
+      done < <(LC_ALL=C grep -E 'variable is not set' "$warn_log")
+    fi
     exit 1
   fi
 
@@ -133,7 +138,7 @@ validate_compose_or_die() {
   if ((${#compose_cmd[@]} == 0)); then
     if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
       if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
-        printf '%s Docker Compose command unavailable; cannot validate.\n' "$STACK_LABEL" >&2
+        warn "[ERROR] Docker Compose command unavailable; cannot validate."
         exit 1
       fi
     elif declare -f detect_compose_cmd >/dev/null 2>&1; then
@@ -148,20 +153,24 @@ validate_compose_or_die() {
   fi
 
   if ((${#compose_cmd[@]} == 0)); then
-    printf '%s Docker Compose command unavailable; cannot validate.\n' "$STACK_LABEL" >&2
+    warn "[ERROR] Docker Compose command unavailable; cannot validate."
     exit 1
   fi
 
   if ! "${compose_cmd[@]}" -f "$file" config -q 2>"$errlog"; then
-    printf '%s Compose validation failed; see %s\n' "$STACK_LABEL" "$errlog"
+    warn "[ERROR] Compose validation failed; see ${errlog}"
     local line
     line="$(LC_ALL=C grep -oE 'line ([0-9]+)' "$errlog" | LC_ALL=C awk '{print $2}' | LC_ALL=C tail -1 || true)"
     if [[ -n "$line" && -r "$file" ]]; then
       local start=$((line - 5))
       local end=$((line + 5))
       ((start < 1)) && start=1
-      printf '%s Error context from docker-compose.yml:\n' "$STACK_LABEL"
-      nl -ba "$file" | LC_ALL=C sed -n "${start},${end}p"
+      msg "  Error context from docker-compose.yml:"
+      nl -ba "$file" | LC_ALL=C sed -n "${start},${end}p" |
+        while IFS= read -r context_line; do
+          [[ -z "$context_line" ]] && continue
+          msg "    ${context_line}"
+        done
     fi
 
     local services_tmp=""
@@ -170,30 +179,37 @@ validate_compose_or_die() {
       if "${compose_cmd[@]}" -f "$file" config --services >"$services_tmp" 2>"$services_err"; then
         while IFS= read -r service; do
           [[ -z "$service" ]] && continue
-          printf '%s Checking service: %s\n' "$STACK_LABEL" "$service"
+          msg "  Checking service: ${service}"
           if ! "${compose_cmd[@]}" -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
-            printf '%s Service %s has configuration errors:\n' "$STACK_LABEL" "$service"
-            cat "${errlog}.${service}" 2>/dev/null || true
+            warn "  Service ${service} has configuration errors:"
+            if [[ -s "${errlog}.${service}" ]]; then
+              while IFS= read -r service_err; do
+                [[ -z "$service_err" ]] && continue
+                msg "    ${service_err}"
+              done <"${errlog}.${service}"
+            else
+              cat "${errlog}.${service}" 2>/dev/null || true
+            fi
             rm -f "${errlog}.${service}" 2>/dev/null || true
           else
             rm -f "${errlog}.${service}" 2>/dev/null || true
           fi
         done <"$services_tmp"
       else
-        warn "${STACK_LABEL} Failed to enumerate services for compose validation; see ${services_err}"
+        warn "Failed to enumerate services for compose validation; see ${services_err}"
         cat "$services_err" 2>/dev/null || true
       fi
       arr_cleanup_temp_path "$services_tmp"
       rm -f "$services_err" 2>/dev/null || true
     else
-      warn "${STACK_LABEL} Unable to create temporary file for compose service list"
+      warn "Unable to create temporary file for compose service list"
     fi
 
     exit 1
   fi
 
   if ! "${compose_cmd[@]}" -f "$file" config --format=json >"$configdump" 2>"${errlog}.json"; then
-    printf '%s Failed to generate JSON config dump at %s\n' "$STACK_LABEL" "$configdump" >&2
+    warn "Failed to generate JSON config dump at ${configdump}"
     cat "${errlog}.json" 2>/dev/null >&2 || true
     rm -f "$configdump"
   fi

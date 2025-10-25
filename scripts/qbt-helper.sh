@@ -29,7 +29,7 @@ qbt_webui_mktemp() {
 
   if declare -f arr_mktemp_file >/dev/null 2>&1; then
     if ! tmp="$(arr_mktemp_file "${base}.XXXXXX")"; then
-      printf '[qbt-helper] Failed to create temporary file near %s\n' "$base" >&2
+      warn "Failed to create temporary file near ${base}"
       return 1
     fi
     printf '%s\n' "$tmp"
@@ -42,7 +42,7 @@ qbt_webui_mktemp() {
   fi
 
   if ! tmp=$(mktemp "$template" 2>/dev/null); then
-    printf '[qbt-helper] Failed to create temporary file near %s\n' "$base" >&2
+    warn "Failed to create temporary file near ${base}"
     return 1
   fi
 
@@ -223,7 +223,7 @@ qbt_webui_enforce() {
 
   if ! arr_read_sensitive_file "$conf" \
     | LC_ALL=C grep -E '^(WebUI\\Address|WebUI\\Port)=' >/dev/null; then
-    printf '[qbt-helper] Failed to assert WebUI prefs in %s\n' "$conf" >&2
+    warn "Failed to assert WebUI prefs in ${conf}"
     return 1
   fi
 
@@ -334,7 +334,7 @@ qbt_webui_init_hook() {
   fi
 
   if ! qbt_webui_enforce; then
-    printf '[qbt-helper] WebUI enforcement failed\n' >&2
+    warn "WebUI enforcement failed"
     exit 1
   fi
 }

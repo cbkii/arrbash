@@ -290,7 +290,7 @@ DELAY="${2:-60}"
 ARR_SCRIPT="${3:?missing stack script path}"
 
 log() {
-  printf '%s\n' "[delayed-sync] $*" >&2
+  printf '%s\n' "delayed-sync: $*" >&2
 }
 
 log "Scheduled API key sync will run in ${DELAY} seconds"

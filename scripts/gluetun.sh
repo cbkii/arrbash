@@ -167,7 +167,7 @@ pf_log() {
   local message="$*"
   local timestamp
   timestamp="$(arr_now_iso8601)"
-  local formatted="[${timestamp}] [pf] ${message}"
+  local formatted="[${timestamp}] port-forward ${message}"
   local log_path
   log_path="$(pf_log_path)"
   _pf_ensure_parent_dir "$log_path"
@@ -542,7 +542,7 @@ gluetun_control_get() {
   if ! command -v curl >/dev/null 2>&1; then
     if [[ -z "${GLUETUN_CURL_WARNED:-}" ]]; then
       if declare -f warn >/dev/null 2>&1; then
-        warn "[gluetun] curl not available; unable to query control API at ${url}"
+        warn "curl not available; unable to query Gluetun control API at ${url}"
       fi
       GLUETUN_CURL_WARNED=1
     fi
@@ -886,7 +886,7 @@ ensure_proton_port_forwarding_ready() {
 
   if ! command -v curl >/dev/null 2>&1; then
     PF_ENSURE_STATUS_MESSAGE="curl unavailable"
-    warn "[pf] curl is required to manage Proton port forwarding; skipping ensure loop"
+    warn "curl is required to manage ProtonVPN port forwarding; skipping ensure loop"
     return 1
   fi
 
@@ -912,11 +912,11 @@ ensure_proton_port_forwarding_ready() {
 
   if ((max_wait <= 0)); then
     PF_ENSURE_STATUS_MESSAGE="skipped (PF_MAX_TOTAL_WAIT=0)"
-    warn "[pf] Skipping Proton port forwarding wait (PF_MAX_TOTAL_WAIT=0)"
+    warn "Skipping ProtonVPN port forwarding wait (PF_MAX_TOTAL_WAIT=0)"
     return 1
   fi
 
-  msg "[pf] Waiting for Proton port forwarding (budget ${max_wait}s)..."
+  msg "Waiting for ProtonVPN port forwarding (budget ${max_wait}s)..."
 
   local start_time
   start_time="$(arr_now_epoch)"
@@ -926,7 +926,7 @@ ensure_proton_port_forwarding_ready() {
     local port
     port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
     if [[ "$port" =~ ^[0-9]+$ && "$port" != "0" ]]; then
-      msg "[pf] Forwarded port acquired: $port"
+      msg "ProtonVPN port forwarding acquired port ${port}"
       PF_ENSURED_PORT="$port"
       PF_ENSURE_STATUS_MESSAGE="acquired port ${port}"
       return 0
@@ -939,14 +939,14 @@ ensure_proton_port_forwarding_ready() {
     if ((elapsed >= max_wait)); then
       PF_ENSURE_STATUS_MESSAGE="timed out after ${elapsed}s"
       PF_ENSURED_PORT="0"
-      warn "[pf] Port forwarding not ready after ${elapsed}s"
+      warn "ProtonVPN port forwarding not ready after ${elapsed}s"
       return 1
     fi
 
     if ((cycle_after > 0 && cycled == 0 && elapsed >= cycle_after)); then
-      msg "[pf] Cycling OpenVPN once to retry Proton port forwarding..."
+      msg "Cycling OpenVPN once to retry ProtonVPN port forwarding..."
       if ! gluetun_cycle_openvpn; then
-        warn "[pf] Failed to cycle OpenVPN via Gluetun control API"
+        warn "Failed to cycle OpenVPN via Gluetun control API"
       fi
       cycled=1
     fi

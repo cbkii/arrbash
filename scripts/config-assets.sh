@@ -39,7 +39,7 @@ _configarr_sanitize_score() {
 }
 
 write_gluetun_control_assets() {
-  msg "[pf] Preparing Gluetun control assets"
+  msg "Preparing Gluetun control assets for Proton port forwarding"
 
   local gluetun_root="${ARR_DOCKER_DIR}/gluetun"
   local hooks_dir="${gluetun_root}/hooks"
@@ -57,7 +57,7 @@ write_gluetun_control_assets() {
     sanitized_key=${GLUETUN_API_KEY//$'\r'/}
     if [[ "$sanitized_key" == *$'\n'* ]]; then
       sanitized_key=${sanitized_key//$'\n'/}
-      warn "[pf] Stripped newline characters from GLUETUN_API_KEY before writing auth config"
+      warn "Stripped newline characters from GLUETUN_API_KEY before writing Gluetun auth config"
     fi
     sanitized_key=${sanitized_key//\\/\\\\}
     sanitized_key="$(printf '%s' "$sanitized_key" | sed 's/"/\\"/g')"
@@ -100,7 +100,7 @@ EOF
     fi
   else
     if gluetun_version_requires_auth_config 2>/dev/null; then
-      warn "[pf] GLUETUN_API_KEY is empty; skipping Gluetun auth config generation (Gluetun 3.40+ requires an API key for control routes)"
+      warn "GLUETUN_API_KEY is empty; skipping Gluetun auth config generation (Gluetun 3.40+ requires an API key for control routes)"
     fi
   fi
 
@@ -109,7 +109,7 @@ EOF
 set -eu
 
 log() {
-    printf '[%s] [update-qbt-port] %s\n' "$(LC_ALL=C date '+%Y-%m-%dT%H:%M:%S')" "$1" >&2
+    printf '[%s] update-qbt-port: %s\n' "$(LC_ALL=C date '+%Y-%m-%dT%H:%M:%S')" "$1" >&2
 }
 
 if ! command -v curl >/dev/null 2>&1; then

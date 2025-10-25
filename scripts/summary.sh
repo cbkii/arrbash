@@ -289,7 +289,7 @@ WARNING
         fi
         ;;
       disabled)
-        msg "[pf] Proton port forwarding disabled in configuration."
+        msg "  Proton port forwarding disabled in configuration."
         ;;
       pending | "")
         warn "PF not acquired yet${pf_status_message:+ (${pf_status_message})}."

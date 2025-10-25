@@ -90,17 +90,17 @@ sab_enabled() {
 
 sab_check_env() {
   if ! sab_enabled; then
-    log_warn "[sab] SABNZBD_ENABLED=0"
+    log_warn "SABNZBD_ENABLED=0"
     return 1
   fi
 
   if ! command -v curl >/dev/null 2>&1; then
-    log_error "[sab] curl is required"
+    log_error "curl is required"
     return 1
   fi
 
   if [[ -z "${SABNZBD_API_KEY:-}" ]]; then
-    log_warn "[sab] SABNZBD_API_KEY is empty; API calls may fail"
+    log_warn "SABNZBD_API_KEY is empty; API calls may fail"
   fi
 
   local timeout
@@ -149,7 +149,7 @@ sab_api() {
 
   if [[ "$args" != *"apikey="* ]]; then
     if [[ -z "${SABNZBD_API_KEY:-}" ]]; then
-      log_warn "[sab] API key required for this operation"
+      log_warn "API key required for this operation"
       return 1
     fi
     if [[ -n "$args" ]]; then
@@ -165,7 +165,7 @@ sab_api() {
 
   local response
   if ! response=$(curl -fsSL --connect-timeout "$timeout" "${base}/api${args}" 2>/dev/null); then
-    log_error "[sab] API request failed (${base})"
+    log_error "API request failed (${base})"
     return 1
   fi
 
@@ -214,11 +214,11 @@ sab_status_summary() {
 
   local version
   version="$(sab_version 2>/dev/null || printf '(unknown)')"
-  log_info "[sab] Version: ${version}"
+  log_info "Version: ${version}"
 
   local queue_json
   if ! queue_json="$(sab_queue_raw 2>/dev/null)"; then
-    log_warn "[sab] Unable to fetch queue"
+    log_warn "Unable to fetch queue"
     return 1
   fi
 
@@ -227,13 +227,13 @@ sab_status_summary() {
     status="$(jq -r '.queue.status // "unknown"' <<<"$queue_json" 2>/dev/null || printf 'unknown')"
     slots="$(jq -r '.queue.slots | length' <<<"$queue_json" 2>/dev/null || printf '0')"
     speed="$(jq -r '.queue.speed // "0"' <<<"$queue_json" 2>/dev/null || printf '0')"
-    log_info "[sab] Queue: status=${status}, active_items=${slots}, speed=${speed}"
+    log_info "Queue: status=${status}, active_items=${slots}, speed=${speed}"
     eta="$(jq -r '.queue.slots[0].timeleft // empty' <<<"$queue_json" 2>/dev/null || printf '')"
     if [[ -n "$eta" && "$eta" != "None" ]]; then
-      log_info "[sab] Next completion in ${eta}"
+      log_info "Next completion in ${eta}"
     fi
   else
-    log_warn "[sab] jq required for SAB parsing; install jq for detailed output"
+    log_warn "jq required for SAB parsing; install jq for detailed output"
   fi
 }
 
@@ -242,15 +242,15 @@ sab_add_nzb_file() {
   sab_check_env || return 1
 
   if [[ -z "$file" ]]; then
-    log_error "[sab] add-file requires a path"
+    log_error "add-file requires a path"
     return 1
   fi
   if [[ ! -f "$file" ]]; then
-    log_error "[sab] NZB file not found: $file"
+    log_error "NZB file not found: $file"
     return 1
   fi
   if [[ -z "${SABNZBD_API_KEY:-}" ]]; then
-    log_error "[sab] SABNZBD_API_KEY must be set to upload NZBs"
+    log_error "SABNZBD_API_KEY must be set to upload NZBs"
     return 1
   fi
 
@@ -266,7 +266,7 @@ sab_add_nzb_file() {
     -F "cat=${SABNZBD_CATEGORY:-}" \
     -F "name=@${file}" \
     "${base}/api" 2>/dev/null); then
-    log_error "[sab] Failed to upload ${file}"
+    log_error "Failed to upload ${file}"
     return 1
   fi
   printf '%s\n' "$response"
@@ -277,11 +277,11 @@ sab_add_nzb_url() {
   sab_check_env || return 1
 
   if [[ -z "$url" ]]; then
-    log_error "[sab] add-url requires a URL"
+    log_error "add-url requires a URL"
     return 1
   fi
   if [[ -z "${SABNZBD_API_KEY:-}" ]]; then
-    log_error "[sab] SABNZBD_API_KEY must be set to submit URLs"
+    log_error "SABNZBD_API_KEY must be set to submit URLs"
     return 1
   fi
 
@@ -297,27 +297,27 @@ sab_add_nzb_url() {
     --data-urlencode "cat=${SABNZBD_CATEGORY:-}" \
     --data-urlencode "output=json" \
     "${base}/api" 2>/dev/null); then
-    log_error "[sab] Failed to submit URL"
+    log_error "Failed to submit URL"
     return 1
   fi
   printf '%s\n' "$response"
 }
 
 sab_pause() {
-  sab_api 'mode=pause' >/dev/null && log_info "[sab] Queue paused"
+  sab_api 'mode=pause' >/dev/null && log_info "Queue paused"
 }
 
 sab_resume() {
-  sab_api 'mode=resume' >/dev/null && log_info "[sab] Queue resumed"
+  sab_api 'mode=resume' >/dev/null && log_info "Queue resumed"
 }
 
 sab_delete_job() {
   local nzo_id="${1:-}"
   if [[ -z "$nzo_id" ]]; then
-    log_error "[sab] delete requires an NZO ID"
+    log_error "delete requires an NZO ID"
     return 1
   fi
-  sab_api "mode=queue&name=delete&value=${nzo_id}" >/dev/null && log_info "[sab] Deleted job ${nzo_id}"
+  sab_api "mode=queue&name=delete&value=${nzo_id}" >/dev/null && log_info "Deleted job ${nzo_id}"
 }
 
 sab_postprocess() {
@@ -325,17 +325,17 @@ sab_postprocess() {
   local timestamp
   timestamp="$(arr_now_iso8601 2>/dev/null || arr_date_local '+%Y-%m-%d %H:%M:%S %Z')"
 
-  log_info "[sab.postprocess] invoked at ${timestamp}"
+  log_info "sab.postprocess invoked at ${timestamp}"
 
   local idx value
   for idx in {0..7}; do
     value="${args[idx]:-}"
-    log_info "[sab.postprocess] arg$((idx + 1))=${value}"
+    log_info "sab.postprocess arg$((idx + 1))=${value}"
   done
 
   if ((${#args[@]} > 8)); then
     local -a extra=("${args[@]:8}")
-    log_info "[sab.postprocess] extra_args=${extra[*]}"
+    log_info "sab.postprocess extra_args=${extra[*]}"
   fi
 
   return 0
