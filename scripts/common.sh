@@ -8,6 +8,7 @@
 : "${RESET:=}"
 : "${BOLD:=}"
 : "${ARR_COLOR_OUTPUT:=1}"
+: "${ARR_COLOR_OUTPUT_EFFECTIVE:=}"
 : "${ARR_COMPOSE_VERSION:=}"
 : "${SECRET_FILE_MODE:=600}"
 : "${NONSECRET_FILE_MODE:=600}"
@@ -101,34 +102,42 @@ arr_cleanup_temp_path() {
 
 # Derives runtime color output preference respecting NO_COLOR/force overrides
 arr_resolve_color_output() {
+  local resolved=1
+
   if [[ -n "${NO_COLOR:-}" ]]; then
-    ARR_COLOR_OUTPUT=0
-    return
+    resolved=0
+  else
+    case "${FORCE_COLOR:-}" in
+      '' | 0 | false | FALSE | no | NO)
+        case "${ARR_COLOR_OUTPUT:-1}" in
+          0 | false | FALSE | no | NO | off | OFF)
+            resolved=0
+            ;;
+          *)
+            resolved=1
+            ;;
+        esac
+        ;;
+      *)
+        resolved=1
+        ;;
+    esac
   fi
 
-  case "${FORCE_COLOR:-}" in
-    '' | 0 | false | FALSE | no | NO) ;;
-    *)
-      ARR_COLOR_OUTPUT=1
-      return
-      ;;
-  esac
+  ARR_COLOR_OUTPUT_EFFECTIVE="$resolved"
 
-  case "${ARR_COLOR_OUTPUT:-1}" in
-    0 | false | FALSE | no | NO | off | OFF)
-      ARR_COLOR_OUTPUT=0
-      ;;
-    *)
-      ARR_COLOR_OUTPUT=1
-      ;;
-  esac
+  if ! (declare -f arr_var_is_readonly >/dev/null 2>&1 && arr_var_is_readonly ARR_COLOR_OUTPUT); then
+    ARR_COLOR_OUTPUT="$resolved"
+  fi
 }
 
 # Resolves whether colorized output should be emitted right now
 msg_color_supported() {
   arr_resolve_color_output
 
-  if [[ "${ARR_COLOR_OUTPUT}" == 0 ]]; then
+  local effective="${ARR_COLOR_OUTPUT_EFFECTIVE:-${ARR_COLOR_OUTPUT:-1}}"
+
+  if [[ "$effective" == 0 ]]; then
     return 1
   fi
 
