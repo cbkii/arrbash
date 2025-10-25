@@ -11,17 +11,51 @@ ARRCONF_DIR=${ARRCONF_DIR:-__ARRCONF_DIR__}
 : "${ARR_DOCKER_DIR:=${ARR_STACK_DIR}/docker-data}"
 : "${ARRCONF_DIR:=${ARR_STACK_DIR}/arrconf}"
 
+_arr_alias_resolve_var() {
+  local name="$1"
+  local value=""
+
+  if [ -z "$name" ]; then
+    printf '%s' ""
+    return 0
+  fi
+
+  # shellcheck disable=SC1083
+  eval "value=\"\${${name}:-}\""
+  printf '%s' "$value"
+}
+
+_arr_alias_source_name() {
+  local candidate
+
+  candidate="$(_arr_alias_resolve_var "BASH_SOURCE[0]")"
+  if [ -n "$candidate" ]; then
+    printf '%s' "${candidate##*/}"
+    return 0
+  fi
+
+  candidate="$(_arr_alias_resolve_var "0")"
+  if [ -n "$candidate" ]; then
+    printf '%s' "${candidate##*/}"
+    return 0
+  fi
+
+  printf '%s' ".aliasarr"
+}
+
 _arr_alias_template_guard() {
-  local source_name="${BASH_SOURCE[0]##*/}"
+  local source_name="$(_arr_alias_source_name)"
   local name value
   for name in ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR; do
-    value="${!name-}"
-    if [[ ${value} == __ARR_*__ ]]; then
-      printf 'arr: refusing to source %s because %s is still set to placeholder %s.\n' \
-        "${source_name}" "${name}" "${value}" >&2
-      printf 'arr: run ./arr.sh --refresh-aliases and source the generated .aliasarr instead.\n' >&2
-      return 1
-    fi
+    value="$(_arr_alias_resolve_var "$name")"
+    case "$value" in
+      __ARR_*__)
+        printf 'arr: refusing to source %s because %s is still set to placeholder %s.\n' \
+          "${source_name}" "${name}" "${value}" >&2
+        printf 'arr: run ./arr.sh --refresh-aliases and source the generated .aliasarr instead.\n' >&2
+        return 1
+        ;;
+    esac
   done
   return 0
 }
