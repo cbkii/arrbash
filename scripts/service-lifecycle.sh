@@ -102,17 +102,40 @@ compose_service_is_running() {
     | grep -q .
 }
 
+# Runs `docker compose up -d` while capturing output for optional logging
+compose_up_detached_capture() {
+  local output_var="$1"
+  shift || true
+
+  if [[ -z "$output_var" ]]; then
+    die "compose_up_detached_capture requires an output variable name"
+  fi
+
+  local compose_output=""
+  if compose_output="$(compose up -d "$@" 2>&1)"; then
+    printf -v "$output_var" '%s' "$compose_output"
+    if [[ "${ARR_COMPOSE_PROGRESS:-quiet}" == "inherit" && -n "$compose_output" ]]; then
+      printf '%s\n' "$compose_output"
+    fi
+    return 0
+  fi
+
+  printf -v "$output_var" '%s' "$compose_output"
+  return 1
+}
+
 # Starts individual compose service and streams docker compose output
 compose_up_service() {
   local service="$1"
   local was_running=0
+  local compose_output=""
 
   if compose_service_is_running "$service"; then
     was_running=1
   fi
 
   msg "  Starting $service..."
-  if compose up -d "$service"; then
+  if compose_up_detached_capture compose_output "$service"; then
     local running_after=0
     if compose_service_is_running "$service"; then
       running_after=1
@@ -131,9 +154,15 @@ compose_up_service() {
       fi
     else
       warn "  $service not running after docker compose up; inspect container logs"
+      if [[ -n "$compose_output" ]]; then
+        printf '%s\n' "$compose_output" | sed 's/^/    /'
+      fi
     fi
   else
     warn "  Failed to start $service"
+    if [[ -n "$compose_output" ]]; then
+      printf '%s\n' "$compose_output" | sed 's/^/    /'
+    fi
   fi
   sleep 2
 }
@@ -757,8 +786,12 @@ start_stack() {
   install_vuetorrent
 
   msg "Starting Gluetun VPN container..."
-  if ! compose up -d gluetun; then
+  local compose_output_gluetun=""
+  if ! compose_up_detached_capture compose_output_gluetun gluetun; then
     warn "Failed to start Gluetun via docker compose"
+    if [[ -n "$compose_output_gluetun" ]]; then
+      printf '%s\n' "$compose_output_gluetun" | sed 's/^/    /'
+    fi
     docker logs --tail=60 gluetun 2>&1 | sed 's/^/    /' || true
     arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING"
     return 1
@@ -830,12 +863,16 @@ start_stack() {
       ensure_qbt_webui_config_ready
     fi
 
-    if compose up -d "$service"; then
+    local compose_output_service=""
+    if compose_up_detached_capture compose_output_service "$service"; then
       if [[ "$service" == "qbittorrent" ]]; then
         qb_started=1
       fi
     else
       warn "Failed to start $service"
+      if [[ -n "$compose_output_service" ]]; then
+        printf '%s\n' "$compose_output_service" | sed 's/^/    /'
+      fi
       failed_services+=("$service")
       continue
     fi
