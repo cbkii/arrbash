@@ -223,7 +223,7 @@ qbt_webui_enforce() {
 
   if ! arr_read_sensitive_file "$conf" \
     | LC_ALL=C grep -E '^(WebUI\\Address|WebUI\\Port)=' >/dev/null; then
-    printf 'Failed to assert WebUI prefs in %s\n' "$conf" >&2
+    warn "Failed to assert WebUI prefs in ${conf}"
     return 1
   fi
 
