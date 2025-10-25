@@ -776,6 +776,7 @@ main() {
 
   msg "Installation completed at $(arr_date_local '+%Y-%m-%d %H:%M:%S %Z')"
   show_summary
+  arr_finalize_shell_reload
 }
 
 if [[ "${ARR_NO_MAIN:-0}" != "1" ]]; then
