@@ -76,15 +76,20 @@ fi
 if ! declare -f arr_parse_csv >/dev/null 2>&1; then
   arr_parse_csv() {
     local raw="$1"
-    local item
 
-    local IFS=','
-    read -r -a _arr_csv_items <<<"$raw"
-    for item in "${_arr_csv_items[@]}"; do
-      item="$(arr_trim_whitespace "$item")"
-      [[ -z "$item" ]] && continue
-      printf '%s\n' "$item"
-    done
+    [[ -n "$raw" ]] || return 0
+
+    printf '%s\n' "$raw" | awk -F',' '
+      {
+        for (i = 1; i <= NF; i++) {
+          item = $i
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+          if (length(item) > 0) {
+            print item
+          }
+        }
+      }
+    '
   }
 fi
 
@@ -128,9 +133,14 @@ if ((${#arr_dns_candidates[@]} == 0)); then
   arr_dns_candidates=("${ARR_DEFAULT_UPSTREAM_DNS[@]}")
 fi
 
-mapfile -t ARR_UPSTREAM_DNS_CHAIN < <(
+ARR_UPSTREAM_DNS_CHAIN=()
+while IFS= read -r _arr_dns_entry; do
+  [[ -n "$_arr_dns_entry" ]] || continue
+  ARR_UPSTREAM_DNS_CHAIN+=("$_arr_dns_entry")
+done < <(
   printf '%s\n' "${arr_dns_candidates[@]}" | awk 'NF && !seen[$0]++'
 )
+unset _arr_dns_entry
 
 if ((${#ARR_UPSTREAM_DNS_CHAIN[@]} == 0)); then
   ARR_UPSTREAM_DNS_CHAIN=("${ARR_DEFAULT_UPSTREAM_DNS[@]}")
@@ -139,11 +149,11 @@ fi
 UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS:-$(arr_join_by ',' "${ARR_UPSTREAM_DNS_CHAIN[@]}")}"
 
 if [[ -z "${UPSTREAM_DNS_1:-}" ]]; then
-  UPSTREAM_DNS_1="${ARR_UPSTREAM_DNS_CHAIN[0]}"
+  UPSTREAM_DNS_1="$(printf '%s\n' "${ARR_UPSTREAM_DNS_CHAIN[@]}" | sed -n '1p')"
 fi
 
 if [[ -z "${UPSTREAM_DNS_2:-}" ]]; then
-  UPSTREAM_DNS_2="${ARR_UPSTREAM_DNS_CHAIN[1]:-}"
+  UPSTREAM_DNS_2="$(printf '%s\n' "${ARR_UPSTREAM_DNS_CHAIN[@]}" | sed -n '2p')"
 fi
 
 # Enable internal local DNS resolver service
