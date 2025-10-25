@@ -8,6 +8,21 @@ __ARR_PORT_PROBE_SELF_READY=0
 declare -A __ARR_PORT_PROBE_LISTENERS=()
 declare -A __ARR_PORT_PROBE_SELF=()
 
+_arr_port_identity() {
+  local host
+
+  host="$(normalize_bind_address "${1:-*}")"
+
+  case "${host}" in
+    ''|'*'|'0.0.0.0'|'::')
+      printf '*\n'
+      ;;
+    *)
+      printf '%s\n' "${host,,}"
+      ;;
+  esac
+}
+
 arr_port_probe_invalidate() {
   __ARR_PORT_PROBE_CACHE_READY=0
   __ARR_PORT_PROBE_SELF_READY=0
@@ -70,10 +85,8 @@ __arr_port_probe_collect_ss() {
   done < <(ss -H -lnptu 2>/dev/null | awk '{
       proto=$1
       local_field=$5
-      if (local_field == "") { local_field=$4 }
-      gsub(/^[[]|[]]$/, "", local_field)
-      raw=$0
-      gsub(/[[:space:]]+/, " ", raw)
+      if (local_field == "") { next }
+      gsub(/\[|\]/, "", local_field)
       pid=""; proc=""
       if (match($0, /pid=([0-9]+)/, m)) { pid=m[1] }
       if (match($0, /"([^\"]+)"/, m2)) { proc=m2[1] }
@@ -83,14 +96,41 @@ __arr_port_probe_collect_ss() {
 
 __arr_port_probe_collect_lsof() {
   lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null |
-    awk 'NR>1 { sub(/\(LISTEN\)/, "", $9); printf "tcp|%s|%s|%s\n", $9, $2, $1 }'
+    awk 'NR>1 {
+      addr=$9; pid=$2; proc=$1;
+      if (addr == "" || pid == "" || proc == "") { next }
+      sub(/\(LISTEN\)/, "", addr)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", addr)
+      printf "tcp|%s|%s|%s\n", addr, pid, proc
+    }'
   lsof -nP -iUDP 2>/dev/null |
-    awk 'NR>1 { printf "udp|%s|%s|%s\n", $9, $2, $1 }'
+    awk 'NR>1 {
+      addr=$9; pid=$2; proc=$1;
+      if (addr == "" || pid == "" || proc == "") { next }
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", addr)
+      printf "udp|%s|%s|%s\n", addr, pid, proc
+    }'
 }
 
 __arr_port_probe_collect_netstat() {
   netstat -tunlp 2>/dev/null |
-    awk 'NR>2 { split($4, parts, ":"); port=parts[length(parts)]; printf "%s|%s|%s|%s\n", tolower($1), $4, $7, $7 }'
+    awk 'NR>2 {
+      proto=tolower($1)
+      if (proto != "tcp" && proto != "udp") { next }
+      local_field=$4
+      if (local_field == "") { next }
+      if (!match(local_field, /(.*):([0-9]+)$/, m)) { next }
+      host=m[1]
+      port=m[2]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", host)
+      pid=""; proc=""
+      if ($7 ~ /^[0-9]+\/[^[:space:]]+$/) {
+        split($7, idparts, "/")
+        pid=idparts[1]
+        proc=idparts[2]
+      }
+      printf "%s|%s:%s|%s|%s\n", proto, host, port, pid, proc
+    }'
 }
 
 __arr_port_probe_collect() {
@@ -182,6 +222,7 @@ __arr_port_probe_refresh_self() {
   fi
 
   while IFS='|' read -r cid service ports; do
+    [[ -z "$service" ]] && continue
     [[ -z "$ports" ]] && continue
     IFS=',' read -ra entries <<<"$ports"
     local entry host_part target proto host port identity key
