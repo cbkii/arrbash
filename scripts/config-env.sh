@@ -107,6 +107,10 @@ prepare_env_context() {
   SPLIT_VPN="$split_vpn"
 
   ENABLE_CADDY="$(arr_normalize_bool "${ENABLE_CADDY:-0}")"
+  if [[ "$ENABLE_CADDY" == "1" ]] && ! validate_caddy_user "$CADDY_BASIC_AUTH_USER"; then
+    warn "[ERROR] Caddy Basic Auth username is empty or invalid after sanitization; update CADDY_BASIC_AUTH_USER before enabling Caddy."
+    die "Invalid Caddy Basic Auth username"
+  fi
   ENABLE_LOCAL_DNS="$(arr_normalize_bool "${ENABLE_LOCAL_DNS:-0}")"
 
   local direct_ports_requested="${EXPOSE_DIRECT_PORTS}"

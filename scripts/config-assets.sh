@@ -230,10 +230,18 @@ ensure_caddy_auth() {
 
   hydrate_caddy_auth_from_env_file
 
+  local original_user="${CADDY_BASIC_AUTH_USER:-}"
   local sanitized_user
-  sanitized_user="$(sanitize_user "${CADDY_BASIC_AUTH_USER}")"
-  if [[ "$sanitized_user" != "$CADDY_BASIC_AUTH_USER" ]]; then
-    CADDY_BASIC_AUTH_USER="$sanitized_user"
+  sanitized_user="$(sanitize_user "$original_user")"
+
+  if ! validate_caddy_user "$sanitized_user"; then
+    warn "[ERROR] Caddy Basic Auth username is empty or invalid after sanitization; set CADDY_BASIC_AUTH_USER to letters, numbers, dots, underscores, or hyphens."
+    die "Invalid Caddy Basic Auth username"
+  fi
+
+  CADDY_BASIC_AUTH_USER="$sanitized_user"
+
+  if [[ "$sanitized_user" != "$original_user" ]]; then
     persist_env_var "CADDY_BASIC_AUTH_USER" "$CADDY_BASIC_AUTH_USER"
     msg "  Caddy user sanitized -> ${CADDY_BASIC_AUTH_USER}"
   fi
@@ -520,8 +528,13 @@ write_caddy_assets() {
 
   sync_caddy_ca_public_copy --quiet || true
 
-  if ! grep -Fq "${CADDY_BASIC_AUTH_USER}" "$caddyfile"; then
-    warn "Caddyfile is missing the configured Basic Auth user; verify CADDY_BASIC_AUTH_USER"
+  if ! grep -Fq -- "$CADDY_BASIC_AUTH_USER" "$caddyfile"; then
+    local grep_rc=$?
+    if ((grep_rc == 1)); then
+      warn "Caddyfile is missing the configured Basic Auth user; verify CADDY_BASIC_AUTH_USER"
+    else
+      warn "Failed to verify the Caddy Basic Auth user in ${caddyfile} (grep exited with ${grep_rc})"
+    fi
   fi
 
   # shellcheck disable=SC2016  # intentional literal $ in regex

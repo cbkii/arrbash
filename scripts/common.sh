@@ -2769,6 +2769,22 @@ sanitize_user() {
   printf '%s' "$sanitized"
 }
 
+# Confirms that a sanitized Caddy username remains non-empty and within the
+# supported Basic Auth character set.
+validate_caddy_user() {
+  local candidate="${1:-}"
+
+  if [[ -z "$candidate" ]]; then
+    return 1
+  fi
+
+  if [[ ! "$candidate" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
 # Validates bcrypt hash formatting and cost bounds before accepting user input
 valid_bcrypt() {
   local hash_candidate="${1:-}"

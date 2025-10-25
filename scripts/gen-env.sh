@@ -92,6 +92,16 @@ if ! type -t sanitize_user >/dev/null 2>&1; then
   }
 fi
 
+if ! type -t validate_caddy_user >/dev/null 2>&1; then
+  validate_caddy_user() {
+    local candidate="${1:-}"
+
+    [[ -n "$candidate" ]] || return 1
+
+    [[ "$candidate" =~ ^[A-Za-z0-9._-]+$ ]]
+  }
+fi
+
 resolve_path() {
   local path="$1"
   if [[ -z "$path" ]]; then
@@ -283,6 +293,11 @@ if declare -f sanitize_user >/dev/null 2>&1; then
   CADDY_BASIC_AUTH_USER="$(sanitize_user "${CADDY_BASIC_AUTH_USER:-}")"
 else
   CADDY_BASIC_AUTH_USER="${CADDY_BASIC_AUTH_USER:-}"
+fi
+
+if [[ "${ENABLE_CADDY}" == "1" ]] && ! validate_caddy_user "$CADDY_BASIC_AUTH_USER"; then
+  printf 'CADDY_BASIC_AUTH_USER sanitized to an empty or invalid value; set a username containing only letters, numbers, dots, underscores, or hyphens before enabling Caddy.\n' >&2
+  exit 1
 fi
 
 OUT_PATH="${OUT_ARG}" 
