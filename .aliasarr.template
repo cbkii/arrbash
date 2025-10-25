@@ -1,8 +1,49 @@
 # shellcheck disable=SC1090,SC2154
 
 ARR_STACK_DIR=${ARR_STACK_DIR:-__ARR_STACK_DIR__}
-if [ -z "${ARR_STACK_DIR:-}" ]; then
-  ARR_STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+_arr_alias_current_source_path() {
+  if [ -n "${BASH_SOURCE[0]-}" ]; then
+    printf '%s\n' "${BASH_SOURCE[0]}"
+    return 0
+  fi
+
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    local zsh_source
+    zsh_source=$(eval 'printf %s "${(%):-%N}"' 2>/dev/null || true)
+    if [ -n "$zsh_source" ] && [ "$zsh_source" != "zsh" ]; then
+      printf '%s\n' "$zsh_source"
+      return 0
+    fi
+  fi
+
+  if [ -n "${0:-}" ]; then
+    printf '%s\n' "$0"
+    return 0
+  fi
+
+  return 1
+}
+
+_arr_alias_source_dir() {
+  local source_path
+  source_path="$(_arr_alias_current_source_path 2>/dev/null || true)"
+
+  if [ -z "$source_path" ]; then
+    printf '%s\n' "$(pwd)"
+    return 0
+  fi
+
+  if [ -d "$source_path" ]; then
+    printf '%s\n' "$(cd "$source_path" && pwd)"
+    return 0
+  fi
+
+  printf '%s\n' "$(cd "$(dirname "$source_path")" && pwd)"
+}
+
+if [ -z "${ARR_STACK_DIR:-}" ] || [ "${ARR_STACK_DIR}" = "__ARR_STACK_DIR__" ]; then
+  ARR_STACK_DIR="$(_arr_alias_source_dir)"
 fi
 ARR_ENV_FILE=${ARR_ENV_FILE:-__ARR_ENV_FILE__}
 ARR_DOCKER_DIR=${ARR_DOCKER_DIR:-__ARR_DOCKER_DIR__}
@@ -112,38 +153,26 @@ _arr_lowercase() {
 _arr_csv_to_array() {
   local input="$1"
   [ -n "$input" ] || return 0
-  local IFS=','
-  local -a tokens=()
-  read -r -a tokens <<<"$input"
-  local token trimmed
-  for token in "${tokens[@]}"; do
-    trimmed="$(_arr_trim "$token")"
-    if [ -n "$trimmed" ]; then
-      printf '%s\n' "$trimmed"
-    fi
-  done
+  printf '%s\n' "$input" | awk -F',' '
+    {
+      for (i = 1; i <= NF; i++) {
+        item = $i
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+        if (length(item) > 0) {
+          print item
+        }
+      }
+    }
+  '
 }
 
 _arr_unique_lines() {
-  local -a seen_lower=()
-  local -a result=()
-  local line lower match existing
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    lower="$(_arr_lowercase "$line")"
-    match=0
-    for existing in "${seen_lower[@]}"; do
-      if [ "$existing" = "$lower" ]; then
-        match=1
-        break
-      fi
-    done
-    if [ "$match" -eq 0 ]; then
-      seen_lower+=("$lower")
-      result+=("$line")
-    fi
-  done
-  printf '%s\n' "${result[@]}"
+  awk 'NF {
+    lower = tolower($0)
+    if (!seen[lower]++) {
+      print $0
+    }
+  }'
 }
 
 _arr_bool() {
@@ -532,13 +561,23 @@ _arr_qbt_login() {
   local cookie
   cookie="$(_arr_qbt_cookie_path)"
   local -a curl_cmd=(curl -fsS -c "$cookie" -b "$cookie" -d "username=${user}&password=${pass}" "$base/api/v2/auth/login")
-  local -a resolve_flags
-  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  local -a resolve_flags=()
+  while IFS= read -r _arr_line; do
+    resolve_flags+=("$_arr_line")
+  done < <(_arr_curl_resolve_flags "$base") || true
+  unset _arr_line
   if [ ${#resolve_flags[@]} -gt 0 ]; then
-    local -a new_cmd=("${curl_cmd[0]}")
-    new_cmd+=("${resolve_flags[@]}")
-    new_cmd+=("${curl_cmd[@]:1}")
-    curl_cmd=("${new_cmd[@]}")
+    local curl_prog=""
+    local -a curl_args=()
+    local _arr_arg
+    for _arr_arg in "${curl_cmd[@]}"; do
+      if [ -z "$curl_prog" ]; then
+        curl_prog="$_arr_arg"
+      else
+        curl_args+=("$_arr_arg")
+      fi
+    done
+    curl_cmd=("$curl_prog" "${resolve_flags[@]}" "${curl_args[@]}")
   fi
   "${curl_cmd[@]}" >/dev/null
 }
@@ -584,8 +623,11 @@ _arr_service_call() {
   if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
     curl_cmd+=(-H 'Content-Type: application/json')
   fi
-  local -a resolve_flags
-  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  local -a resolve_flags=()
+  while IFS= read -r _arr_line; do
+    resolve_flags+=("$_arr_line")
+  done < <(_arr_curl_resolve_flags "$base") || true
+  unset _arr_line
   if [ ${#resolve_flags[@]} -gt 0 ]; then
     curl_cmd+=("${resolve_flags[@]}")
   fi
@@ -609,8 +651,10 @@ _arr_bazarr_call() {
     *)    url="${url}?apikey=${key}" ;;
   esac
   local -a curl_cmd=(curl -fsS -X "$method")
-  local -a resolve_flags
-  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  local -a resolve_flags=()
+  while IFS= read -r _arr_line; do
+    resolve_flags+=("$_arr_line")
+  done < <(_arr_curl_resolve_flags "$base") || true
   if [ ${#resolve_flags[@]} -gt 0 ]; then
     curl_cmd+=("${resolve_flags[@]}")
   fi
@@ -659,7 +703,7 @@ arr.down() { _arr_compose down "$@"; }
 arr.restart() { if [ $# -eq 0 ]; then _arr_compose restart "${_arr_services[@]}"; else _arr_compose restart "$@"; fi }
 arr.pull() { _arr_compose pull "$@"; }
 arr.logs() {
-  local tail_args=()
+  local -a tail_args=()
   if [ $# -gt 0 ] && [ "${1#*[!0-9]}" = "$1" ]; then
     tail_args=(--tail "$1")
     shift
@@ -1173,7 +1217,10 @@ arr.vpn.fastest() {
 arr.vpn.switch() {
   local requested="$(_arr_trim "${1:-}")"
   local -a countries=()
-  mapfile -t countries < <(_arr_vpn_rotation_candidates)
+  while IFS= read -r _arr_country; do
+    countries+=("$_arr_country")
+  done < <(_arr_vpn_rotation_candidates)
+  unset _arr_country
   if [ ${#countries[@]} -eq 0 ]; then
     echo 'No ProtonVPN countries available for rotation.' >&2
     return 1
@@ -1280,8 +1327,11 @@ _arr_qbt_call() {
   local base="$(_arr_qbt_base)"
   local cookie
   cookie="$(_arr_qbt_cookie_path)"
-  local -a resolve_flags
-  mapfile -t resolve_flags < <(_arr_curl_resolve_flags "$base") || true
+  local -a resolve_flags=()
+  while IFS= read -r _arr_flag; do
+    resolve_flags+=("$_arr_flag")
+  done < <(_arr_curl_resolve_flags "$base") || true
+  unset _arr_flag
   local attempt=0
   while [ $attempt -lt 2 ]; do
     if [ ! -s "$cookie" ]; then
@@ -1295,7 +1345,7 @@ _arr_qbt_call() {
     fi
     curl_cmd+=("$@")
     curl_cmd+=("${base}${endpoint}")
-    http_code="$(${curl_cmd[@]})"
+    http_code="$("${curl_cmd[@]}")"
     local rc=$?
     if [ $rc -ne 0 ]; then
       rm -f "$tmp_body"
@@ -1803,8 +1853,11 @@ EOF
 arr.fsolv.health() {
   local base="$(_arr_service_base flaresolverr)"
   local -a cmd=(curl -fsS)
-  local -a resolve
-  mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+  local -a resolve=()
+  while IFS= read -r _arr_resolve; do
+    resolve+=("$_arr_resolve")
+  done < <(_arr_curl_resolve_flags "$base") || true
+  unset _arr_resolve
   if [ ${#resolve[@]} -gt 0 ]; then
     cmd+=("${resolve[@]}")
   fi
@@ -1820,8 +1873,11 @@ arr.fsolv.solve() {
   fi
   local base="$(_arr_service_base flaresolverr)"
   local -a cmd=(curl -fsS -X POST -H 'Content-Type: application/json' --data "$payload")
-  local -a resolve
-  mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+  local -a resolve=()
+  while IFS= read -r _arr_resolve; do
+    resolve+=("$_arr_resolve")
+  done < <(_arr_curl_resolve_flags "$base") || true
+  unset _arr_resolve
   if [ ${#resolve[@]} -gt 0 ]; then
     cmd+=("${resolve[@]}")
   fi
@@ -1839,8 +1895,11 @@ EOF
 arr.caddy.health() {
   local base="$(_arr_service_base caddy)"
   local -a cmd=(curl -fsS)
-  local -a resolve
-  mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+  local -a resolve=()
+  while IFS= read -r _arr_resolve; do
+    resolve+=("$_arr_resolve")
+  done < <(_arr_curl_resolve_flags "$base") || true
+  unset _arr_resolve
   if [ ${#resolve[@]} -gt 0 ]; then
     cmd+=("${resolve[@]}")
   fi
@@ -1956,13 +2015,16 @@ arr.check.ports() {
   for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
     base="$(_arr_service_base "$svc")"
     local -a cmd=(curl -sS -o /dev/null -w '%{http_code}' --max-time 5)
-    local -a resolve
-    mapfile -t resolve < <(_arr_curl_resolve_flags "$base") || true
+    local -a resolve=()
+    while IFS= read -r _arr_resolve; do
+      resolve+=("$_arr_resolve")
+    done < <(_arr_curl_resolve_flags "$base") || true
+    unset _arr_resolve
     if [ ${#resolve[@]} -gt 0 ]; then
       cmd+=("${resolve[@]}")
     fi
     cmd+=("$base")
-    http="$(${cmd[@]} 2>/dev/null || printf '000')"
+    http="$("${cmd[@]}" 2>/dev/null || printf '000')"
     if [ "$http" = "000" ]; then
       printf '  %-13s unavailable\n' "$svc"
       rc=1

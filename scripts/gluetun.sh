@@ -14,10 +14,51 @@
 : "${PF_ASYNC_STATE_FILE:=pf-state.json}"
 : "${PF_ASYNC_LOG_FILE:=port-forwarding.log}"
 : "${GLUETUN_PF_STRICT:=0}"
+
+_arr_gluetun_current_source_path() {
+  if [ -n "${BASH_SOURCE[0]-}" ]; then
+    printf '%s\n' "${BASH_SOURCE[0]}"
+    return 0
+  fi
+
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    local zsh_source
+    zsh_source=$(eval 'printf %s "${(%):-%N}"' 2>/dev/null || true)
+    if [ -n "$zsh_source" ] && [ "$zsh_source" != "zsh" ]; then
+      printf '%s\n' "$zsh_source"
+      return 0
+    fi
+  fi
+
+  if [ -n "${0:-}" ]; then
+    printf '%s\n' "$0"
+    return 0
+  fi
+
+  return 1
+}
+
+_arr_gluetun_source_dir() {
+  local source_path
+  source_path="$(_arr_gluetun_current_source_path 2>/dev/null || true)"
+
+  if [ -z "$source_path" ]; then
+    printf '%s\n' "$(pwd)"
+    return 0
+  fi
+
+  if [ -d "$source_path" ]; then
+    printf '%s\n' "$(cd "$source_path" && pwd)"
+    return 0
+  fi
+
+  printf '%s\n' "$(cd "$(dirname "$source_path")" && pwd)"
+}
+
 : "${PF_ENABLE_CYCLE:=1}"
 
 if ! declare -f arr_date_local >/dev/null 2>&1; then
-  __arr_time_guard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  __arr_time_guard_dir="$(_arr_gluetun_source_dir)"
   REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
   if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
     # shellcheck source=scripts/common.sh
@@ -46,16 +87,21 @@ gluetun_version_requires_auth_config() {
   local tag="${image##*:}"
 
   # Extract semantic version components from a variety of tag formats
-  if [[ "$tag" =~ ^v?([0-9]+)\.([0-9]+) ]]; then
-    local major="${BASH_REMATCH[1]}"
-    local minor="${BASH_REMATCH[2]}"
+  local version_head="${tag#v}"
+  version_head="${version_head%%[^0-9.]*}"
+  local major=""
+  local minor=""
+  if [ -n "$version_head" ]; then
+    IFS='.' read -r major minor _ <<EOF
+$version_head
+EOF
+  fi
 
-    if [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]]; then
-      if ((major > 3 || (major == 3 && minor >= 40))); then
-        return 0
-      fi
-      return 1
+  if [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]]; then
+    if ((major > 3 || (major == 3 && minor >= 40))); then
+      return 0
     fi
+    return 1
   fi
 
   if [[ "$tag" == "latest" || "$tag" == "edge" || "$tag" == "testing" || "$image" == "qmcgaw/gluetun" ]]; then
