@@ -1447,6 +1447,20 @@ YAML
     printf '      - "%s"\n' "\${SUBS_DIR}:/subs" >>"$dest"
   fi
 
+  if [[ "$service" == "prowlarr" ]]; then
+    cat <<'YAML' >>"$dest"
+    dns:
+      - "1.1.1.1"
+      - "1.0.0.1"
+      - "8.8.8.8"
+      - "8.8.4.4"
+      - "9.9.9.9"
+      - "149.112.112.112"
+      - "77.88.8.8"
+      - "77.88.8.1"
+YAML
+  fi
+
   cat <<'YAML' >>"$dest"
     restart: "unless-stopped"
     logging:
