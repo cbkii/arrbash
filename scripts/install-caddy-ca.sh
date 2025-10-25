@@ -24,10 +24,16 @@ DATA_DIR_OVERRIDE=""
 while (($#)); do
   case "$1" in
     --stack-dir)
+      if [[ $# -lt 2 ]]; then
+        die "--stack-dir requires a path argument"
+      fi
       STACK_DIR="$2"
       shift 2
       ;;
     --data-dir)
+      if [[ $# -lt 2 ]]; then
+        die "--data-dir requires a path argument"
+      fi
       DATA_DIR_OVERRIDE="$2"
       shift 2
       ;;
@@ -44,7 +50,11 @@ while (($#)); do
 done
 
 if [[ -z "$STACK_DIR" ]]; then
-  STACK_DIR="${ARR_STACK_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+  if [[ -n "${ARR_STACK_DIR:-}" ]]; then
+    STACK_DIR="${ARR_STACK_DIR}"
+  else
+    STACK_DIR="${SCRIPT_DIR}/.."
+  fi
 fi
 
 STACK_DIR_INPUT="$STACK_DIR"
@@ -52,20 +62,26 @@ if ! STACK_DIR="$(cd "$STACK_DIR_INPUT" 2>/dev/null && pwd)"; then
   die "Stack directory not found: ${STACK_DIR_INPUT}"
 fi
 
-if [[ -n "$DATA_DIR_OVERRIDE" ]]; then
-  CADDY_DATA_DIR="$DATA_DIR_OVERRIDE"
-else
-  ENV_FILE="$(arr_env_file)"
-  if [[ -f "$ENV_FILE" ]]; then
-    arr_docker_dir="$(get_env_kv "ARR_DOCKER_DIR" "$ENV_FILE" || true)"
-    if [[ -n "$arr_docker_dir" ]]; then
-      CADDY_DATA_DIR="${arr_docker_dir}/caddy/data"
+ARR_STACK_DIR="$STACK_DIR"
+
+ENV_FILE="$(arr_env_file)"
+if [[ -f "$ENV_FILE" ]]; then
+  if arr_docker_dir="$(get_env_kv "ARR_DOCKER_DIR" "$ENV_FILE" || true)" && [[ -n "$arr_docker_dir" ]]; then
+    ARR_DOCKER_DIR="$arr_docker_dir"
+  fi
+  if [[ -z "${STACK:-}" ]]; then
+    if stack_name="$(get_env_kv "STACK" "$ENV_FILE" || true)" && [[ -n "$stack_name" ]]; then
+      STACK="$stack_name"
     fi
   fi
 fi
 
-if [[ -z "${CADDY_DATA_DIR:-}" ]]; then
-  CADDY_DATA_DIR="${STACK_DIR}/caddy/data"
+STACK="${STACK:-arr}"
+
+if [[ -n "$DATA_DIR_OVERRIDE" ]]; then
+  CADDY_DATA_DIR="$DATA_DIR_OVERRIDE"
+else
+  CADDY_DATA_DIR="$(arr_docker_data_root)/caddy/data"
 fi
 
 if [[ ! -d "$CADDY_DATA_DIR" ]]; then
