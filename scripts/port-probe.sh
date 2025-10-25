@@ -89,7 +89,7 @@ __arr_port_probe_collect_ss() {
       gsub(/\[|\]/, "", local_field)
       pid=""; proc=""
       if (match($0, /pid=([0-9]+)/, m)) { pid=m[1] }
-      if (match($0, /"([^\"]+)"/, m2)) { proc=m2[1] }
+      if (match($0, /"([^"]+)"/, m2)) { proc=m2[1] }
       printf "%s|%s|%s|%s\n", proto, local_field, pid, proc
     }')
 }
