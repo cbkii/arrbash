@@ -602,14 +602,15 @@ if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_STATE:-inactive}" == "active"
     if ! have_command dig; then
       doctor_warn "'dig' command not found; skipping DNS lookup."
     else
-      res_udp="$(dig +short @"${DNS_IP}" qbittorrent."${SUFFIX}" 2>/dev/null || true)"
+      dns_server_arg=@"${DNS_IP}"
+      res_udp="$(dig +short "${dns_server_arg}" "qbittorrent.${SUFFIX}" 2>/dev/null || true)"
       if [[ -z "$res_udp" ]]; then
         doctor_fail "qbittorrent.${SUFFIX} did NOT resolve via ${DNS_IP} (UDP)"
       else
         doctor_ok "qbittorrent.${SUFFIX} resolves to ${res_udp} (UDP)"
       fi
 
-      res_tcp="$(dig +tcp +short @"${DNS_IP}" qbittorrent."${SUFFIX}" 2>/dev/null || true)"
+      res_tcp="$(dig +tcp +short "${dns_server_arg}" "qbittorrent.${SUFFIX}" 2>/dev/null || true)"
       if [[ -z "$res_tcp" ]]; then
         doctor_fail "qbittorrent.${SUFFIX} did NOT resolve via ${DNS_IP} (TCP)"
       else
