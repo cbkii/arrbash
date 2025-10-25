@@ -115,7 +115,8 @@ CANDIDATES="$(printf "%s\n%s\n%s\n%s\n" \
 VALID=()
 for ip in ${CANDIDATES}; do
   if command -v dig >/dev/null 2>&1; then
-    if dig +time=1 +tries=1 @"${ip}" cloudflare.com A >/dev/null 2>&1; then
+    server_arg=@"${ip}"
+    if dig +time=1 +tries=1 "${server_arg}" cloudflare.com A >/dev/null 2>&1; then
       VALID+=("${ip}")
     fi
   else
@@ -229,7 +230,8 @@ fi
 # ---- Functional tests ----
 set +e
 msg "Testing DNS -> qbittorrent.${SUFFIX} via ${LAN_IP}"
-dig +short @"${LAN_IP}" "qbittorrent.${SUFFIX}"
+LAN_DNS_ARG=@"${LAN_IP}"
+dig +short "${LAN_DNS_ARG}" "qbittorrent.${SUFFIX}"
 DIG_RC=$?
 msg "Testing HTTPS (Caddy) -> qbittorrent.${SUFFIX} (forced resolve)"
 caddy_https_port="${CADDY_HTTPS_PORT:-443}"

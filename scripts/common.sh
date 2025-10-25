@@ -2191,23 +2191,24 @@ probe_dns_resolver() {
   local server="$1"
   local domain="${2:-cloudflare.com}"
   local timeout="${3:-2}"
+  local server_arg=@"${server}"
 
   if command -v dig >/dev/null 2>&1; then
-    if dig +time="${timeout}" +tries=1 @"${server}" "${domain}" >/dev/null 2>&1; then
+    if dig +time="${timeout}" +tries=1 "${server_arg}" "${domain}" >/dev/null 2>&1; then
       return 0
     fi
     return 1
   fi
 
   if command -v drill >/dev/null 2>&1; then
-    if drill -Q "${domain}" @"${server}" >/dev/null 2>&1; then
+    if drill -Q "${domain}" "${server_arg}" >/dev/null 2>&1; then
       return 0
     fi
     return 1
   fi
 
   if command -v kdig >/dev/null 2>&1; then
-    if kdig @"${server}" "${domain}" >/dev/null 2>&1; then
+    if kdig "${server_arg}" "${domain}" >/dev/null 2>&1; then
       return 0
     fi
     return 1
