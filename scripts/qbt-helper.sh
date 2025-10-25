@@ -334,7 +334,7 @@ qbt_webui_init_hook() {
   fi
 
   if ! qbt_webui_enforce; then
-    printf 'WebUI enforcement failed\n' >&2
+    warn "WebUI enforcement failed"
     exit 1
   fi
 }
