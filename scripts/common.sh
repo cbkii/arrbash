@@ -1688,10 +1688,31 @@ acquire_lock() {
     fi
   fi
 
-  while ! (
-    set -C
-    printf '%s' "$$" >"$lockfile"
-  ) 2>/dev/null; do
+  while true; do
+    if (
+      set -C
+      printf '%s' "$$" >"$lockfile"
+    ) 2>/dev/null; then
+      break
+    fi
+
+    if [[ -e "${lockfile}" ]]; then
+      local owner_pid=""
+      if owner_pid="$(head -n1 "${lockfile}" 2>/dev/null)"; then
+        owner_pid="${owner_pid//[^0-9]}"
+      else
+        owner_pid=""
+      fi
+
+      if [[ -n "${owner_pid}" ]] && ! ps -p "${owner_pid}" >/dev/null 2>&1; then
+        warn "Removing stale installer lock held by PID ${owner_pid} (${lockfile})."
+        if rm -f -- "${lockfile}" 2>/dev/null; then
+          continue
+        fi
+        warn "Failed to remove stale installer lock at ${lockfile}; retrying."
+      fi
+    fi
+
     if [ "$elapsed" -ge "$timeout" ]; then
       die "Could not acquire lock after ${timeout}s. Another instance may be running."
     fi
