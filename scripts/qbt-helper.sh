@@ -42,7 +42,7 @@ qbt_webui_mktemp() {
   fi
 
   if ! tmp=$(mktemp "$template" 2>/dev/null); then
-    printf 'Failed to create temporary file near %s\n' "$base" >&2
+    warn "Failed to create temporary file near ${base}"
     return 1
   fi
 
