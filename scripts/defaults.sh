@@ -176,7 +176,6 @@ arr_setup_defaults() {
 
   : "$SECRET_FILE_MODE" "$LOCK_FILE_MODE" "$NONSECRET_FILE_MODE" "$DATA_DIR_MODE" \
     "$COLLAB_GROUP_WRITE_ENABLED" "$COLLAB_GROUP_WRITE_DISABLED_REASON"
-  readonly ARR_PERMISSION_PROFILE SECRET_FILE_MODE LOCK_FILE_MODE NONSECRET_FILE_MODE DATA_DIR_MODE
 
   COLLAB_PERMISSION_WARNINGS=""
   COLLAB_CREATED_MEDIA_DIRS=""
@@ -184,7 +183,6 @@ arr_setup_defaults() {
 
   ARR_DOCKER_SERVICES=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr sabnzbd configarr caddy local_dns)
   : "${ARR_DOCKER_SERVICES[*]}"
-  readonly -a ARR_DOCKER_SERVICES
 
   : "${QBT_INT_PORT:=8082}"
   : "${QBT_BIND_ADDR:=0.0.0.0}"
