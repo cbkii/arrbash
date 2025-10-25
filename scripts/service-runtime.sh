@@ -99,7 +99,7 @@ arr_restore_stack_runtime_state() {
   fi
 
   if ! command -v docker >/dev/null 2>&1; then
-    warn "[restore] Docker unavailable; unable to restore previously running services."
+    warn "Docker unavailable; unable to restore previously running services."
     arr_clear_stack_runtime_state
     return 0
   fi
@@ -107,18 +107,18 @@ arr_restore_stack_runtime_state() {
   if ((${#DOCKER_COMPOSE_CMD[@]} == 0)); then
     if declare -f arr_resolve_compose_cmd >/dev/null 2>&1; then
       if ! arr_resolve_compose_cmd >/dev/null 2>&1; then
-        warn "[restore] Docker Compose unavailable; unable to restore services automatically."
+        warn "Docker Compose unavailable; unable to restore services automatically."
         arr_clear_stack_runtime_state
         return 0
       fi
     else
-      warn "[restore] Docker Compose helper missing; unable to restore services automatically."
+      warn "Docker Compose helper missing; unable to restore services automatically."
       arr_clear_stack_runtime_state
       return 0
     fi
   fi
 
-  warn "[restore] Installer exited with status ${exit_code}; restoring previously running services."
+  warn "Installer exited with status ${exit_code}; restoring previously running services."
 
   declare -A seen=()
   local -a restore_order=()
@@ -146,9 +146,9 @@ arr_restore_stack_runtime_state() {
       continue
     fi
 
-    msg "[restore] Restarting ${service}"
+    msg "Restarting ${service}"
     if ! service_runtime_compose up -d "$service" >/dev/null 2>&1; then
-      warn "[restore] Failed to restart ${service}; check docker compose logs."
+      warn "Failed to restart ${service}; check docker compose logs."
     fi
   done
 
@@ -198,20 +198,20 @@ service_sab_helper_path() {
 
 service_start_sabnzbd() {
   [[ "${SABNZBD_ENABLED:-0}" == "1" ]] || return 0
-  msg "[sabnzbd] Enabled (startup managed via docker compose)."
+  msg "Enabled (startup managed via docker compose)."
 }
 
 service_health_sabnzbd() {
   [[ "${SABNZBD_ENABLED:-0}" == "1" ]] || return 0
   local helper
   if ! helper="$(service_sab_helper_path)"; then
-    warn "[sabnzbd] Helper script not found; skipping health check"
+    warn "Helper script not found; skipping health check"
     return 0
   fi
   local version
   if version="$($helper version 2>/dev/null)"; then
-    msg "[sabnzbd] API reachable (${version})"
+    msg "API reachable (${version})"
   else
-    warn "[sabnzbd] Health check failed (verify SABNZBD_HOST/SABNZBD_PORT or container status)"
+    warn "Health check failed (verify SABNZBD_HOST/SABNZBD_PORT or container status)"
   fi
 }

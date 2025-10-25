@@ -22,7 +22,7 @@ if [[ -f "$COMMON_LIB" ]]; then
   # shellcheck source=scripts/common.sh
   . "$COMMON_LIB"
 else
-  printf '[arr.uninstall] missing required module: %s\n' "$COMMON_LIB" >&2
+  printf '[ERROR] Missing required module: %s\n' "$COMMON_LIB" >&2
   exit 1
 fi
 

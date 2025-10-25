@@ -15,9 +15,16 @@ arr_err_trap() {
   local src="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
   local line="${BASH_LINENO[0]:-${LINENO}}"
   local label="[${STACK:-arr}]"
-  printf '%s error at %s:%s (status=%s)\n' "${label}" "${src}" "${line}" "${rc}" >&2
-  if [[ -n "${ARR_TRACE_FILE:-}" ]]; then
-    printf 'Trace log: %s\n' "${ARR_TRACE_FILE}" >&2
+  if declare -f warn >/dev/null 2>&1; then
+    warn "[ERROR] ${label} error at ${src}:${line} (status=${rc})"
+    if [[ -n "${ARR_TRACE_FILE:-}" ]]; then
+      warn "  Trace log: ${ARR_TRACE_FILE}"
+    fi
+  else
+    printf '[ERROR] %s error at %s:%s (status=%s)\n' "${label}" "${src}" "${line}" "${rc}" >&2
+    if [[ -n "${ARR_TRACE_FILE:-}" ]]; then
+      printf '  Trace log: %s\n' "${ARR_TRACE_FILE}" >&2
+    fi
   fi
   exit "${rc}"
 }
@@ -296,7 +303,11 @@ if [[ -f "${USERCONF_LIB}" ]]; then
   # shellcheck source=scripts/userconf.sh
   . "${USERCONF_LIB}"
 else
-  printf '[arr] missing required module: %s\n' "${USERCONF_LIB}" >&2
+  if declare -f warn >/dev/null 2>&1; then
+    warn "[ERROR] Missing required module: ${USERCONF_LIB}"
+  else
+    printf '[ERROR] Missing required module: %s\n' "${USERCONF_LIB}" >&2
+  fi
   exit 1
 fi
 
@@ -310,7 +321,11 @@ if [[ -f "${COMMON_LIB}" ]]; then
   # shellcheck source=scripts/common.sh
   . "${COMMON_LIB}"
 else
-  printf '[arr] missing required module: %s\n' "${COMMON_LIB}" >&2
+  if declare -f warn >/dev/null 2>&1; then
+    warn "[ERROR] Missing required module: ${COMMON_LIB}"
+  else
+    printf '[ERROR] Missing required module: %s\n' "${COMMON_LIB}" >&2
+  fi
   exit 1
 fi
 
@@ -328,7 +343,7 @@ arr_apply_env_overrides() {
     _arr_seen["${_arr_env_var}"]=1
 
     if [[ ! "${_arr_env_var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      printf '%s WARN: Skipping invalid environment variable name: %s\n' "${_arr_warn_tag}" "${_arr_env_var}" >&2
+      warn "Skipping invalid environment variable name: ${_arr_env_var}"
       continue
     fi
 
@@ -344,7 +359,7 @@ arr_apply_env_overrides() {
     fi
 
     if declare -f arr_var_is_readonly >/dev/null 2>&1 && arr_var_is_readonly "${_arr_env_var}"; then
-      printf '%s WARN: Cannot override readonly variable: %s\n' "${_arr_warn_tag}" "${_arr_env_var}" >&2
+      warn "Cannot override readonly variable: ${_arr_env_var}"
       continue
     fi
 
@@ -414,10 +429,10 @@ if [[ "${ARR_USERCONF_ALLOW_OUTSIDE:-0}" != "1" ]]; then
   if [[ -z "${ARR_USERCONF_OVERRIDE_PATH:-}" && -n "${_canon_base}" ]]; then
     if ! [[ "${_canon_userconf}" == "${_canon_base}" || "${_canon_userconf}" == "${_canon_base}/"* ]]; then
       if [[ "${ARR_USERCONF_STRICT:-0}" == "1" ]]; then
-        printf '%s user config path outside base (%s): %s (strict mode)\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
+        warn "[ERROR] User config path outside base (${_canon_base}): ${_canon_userconf} (strict mode)"
         exit 1
       else
-        printf '%s WARN: user config outside expected base (%s): %s\n' "${STACK_TAG}" "${_canon_base}" "${_canon_userconf}" >&2
+        warn "User config outside expected base (${_canon_base}): ${_canon_userconf}"
       fi
     fi
   fi
@@ -448,7 +463,7 @@ if [[ -f "${_canon_userconf}" ]]; then
     if [[ -s "${_arr_userr_conf_errlog}" ]] && ! grep -v "readonly variable" "${_arr_userr_conf_errlog}" >/dev/null; then
       :
     else
-      printf '%s Failed to source user config (status=%s): %s\n' "${STACK_TAG}" "${_arr_userr_conf_status}" "${_canon_userconf}" >&2
+      warn "Failed to source user config (status=${_arr_userr_conf_status}): ${_canon_userconf}"
       # Replay captured stderr to aid debugging
       cat "${_arr_userr_conf_errlog}" >&2 || :
       arr_cleanup_temp_path "${_arr_userr_conf_errlog}"
@@ -491,7 +506,7 @@ arr_lock_effective_vars() {
     fi
     _arr_guard_seen["${var}"]=1
     if [[ ! "${var}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      printf '%s WARN: Skipping readonly guard for invalid environment variable name: %s (must start with letter or underscore and contain only alphanumeric characters and underscores)\n' "${STACK_TAG}" "${var}" >&2
+      warn "Skipping readonly guard for invalid environment variable name: ${var} (must start with letter or underscore and contain only alphanumeric characters and underscores)"
       continue
     fi
     if arr_var_is_readonly "${var}"; then
@@ -517,7 +532,7 @@ if [[ -f "${YAML_EMIT_LIB}" ]]; then
   # shellcheck source=scripts/yaml-emit.sh
   . "${YAML_EMIT_LIB}"
 else
-  printf '%s missing emission helper library: %s\n' "${STACK_TAG}" "${YAML_EMIT_LIB}" >&2
+  warn "[ERROR] Missing emission helper library: ${YAML_EMIT_LIB}"
   exit 1
 fi
 modules=(
@@ -541,7 +556,7 @@ modules=(
 for module in "${modules[@]}"; do
   f="${SCRIPT_LIB_DIR}/${module}"
   if [[ ! -f "${f}" ]]; then
-    printf '%s missing required module: %s\n' "${STACK_TAG}" "${f}" >&2
+    warn "[ERROR] Missing required module: ${f}"
     exit 1
   fi
   # shellcheck source=/dev/null

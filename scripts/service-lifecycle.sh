@@ -504,7 +504,7 @@ stop_existing_vpn_auto_reconnect_workers() {
   done
   candidate_pids=("${!seen_pids[@]}")
 
-  msg "[vpn-auto] Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
+  msg "Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
 
   for pid in "${candidate_pids[@]}"; do
     if kill "$pid" 2>/dev/null; then
@@ -533,13 +533,13 @@ start_vpn_auto_reconnect_if_enabled() {
   fi
 
   if ! vpn_auto_reconnect_is_enabled; then
-    msg "[vpn-auto] Auto-reconnect disabled (VPN_AUTO_RECONNECT_ENABLED=${VPN_AUTO_RECONNECT_ENABLED:-0})"
+    msg "Auto-reconnect disabled (VPN_AUTO_RECONNECT_ENABLED=${VPN_AUTO_RECONNECT_ENABLED:-0})"
     return 0
   fi
 
   local daemon_path="${ARR_STACK_DIR}/scripts/vpn-auto-reconnect-daemon.sh"
   if [[ ! -x "$daemon_path" ]]; then
-    warn "[vpn-auto] Auto-reconnect daemon missing at ${daemon_path}"
+    warn "Auto-reconnect daemon missing at ${daemon_path}"
     return 1
   fi
 
@@ -554,7 +554,7 @@ start_vpn_auto_reconnect_if_enabled() {
 
   stop_existing_vpn_auto_reconnect_workers "$daemon_path" "$pid_file"
 
-  msg "[vpn-auto] Launching auto-reconnect daemon"
+  msg "Launching auto-reconnect daemon"
 
   touch "$log_file" 2>/dev/null || true
   ensure_nonsecret_file_mode "$log_file"
@@ -563,9 +563,9 @@ start_vpn_auto_reconnect_if_enabled() {
     local pid=$!
     printf '%s\n' "$pid" >"$pid_file"
     ensure_secret_file_mode "$pid_file"
-    msg "[vpn-auto] Daemon started (pid ${pid})"
+    msg "Daemon started (pid ${pid})"
   else
-    warn "[vpn-auto] Failed to start auto-reconnect daemon"
+    warn "Failed to start auto-reconnect daemon"
   fi
 }
 
@@ -598,7 +598,7 @@ show_service_status() {
     local pf_port
     pf_port="$(grep -Eo '"port"[[:space:]]*:[[:space:]]*[0-9]+' "$pf_state" 2>/dev/null | head -n1 | sed 's/.*"port"[[:space:]]*:[[:space:]]*//' || true)"
     if [[ -n "$pf_status" ]]; then
-      msg "[pf] Current PF status: ${pf_status} (port=${pf_port:-0})"
+      msg "Current PF status: ${pf_status} (port=${pf_port:-0})"
     fi
   fi
 }
@@ -606,7 +606,7 @@ show_service_status() {
 # Disables Docker's userland proxy to let dnsmasq bind :53 reliably
 ensure_docker_userland_proxy_disabled() {
   if [[ "${LOCAL_DNS_STATE:-inactive}" != "active" ]]; then
-    msg "[dns] Skipping userland-proxy update (local DNS inactive)"
+    msg "Skipping userland-proxy update (local DNS inactive)"
     return 0
   fi
 
@@ -618,36 +618,36 @@ ensure_docker_userland_proxy_disabled() {
   local merge_tool=""
 
   if [[ -n "$merge_tool_preference" && "$merge_tool_preference" != "jq" ]]; then
-    warn "[dns] Only jq is supported for editing ${conf}; ignoring ARR_DAEMON_JSON_TOOL=${merge_tool_preference}"
+    warn "Only jq is supported for editing ${conf}; ignoring ARR_DAEMON_JSON_TOOL=${merge_tool_preference}"
   fi
 
   if command -v jq >/dev/null 2>&1; then
     merge_tool="jq"
   else
-    warn "[dns] jq is required to edit ${conf}. Install jq and rerun."
+    warn "jq is required to edit ${conf}. Install jq and rerun."
     return 1
   fi
 
   if [[ ! -e "$conf" ]]; then
     if [[ ! -d "$conf_dir" ]] && ! mkdir -p "$conf_dir"; then
-      warn "[dns] Failed to create ${conf_dir}"
+      warn "Failed to create ${conf_dir}"
       return 1
     fi
   fi
 
   if [[ -f "$conf" && ! -w "$conf" && ! -w "$conf_dir" ]]; then
-    warn "[dns] Docker daemon.json requires root to modify."
-    warn "[dns] Run with sudo or set {\"userland-proxy\": false} in ${conf} manually."
+    warn "Docker daemon.json requires root to modify."
+    warn "Run with sudo or set {\"userland-proxy\": false} in ${conf} manually."
     return 1
   fi
 
   if [[ "$merge_tool" == "jq" && -s "$conf" ]]; then
     if jq -e '."userland-proxy" == false' "$conf" >/dev/null 2>&1; then
-      msg "[dns] Docker userland-proxy already disabled"
+      msg "Docker userland-proxy already disabled"
       return 0
     fi
     if ! jq empty "$conf" >/dev/null 2>&1; then
-      warn "[dns] ${conf} contains invalid JSON; fix the file manually before continuing."
+      warn "${conf} contains invalid JSON; fix the file manually before continuing."
       return 1
     fi
 
@@ -660,7 +660,7 @@ ensure_docker_userland_proxy_disabled() {
   backup="${conf}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
   if [[ -f "$conf" ]]; then
     if ! cp -p "$conf" "$backup"; then
-      warn "[dns] Failed to create backup at ${backup}"
+      warn "Failed to create backup at ${backup}"
       return 1
     fi
   else
@@ -669,7 +669,7 @@ ensure_docker_userland_proxy_disabled() {
 
   local tmp
   if ! tmp="$(arr_mktemp_file "${conf}.XXXXXX.tmp")"; then
-    warn "[dns] Failed to create temporary file for ${conf}"
+    warn "Failed to create temporary file for ${conf}"
     return 1
   fi
 
@@ -684,14 +684,14 @@ ensure_docker_userland_proxy_disabled() {
 
   if ((merge_status != 0)); then
     arr_cleanup_temp_path "$tmp"
-    warn "[dns] Failed to merge userland-proxy setting into ${conf}"
-    warn "[dns] Backup saved at ${backup}"
+    warn "Failed to merge userland-proxy setting into ${conf}"
+    warn "Backup saved at ${backup}"
     return 1
   fi
 
   if ! mv "$tmp" "$conf"; then
     arr_cleanup_temp_path "$tmp"
-    warn "[dns] Failed to replace ${conf}. Backup saved at ${backup}"
+    warn "Failed to replace ${conf}. Backup saved at ${backup}"
     return 1
   fi
   arr_unregister_temp_path "$tmp"
@@ -709,30 +709,30 @@ ensure_docker_userland_proxy_disabled() {
   if ((restart_allowed)); then
     if command -v systemctl >/dev/null 2>&1; then
       if ! systemctl restart docker >/dev/null 2>&1; then
-        warn "[dns] Failed to restart Docker; run 'sudo systemctl restart docker' manually."
-        warn "[dns] Rollback available at: ${backup}"
+        warn "Failed to restart Docker; run 'sudo systemctl restart docker' manually."
+        warn "Rollback available at: ${backup}"
         return 1
       fi
       if ! systemctl is-active --quiet docker; then
-        warn "[dns] Docker failed to report healthy after restart; inspect 'journalctl -xeu docker'."
+        warn "Docker failed to report healthy after restart; inspect 'journalctl -xeu docker'."
         return 1
       fi
-      msg "[dns] Docker daemon restarted to apply userland-proxy change"
+      msg "Docker daemon restarted to apply userland-proxy change"
     elif command -v service >/dev/null 2>&1; then
       if ! service docker restart >/dev/null 2>&1; then
-        warn "[dns] Failed to restart Docker; run 'sudo service docker restart' manually."
-        warn "[dns] Rollback available at: ${backup}"
+        warn "Failed to restart Docker; run 'sudo service docker restart' manually."
+        warn "Rollback available at: ${backup}"
         return 1
       fi
-      msg "[dns] Docker daemon restarted to apply userland-proxy change"
+      msg "Docker daemon restarted to apply userland-proxy change"
     else
-      warn "[dns] Docker restart command not found; restart the daemon manually to apply changes."
+      warn "Docker restart command not found; restart the daemon manually to apply changes."
     fi
   else
-    warn "[dns] Docker restart required to apply userland-proxy change. Re-run with --yes or ARR_HOST_RESTART_OK=1."
+    warn "Docker restart required to apply userland-proxy change. Re-run with --yes or ARR_HOST_RESTART_OK=1."
   fi
 
-  msg "[dns] Docker userland-proxy set to false"
+  msg "Docker userland-proxy set to false"
   return 0
 }
 
@@ -788,19 +788,19 @@ start_stack() {
     fi
 
     if [[ "${PF_ASYNC_ENABLE:-1}" == "1" && "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
-      msg "[pf] Launching asynchronous ProtonVPN port forwarding worker..."
+      msg "Launching asynchronous ProtonVPN port forwarding worker..."
       msg "  Strict mode (GLUETUN_PF_STRICT): ${GLUETUN_PF_STRICT:-0}"
       msg "  State file: ${pf_state_file}"
       msg "  Log file:   ${pf_log_file}"
       start_async_pf_if_enabled || {
         if [[ "${GLUETUN_PF_STRICT:-0}" == "1" ]]; then
-          warn "[pf] Worker exited non-zero (strict)."
+          warn "Worker exited non-zero (strict)."
         else
-          warn "[pf] Worker exited non-zero but GLUETUN_PF_STRICT=0 (continuing)."
+          warn "Worker exited non-zero but GLUETUN_PF_STRICT=0 (continuing)."
         fi
       }
     else
-      msg "[pf] Port forwarding worker skipped (PF_ASYNC_ENABLE=${PF_ASYNC_ENABLE:-1}, provider=${VPN_SERVICE_PROVIDER:-unknown}, forwarding=${VPN_PORT_FORWARDING:-off})."
+      msg "Port forwarding worker skipped (PF_ASYNC_ENABLE=${PF_ASYNC_ENABLE:-1}, provider=${VPN_SERVICE_PROVIDER:-unknown}, forwarding=${VPN_PORT_FORWARDING:-off})."
     fi
   fi
 

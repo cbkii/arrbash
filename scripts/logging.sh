@@ -65,14 +65,14 @@ arr_trace_start() {
       mask="${ARR_TRACE_MASK_RE}|${mask}"
     else
       local sed_status=$?
-      printf '%s WARN: ignoring invalid ARR_TRACE_MASK_RE (sed status %s): %s\n' "${STACK_LABEL:-[arr]}" "$sed_status" "${ARR_TRACE_MASK_RE}" >&2
+      warn "Ignoring invalid ARR_TRACE_MASK_RE (sed status ${sed_status}): ${ARR_TRACE_MASK_RE}"
     fi
   fi
 
   if [[ -n "$mask" ]]; then
     if ! printf '' | sed -E "s/${mask}//" >/dev/null; then
       local final_status=$?
-      printf '%s WARN: disabling trace masking due to invalid combined expression (sed status %s).\n' "${STACK_LABEL:-[arr]}" "$final_status" >&2
+      warn "Disabling trace masking due to invalid combined expression (sed status ${final_status})."
       mask=""
     fi
   fi

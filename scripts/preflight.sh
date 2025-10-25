@@ -342,15 +342,15 @@ force_kill_port_listeners() {
     case "$proc_name" in
       docker-proxy) ;;
       *)
-        warn "    [fix] Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
+        warn "    Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
         continue
         ;;
     esac
-    warn "    [fix] Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
+    warn "    Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
     if kill "$pid" 2>/dev/null; then
       any_action=1
     else
-      warn "    [fix] Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
+      warn "    Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
     fi
   done
   if ((any_action)); then
@@ -358,7 +358,7 @@ force_kill_port_listeners() {
     for pid in "${targets[@]}"; do
       [[ -z "$pid" ]] && continue
       if kill -0 "$pid" 2>/dev/null; then
-        warn "    [fix] PID ${pid} still running; sending SIGKILL."
+        warn "    PID ${pid} still running; sending SIGKILL."
         kill -9 "$pid" 2>/dev/null || true
       fi
     done
@@ -567,7 +567,7 @@ simple_port_check() {
     fi
 
     if [[ "$mode" == "fix" ]]; then
-      warn "    [fix] Automatic remediation was unable to clear all conflicting listeners."
+      warn "    Automatic remediation was unable to clear all conflicting listeners."
       warn "    Continuing despite port conflicts (ARR_PORT_CHECK_MODE=fix). Services may fail to bind."
       return 0
     fi
@@ -667,13 +667,13 @@ preflight() {
   install_missing
 
   if [[ "${PF_ASYNC_ENABLE:-1}" == "1" ]] && ! command -v jq >/dev/null 2>&1; then
-    warn "[pf] jq is not installed; async port forwarding state will be parsed without JSON tooling."
+    warn "jq is not installed; async ProtonVPN port forwarding state will be parsed without JSON tooling."
   fi
 
   if gluetun_version_requires_auth_config 2>/dev/null; then
     local auth_config_path="${ARR_DOCKER_DIR}/gluetun/auth/config.toml"
     if [[ -d "${ARR_DOCKER_DIR}/gluetun" && ! -f "$auth_config_path" ]]; then
-      warn "[pf] Gluetun control API requires role-based auth; the installer will create ${auth_config_path}."
+      warn "Gluetun control API requires role-based auth; the installer will create ${auth_config_path}."
     fi
   fi
 

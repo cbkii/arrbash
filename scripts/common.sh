@@ -99,6 +99,69 @@ arr_cleanup_temp_path() {
   rm -rf -- "$path" 2>/dev/null || true
 }
 
+# Derives runtime color output preference respecting NO_COLOR/force overrides
+arr_resolve_color_output() {
+  if [[ -n "${NO_COLOR:-}" ]]; then
+    ARR_COLOR_OUTPUT=0
+    return
+  fi
+
+  case "${FORCE_COLOR:-}" in
+    '' | 0 | false | FALSE | no | NO) ;;
+    *)
+      ARR_COLOR_OUTPUT=1
+      return
+      ;;
+  esac
+
+  case "${ARR_COLOR_OUTPUT:-1}" in
+    0 | false | FALSE | no | NO | off | OFF)
+      ARR_COLOR_OUTPUT=0
+      ;;
+    *)
+      ARR_COLOR_OUTPUT=1
+      ;;
+  esac
+}
+
+# Resolves whether colorized output should be emitted right now
+msg_color_supported() {
+  arr_resolve_color_output
+
+  if [[ "${ARR_COLOR_OUTPUT}" == 0 ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+# User-facing info message without additional styling
+msg() {
+  if msg_color_supported; then
+    printf '%b%s%b\n' "$BLUE" "$*" "$RESET"
+  else
+    printf '%s\n' "$*"
+  fi
+}
+
+# User-facing step banner with bold styling
+step() {
+  if msg_color_supported; then
+    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BLUE}${BOLD}" "$*" "$RESET"
+  else
+    printf '[STEP] %s\n' "$*"
+  fi
+}
+
+# User-facing warning message with optional color
+warn() {
+  if msg_color_supported; then
+    printf '%b[‽]  %s%b\n' "$YELLOW" "$*" "$RESET" >&2
+  else
+    printf '[WARN]  %s\n' "$*" >&2
+  fi
+}
+
 # Normalises mktemp templates so leading dashes are treated as literal paths
 arr_prepare_mktemp_template() {
   local template="$1"
@@ -152,7 +215,7 @@ if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
     # shellcheck source=scripts/yaml-emit.sh
     . "${YAML_EMIT_LIB}"
   else
-    printf '[arr] missing emission helper library: %s\n' "${YAML_EMIT_LIB}" >&2
+    warn "[ERROR] Missing emission helper library: ${YAML_EMIT_LIB}"
     exit 1
   fi
   unset _arr_common_dir
@@ -165,7 +228,7 @@ if [[ -z "${ARR_PORT_PROBE_LIB_SOURCED:-}" ]]; then
     # shellcheck source=scripts/port-probe.sh
     . "${PORT_PROBE_LIB}"
   else
-    printf '[arr] missing port probe helper: %s\n' "${PORT_PROBE_LIB}" >&2
+    warn "[ERROR] Missing port probe helper: ${PORT_PROBE_LIB}"
     exit 1
   fi
   unset _arr_port_lib_dir
@@ -183,33 +246,6 @@ ARR_DATA_ROOT="${ARR_DATA_ROOT%/}"
 
 # shellcheck disable=SC2034  # exported for other modules
 STACK_LABEL="[${STACK}]"
-
-# Derives runtime color output preference respecting NO_COLOR/force overrides
-arr_resolve_color_output() {
-  if [[ -n "${NO_COLOR:-}" ]]; then
-    ARR_COLOR_OUTPUT=0
-    return
-  fi
-
-  case "${FORCE_COLOR:-}" in
-    '' | 0 | false | FALSE | no | NO) ;;
-    *)
-      ARR_COLOR_OUTPUT=1
-      return
-      ;;
-  esac
-
-  case "${ARR_COLOR_OUTPUT:-1}" in
-    0 | false | FALSE | no | NO | off | OFF)
-      ARR_COLOR_OUTPUT=0
-      ;;
-    *)
-      ARR_COLOR_OUTPUT=1
-      ;;
-  esac
-}
-
-arr_resolve_color_output
 
 # Determines if a shell variable is readonly to avoid clobbering host overrides
 arr_var_is_readonly() {
@@ -1170,6 +1206,7 @@ arr_escalate_privileges() {
   fi
 
   _script_path="${0:-}"
+  local script_label
   if [ -n "${_script_path}" ] && [ "${_script_path#./}" = "${_script_path}" ] && [ "${_script_path#/}" = "${_script_path}" ]; then
     if command -v realpath >/dev/null 2>&1; then
       _script_path="$(realpath "${_script_path}" 2>/dev/null || printf '%s' "${_script_path}")"
@@ -1186,7 +1223,8 @@ arr_escalate_privileges() {
       unset ARR_ESCALATED
       return 0
     else
-      printf '[%s] escalating privileges with sudo; you may be prompted for your password…\n' "$(basename "${_script_path}")" >&2
+      script_label="$(basename "${_script_path}")"
+      msg "${script_label} escalating privileges with sudo; you may be prompted for your password…"
       export ARR_ESCALATED=1
       # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
@@ -1196,7 +1234,8 @@ arr_escalate_privileges() {
   fi
 
   if command -v pkexec >/dev/null 2>&1; then
-    printf '[%s] escalating privileges with pkexec; you may be prompted for authentication…\n' "$(basename "${_script_path}")" >&2
+    script_label="$(basename "${_script_path}")"
+    msg "${script_label} escalating privileges with pkexec; you may be prompted for authentication…"
     if command -v bash >/dev/null 2>&1; then
       export ARR_ESCALATED=1
       # shellcheck disable=SC2093
@@ -1212,7 +1251,8 @@ arr_escalate_privileges() {
   fi
 
   if command -v su >/dev/null 2>&1; then
-    printf '[%s] escalating privileges with su; you may be prompted for the root password…\n' "$(basename "${_script_path}")" >&2
+    script_label="$(basename "${_script_path}")"
+    msg "${script_label} escalating privileges with su; you may be prompted for the root password…"
 
     _cmd=""
     local _cmd_source=""
@@ -1236,7 +1276,8 @@ arr_escalate_privileges() {
     return 0
   fi
 
-  printf '[%s] ERROR: root privileges are required. Install sudo, pkexec (polkit) or su, or run this script as root.\n' "$(basename "${_script_path}")" >&2
+  script_label="$(basename "${_script_path}")"
+  warn "[ERROR] ${script_label} requires root privileges. Install sudo, pkexec (polkit) or su, or run this script as root."
   return 2
 }
 
@@ -1419,17 +1460,6 @@ arr_read_run_failure_code() {
   printf '%s\n' "$code"
 }
 
-# Resolves whether colorized output should be emitted right now
-msg_color_supported() {
-  arr_resolve_color_output
-
-  if [[ "${ARR_COLOR_OUTPUT}" == 0 ]]; then
-    return 1
-  fi
-
-  return 0
-}
-
 # Timezone helpers (prefer local TZ from configuration, fall back to UTC)
 ARR_TIMEZONE_WARNING_EMITTED="${ARR_TIMEZONE_WARNING_EMITTED:-}"
 ARR_TIMEZONE_RESOLVED="${ARR_TIMEZONE_RESOLVED:-}"
@@ -1446,11 +1476,7 @@ _arr_timezone_warn_once() {
     return 0
   fi
   ARR_TIMEZONE_WARNING_EMITTED=1
-  if declare -f warn >/dev/null 2>&1; then
-    warn "$message"
-  else
-    printf '[WARN]  %s\n' "$message" >&2
-  fi
+  warn "$message"
   return 0
 }
 
@@ -1529,33 +1555,6 @@ log_warn() {
 # Emits timestamped error log to stderr
 log_error() {
   printf '[%s] ERROR: %s\n' "$(arr_timestamp)" "$*" >&2
-}
-
-# User-facing info message without additional styling
-msg() {
-  if msg_color_supported; then
-    printf '%b%s%b\n' "$BLUE" "$*" "$RESET"
-  else
-    printf '%s\n' "$*"
-  fi
-}
-
-# User-facing step banner with bold styling
-step() {
-  if msg_color_supported; then
-    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BLUE}${BOLD}" "$*" "$RESET"
-  else
-    printf '[STEP] %s\n' "$*"
-  fi
-}
-
-# User-facing warning message with optional color
-warn() {
-  if msg_color_supported; then
-    printf '%b[‽]  %s%b\n' "$YELLOW" "$*" "$RESET" >&2
-  else
-    printf '[WARN]  %s\n' "$*" >&2
-  fi
 }
 
 # Logs error then exits non-zero to halt the caller
@@ -2516,7 +2515,7 @@ arr_verify_compose_placeholders() {
     if [[ ${!_arr_name+x} ]]; then
       continue
     fi
-    printf "[placeholders] Unexpected placeholder \${%s} in %s\n" "$_arr_name" "$compose_file" >&2
+    warn "Unexpected placeholder \\${${_arr_name}} in ${compose_file}"
     local _arr_display=""
     printf -v _arr_display "\${%s}" "$_arr_name"
     _arr_missing+=("${_arr_display}")

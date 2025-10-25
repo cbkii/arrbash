@@ -28,15 +28,15 @@ vpn_auto_reconnect_apply_jitter_delay() {
 # Issues OpenVPN cycle via Gluetun control API and records result
 vpn_auto_reconnect_restart_gluetun() {
   if ! command -v docker >/dev/null 2>&1; then
-    log_warn "[vpn-auto] docker command missing; cannot restart Gluetun"
+    log_warn "VPN auto cannot restart Gluetun: docker command missing"
     return 1
   fi
   if ! docker inspect gluetun >/dev/null 2>&1; then
-    log_warn "[vpn-auto] Gluetun container not found"
+    log_warn "VPN auto cannot restart Gluetun: container not found"
     return 1
   fi
   if ! docker restart gluetun >/dev/null 2>&1; then
-    log_warn "[vpn-auto] Failed to restart Gluetun"
+    log_warn "VPN auto failed to restart Gluetun"
     return 1
   fi
   return 0
@@ -56,7 +56,7 @@ vpn_auto_reconnect_wait_for_health() {
     url="http://${host}:${port}/v1/openvpn/status"
   fi
   if ! command -v docker >/dev/null 2>&1; then
-    log_warn "[vpn-auto] docker command missing; cannot confirm Gluetun health"
+    log_warn "VPN auto cannot confirm Gluetun health: docker command missing"
     return 1
   fi
 
@@ -70,7 +70,7 @@ vpn_auto_reconnect_wait_for_health() {
   else
     curl_available=0
     if [[ "${VPN_AUTO_RECONNECT_CURL_WARNED:-0}" -eq 0 ]]; then
-      log_warn "[vpn-auto] curl not available; skipping Gluetun API verification"
+      log_warn "VPN auto skipping Gluetun API verification: curl not available"
       VPN_AUTO_RECONNECT_CURL_WARNED=1
     fi
   fi
@@ -89,7 +89,7 @@ vpn_auto_reconnect_wait_for_health() {
     sleep "$interval"
     elapsed=$((elapsed + interval))
   done
-  log_warn "[vpn-auto] VPN health endpoint did not respond within ${timeout}s"
+  log_warn "VPN auto health endpoint did not respond within ${timeout}s"
   return 1
 }
 
