@@ -158,6 +158,19 @@ if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   unset _arr_common_dir
 fi
 
+if [[ -z "${ARR_PORT_PROBE_LIB_SOURCED:-}" ]]; then
+  _arr_port_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  PORT_PROBE_LIB="${PORT_PROBE_LIB:-${_arr_port_lib_dir}/port-probe.sh}"
+  if [[ -f "${PORT_PROBE_LIB}" ]]; then
+    # shellcheck source=scripts/port-probe.sh
+    . "${PORT_PROBE_LIB}"
+  else
+    printf '[arr] missing port probe helper: %s\n' "${PORT_PROBE_LIB}" >&2
+    exit 1
+  fi
+  unset _arr_port_lib_dir
+fi
+
 if [[ -z "${ARR_DATA_ROOT:-}" ]]; then
   if [[ -n "${HOME:-}" ]]; then
     ARR_DATA_ROOT="${HOME%/}/srv"
@@ -1225,80 +1238,6 @@ arr_escalate_privileges() {
 
   printf '[%s] ERROR: root privileges are required. Install sudo, pkexec (polkit) or su, or run this script as root.\n' "$(basename "${_script_path}")" >&2
   return 2
-}
-
-# Checks if tcp/udp port has listeners using ss, returning 2 when ss unavailable
-ss_port_bound() {
-  local proto="$1"
-  local port="$2"
-
-  if ! have_command ss; then
-    return 2
-  fi
-
-  local flag
-  case "$proto" in
-    udp)
-      flag="u"
-      ;;
-    tcp)
-      flag="t"
-      ;;
-    *)
-      return 2
-      ;;
-  esac
-
-  if ss -H -ln${flag} "sport = :${port}" 2>/dev/null | awk 'NR>0 {exit 0} END {exit 1}'; then
-    return 0
-  fi
-
-  return 1
-}
-
-# Checks port occupancy using lsof as a fallback when ss is unavailable
-lsof_port_bound() {
-  local proto="$1"
-  local port="$2"
-
-  if ! have_command lsof; then
-    return 2
-  fi
-
-  local spec
-  case "$proto" in
-    udp)
-      spec=(-iUDP:"${port}")
-      ;;
-    tcp)
-      spec=(-iTCP:"${port}" -sTCP:LISTEN)
-      ;;
-    *)
-      return 2
-      ;;
-  esac
-
-  if lsof -nP "${spec[@]}" 2>/dev/null | awk 'NR>0 {exit 0} END {exit 1}'; then
-    return 0
-  fi
-
-  return 1
-}
-
-# Answers whether any supported tool detects the port as bound
-port_bound_any() {
-  local proto="$1"
-  local port="$2"
-
-  if ss_port_bound "$proto" "$port"; then
-    return 0
-  fi
-
-  if lsof_port_bound "$proto" "$port"; then
-    return 0
-  fi
-
-  return 1
 }
 
 # Normalizes bind targets to comparable forms (handles IPv6-v4 mapped addresses)

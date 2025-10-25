@@ -25,117 +25,6 @@ if [[ -f "${ARR_USERCONF_PATH}" ]]; then
   . "${ARR_USERCONF_PATH}"
 fi
 
-# Uses ss to determine if a port is bound at a conflicting address
-port_in_use_with_ss() {
-  local proto="$1"
-  local bind_ip="$2"
-  local port="$3"
-
-  local flag="t"
-  if [[ "$proto" == "udp" ]]; then
-    flag="u"
-  fi
-
-  local output
-  output="$(ss -H -ln${flag} "sport = :${port}" 2>/dev/null || true)"
-  if [[ -z "$output" ]]; then
-    return 1
-  fi
-
-  local line
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    local addr_field
-    addr_field="$(awk '{print $5}' <<<"$line")"
-    if [[ -z "$addr_field" ]]; then
-      addr_field="$(awk '{print $4}' <<<"$line")"
-    fi
-    [[ -z "$addr_field" ]] && continue
-    local host="${addr_field%:*}"
-    local port_field="${addr_field##*:}"
-    host="${host%%%*}"
-    if [[ "$port_field" != "$port" ]]; then
-      continue
-    fi
-    if address_conflicts "$bind_ip" "$host"; then
-      return 0
-    fi
-  done <<<"$output"
-
-  return 1
-}
-
-# Uses lsof to detect port conflicts when ss is unavailable
-port_in_use_with_lsof() {
-  local proto="$1"
-  local bind_ip="$2"
-  local port="$3"
-
-  local -a cmd=(lsof -nP)
-  if [[ "$proto" == "udp" ]]; then
-    cmd+=(-iUDP:"${port}")
-  else
-    cmd+=(-iTCP:"${port}" -sTCP:LISTEN)
-  fi
-
-  local output
-  output="$("${cmd[@]}" 2>/dev/null || true)"
-  if [[ -z "$output" ]]; then
-    return 1
-  fi
-
-  local line
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    [[ "$line" =~ ^COMMAND ]] && continue
-    local name
-    name="$(awk '{print $9}' <<<"$line" 2>/dev/null || true)"
-    [[ -z "$name" ]] && continue
-    name="${name%%->*}"
-    name="${name% (LISTEN)}"
-    local host="${name%:*}"
-    local port_field="${name##*:}"
-    port_field="${port_field%%[^0-9]*}"
-    host="${host##*@}"
-    if [[ "$port_field" != "$port" ]]; then
-      continue
-    fi
-    if address_conflicts "$bind_ip" "$host"; then
-      return 0
-    fi
-  done <<<"$output"
-
-  return 1
-}
-
-PORT_TOOL=""
-if have_command ss; then
-  PORT_TOOL="ss"
-elif have_command lsof; then
-  PORT_TOOL="lsof"
-fi
-
-# Chooses the best available port checker for the current host
-port_in_use() {
-  local proto="$1"
-  local bind_ip="$2"
-  local port="$3"
-
-  case "$PORT_TOOL" in
-    ss)
-      port_in_use_with_ss "$proto" "$bind_ip" "$port"
-      return $?
-      ;;
-    lsof)
-      port_in_use_with_lsof "$proto" "$bind_ip" "$port"
-      return $?
-      ;;
-    *)
-      return 2
-      ;;
-  esac
-}
-
 doctor_ok() {
   printf '[doctor][ok] %s\n' "$*"
 }
@@ -159,16 +48,31 @@ report_port() {
   local bind_ip="$3"
   local port="$4"
 
-  if [[ -z "$PORT_TOOL" ]]; then
-    printf '[doctor][warn] Cannot check %s (%s %s:%s): missing \"ss\"/\"lsof\".\n' "$label" "${proto^^}" "$bind_ip" "$port"
-    return
+  local details=""
+  local rc
+  if arr_port_probe_conflicts "$proto" "$port" details "$bind_ip"; then
+    rc=0
+  else
+    rc=$?
   fi
 
-  if port_in_use "$proto" "$bind_ip" "$port"; then
-    printf '[doctor][warn] %s port %s/%s is already in use on %s.\n' "$label" "$port" "${proto^^}" "$bind_ip"
-  else
-    printf '[doctor][ok] %s port %s/%s is free on %s.\n' "$label" "$port" "${proto^^}" "$bind_ip"
-  fi
+  case "$rc" in
+    0)
+      printf '[doctor][warn] %s port %s/%s is already in use on %s.\n' "$label" "$port" "${proto^^}" "$bind_ip"
+      if [[ -n "$details" ]]; then
+        while IFS= read -r entry; do
+          [[ -z "$entry" ]] && continue
+          printf '[doctor][warn]   Listener: %s\n' "$entry"
+        done <<<"$(printf '%s\n' "$details" | head -n 3)"
+      fi
+      ;;
+    1)
+      printf '[doctor][ok] %s port %s/%s is free on %s.\n' "$label" "$port" "${proto^^}" "$bind_ip"
+      ;;
+    2)
+      printf '[doctor][warn] Cannot check %s (%s %s:%s): missing port inspection tooling.\n' "$label" "${proto^^}" "$bind_ip" "$port"
+      ;;
+  esac
 }
 
 # Lists normalized bind addresses for a port using ss or lsof output

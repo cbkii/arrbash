@@ -172,109 +172,6 @@ detect_internal_port_conflicts() {
   done
 }
 
-# Checks port availability and returns raw listener details for diagnostics
-port_in_use_with_details() {
-  local proto="$1"
-  local port="$2"
-  local _details_name="$3"
-  local expected_addr="${4:-*}"
-  # shellcheck disable=SC2178
-  local -n _details_ref="$_details_name"
-
-  _details_ref=""
-
-  local tool=""
-  if command -v ss >/dev/null 2>&1; then
-    tool="ss"
-  elif command -v lsof >/dev/null 2>&1; then
-    tool="lsof"
-  elif command -v netstat >/dev/null 2>&1; then
-    tool="netstat"
-  else
-    return 2
-  fi
-
-  local -a lines=()
-  case "$tool" in
-    ss)
-      local -a args=()
-      case "$proto" in
-        tcp) args=(-H -ltnp) ;;
-        udp) args=(-H -lunp) ;;
-        *) return 1 ;;
-      esac
-      mapfile -t lines < <(ss "${args[@]}" "sport = :${port}" 2>/dev/null || true)
-      ;;
-    lsof)
-      local -a cmd=(lsof -nP)
-      case "$proto" in
-        tcp) cmd+=(-iTCP:"$port" -sTCP:LISTEN) ;;
-        udp) cmd+=(-iUDP:"$port") ;;
-        *) return 1 ;;
-      esac
-      mapfile -t lines < <("${cmd[@]}" 2>/dev/null || true)
-      ;;
-    netstat)
-      mapfile -t lines < <(netstat -tunlp 2>/dev/null \
-        | awk -v port="$port" 'NR > 2 { split($4, parts, ":"); candidate = parts[length(parts)]; if (candidate == port) { print $0 } }' \
-        || true)
-      ;;
-  esac
-
-  if ((${#lines[@]} == 0)); then
-    return 1
-  fi
-
-  local conflict=0
-  local line=""
-  local host=""
-  local normalized=""
-  local -a conflict_lines=()
-
-  for line in "${lines[@]}"; do
-    [[ -z "$line" ]] && continue
-
-    case "$tool" in
-      ss)
-        local addr_field
-        addr_field="$(awk '{print $5}' <<<"$line" 2>/dev/null || true)"
-        if [[ -z "$addr_field" ]]; then
-          addr_field="$(awk '{print $4}' <<<"$line" 2>/dev/null || true)"
-        fi
-        [[ -z "$addr_field" ]] && continue
-        host="${addr_field%:*}"
-        ;;
-      lsof)
-        [[ "$line" =~ ^COMMAND[[:space:]] ]] && continue
-        local name_field
-        name_field="$(awk '{print $9}' <<<"$line" 2>/dev/null || true)"
-        [[ -z "$name_field" ]] && continue
-        name_field="${name_field%%->*}"
-        host="${name_field%:*}"
-        ;;
-      netstat)
-        local addr_field
-        addr_field="$(awk '{print $4}' <<<"$line" 2>/dev/null || true)"
-        [[ -z "$addr_field" ]] && continue
-        host="${addr_field%:*}"
-        ;;
-    esac
-
-    normalized="$(normalize_bind_address "$host")"
-    if address_conflicts "$expected_addr" "$normalized"; then
-      conflict=1
-      conflict_lines+=("$line")
-    fi
-  done
-
-  if ((conflict)); then
-    _details_ref="$(printf '%s\n' "${conflict_lines[@]}")"
-    return 0
-  fi
-
-  return 1
-}
-
 # Provides actionable suggestions when required ports are already bound
 port_conflict_guidance() {
   warn "    Resolve the conflicts by stopping or reconfiguring the services listed above."
@@ -527,6 +424,7 @@ simple_port_check() {
   ARR_INTERNAL_PORT_CONFLICT_DETAIL=""
 
   while :; do
+    arr_port_probe_invalidate
     local -a requirements=()
     collect_port_requirements requirements
 
@@ -579,8 +477,9 @@ simple_port_check() {
     for requirement in "${requirements[@]}"; do
       IFS='|' read -r proto port label expected <<<"$requirement"
       local details=""
-      rc=0
-      if ! port_in_use_with_details "$proto" "$port" details "$expected"; then
+      if arr_port_probe_conflicts "$proto" "$port" details "$expected"; then
+        rc=0
+      else
         rc=$?
       fi
 
