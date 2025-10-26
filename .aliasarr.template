@@ -271,6 +271,99 @@ fi
 
 _arr_compose() { (cd "$ARR_STACK_DIR" && docker compose "$@" ); }
 
+_arr_compose_services_cache=""
+_arr_compose_services_cache_rc=0
+_arr_compose_services_cache_init=""
+
+_arr_compose_services() {
+  if [ -z "${_arr_compose_services_cache_init}" ]; then
+    if _arr_compose_services_cache="$(_arr_compose config --services 2>/dev/null)"; then
+      _arr_compose_services_cache_rc=0
+    else
+      _arr_compose_services_cache_rc=$?
+      _arr_compose_services_cache=""
+    fi
+    _arr_compose_services_cache_init=1
+  fi
+  printf '%s\n' "${_arr_compose_services_cache}"
+}
+
+_arr_service_defined() {
+  local svc="$1"
+  if [ -z "$svc" ]; then
+    return 1
+  fi
+
+  local services
+  services="$(_arr_compose_services)"
+  if [ -n "$services" ]; then
+    printf '%s\n' "$services" | grep -Fxq "$svc"
+    return $?
+  fi
+
+  local fallback
+  for fallback in "${_arr_services[@]}"; do
+    if [ "$fallback" = "$svc" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+_arr_wait_for_container_health() {
+  local container="$1"
+  local timeout="${2:-150}"
+  local interval="${3:-5}"
+  local waited=0
+
+  if [ -z "$container" ]; then
+    return 1
+  fi
+
+  while [ "$waited" -lt "$timeout" ]; do
+    local status
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || printf '')"
+
+    case "$status" in
+      healthy|running)
+        return 0
+        ;;
+      unhealthy|exited|dead)
+        printf 'arr: %s reported status %s while waiting for health.\n' "$container" "$status" >&2
+        return 1
+        ;;
+    esac
+
+    sleep "$interval"
+    waited=$((waited + interval))
+  done
+
+  printf 'arr: timeout while waiting for %s to become healthy.\n' "$container" >&2
+  return 1
+}
+
+_arr_stack_restart_services() {
+  local -a order=()
+  local enable_local_dns="${ENABLE_LOCAL_DNS:-$(_arr_env_get ENABLE_LOCAL_DNS)}"
+  local local_dns_state="$(_arr_env_get LOCAL_DNS_STATE)"
+
+  if [ "$local_dns_state" = "active" ] || _arr_bool "$enable_local_dns"; then
+    order+=(local_dns)
+  fi
+
+  if [ "$(_arr_enable_caddy)" = "1" ]; then
+    order+=(caddy)
+  fi
+
+  order+=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
+
+  if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
+    order+=(sabnzbd)
+  fi
+
+  printf '%s\n' "${order[@]}"
+}
+
 _arr_is_tty() { [ -t 1 ]; }
 
 _arr_host() {
@@ -701,6 +794,69 @@ arr.compose() { _arr_compose "$@"; }
 arr.up() { _arr_compose up -d "$@"; }
 arr.down() { _arr_compose down "$@"; }
 arr.restart() { if [ $# -eq 0 ]; then _arr_compose restart "${_arr_services[@]}"; else _arr_compose restart "$@"; fi }
+arr.restart.stack() {
+  printf '==> Stopping stack containers\n'
+  if ! _arr_compose stop >/dev/null 2>&1; then
+    printf 'arr: docker compose stop failed; continuing with restart.\n' >&2
+  fi
+
+  if ! _arr_compose down --remove-orphans >/dev/null 2>&1; then
+    printf 'arr: docker compose down failed; attempting restart anyway.\n' >&2
+  fi
+
+  if _arr_service_defined gluetun; then
+    printf '==> Starting gluetun (VPN)\n'
+    if ! _arr_compose up -d gluetun >/dev/null 2>&1; then
+      printf 'arr: failed to start gluetun; aborting restart.\n' >&2
+      return 1
+    fi
+
+    if ! _arr_wait_for_container_health gluetun 150 5; then
+      printf 'arr: gluetun did not become ready; aborting restart.\n' >&2
+      return 1
+    fi
+  else
+    printf 'arr: gluetun service not defined in compose configuration; skipping VPN warm-up.\n' >&2
+  fi
+
+  local -a desired=()
+  while IFS= read -r svc; do
+    [ -n "$svc" ] || continue
+    if _arr_service_defined "$svc"; then
+      desired+=("$svc")
+    fi
+  done < <(_arr_stack_restart_services)
+
+  local svc
+  for svc in "${desired[@]}"; do
+    printf '==> Starting %s\n' "$svc"
+    if ! _arr_compose up -d "$svc" >/dev/null 2>&1; then
+      printf 'arr: failed to start %s; check docker compose logs.\n' "$svc" >&2
+      continue
+    fi
+    sleep 3
+  done
+
+  sleep 5
+
+  local -a created=()
+  for svc in "${desired[@]}"; do
+    local status
+    status="$(docker inspect --format '{{.State.Status}}' "$svc" 2>/dev/null || printf '')"
+    if [ "$status" = "created" ]; then
+      created+=("$svc")
+    fi
+  done
+
+  if [ ${#created[@]} -gt 0 ]; then
+    printf 'arr: forcing start for services stuck in created state: %s\n' "${created[*]}" >&2
+    for svc in "${created[@]}"; do
+      docker start "$svc" >/dev/null 2>&1 || true
+    done
+  fi
+
+  printf '==> Stack restart sequence complete. Containers may need additional time to pass health checks.\n'
+}
 arr.pull() { _arr_compose pull "$@"; }
 arr.logs() {
   local -a tail_args=()
@@ -896,6 +1052,7 @@ Core stack management:
   arr.up [services...]         Start the stack (defaults to core services) in detached mode
   arr.down [services...]       Stop services
   arr.restart [services...]    Restart one or more services (defaults to the core set)
+  arr.restart.stack            Fully recycle the stack with ordered restart sequencing
   arr.pull [services...]       Pull updated container images
   arr.logs [N] [services...]   Follow compose logs (prefix with a number to set --tail)
   arr.ps                       Show container status via docker compose
