@@ -84,7 +84,7 @@ compose_emit_gluetun_environment() {
   arr_yaml_kv "      " "VPN_PORT_FORWARDING" "on" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_PROVIDER" "protonvpn" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_STATUS_FILE" "${GLUETUN_RUNTIME_FORWARD_STATUS_FILE}" >>"$dest"
-  arr_yaml_kv "      " "HTTP_CONTROL_SERVER_ADDRESS" "127.0.0.1:${placeholder_control_port}" >>"$dest"
+  arr_yaml_kv "      " "HTTP_CONTROL_SERVER_ADDRESS" ":${placeholder_control_port}" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_AUTH" "apikey" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_APIKEY" "${placeholder_api_key}" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_UP_COMMAND" "/gluetun/hooks/update-qbt-port.sh {{PORTS}}" >>"$dest"
