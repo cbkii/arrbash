@@ -58,7 +58,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
    * `scripts/gen-env.sh`:
 
     * Sources defaults then user overrides (arr.sh applies CLI/environment overrides before invoking the generator).
-    * Applies **derived logic** (internal→external port fallbacks, ProtonVPN port-forward defaults, boolean normalisation).
+   * Applies **derived logic** (internal→external port fallbacks, ProtonVPN port-forward defaults, boolean normalisation).
      * Processes conditional blocks: keeps content between `# @if VAR` … `# @endif` only when `VAR` is “truthy” (`1/true/yes/on`, case-insensitive).
      * Runs `envsubst` **scoped** to placeholders actually used in the filtered template.
      * Writes to `${ARR_ENV_FILE}` (default `${ARR_STACK_DIR}/.env`) with mode `0600`.
