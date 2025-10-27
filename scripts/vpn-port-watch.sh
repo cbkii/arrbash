@@ -115,7 +115,8 @@ pm_http_post_capture() {
 
   pm_headers_tmp=""
   if [ "$#" -gt 0 ]; then
-    pm_headers_tmp="$(mktemp "${TMPDIR:-/tmp}/pm-headers.XXXXXX" 2>/dev/null || mktemp /tmp/pm-headers.XXXXXX)"
+    pm_headers_template="pm-headers.XXXXXX"
+    pm_headers_tmp="$(mktemp "${TMPDIR:-/tmp}/$pm_headers_template" 2>/dev/null || mktemp /tmp/$pm_headers_template)"
     if [ -z "$pm_headers_tmp" ] || [ ! -w "$pm_headers_tmp" ]; then
       pm_log error "unable to create temporary header file"
       return 1
