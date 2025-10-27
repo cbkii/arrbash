@@ -183,24 +183,6 @@ apply_env_overrides() {
   if value="$(get_env_kv "LAN_IP" "$file" 2>/dev/null || true)" && [[ -n "$value" ]]; then
     LAN_IP="$value"
   fi
-  if value="$(get_env_kv "LAN_DOMAIN_SUFFIX" "$file" 2>/dev/null || true)" && [[ -n "$value" ]]; then
-    LAN_DOMAIN_SUFFIX="$value"
-  fi
-  if value="$(get_env_kv "ENABLE_LOCAL_DNS" "$file" 2>/dev/null || true)" && [[ -n "$value" ]]; then
-    ENABLE_LOCAL_DNS="$value"
-  fi
-  if value="$(get_env_kv "DNS_DISTRIBUTION_MODE" "$file" 2>/dev/null || true)" && [[ -n "$value" ]]; then
-    DNS_DISTRIBUTION_MODE="$value"
-  fi
-  if value="$(get_env_kv "UPSTREAM_DNS_SERVERS" "$file" 2>/dev/null || true)" && [[ -n "$value" ]]; then
-    UPSTREAM_DNS_SERVERS="$value"
-  fi
-  if value="$(get_env_kv "UPSTREAM_DNS_1" "$file" 2>/dev/null || true)" && [[ -n "$value" ]]; then
-    UPSTREAM_DNS_1="$value"
-  fi
-  if value="$(get_env_kv "UPSTREAM_DNS_2" "$file" 2>/dev/null || true)" && [[ -n "$value" ]]; then
-    UPSTREAM_DNS_2="$value"
-  fi
 }
 
 collect_env_candidates() {
@@ -251,12 +233,6 @@ STACK="${STACK:-arr}"
 STACK_LABEL="[${STACK}]"
 
 LAN_IP="${LAN_IP:-}"
-LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX:-}"
-ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS:-}"
-DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-}"
-UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS:-}"
-UPSTREAM_DNS_1="${UPSTREAM_DNS_1:-}"
-UPSTREAM_DNS_2="${UPSTREAM_DNS_2:-}"
 
 is_protected_removal_path() {
   local path="$1"
@@ -700,12 +676,6 @@ needs_dns_rollback() {
   return 1
 }
 
-CADDY_CA_TARGETS=()
-if [[ -n "$STACK" ]]; then
-  CADDY_CA_TARGETS+=("/usr/local/share/ca-certificates/${STACK}-caddy-ca.crt")
-  CADDY_CA_TARGETS+=("/usr/local/share/ca-certificates/${STACK}-caddy-ca.pem")
-fi
-
 step "Detected installation state"
 msg "  Stack name: ${STACK}"
 msg "  Stack directory: ${ARR_STACK_DIR:-<unknown>}"
@@ -985,45 +955,6 @@ if [[ -n "${ALIAS_HELPER_PATH}" && -n "${PRIMARY_HOME}" ]]; then
   fi
   if [[ "$removed_any" != 1 ]]; then
     msg "  No ARR alias blocks found in shell rc files."
-  fi
-fi
-
-remove_caddy_ca() {
-  local target="$1"
-  [[ -f "$target" ]] || return 1
-  if [[ $EUID -eq 0 ]]; then
-    rm -f -- "$target"
-    return $?
-  fi
-  if command -v sudo >/dev/null 2>&1; then
-    sudo rm -f -- "$target"
-    return $?
-  fi
-  warn "Run manually to remove ${target} (requires root)."
-  return 1
-}
-
-ca_removed=0
-for target in "${CADDY_CA_TARGETS[@]}"; do
-  if [[ -f "$target" ]]; then
-    if remove_caddy_ca "$target"; then
-      msg "Removed Caddy CA certificate at ${target}"
-      ca_removed=1
-    fi
-  fi
-done
-
-if ((ca_removed)); then
-  if command -v update-ca-certificates >/dev/null 2>&1; then
-    if [[ $EUID -eq 0 ]]; then
-      update-ca-certificates >/dev/null 2>&1 || warn "update-ca-certificates failed"
-    elif command -v sudo >/dev/null 2>&1; then
-      sudo update-ca-certificates >/dev/null 2>&1 || warn "update-ca-certificates via sudo failed"
-    else
-      warn "Run update-ca-certificates manually to refresh trust store."
-    fi
-  else
-    warn "update-ca-certificates not found; refresh your system trust store manually."
   fi
 fi
 

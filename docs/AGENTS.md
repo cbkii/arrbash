@@ -14,7 +14,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
 ## Repository Overview
 
-* **Entry script:** `arr.sh` — orchestrates setup on Debian hosts, handles flags like `--yes`, `--rotate-caddy-auth`, `--setup-host-dns`, etc.
+* **Entry script:** `arr.sh` — orchestrates setup on Debian hosts, handles flags like `--yes`, `--rotate-api-key`, `--split`, etc.
 * **Config directory:** `arrconf/` — user and defaults config; **this is the canonical source of config variables**.
 * **Env generation (NEW):**
 
@@ -35,7 +35,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
 * **User config (canonical):** `arrconf/userr.conf.defaults.sh` → `${ARRCONF_DIR}/userr.conf` (**double r**).
 * **Scripts / helpers:** file names kebab-case; shared helpers prefixed `arr_` when appropriate.
-* **Variables:** uppercase `SNAKE_CASE` with service/area prefixes (`ARR_`, `GLUETUN_`, `QBT_`, `CADDY_`, `PROWLARR_`, etc.).
+* **Variables:** uppercase `SNAKE_CASE` with service/area prefixes (`ARR_`, `GLUETUN_`, `QBT_`, `PROWLARR_`, etc.).
 * **Compose/env artefacts:**
 
   * `.env.template` (**tracked; hand-edited**)
@@ -58,7 +58,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
    * `scripts/gen-env.sh`:
 
     * Sources defaults then user overrides (arr.sh applies CLI/environment overrides before invoking the generator).
-     * Applies **derived logic** (internal→external port fallbacks, Caddy defaults, DNS upstream defaults, PF/ProtonVPN toggles, boolean normalisation).
+   * Applies **derived logic** (internal→external port fallbacks, ProtonVPN port-forward defaults, boolean normalisation).
      * Processes conditional blocks: keeps content between `# @if VAR` … `# @endif` only when `VAR` is “truthy” (`1/true/yes/on`, case-insensitive).
      * Runs `envsubst` **scoped** to placeholders actually used in the filtered template.
      * Writes to `${ARR_ENV_FILE}` (default `${ARR_STACK_DIR}/.env`) with mode `0600`.
@@ -111,7 +111,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
   * Values are produced via `envsubst`; source variables must be set before substitution. Do not add quotes around values in `userr.conf`—Compose reads `.env` values literally, so quotes become part of the value. Spaces and `#` are allowed in values; just ensure there’s no trailing comment after the value in the template.
   * Optional blocks rely on `# @if VAR` guards so feature-scoped variables disappear entirely when falsey.
 * **YAML emission:** keep YAML-escape logic (double-quoted scalars; escape `\` → `\\`, `"` → `\"`, newlines → `\n`). Prefer list-form commands/healthchecks.
-  * Feature-gated sections (Caddy, SABnzbd, Configarr, VPN helpers, etc.) must drop their services and dependent variables whenever the controlling flag is disabled.
+  * Feature-gated sections (SABnzbd, Configarr, VPN helpers, etc.) must drop their services and dependent variables whenever the controlling flag is disabled.
 * **Double-expansion guard:** after writing YAML, ensure unresolved placeholders are only those intended for Compose interpolation (allow-list common runtime names).
 
 ---
@@ -122,14 +122,13 @@ Include placeholders for **all** user-settable variables found in `arrconf/userr
 
 * **Core/paths & identity:** `STACK`, `ARR_STACK_DIR`, `ARRCONF_DIR`, `ARR_DATA_ROOT`, `PUID`, `PGID`, `TIMEZONE`
 * **Media & downloads:** `MEDIA_DIR`, `TV_DIR`, `MOVIES_DIR`, `SUBS_DIR`, `DOWNLOADS_DIR`, `COMPLETED_DIR`
-* **DNS & LAN:** `LAN_IP`, `LOCALHOST_IP`, `LAN_DOMAIN_SUFFIX`, `ENABLE_LOCAL_DNS`, `UPSTREAM_DNS_SERVERS`, `UPSTREAM_DNS_1`, `UPSTREAM_DNS_2`, `DNS_DISTRIBUTION_MODE`
+* **LAN & loopback:** `LAN_IP`, `LOCALHOST_IP`
 * **VPN/Proton/Gluetun & PF tuning:** `SERVER_COUNTRIES`, `PVPN_ROTATE_COUNTRIES`, `GLUETUN_API_KEY`, `GLUETUN_CONTROL_PORT`, `GLUETUN_PF_STRICT`, `PF_*`, `VPN_*`, `SPLIT_VPN`
-* **Images:** `CONFIGARR_IMAGE`, `FLARR_IMAGE`, `GLUETUN_IMAGE`, `LOCALDNS_IMAGE`, `PROWLARR_IMAGE`, `QBITTORRENT_IMAGE`, `RADARR_IMAGE`, `SONARR_IMAGE`
+* **Images:** `CONFIGARR_IMAGE`, `FLARR_IMAGE`, `GLUETUN_IMAGE`, `PROWLARR_IMAGE`, `QBITTORRENT_IMAGE`, `RADARR_IMAGE`, `SONARR_IMAGE`
 * **Service ports:**
 
   * Internal: `QBT_INT_PORT`, `SONARR_INT_PORT`, `RADARR_INT_PORT`, `PROWLARR_INT_PORT`, `BAZARR_INT_PORT`, `FLARR_INT_PORT`
   * LAN exposed (guard with `# @if EXPOSE_DIRECT_PORTS`): `EXPOSE_DIRECT_PORTS`, `QBT_PORT`, `SONARR_PORT`, `RADARR_PORT`, `PROWLARR_PORT`, `BAZARR_PORT`, `FLARR_PORT`
-* **Caddy / Auth (guard with `# @if ENABLE_CADDY`):** `ENABLE_CADDY`, `CADDY_DOMAIN_SUFFIX`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT`, `CADDY_BASIC_AUTH_USER`, `CADDY_BASIC_AUTH_HASH`
 * **qBittorrent:** `QBT_USER`, `QBT_PASS`, `QBT_BIND_ADDR`, `QBT_ENFORCE_WEBUI`, `QBT_AUTH_WHITELIST`
 * **SABnzbd (guard with `# @if SABNZBD_ENABLED`):** `SABNZBD_ENABLED`, `SABNZBD_USE_VPN`, `SABNZBD_HOST`, `SABNZBD_INT_PORT`, `SABNZBD_PORT`, `SABNZBD_API_KEY`, `SABNZBD_CATEGORY`, `SABNZBD_TIMEOUT`
 * **Scoring/tuning:** all `ARR_*` from the example file, incl.:
@@ -179,12 +178,6 @@ Include placeholders for **all** user-settable variables found in `arrconf/userr
 rm -f "${ARR_STACK_DIR}/.env"
 scripts/gen-env.sh .env.template "${ARR_STACK_DIR}/.env"
 test -f "${ARR_STACK_DIR}/.env" && ls -l "${ARR_STACK_DIR}/.env"
-
-# Guard off/on
-sed -i 's/^ENABLE_CADDY=.*/ENABLE_CADDY=0/' arrconf/userr.conf; scripts/gen-env.sh
-! grep -q '^CADDY_HTTP_PORT=' "${ARR_STACK_DIR}/.env"
-sed -i 's/^ENABLE_CADDY=.*/ENABLE_CADDY=1/' arrconf/userr.conf; scripts/gen-env.sh
-grep -q '^CADDY_HTTP_PORT=' "${ARR_STACK_DIR}/.env"
 
 # Derived fallback
 sed -i 's/^QBT_PORT=.*/QBT_PORT=/' arrconf/userr.conf; scripts/gen-env.sh

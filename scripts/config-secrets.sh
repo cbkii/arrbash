@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Purpose: Provide secret management helpers for credential generation and hashing.
-# Inputs: Uses CADDY_IMAGE, ARR_ENV_FILE, ARR_DOCKER_DIR, FORCE_ROTATE_API_KEY, GLUETUN_API_KEY.
+# Inputs: Uses ARR_ENV_FILE, ARR_DOCKER_DIR, FORCE_ROTATE_API_KEY, GLUETUN_API_KEY.
 # Outputs: Prints hashed credentials and updates GLUETUN_API_KEY variable in-place.
 # Exit codes: Functions return non-zero when prerequisites are missing or invalid.
 if [[ -n "${__CONFIG_SECRETS_LOADED:-}" ]]; then
@@ -24,60 +24,6 @@ if ! declare -f gluetun_version_requires_auth_config >/dev/null 2>&1; then
   fi
   unset _config_secrets_gluetun_lib
 fi
-
-# Generates a bcrypt hash for Caddy credentials, preferring local openssl before docker fallback
-caddy_bcrypt() {
-  local plaintext="${1-}"
-
-  if [[ -z "$plaintext" ]]; then
-    return 1
-  fi
-
-  local hash_output=""
-
-  if command -v openssl >/dev/null 2>&1; then
-    hash_output="$(
-      printf '%s\n' "$plaintext" \
-        | openssl passwd -bcrypt -stdin 2>/dev/null
-    )" || true
-
-    if [[ -n "$hash_output" ]]; then
-      printf '%s\n' "$hash_output"
-      return 0
-    fi
-  fi
-
-  local -a docker_hash_cmd=(
-    docker run --rm
-    --cpus=1
-    --memory=256m
-    --memory-swap=256m
-    --network=none
-    --pids-limit=64
-    --read-only
-    --cap-drop=ALL
-    --security-opt=no-new-privileges
-    "${CADDY_IMAGE}"
-    caddy hash-password
-    --algorithm bcrypt
-    --plaintext
-    "$plaintext"
-  )
-
-  local docker_hash_output=""
-  if command -v timeout >/dev/null 2>&1; then
-    docker_hash_output="$(timeout --preserve-status 18 "${docker_hash_cmd[@]}" 2>/dev/null || true)"
-  else
-    docker_hash_output="$("${docker_hash_cmd[@]}" 2>/dev/null || true)"
-  fi
-
-  if [[ -n "$docker_hash_output" ]]; then
-    printf '%s\n' "$docker_hash_output"
-    return 0
-  fi
-
-  return 1
-}
 
 # Produces an alphanumeric token using the strongest available entropy source
 safe_random_alnum() {

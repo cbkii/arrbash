@@ -114,19 +114,6 @@ port_bind_addresses() {
   fi
 }
 
-resolve_caddy_ports() {
-  local __http_name="$1"
-  local __https_name="$2"
-  local http_value="${CADDY_HTTP_PORT:-80}"
-  local https_value="${CADDY_HTTPS_PORT:-443}"
-
-  arr_resolve_port http_value "$http_value" 80
-  arr_resolve_port https_value "$https_value" 443
-
-  printf -v "$__http_name" '%s' "$http_value"
-  printf -v "$__https_name" '%s' "$https_value"
-}
-
 # Audits exposed services versus expected LAN bindings and warns on unsafe listeners
 check_network_security() {
   step "Auditing bind addresses for safety"
@@ -235,54 +222,14 @@ check_network_security() {
     doctor_warn "Gluetun control API is reachable on ${gluetun_bindings[*]}; restrict it to LOCALHOST_IP=${LOCALHOST_IP}."
   fi
 
-  if [[ "${ENABLE_CADDY}" != "1" ]]; then
-    local caddy_http_port=""
-    local caddy_https_port=""
-    resolve_caddy_ports caddy_http_port caddy_https_port
-    local port
-    for port in "$caddy_http_port" "$caddy_https_port"; do
-      local -a bindings=()
-      mapfile -t bindings < <(port_bind_addresses tcp "$port")
-      if ((${#bindings[@]} > 0)); then
-        doctor_warn "Port ${port}/TCP is in use while ENABLE_CADDY=0 (${bindings[*]}). If you expected the proxy, set ENABLE_CADDY=1 and rerun ./arr.sh."
-      fi
-    done
-  fi
+  doctor_note "Reverse proxy helper removed; any listeners on ports 80/443 belong to other services."
 }
 
-# Probes LAN-facing HTTP endpoints through Caddy to validate local routing
+# Legacy stub retained for reverse proxy compatibility messaging
 test_lan_connectivity() {
   step "Testing LAN accessibility..."
 
-  if [[ "${ENABLE_CADDY}" != "1" ]]; then
-    doctor_note "Skipping Caddy HTTP checks (ENABLE_CADDY=0)."
-    return
-  fi
-
-  if [[ -z "${LAN_IP}" || "${LAN_IP}" == "0.0.0.0" ]]; then
-    doctor_warn "LAN_IP unset or 0.0.0.0; skipping LAN connectivity checks."
-    return
-  fi
-
-  if ! have_command curl; then
-    doctor_warn "'curl' not available; cannot probe LAN HTTP endpoints."
-    return
-  fi
-
-  if curl -fsS -m 5 "http://${LAN_IP}/healthz" >/dev/null 2>&1; then
-    doctor_ok "Caddy responds on http://${LAN_IP}/healthz"
-  else
-    doctor_fail "Caddy not accessible on http://${LAN_IP}/healthz"
-  fi
-
-  local service
-  for service in qbittorrent sonarr radarr lidarr prowlarr bazarr; do
-    if curl -fsS -m 5 -H "Host: ${service}.${SUFFIX}" "http://${LAN_IP}/" >/dev/null 2>&1; then
-      doctor_ok "${service} accessible via Caddy on ${LAN_IP}"
-    else
-      doctor_warn "${service} not accessible via Caddy on ${LAN_IP}"
-    fi
-  done
+  doctor_note "Reverse proxy checks removed; access services via host ports instead."
 }
 
 # Verifies upstream DNS responders and surfaces missing tooling
@@ -429,8 +376,8 @@ doctor_check_sabnzbd() {
       ;;
   esac
 
-  if [[ "${SABNZBD_USE_VPN:-0}" != "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" && "${ENABLE_CADDY:-0}" != "1" ]]; then
-    doctor_warn "SABnzbd exposed on LAN without Caddy (ENABLE_CADDY=0, EXPOSE_DIRECT_PORTS=1)"
+  if [[ "${SABNZBD_USE_VPN:-0}" != "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    doctor_warn "SABnzbd exposed on LAN; ensure access is limited to trusted networks."
   fi
 
   if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
@@ -457,17 +404,10 @@ doctor_check_sabnzbd() {
   return $sab_status
 }
 
-SUFFIX="${LAN_DOMAIN_SUFFIX:-}"
 LAN_IP="${LAN_IP:-}"
-DNS_IP="${LAN_IP:-127.0.0.1}"
-ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS:-0}"
-LOCAL_DNS_STATE="${LOCAL_DNS_STATE:-inactive}"
-LOCAL_DNS_STATE_REASON="${LOCAL_DNS_STATE_REASON:-Local DNS disabled}"
-ENABLE_CADDY="${ENABLE_CADDY:-0}"
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-0}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
-DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-router}"
 QBT_INT_PORT="${QBT_INT_PORT:-8082}"
 QBT_PORT="${QBT_PORT:-${QBT_INT_PORT}}"
 SONARR_INT_PORT="${SONARR_INT_PORT:-8989}"
@@ -492,56 +432,12 @@ if [[ "${ARR_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
   fi
 fi
 
-if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
-  step "Checking if port 53 is free (or already bound):"
-  if have_command ss; then
-    if [[ -n "$(ss -H -lnu 'sport = :53' 2>/dev/null)" ]] || [[ -n "$(ss -H -lnt 'sport = :53' 2>/dev/null)" ]]; then
-      doctor_warn "Something is listening on port 53. Could conflict with local_dns service."
-      if have_command systemctl && systemctl is-active --quiet systemd-resolved; then
-        doctor_note "systemd-resolved is active and commonly owns :53 on Bookworm."
-        doctor_note "Run: ./scripts/host-dns-setup.sh (safe takeover with backup & rollback)."
-      fi
-    else
-      doctor_ok "Port 53 appears free."
-    fi
-  elif have_command lsof; then
-    if [[ -n "$(lsof -nP -iUDP:53 2>/dev/null)" ]] || [[ -n "$(lsof -nP -iTCP:53 -sTCP:LISTEN 2>/dev/null)" ]]; then
-      doctor_warn "Something is listening on port 53. Could conflict with local_dns service."
-    else
-      doctor_ok "Port 53 appears free."
-    fi
-  else
-    doctor_warn "Cannot test port 53 status (missing 'ss' and 'lsof')."
-  fi
-else
-  doctor_note "Skipping port 53 availability check (local DNS disabled)."
-fi
-
-if [[ "${ENABLE_CADDY}" == "1" ]]; then
-  printf -v message 'LAN domain suffix: %s' "${SUFFIX:-<unset>}"
-  doctor_note "$message"
-else
-  doctor_note "Skipping LAN domain suffix reporting (ENABLE_CADDY=0)."
-fi
+doctor_note "Local DNS helper removed; skipping port 53 availability checks."
+doctor_note "LAN reverse-proxy shortcuts are no longer generated. Use direct host:port access."
 printf -v message 'LAN IP: %s' "${LAN_IP:-<unset>}"
-doctor_note "$message"
-printf -v message 'Using DNS server at: %s' "${DNS_IP}"
 doctor_note "$message"
 doctor_dns_health
 check_docker_dns_configuration
-
-printf -v message 'DNS distribution mode: %s' "${DNS_DISTRIBUTION_MODE}"
-doctor_note "$message"
-
-if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
-  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
-    step "Local DNS container: enabled"
-  else
-    doctor_warn "Local DNS requested but not active: ${LOCAL_DNS_STATE_REASON}."
-  fi
-else
-  doctor_note "Local DNS disabled in configuration."
-fi
 
 step "Checking host reachability"
 if [[ -z "${LAN_IP}" || "${LAN_IP}" == "0.0.0.0" ]]; then
@@ -570,22 +466,7 @@ else
     doctor_note "Direct LAN ports are disabled (EXPOSE_DIRECT_PORTS=0)."
   fi
 
-  if [[ "${ENABLE_CADDY}" == "1" ]]; then
-    caddy_http_port=""
-    caddy_https_port=""
-    resolve_caddy_ports caddy_http_port caddy_https_port
-    report_port "Caddy HTTP" tcp "${LAN_IP}" "$caddy_http_port"
-    report_port "Caddy HTTPS" tcp "${LAN_IP}" "$caddy_https_port"
-  else
-    doctor_note "Skipping Caddy port checks (ENABLE_CADDY=0)."
-  fi
-
-  if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
-    report_port "Local DNS" udp "${LAN_IP}" 53
-    report_port "Local DNS" tcp "${LAN_IP}" 53
-  else
-    doctor_note "Skipping port 53 checks because local DNS is disabled."
-  fi
+  doctor_note "Reverse proxy helper removed; qBittorrent is reachable via Gluetun-published ports."
 fi
 
 check_network_security
@@ -594,87 +475,11 @@ if [[ -n "${LOCALHOST_IP}" ]]; then
   report_port "Gluetun control" tcp "${LOCALHOST_IP}" "${GLUETUN_CONTROL_PORT}"
 fi
 
-if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
-  if [[ "${ENABLE_CADDY}" != "1" ]]; then
-    doctor_note "Skipping LAN hostname resolution checks (ENABLE_CADDY=0)."
-  else
-    step "Testing DNS resolution of qbittorrent.${SUFFIX} via local resolver"
-    if ! have_command dig; then
-      doctor_warn "'dig' command not found; skipping DNS lookup."
-    else
-      dns_server_arg=@"${DNS_IP}"
-      res_udp="$(dig +short "${dns_server_arg}" "qbittorrent.${SUFFIX}" 2>/dev/null || true)"
-      if [[ -z "$res_udp" ]]; then
-        doctor_fail "qbittorrent.${SUFFIX} did NOT resolve via ${DNS_IP} (UDP)"
-      else
-        doctor_ok "qbittorrent.${SUFFIX} resolves to ${res_udp} (UDP)"
-      fi
-
-      res_tcp="$(dig +tcp +short "${dns_server_arg}" "qbittorrent.${SUFFIX}" 2>/dev/null || true)"
-      if [[ -z "$res_tcp" ]]; then
-        doctor_fail "qbittorrent.${SUFFIX} did NOT resolve via ${DNS_IP} (TCP)"
-      else
-        doctor_ok "qbittorrent.${SUFFIX} resolves to ${res_tcp} (TCP)"
-      fi
-    fi
-  fi
-else
-  doctor_note "DNS checks skipped: local DNS is disabled."
-fi
-
-if [[ "${ENABLE_CADDY}" == "1" ]]; then
-  caddy_http_port=""
-  caddy_https_port=""
-  resolve_caddy_ports caddy_http_port caddy_https_port
-  step "Testing CA fetch over HTTP (bootstrap)"
-  if have_command curl && have_command openssl; then
-    if cert_output="$(curl -fsS "http://ca.${SUFFIX}/root.crt" 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null)"; then
-      printf -v message 'CA download succeeded:%s%s' "${cert_output:+\n}" "${cert_output}"
-      doctor_ok "$message"
-    else
-      doctor_warn "Could not fetch CA over HTTP"
-    fi
-  else
-    doctor_warn "Skipping CA fetch test: missing 'curl' or 'openssl'."
-  fi
-
-  step "Testing HTTPS endpoint"
-  if ! have_command curl; then
-    doctor_warn "'curl' command not found; skipping HTTPS probe."
-  else
-    curl_args=(-k --silent --max-time 5)
-    if [[ -n "${LAN_IP}" && "${LAN_IP}" != "0.0.0.0" ]]; then
-      curl_args+=(--resolve "qbittorrent.${SUFFIX}:${caddy_https_port}:${LAN_IP}" --resolve "qbittorrent.${SUFFIX}:${caddy_http_port}:${LAN_IP}")
-    fi
-    if curl "${curl_args[@]}" "https://qbittorrent.${SUFFIX}/" -o /dev/null; then
-      doctor_ok "HTTPS endpoint reachable"
-    else
-      doctor_warn "HTTPS endpoint not reachable. Could be DNS, Caddy, or firewall issue."
-    fi
-  fi
-else
-  doctor_note "Skipping Caddy CA and HTTPS checks (ENABLE_CADDY=0)."
-fi
+doctor_note "DNS hostname checks skipped: local DNS helper removed."
 
 test_lan_connectivity
 
 doctor_check_sabnzbd
-
-if [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
-  case "${DNS_DISTRIBUTION_MODE}" in
-    router)
-      doctor_note "DNS distribution mode 'router': set DHCP Option 6 (DNS server) on your router to ${LAN_IP}."
-      ;;
-    per-device)
-      doctor_note "DNS distribution mode 'per-device': point important clients at ${LAN_IP} and keep Android Private DNS Off/Automatic."
-      ;;
-    *)
-      doctor_warn "Unknown DNS_DISTRIBUTION_MODE='${DNS_DISTRIBUTION_MODE}'. Expected 'router' or 'per-device'."
-      ;;
-  esac
-else
-  doctor_note "DNS distribution mode ignored (local DNS disabled)."
-fi
 
 lan_target="${LAN_IP:-<unset>}"
 step "From another LAN device you can try:"
@@ -689,21 +494,6 @@ else
   msg "  (Direct ports disabled; set EXPOSE_DIRECT_PORTS=1 to enable IP:PORT access.)"
 fi
 
-if [[ "${ENABLE_LOCAL_DNS}" == "1" && "${ENABLE_CADDY}" == "1" ]]; then
-  msg "  nslookup qbittorrent.${SUFFIX} ${lan_target}"
-  doctor_note "If DNS queries fail:"
-  msg "  - Ensure the client and ${lan_target} are on the same VLAN/subnet;"
-  msg "  - Some routers block DNS to LAN hosts; allow UDP/TCP 53 to ${lan_target};"
-  msg "  - Temporarily set the client DNS to ${lan_target} and retry."
-elif [[ "${ENABLE_LOCAL_DNS}" == "1" ]]; then
-  msg "  (DNS hostname troubleshooting tips skipped; ENABLE_CADDY=0.)"
-fi
-
-if [[ "${ENABLE_CADDY}" == "1" ]]; then
-  _unused_caddy_http_port=""
-  caddy_https_port=""
-  resolve_caddy_ports _unused_caddy_http_port caddy_https_port
-  msg "  curl -k https://qbittorrent.${SUFFIX}/ --resolve qbittorrent.${SUFFIX}:${caddy_https_port}:${lan_target}"
-fi
+doctor_note "Local DNS and reverse proxy helpers removed; rely on LAN IP access instead."
 
 exit 0

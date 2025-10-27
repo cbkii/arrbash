@@ -57,23 +57,8 @@ FLARR_INT_PORT="8191"      # default: 8191; internal FlareSolverr port
 FLARR_PORT="${FLARR_INT_PORT}"      # default: ${FLARR_INT_PORT} (8191); FlareSolverr LAN port
 SABNZBD_INT_PORT="8080"      # default: 8080; internal SABnzbd WebUI port
 SABNZBD_PORT="${SABNZBD_INT_PORT}"      # default: ${SABNZBD_INT_PORT} (8080); SABnzbd LAN port
-CADDY_HTTP_PORT="80"      # default: 80; exposed HTTP port for health/apps
-CADDY_HTTPS_PORT="443"      # default: 443; exposed HTTPS port for proxy endpoints
 GLUETUN_CONTROL_PORT="8000"      # default: 8000; Gluetun control API port
 GLUETUN_CONNECTIVITY_PROBE_URLS="https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace"      # default: https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace; external URLs used to verify VPN connectivity
-
-# --- DNS & domains (if enabled) ---
-ENABLE_LOCAL_DNS="0"      # default: 0; enable optional dnsmasq container
-ENABLE_CADDY="0"      # default: 0; enable Caddy reverse proxy
-CADDY_BASIC_AUTH_USER="user"      # default: user; Caddy Basic Auth username
-CADDY_BASIC_AUTH_HASH=""      # default: empty; bcrypt hash for Basic Auth password
-LAN_DOMAIN_SUFFIX="home.arpa"      # default: home.arpa; LAN DNS suffix
-CADDY_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}"      # default: ${LAN_DOMAIN_SUFFIX} (home.arpa); Caddy hostname suffix override
-DNS_DISTRIBUTION_MODE="router"      # default: router; how LAN clients learn DNS (router/per-device)
-UPSTREAM_DNS_SERVERS="1.1.1.1,1.0.0.1"      # default: 1.1.1.1,1.0.0.1; resolver list for dnsmasq
-UPSTREAM_DNS_1="1.1.1.1"      # default: 1.1.1.1; primary resolver override
-UPSTREAM_DNS_2="1.0.0.1"      # default: 1.0.0.1; secondary resolver override
-CADDY_LAN_CIDRS="127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"      # default: 127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; skip Caddy auth
 
 # --- qBitTorrent Client credentials (change on first run) ---
 QBT_USER="admin"      # default: admin; initial qBittorrent username
@@ -161,15 +146,11 @@ ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rul
 # FLARR_IMAGE="ghcr.io/flaresolverr/flaresolverr:v3.3.21"      # default: ghcr.io/flaresolverr/flaresolverr:v3.3.21; override FlareSolverr tag
 # SABNZBD_IMAGE="lscr.io/linuxserver/sabnzbd:latest"      # default: lscr.io/linuxserver/sabnzbd:latest; override SABnzbd tag
 # CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"      # default: ghcr.io/raydak-labs/configarr:latest; override ConfigArr tag
-# CADDY_IMAGE="caddy:2.8.4"      # default: caddy:2.8.4; override Caddy tag
-# LOCALDNS_IMAGE="4km3/dnsmasq:2.90-r3"      # default: 4km3/dnsmasq:2.90-r3; override dnsmasq tag
 # QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"      # default: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest; Vuetorrent WebUI mod
 QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128; CIDRs that bypass qBittorrent login
 
 # --- Behaviour toggles ---
 # ASSUME_YES="0"      # default: 0; skip confirmation prompts when scripting installs
 # FORCE_ROTATE_API_KEY="0"      # default: 0; regenerate Gluetun API key next run
-# FORCE_REGEN_CADDY_AUTH="0"      # default: 0; rotate Caddy Basic Auth credentials next run
-# SETUP_HOST_DNS="0"      # default: 0; run host DNS takeover helper
 # REFRESH_ALIASES="0"      # default: 0; regenerate helper aliases only
 ARR_COLOR_OUTPUT="1"      # default: 1; keep colorful CLI output (set 0 for monochrome)

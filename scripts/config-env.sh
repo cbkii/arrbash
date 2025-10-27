@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Purpose: Prepare runtime environment values and hydrate persisted credentials.
-# Inputs: Consumes numerous ARR_* variables, ENABLE_CADDY, SPLIT_VPN, ARR_ENV_FILE, LAN_IP, ARR_USERCONF_PATH.
+# Inputs: Consumes numerous ARR_* variables, SPLIT_VPN, ARR_ENV_FILE, LAN_IP, ARR_USERCONF_PATH.
 # Outputs: Normalizes environment variables in-place and prompts for direct port exposure when needed.
 # Exit codes: Functions return non-zero when validations fail (e.g., LAN_IP invalid) or user aborts prompts.
 if [[ -n "${__CONFIG_ENV_LOADED:-}" ]]; then
@@ -56,41 +56,13 @@ arr_prompt_direct_port_exposure() {
 }
 
 
-# Creates stack/data/media directories and reconciles permissions per profile
-hydrate_caddy_auth_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
-  if [[ -z "${CADDY_BASIC_AUTH_USER:-}" || "${CADDY_BASIC_AUTH_USER}" == "user" ]]; then
-    local hydrated_user=""
-    if hydrated_user="$(get_env_kv "CADDY_BASIC_AUTH_USER" "$ARR_ENV_FILE" 2>/dev/null)"; then
-      if [[ -n "$hydrated_user" ]]; then
-        CADDY_BASIC_AUTH_USER="$hydrated_user"
-      fi
-    fi
-  fi
-
-  if [[ -z "${CADDY_BASIC_AUTH_HASH:-}" ]]; then
-    local hydrated_hash=""
-    if hydrated_hash="$(get_env_kv "CADDY_BASIC_AUTH_HASH" "$ARR_ENV_FILE" 2>/dev/null)"; then
-      if [[ -n "$hydrated_hash" ]]; then
-        CADDY_BASIC_AUTH_HASH="$hydrated_hash"
-      fi
-    fi
-  fi
-}
-
 prepare_env_context() {
   step "📝 Preparing environment values"
 
-  hydrate_caddy_auth_from_env_file
   hydrate_user_credentials_from_env_file
   hydrate_sab_api_key_from_config
   hydrate_qbt_host_port_from_env_file
   hydrate_qbt_webui_port_from_config
-
-  CADDY_BASIC_AUTH_USER="$(sanitize_user "$CADDY_BASIC_AUTH_USER")"
 
   local direct_ports_raw="${EXPOSE_DIRECT_PORTS:-0}"
   EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "$direct_ports_raw")"
@@ -106,30 +78,12 @@ prepare_env_context() {
   esac
   SPLIT_VPN="$split_vpn"
 
-  ENABLE_CADDY="$(arr_normalize_bool "${ENABLE_CADDY:-0}")"
-  if [[ "$ENABLE_CADDY" == "1" ]] && ! validate_caddy_user "$CADDY_BASIC_AUTH_USER"; then
-    warn "[ERROR] Caddy Basic Auth username is empty or invalid after sanitization; update CADDY_BASIC_AUTH_USER before enabling Caddy."
-    die "Invalid Caddy Basic Auth username"
-  fi
-  ENABLE_LOCAL_DNS="$(arr_normalize_bool "${ENABLE_LOCAL_DNS:-0}")"
-
   local direct_ports_requested="${EXPOSE_DIRECT_PORTS}"
   local userconf_path="${ARR_USERCONF_PATH:-}"
   if [[ -z "${userconf_path}" ]]; then
     if ! userconf_path="$(arr_default_userconf_path 2>/dev/null)"; then
       userconf_path="userr.conf"
     fi
-  fi
-
-  if ((split_vpn == 1)); then
-    if [[ "${ENABLE_CADDY:-0}" -ne 0 ]]; then
-      warn "SPLIT_VPN=1: disabling Caddy (unsupported in split mode)"
-    fi
-    ENABLE_CADDY=0
-    if [[ "${ENABLE_LOCAL_DNS:-0}" -ne 0 ]]; then
-      warn "SPLIT_VPN=1: disabling Local DNS (unsupported in split mode)"
-    fi
-    ENABLE_LOCAL_DNS=0
   fi
 
   local user_supplied_lan_ip="${LAN_IP:-}"
@@ -173,16 +127,6 @@ prepare_env_context() {
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     arr_prompt_direct_port_exposure "$LAN_IP"
   fi
-
-  local caddy_http_port_value
-  arr_resolve_port caddy_http_port_value "${CADDY_HTTP_PORT:-}" 80 \
-    "Invalid CADDY_HTTP_PORT=${CADDY_HTTP_PORT:-}; defaulting to 80."
-  CADDY_HTTP_PORT="$caddy_http_port_value"
-
-  local caddy_https_port_value
-  arr_resolve_port caddy_https_port_value "${CADDY_HTTPS_PORT:-}" 443 \
-    "Invalid CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-}; defaulting to 443."
-  CADDY_HTTPS_PORT="$caddy_https_port_value"
 
   local sab_enabled_raw="${SABNZBD_ENABLED:-0}"
   local sab_enabled

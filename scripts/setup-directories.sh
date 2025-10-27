@@ -89,12 +89,6 @@ mkdirs() {
 
   local service
   for service in "${ARR_DOCKER_SERVICES[@]}"; do
-    if [[ "$service" == "local_dns" && "${ENABLE_LOCAL_DNS:-0}" != "1" ]]; then
-      continue
-    fi
-    if [[ "$service" == "caddy" && "${ENABLE_CADDY:-0}" != "1" ]]; then
-      continue
-    fi
     if [[ "$service" == "sabnzbd" && "${SABNZBD_ENABLED:-0}" != "1" ]]; then
       continue
     fi

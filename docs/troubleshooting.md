@@ -21,32 +21,26 @@ tmux set-environment -ur ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR 2
 ```
 
 ## DNS and HTTPS issues
+arrbash no longer provisions a reverse proxy or LAN DNS resolver. If you require friendly hostnames or HTTPS termination, deploy and manage your own tooling (Pi-hole/unbound, AdGuard Home, nginx, Traefik, etc.) and point clients at it.
+
 ### `ERR_NAME_NOT_RESOLVED`
-- Applies only when local DNS is enabled. Ensure clients point at the arrbash host first (DHCP Option 6 or per-device settings). See [Networking](networking.md) for setup guidance.
-- Verify:
+- When you operate your own resolver, ensure LAN clients use it (DHCP Option 6 or per-device configuration).
+- Verify the record resolves as expected:
   ```bash
-  nslookup qbittorrent.${LAN_DOMAIN_SUFFIX:-home.arpa}
+  nslookup media.example.com
   ```
-  The resolver should report your Pi’s LAN IP.
+  Substitute the hostname you publish; the response should report your arrbash host’s LAN IP.
 
 ### Browser warns about HTTPS certificate
-- Import the Caddy root certificate from `http://ca.${LAN_DOMAIN_SUFFIX:-home.arpa}/root.crt` or run `./scripts/install-caddy-ca.sh` on Debian/Ubuntu hosts.
-- Verify:
+- Import the trust roots for whatever HTTPS proxy you provide. arrbash no longer installs or manages certificates automatically.
+- Verify your proxy terminates TLS cleanly:
   ```bash
-  curl -I https://qbittorrent.${LAN_DOMAIN_SUFFIX:-home.arpa}
+  curl -I https://media.example.com
   ```
-  Expect an HTTP 200/301 without TLS warnings.
+  Replace the hostname with the value you publish and expect an HTTP 200/301 without TLS warnings.
 
 ### Port 53 already in use
-- Run the host helper to free the port and start the `local_dns` container:
-  ```bash
-  ./scripts/host-dns-setup.sh
-  ```
-- Verify:
-  ```bash
-  ss -ulpn | grep ':53 '
-  ```
-  `dnsmasq` should own the socket. Roll back with `./scripts/host-dns-rollback.sh` when finished testing.
+- arrbash no longer starts dnsmasq. If a prior deployment left a resolver enabled, stop or remove that service manually before binding another DNS daemon on the host.
 
 ## VPN and torrent issues
 ### qBittorrent unreachable after enabling `SPLIT_VPN=1`

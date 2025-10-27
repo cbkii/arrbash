@@ -11,7 +11,7 @@ Any 64-bit Debian Bookworm host with roughly 4 CPU cores and 4 GB RAM works. Ras
 Use Proton VPN Plus or Unlimited. Those plans support port forwarding, which qBittorrent needs for good performance.
 
 ## Can I skip the DNS helper?
-Yes, but you must add host entries manually or set DNS per device. Following [Networking](networking.md) keeps the experience consistent and avoids guesswork later.
+The legacy DNS helper has been removed. Manage hostnames through your router or per-device configuration instead. See [Networking](networking.md) for current exposure guidance.
 
 ## Where do I put my Proton credentials?
 Copy `arrconf/proton.auth.example` to `arrconf/proton.auth` and fill in `PROTON_USER` and `PROTON_PASS`. The installer enforces safe permissions automatically.
@@ -26,10 +26,8 @@ Read [Version management](version-management.md). Adjust tags in `${ARRCONF_DIR}
 Yes. `./arr.sh` is idempotent—rerun it anytime after editing `${ARRCONF_DIR}/userr.conf`. Review the printed summary before containers restart.
 
 ## Can I expose services to the Internet?
-Use Caddy with strong basic auth if you need remote access. Avoid forwarding raw service ports; keep the stack behind Proton VPN whenever possible. Review [Security](security.md) first.
+Direct WAN exposure is not recommended. Keep qBittorrent behind Gluetun and access the *arr services via LAN IPs only. Review [Security](security.md) before attempting any port forwards.
 
-## Is `home.arpa` required?
-It is the recommended LAN suffix because it never leaks to the public Internet. Change it only if another system already uses it.
 
 ## Related topics
 - [Configuration](configuration.md)

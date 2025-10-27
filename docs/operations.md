@@ -5,26 +5,23 @@
 Use these commands to run the installer safely, rotate credentials, and call helper scripts.
 
 ## Installer basics
-- `./arr.sh` is idempotent. Rerun it after editing `${ARRCONF_DIR}/userr.conf`; the script regenerates `.env` from `.env.template` via `scripts/gen-env.sh` plus `docker-compose.yml`, the Caddyfile, and helper assets before starting containers. Do not edit those generated files manually—change `userr.conf` or use CLI flags instead. It only checks prerequisites, so install Docker and helper tools yourself first.
+- `./arr.sh` is idempotent. Rerun it after editing `${ARRCONF_DIR}/userr.conf`; the script regenerates `.env` from `.env.template` via `scripts/gen-env.sh` plus `docker-compose.yml` and helper assets before starting containers. Do not edit those generated files manually—change `userr.conf` or use CLI flags instead. It only checks prerequisites, so install Docker and helper tools yourself first.
 - Key flags (combine as needed):
 
   ```bash
   ./arr.sh --yes                 # non-interactive mode
   ./arr.sh --trace               # emit Bash trace logs for deeper debugging
-  ./arr.sh --enable-caddy        # temporary toggle for ENABLE_CADDY=1
   ./arr.sh --enable-sab          # temporary toggle for SABNZBD_ENABLED=1
   ./arr.sh --rotate-api-key      # issue a new Gluetun API key
-  ./arr.sh --rotate-caddy-auth   # generate new Caddy basic auth credentials
   ./arr.sh --sync-api-keys       # resync Sonarr/Radarr/Prowlarr keys into Configarr
   ./arr.sh --no-auto-api-sync    # skip automatic Configarr sync for one run
   ./arr.sh --force-unlock        # clear a stale installer lock (override concurrency guard)
-  ./arr.sh --setup-host-dns      # run the host DNS takeover helper during install
   ./arr.sh --refresh-aliases     # rebuild .aliasarr
   ./arr.sh --uninstall           # stop services, remove assets, and restore host defaults
   ```
 
 - The installer validates dependencies, checks port availability, and prints a summary before starting services. Cancel with `Ctrl+C` if something looks wrong and adjust `userr.conf` or your host configuration.
-- `--uninstall` delegates to `scripts/uninstall.sh`, which tears down containers, removes generated stack files, re-enables `systemd-resolved`, and deletes installed Caddy trust material. Run it with `--yes` to skip the confirmation prompt.
+- `--uninstall` delegates to `scripts/uninstall.sh`, which tears down containers, removes generated stack files, and re-enables `systemd-resolved` if you previously ran the legacy DNS helper. Run it with `--yes` to skip the confirmation prompt.
 
 ## Helper aliases
 After running `./arr.sh` at least once, load the generated aliases in new shells:
@@ -35,7 +32,7 @@ Common helpers include:
 - `arr.vpn.status` – display Gluetun health.
 - `arr.vpn.port`, `arr.vpn.port.state`, `arr.vpn.port.watch` – inspect Proton port forwarding.
 - `arr.logs` – follow stack logs.
-- `arr.open` – print LAN or Caddy URLs for qBittorrent, Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, and FlareSolverr.
+- `arr.open` – print LAN URLs for qBittorrent, Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, and FlareSolverr.
 - `arr.config.sync` – trigger Configarr after manual API key updates.
 - `arr.vpn.auto.*` – manage the VPN auto-reconnect daemon.
 
@@ -46,11 +43,11 @@ Run these from the repository root:
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/host-dns-setup.sh` | Disable `systemd-resolved`, install a static `/etc/resolv.conf`, and start the local DNS container when the host still owns port 53. |
-| `scripts/host-dns-rollback.sh` | Restore the original resolver configuration. |
-| `scripts/setup-lan-dns.sh` | Update `/etc/hosts`, Docker DNS settings, and LAN hostnames without full DNS takeover. |
-| `scripts/install-caddy-ca.sh` | Install the Caddy root certificate into the host trust store (requires sudo). |
-| `scripts/export-caddy-ca.sh` | Copy the public `root.crt` to a safe location for manual import. |
+| `scripts/host-dns-setup.sh` | Legacy stub that reports the DNS helper was removed. |
+| `scripts/host-dns-rollback.sh` | Legacy stub retained for compatibility messaging. |
+| `scripts/setup-lan-dns.sh` | Legacy stub retained for compatibility messaging. |
+| `scripts/install-caddy-ca.sh` | Legacy stub retained for reverse proxy compatibility messaging. |
+| `scripts/export-caddy-ca.sh` | Legacy stub retained for reverse proxy compatibility messaging. |
 | `scripts/qbt-helper.sh` | Show or reset qBittorrent WebUI credentials and whitelist entries. |
 | `scripts/doctor.sh` | Run the same port, DNS, HTTPS, and connectivity checks the installer performs. |
 | `scripts/fix-versions.sh` | Swap pinned LinuxServer tags to `latest` when a registry removes a manifest. |
@@ -64,14 +61,14 @@ Run these from the repository root:
    docker compose ps
    arr.vpn.status
    ```
-4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `--rotate-caddy-auth`, `scripts/qbt-helper.sh reset`).
+4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `scripts/qbt-helper.sh reset`).
 
 ## Runtime hardening conventions
 
 - **Required directories.** Installer helpers abort immediately if `ARR_STACK_DIR`, `ARR_DOCKER_DIR`, or the `ARR_DOCKER_SERVICES` array are unset. These values are exported by `arr.sh`; set them yourself only when running helpers in isolation.
 - **Locale stability.** Text parsers (`grep`, `awk`, `sed`, `tr`) force `LC_ALL=C` to keep byte-oriented behaviour. If you override locale variables in your shell, export them _before_ calling into the helpers, so the scripts can pin the parsing locale.
 - **Compose wrapper.** All Docker Compose calls flow through the resolved wrapper stored in `DOCKER_COMPOSE_CMD`. Use `arr_resolve_compose_cmd` to populate the array before invoking validation helpers manually.
-- **Bounded secrets tooling.** Secret rotation helpers (e.g., the Caddy bcrypt fallback container) run with CPU/memory limits, an 18‑second timeout, and `--network=none`. Expect them to fail fast if Docker cannot enforce these limits; retry after fixing the host configuration.
+- **Bounded secrets tooling.** Secret rotation helpers run with CPU/memory limits, an 18‑second timeout, and `--network=none`. Expect them to fail fast if Docker cannot enforce these limits; retry after fixing the host configuration.
 
 ## Temporary file hygiene & privileged redirections
 

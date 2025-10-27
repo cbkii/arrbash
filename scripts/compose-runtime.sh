@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Purpose: Handle docker-compose generation, validation, and repair helpers for the stack.
-# Inputs: Uses ARR_STACK_DIR, ARR_ENV_FILE, DOCKER_COMPOSE_CMD, compose template variables, and env toggles like ENABLE_CADDY.
+# Inputs: Uses ARR_STACK_DIR, ARR_ENV_FILE, DOCKER_COMPOSE_CMD, compose template variables, and runtime env toggles.
 # Outputs: Writes docker-compose.yml files, logs validation summaries, and emits diagnostics to logs/compose-repair.log.
 # Exit codes: Functions return non-zero when compose validation or file writes fail.
 if [[ -n "${__COMPOSE_RUNTIME_LOADED:-}" ]]; then
@@ -1616,8 +1616,8 @@ write_compose_split_mode() {
     die "Compose prerequisites not satisfied"
   fi
 
-  LOCAL_DNS_STATE="split-disabled"
-  LOCAL_DNS_STATE_REASON="Local DNS disabled in split mode (SPLIT_VPN=1)"
+  LOCAL_DNS_STATE="removed"
+  LOCAL_DNS_STATE_REASON="Local DNS helper removed (custom domain routing disabled)"
 
   tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
@@ -1628,7 +1628,6 @@ write_compose_split_mode() {
 # Split VPN mode is active: only qBittorrent shares gluetun's network namespace
 # while the *Arr applications run on arr_net (standard bridge) outside the VPN.
 # -----------------------------------------------------------------------------
-# Caddy reverse proxy disabled automatically (SPLIT_VPN=1).
 services:
   gluetun:
     image: "${GLUETUN_IMAGE}"
@@ -1643,7 +1642,7 @@ YAML
     cap_add:
       - "NET_ADMIN"
     devices:
-      - "/dev/net/tun"
+      - "/dev/net/tun:/dev/net/tun"
     environment:
       VPN_SERVICE_PROVIDER: "${VPN_SERVICE_PROVIDER}"
       VPN_TYPE: "openvpn"
@@ -1651,6 +1650,13 @@ YAML
       OPENVPN_PASSWORD: "${OPENVPN_PASSWORD}"
       FREE_ONLY: "off"
       SERVER_COUNTRIES: "${SERVER_COUNTRIES}"
+YAML
+
+  if [[ -n "${SERVER_NAMES:-}" ]]; then
+    printf '      SERVER_NAMES: "${SERVER_NAMES}"\n' >>"$tmp"
+  fi
+
+  cat <<'YAML' >>"$tmp"
       VPN_PORT_FORWARDING: "on"
       VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
       HTTP_CONTROL_SERVER_ADDRESS: "0.0.0.0:${GLUETUN_CONTROL_PORT}"
@@ -1851,44 +1857,12 @@ write_compose() {
     die "Compose prerequisites not satisfied"
   fi
 
-  LOCAL_DNS_STATE="inactive"
-  LOCAL_DNS_STATE_REASON="Local DNS container disabled (ENABLE_LOCAL_DNS=0)"
-  local include_caddy=0
-  local include_local_dns=0
-  local -a upstream_dns_servers=()
+  LOCAL_DNS_STATE="removed"
+  LOCAL_DNS_STATE_REASON="Local DNS helper removed (custom domain routing disabled)"
   local userconf_path="${ARR_USERCONF_PATH:-}"
   if [[ -z "${userconf_path}" ]]; then
     if ! userconf_path="$(arr_default_userconf_path 2>/dev/null)"; then
       userconf_path="userr.conf"
-    fi
-  fi
-
-  mapfile -t upstream_dns_servers < <(collect_upstream_dns_servers)
-
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    include_caddy=1
-  fi
-
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    include_local_dns=1
-    LOCAL_DNS_STATE="requested"
-    LOCAL_DNS_STATE_REASON="Local DNS container requested"
-  fi
-
-  if ((include_local_dns)); then
-    if port_bound_any udp 53 || port_bound_any tcp 53; then
-      include_local_dns=0
-      LOCAL_DNS_STATE="blocked"
-      LOCAL_DNS_STATE_REASON="Local DNS disabled automatically (port 53 already in use)"
-      warn "Port 53 is already in use (likely systemd-resolved). Local DNS will be disabled (LOCAL_DNS_STATE=blocked)."
-    fi
-  fi
-
-  if ((include_local_dns)); then
-    LOCAL_DNS_STATE="active"
-    LOCAL_DNS_STATE_REASON="Local DNS container enabled"
-    if [[ -z "${LAN_IP:-}" || "${LAN_IP}" == "0.0.0.0" ]]; then
-      warn "Local DNS will bind to all interfaces (0.0.0.0:53)"
     fi
   fi
 
@@ -1904,11 +1878,6 @@ write_compose() {
 # -----------------------------------------------------------------------------
 YAML
 
-  if ((include_caddy == 0)); then
-    arr_yaml_comment "" "Caddy reverse proxy disabled (ENABLE_CADDY=0)." >>"$tmp"
-    arr_yaml_comment "" "Set ENABLE_CADDY=1 in ${userconf_path} and rerun ./${STACK}.sh to add HTTPS hostnames via Caddy." >>"$tmp"
-  fi
-
   cat <<'YAML' >>"$tmp"
 services:
   gluetun:
@@ -1921,7 +1890,7 @@ services:
     cap_add:
       - "NET_ADMIN"
     devices:
-      - "/dev/net/tun"
+      - "/dev/net/tun:/dev/net/tun"
     environment:
       VPN_SERVICE_PROVIDER: "${VPN_SERVICE_PROVIDER}"
       VPN_TYPE: "openvpn"
@@ -1929,6 +1898,13 @@ services:
       OPENVPN_PASSWORD: "${OPENVPN_PASSWORD}"
       FREE_ONLY: "off"
       SERVER_COUNTRIES: "${SERVER_COUNTRIES}"
+YAML
+
+  if [[ -n "${SERVER_NAMES:-}" ]]; then
+    printf '      SERVER_NAMES: "${SERVER_NAMES}"\n' >>"$tmp"
+  fi
+
+  cat <<'YAML' >>"$tmp"
       VPN_PORT_FORWARDING: "on"
       VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
       HTTP_CONTROL_SERVER_ADDRESS: "0.0.0.0:${GLUETUN_CONTROL_PORT}"
@@ -1957,13 +1933,6 @@ services:
       - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
-
-  if ((include_caddy)); then
-    cat <<'YAML' >>"$tmp"
-      - "${LAN_IP}:${CADDY_HTTP_PORT}:${CADDY_HTTP_PORT}"
-      - "${LAN_IP}:${CADDY_HTTPS_PORT}:${CADDY_HTTPS_PORT}"
-YAML
-  fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
@@ -2004,62 +1973,6 @@ YAML
         max-size: "1m"
         max-file: "3"
 YAML
-
-  if ((include_local_dns)); then
-    cat <<'YAML' >>"$tmp"
-  local_dns:
-    image: "${LOCALDNS_IMAGE}"
-    container_name: "arr_local_dns"
-    profiles:
-      - "localdns"
-    cap_add:
-      - "NET_ADMIN"
-    ports:
-      - "${LAN_IP}:53:53/udp"
-      - "${LAN_IP}:53:53/tcp"
-    command:
-      - "--log-facility=-"
-      - "--log-async=5"
-      - "--log-queries"
-      - "--no-resolv"
-YAML
-    local server
-    for server in "${upstream_dns_servers[@]}"; do
-      arr_yaml_list_item "      " "--server=${server}" >>"$tmp"
-    done
-    cat <<'YAML' >>"$tmp"
-      - "--domain-needed"
-      - "--bogus-priv"
-      - "--local-service"
-      - "--domain=${LAN_DOMAIN_SUFFIX}"
-      - "--local=/${LAN_DOMAIN_SUFFIX}/"
-      - "--address=/${LAN_DOMAIN_SUFFIX}/${DNS_HOST_ENTRY}"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "2"
-    healthcheck:
-      test:
-        - "CMD-SHELL"
-        - >-
-          if command -v drill >/dev/null 2>&1; then
-            drill -Q example.com @${LOCALHOST_IP} >/dev/null 2>&1;
-          elif command -v nslookup >/dev/null 2>&1; then
-            nslookup example.com ${LOCALHOST_IP} >/dev/null 2>&1;
-          elif command -v dig >/dev/null 2>&1; then
-            dig +time=2 +tries=1 @${LOCALHOST_IP} example.com >/dev/null 2>&1;
-          else
-            exit 1;
-          fi
-      interval: "10s"
-      timeout: "3s"
-      retries: "6"
-      start_period: "10s"
-
-YAML
-  fi
 
   printf '\n' >>"$tmp"
   if ! arr_compose_emit_qbittorrent_service "$tmp"; then
@@ -2145,48 +2058,6 @@ YAML
       driver: "json-file"
       options:
         max-size: "512k"
-        max-file: "2"
-YAML
-  fi
-
-  if ((include_caddy)); then
-    cat <<'YAML' >>"$tmp"
-  caddy:
-    image: "${CADDY_IMAGE}"
-    container_name: "caddy"
-    profiles:
-      - "proxy"
-    network_mode: "service:gluetun"
-    volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/data:/data"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/config:/config"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/caddy/ca-pub:/ca-pub:ro"
-    depends_on:
-      gluetun:
-        condition: "service_healthy"
-YAML
-    if ((include_local_dns)); then
-      cat <<'YAML' >>"$tmp"
-      local_dns:
-        condition: "service_healthy"
-YAML
-    fi
-    cat <<'YAML' >>"$tmp"
-    healthcheck:
-      test:
-        - "CMD-SHELL"
-        - >-
-          curl -fsS --max-time 3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1 || curl -fsS --max-time 3 http://${LOCALHOST_IP}/healthz >/dev/null 2>&1 || wget -qO- --timeout=3 http://${LOCALHOST_IP}:${CADDY_HTTP_PORT}/healthz >/dev/null 2>&1
-      interval: "10s"
-      timeout: "5s"
-      retries: "6"
-      start_period: "20s"
-    restart: "unless-stopped"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
         max-file: "2"
 YAML
   fi
