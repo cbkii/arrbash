@@ -19,18 +19,6 @@ install_missing() {
 
   require_dependencies curl jq openssl yq
 
-  if ! command -v certutil >/dev/null 2>&1; then
-    if command -v apt-get >/dev/null 2>&1; then
-      msg "  Tip: install certutil for smoother Caddy TLS trust: sudo apt-get install -y libnss3-tools"
-    elif command -v yum >/dev/null 2>&1; then
-      msg "  Tip: install certutil for smoother Caddy TLS trust: sudo yum install -y nss-tools"
-    elif command -v dnf >/dev/null 2>&1; then
-      msg "  Tip: install certutil for smoother Caddy TLS trust: sudo dnf install -y nss-tools"
-    else
-      msg "  Tip: certutil not found (optional); Caddy may print a trust-store warning."
-    fi
-  fi
-
   msg "  Docker: $(docker version --format '{{.Server.Version}}')"
   local compose_cmd_display="${DOCKER_COMPOSE_CMD[*]}"
   local compose_version_display="${ARR_COMPOSE_VERSION:-unknown}"
@@ -93,37 +81,7 @@ collect_port_requirements() {
     _requirements_ref+=("tcp|${qbt_http_port}|qBittorrent WebUI|${LAN_IP}")
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    local caddy_http_port
-    local caddy_https_port
-    arr_resolve_port caddy_http_port "${CADDY_HTTP_PORT:-}" 80 \
-      "    Invalid CADDY_HTTP_PORT=${CADDY_HTTP_PORT:-}; defaulting to 80."
-    arr_resolve_port caddy_https_port "${CADDY_HTTPS_PORT:-}" 443 \
-      "    Invalid CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-}; defaulting to 443."
-    CADDY_HTTP_PORT="$caddy_http_port"
-    CADDY_HTTPS_PORT="$caddy_https_port"
-
-    local caddy_expected="*"
-    if ((lan_ip_known)); then
-      caddy_expected="$LAN_IP"
-    else
-      if [[ "${ARR_WARNED_CADDY_LAN_UNKNOWN:-0}" != "1" ]]; then
-        warn "    LAN_IP unknown; validating Caddy ports on all interfaces. Set LAN_IP in ${ARR_USERCONF_PATH:-userr.conf} to lock bindings."
-        ARR_WARNED_CADDY_LAN_UNKNOWN=1
-      fi
-    fi
-    _requirements_ref+=("tcp|${caddy_http_port}|Caddy HTTP|${caddy_expected}")
-    _requirements_ref+=("tcp|${caddy_https_port}|Caddy HTTPS|${caddy_expected}")
-  fi
-
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    local dns_expected="*"
-    if ((lan_ip_known)); then
-      dns_expected="$LAN_IP"
-    fi
-    _requirements_ref+=("tcp|53|Local DNS (TCP)|${dns_expected}")
-    _requirements_ref+=("udp|53|Local DNS (UDP)|${dns_expected}")
-  fi
+  # Local DNS and Caddy have been removed; no additional port requirements.
 }
 
 detect_internal_port_conflicts() {
@@ -577,57 +535,6 @@ simple_port_check() {
 }
 
 # Validates that local DNS prerequisites are satisfied and upstream resolvers respond
-validate_dns_configuration() {
-  if [[ "${ENABLE_LOCAL_DNS:-0}" != "1" ]]; then
-    return
-  fi
-
-  if [[ -z "${LAN_DOMAIN_SUFFIX:-}" ]]; then
-    die "Local DNS requires LAN_DOMAIN_SUFFIX to be set to a non-empty domain suffix."
-  fi
-
-  local -a resolvers=()
-  mapfile -t resolvers < <(collect_upstream_dns_servers)
-
-  if ((${#resolvers[@]} == 0)); then
-    die "Local DNS requires at least one upstream resolver via UPSTREAM_DNS_SERVERS or the legacy UPSTREAM_DNS_1/2 variables."
-  fi
-
-  local -a healthy=()
-  local -a unhealthy=()
-  local probe_rc=0
-  local resolver
-
-  for resolver in "${resolvers[@]}"; do
-    local rc=0
-    if probe_dns_resolver "$resolver" "cloudflare.com" 2; then
-      healthy+=("$resolver")
-      continue
-    fi
-
-    rc=$?
-    if ((rc == 2)); then
-      probe_rc=2
-      warn "Skipping DNS reachability probe: install dig, drill, kdig, or nslookup to enable upstream validation."
-      healthy=("${resolvers[@]}")
-      unhealthy=()
-      break
-    fi
-
-    unhealthy+=("$resolver")
-  done
-
-  if ((probe_rc != 2)); then
-    if ((${#healthy[@]} == 0)); then
-      die "None of the upstream DNS servers responded (${resolvers[*]}). Update UPSTREAM_DNS_SERVERS with reachable resolvers before continuing."
-    fi
-
-    if ((${#unhealthy[@]} > 0)); then
-      warn "Upstream DNS servers unreachable during preflight probe: ${unhealthy[*]}"
-    fi
-  fi
-}
-
 # Runs installer preflight: locks, dependency validation, prompts, and previews
 preflight() {
   step "🚀 Preflight checks"
@@ -681,7 +588,6 @@ preflight() {
     warn "Gluetun 3.40+ requires an API key. It will be auto-generated during setup."
   fi
 
-  validate_dns_configuration
   simple_port_check
 
   if [[ -f "${ARR_ENV_FILE}" ]]; then

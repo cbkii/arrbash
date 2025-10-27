@@ -168,51 +168,12 @@ QBT_INFO
     msg "Access services from the host network (docker compose exec/port-forward) or add your own reverse proxy."
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    local domain_suffix="${ARR_DOMAIN_SUFFIX_CLEAN}"
-    cat <<CADDY_INFO
+  cat <<'ACCESS_NOTICE'
 
-Proxy profile enabled (Caddy reverse proxy):
-  http://qbittorrent.${domain_suffix}
-  https://qbittorrent.${domain_suffix} (trust the internal CA)
-  http://sonarr.${domain_suffix}
-  http://radarr.${domain_suffix}
-  http://lidarr.${domain_suffix}
-  http://prowlarr.${domain_suffix}
-  http://bazarr.${domain_suffix}
-  http://flaresolverr.${domain_suffix}
-  Health endpoint: http://${ip_hint}/healthz
-Remote clients must authenticate with '${CADDY_BASIC_AUTH_USER}' using the password stored in ${ARR_DOCKER_DIR}/caddy/credentials.
-CADDY_INFO
-  else
-    if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
-      cat <<'NO_CADDY_SPLIT'
-
-Reverse proxy disabled in split VPN mode (SPLIT_VPN=1).
-Multi-network proxy support is planned for a future release.
-NO_CADDY_SPLIT
-    else
-      cat <<NO_CADDY
-
-Reverse proxy disabled (ENABLE_CADDY=0).
-Access the services via the direct LAN URLs above.
-Set ENABLE_CADDY=1 in ${ARR_USERCONF_PATH} and rerun ./arr.sh to publish HTTPS hostnames signed by the internal CA.
-NO_CADDY
-    fi
-    if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-      cat <<'DNS_HTTP'
-Local DNS is enabled. Hostnames will resolve but continue serving plain HTTP until Caddy is enabled.
-DNS_HTTP
-    fi
-  fi
-
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
-      msg "Local DNS is enabled. Point DHCP Option 6 (or per-device DNS) at ${LAN_IP:-<unset>} so hostnames resolve."
-    else
-      warn "Local DNS requested but not active: ${LOCAL_DNS_STATE_REASON:-Local DNS is disabled}. Resolve the issue and rerun."
-    fi
-  fi
+Remote access reminder:
+  • The stack no longer provides an internal reverse proxy or DNS helper.
+  • Expose these services through your preferred VPN or reverse proxy if they must be reached from outside the LAN.
+ACCESS_NOTICE
 
   if [[ "${LAN_IP}" == "0.0.0.0" || -z "${LAN_IP:-}" ]]; then
     cat <<WARNING
@@ -527,22 +488,15 @@ POLICY
       msg "Host Port: ${SABNZBD_PORT}"
       if [[ "${EXPOSE_DIRECT_PORTS:-0}" != "1" ]]; then
         msg "LAN Exposure: disabled (EXPOSE_DIRECT_PORTS=0)"
-      elif [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
-        warn "SABnzbd exposed directly on the LAN without Caddy (ENABLE_CADDY=0)."
+      else
+        warn "SABnzbd exposed directly on the LAN; restrict access to trusted clients."
       fi
     else
       msg "Host Port: (not exposed – VPN mode)"
     fi
     local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
     msg "Helper Endpoint: ${sab_helper_url}"
-    if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${ARR_DOMAIN_SUFFIX_CLEAN:-}" ]]; then
-      if [[ "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
-        local sab_domain="sabnzbd.${ARR_DOMAIN_SUFFIX_CLEAN}"
-        msg "Caddy Route: https://${sab_domain}"
-      else
-        msg "Caddy Route: not published (VPN mode)"
-      fi
-    fi
+    # No reverse proxy integration; expose your own route if needed.
     if [[ -n "${SABNZBD_CATEGORY:-}" ]]; then
       msg "Default Category Override: ${SABNZBD_CATEGORY}"
     else

@@ -167,30 +167,8 @@ show_configuration_preview() {
     fi
   fi
 
-  local dns_suffix_display="${LAN_DOMAIN_SUFFIX:-home.arpa}"
-  local local_dns_summary="disabled (suffix ${dns_suffix_display})"
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    local_dns_summary="enabled (${dns_suffix_display}; mode ${DNS_DISTRIBUTION_MODE:-router}; upstream ${upstream_dns_display})"
-  fi
-
-  local caddy_domain_suffix="${CADDY_DOMAIN_SUFFIX:-${LAN_DOMAIN_SUFFIX:-}}"
-  local caddy_domain_display
-  if [[ -n "$caddy_domain_suffix" ]]; then
-    caddy_domain_display="$caddy_domain_suffix"
-  else
-    caddy_domain_display="(not set)"
-  fi
-
-  local caddy_summary="disabled (${caddy_domain_display})"
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    caddy_summary="enabled (${caddy_domain_display}; HTTP ${CADDY_HTTP_PORT}; HTTPS ${CADDY_HTTPS_PORT})"
-  fi
-
-  local caddy_auth_user_display="${CADDY_BASIC_AUTH_USER:-(not set)}"
-  local caddy_auth_hash_display="(will be generated)"
-  if [[ -n "${CADDY_BASIC_AUTH_HASH:-}" ]]; then
-    caddy_auth_hash_display="present"
-  fi
+  local local_dns_summary="removed (custom domain routing no longer provided)"
+  local caddy_summary="removed (bring your own reverse proxy if needed)"
 
   local direct_ports_summary="disabled"
   if [[ "${EXPOSE_DIRECT_PORTS:-1}" == "1" ]]; then
@@ -223,11 +201,6 @@ show_configuration_preview() {
 
   local usenet_client_display="${ARRBASH_USENET_CLIENT:-(not set)}"
 
-  local caddy_lan_bypass_line=""
-  if [[ "${ENABLE_CADDY:-0}" == "1" && -n "${CADDY_LAN_CIDRS:-}" ]]; then
-    printf -v caddy_lan_bypass_line '  • Caddy LAN bypass CIDRs: %s\n' "${CADDY_LAN_CIDRS}"
-  fi
-
   local sab_port_line
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
@@ -237,15 +210,6 @@ show_configuration_preview() {
     fi
   else
     printf -v sab_port_line '  • SABnzbd: (disabled)\n'
-  fi
-
-  local caddy_http_line caddy_https_line
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    printf -v caddy_http_line '  • Caddy HTTP: %s\n' "${CADDY_HTTP_PORT}"
-    printf -v caddy_https_line '  • Caddy HTTPS: %s\n' "${CADDY_HTTPS_PORT}"
-  else
-    printf -v caddy_http_line '  • Caddy HTTP: (disabled)\n'
-    printf -v caddy_https_line '  • Caddy HTTPS: (disabled)\n'
   fi
 
   cat <<CONFIG
@@ -276,10 +240,8 @@ Network & system
   • VPN retry budget (minutes): ${VPN_MAX_RETRY_MINUTES:-20}
   • User/Group IDs: ${PUID}/${PGID}
   • Local DNS: ${local_dns_summary}
-  • Caddy reverse proxy: ${caddy_summary}
+  • Reverse proxy helper: removed (access services via LAN ports)
   • Direct LAN ports: ${direct_ports_summary}
-  • LAN domain suffix: ${LAN_DOMAIN_SUFFIX:-home.arpa}
-  • Caddy domain suffix: ${caddy_domain_display}
 
 Credentials & secrets
   • Proton username: ${proton_user_display}
@@ -290,8 +252,6 @@ Credentials & secrets
   • qBittorrent password: ${qbt_pass_display}
   • qBittorrent auth whitelist: ${qbt_whitelist_final}
   • SABnzbd API key: ${sab_api_key_display}
-  • Caddy Basic Auth user: ${caddy_auth_user_display}
-  • Caddy Basic Auth password hash: ${caddy_auth_hash_display}
 
 Ports
   • Gluetun control: ${GLUETUN_CONTROL_PORT}
@@ -305,13 +265,12 @@ Ports
   • Prowlarr: ${PROWLARR_PORT}
   • Bazarr: ${BAZARR_PORT}
   • FlareSolverr: ${FLARR_PORT}
-${sab_port_line}${caddy_http_line}${caddy_https_line}
+${sab_port_line}
 
 Services & automation
   • ConfigArr: ${configarr_summary}
   • SABnzbd: ${sabnzbd_summary}
   • Usenet client label: ${usenet_client_display}
-$caddy_lan_bypass_line
 Files that will be created/updated
   • Environment file: ${ARR_ENV_FILE}
   • Compose file: ${ARR_STACK_DIR}/docker-compose.yml
@@ -320,14 +279,7 @@ If anything looks incorrect, edit ${userconf_edit_target} before continuing.
 ------------------------------------------------------------
 CONFIG
 
-  if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
-    if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-      warn "SPLIT_VPN=1: Caddy will be disabled automatically (unsupported in split mode)."
-    fi
-    if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-      warn "SPLIT_VPN=1: Local DNS will be disabled automatically (unsupported in split mode)."
-    fi
-  fi
+  # Reverse proxy and custom DNS helpers have been removed; no additional warnings required.
 }
 
 # Accepts explicit credentials but falls back to global PU/PW for backward compatibility.

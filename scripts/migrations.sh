@@ -55,19 +55,6 @@ run_one_time_migrations() {
       fi
     fi
 
-    local raw_hash_line=""
-    raw_hash_line="$(arr_run_sensitive_command grep -m1 '^CADDY_BASIC_AUTH_HASH=' "${ARR_ENV_FILE}" || true)"
-    if [[ -n "$raw_hash_line" ]]; then
-      local hash_value="${raw_hash_line#CADDY_BASIC_AUTH_HASH=}"
-      local hash_unescaped=""
-      hash_unescaped="$(unescape_env_value_from_compose "$hash_value")"
-      if [[ "$hash_value" != "$hash_unescaped" ]]; then
-        ensure_env_backup
-        persist_env_var "CADDY_BASIC_AUTH_HASH" "$hash_unescaped"
-        warn "Normalized CADDY_BASIC_AUTH_HASH format for Docker Compose compatibility"
-      fi
-    fi
-
     unset -f ensure_env_backup || true
   fi
 

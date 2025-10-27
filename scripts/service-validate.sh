@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Purpose: Validate generated compose artifacts, Caddy configuration, and container images prior to startup.
-# Inputs: Requires ARR_STACK_DIR, ARR_ENV_FILE, ARR_DOCKER_DIR, ENABLE_CADDY, and Docker CLI availability.
+# Purpose: Validate generated compose artifacts and container images prior to startup.
+# Inputs: Requires ARR_STACK_DIR, ARR_ENV_FILE, ARR_DOCKER_DIR, and Docker CLI availability.
 # Outputs: Emits warnings/errors, writes temporary diagnostics, and may persist image pins in .env.
 # Exit codes: Functions return non-zero when validation fails or dependencies are missing.
 if [[ -n "${__SERVICE_VALIDATE_LOADED:-}" ]]; then
@@ -219,62 +219,6 @@ validate_compose_or_die() {
   rm -f "$errlog"
 }
 
-# Validates generated Caddyfile using docker image when proxying is enabled
-validate_caddy_config() {
-  if [[ "${ENABLE_CADDY:-0}" != "1" ]]; then
-    msg "🧪 Skipping Caddy validation (ENABLE_CADDY=0)"
-    return 0
-  fi
-
-  local caddyfile="${ARR_DOCKER_DIR}/caddy/Caddyfile"
-
-  if [[ ! -f "$caddyfile" ]]; then
-    warn "Caddyfile not found at ${caddyfile}; skipping validation"
-    return 0
-  fi
-
-  if [[ -z "${CADDY_IMAGE:-}" ]]; then
-    warn "CADDY_IMAGE is unset; skipping Caddy config validation"
-    return 0
-  fi
-
-  local log_dir
-  log_dir="$(arr_log_dir)"
-  ensure_dir "$log_dir"
-  local logfile="${log_dir}/caddy-validate.log"
-
-  step "🧪 Validating Caddy configuration"
-
-  local -a env_args=()
-  if [[ -n "${LAN_IP:-}" ]]; then
-    env_args+=(-e "LAN_IP=${LAN_IP}")
-  fi
-  if [[ -n "${LOCALHOST_IP:-}" ]]; then
-    env_args+=(-e "LOCALHOST_IP=${LOCALHOST_IP}")
-  fi
-
-  local -a docker_args=(--rm)
-  if ((${#env_args[@]} > 0)); then
-    docker_args+=("${env_args[@]}")
-  fi
-  docker_args+=(-v "${caddyfile}:/etc/caddy/Caddyfile:ro" "${CADDY_IMAGE}" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile)
-
-  if ! docker run "${docker_args[@]}" >"$logfile" 2>&1; then
-    warn "Caddy validation failed; see ${logfile}"
-    cat "$logfile"
-    exit 1
-  fi
-
-  # shellcheck disable=SC2016  # literal ${ is intentional to flag unresolved placeholders
-  if LC_ALL=C grep -q '\${' "$caddyfile"; then
-    warn "Caddyfile contains unresolved variable references that might cause issues at runtime"
-    # shellcheck disable=SC2016  # literal ${ is intentional to flag unresolved placeholders
-    LC_ALL=C grep -n '\${' "$caddyfile"
-  fi
-
-  rm -f "$logfile"
-}
-
 # Rewrites .env image variables when fallback tags are selected
 update_env_image_var() {
   local var_name="$1"
@@ -347,17 +291,8 @@ validate_images() {
     image_vars+=(CONFIGARR_IMAGE)
   fi
 
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    image_vars+=(CADDY_IMAGE)
-  fi
-
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     image_vars+=(SABNZBD_IMAGE)
-  fi
-
-  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
-    LOCALDNS_IMAGE="${LOCALDNS_IMAGE:-4km3/dnsmasq:2.90-r3}"
-    image_vars+=(LOCALDNS_IMAGE)
   fi
 
   local failed_images=()

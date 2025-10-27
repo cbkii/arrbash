@@ -521,8 +521,6 @@ declare -a ARR_RUNTIME_KEYS=(
   GLUETUN_API_KEY
   QBT_PASS
   SABNZBD_API_KEY
-  CADDY_BASIC_AUTH_HASH
-  CADDY_BASIC_AUTH_USER
 )
 
 declare -A ARR_IMMUTABLE_SNAPSHOT=()
@@ -619,13 +617,10 @@ Usage: ./arr.sh [options]
 Options:
   --trace              Enable detailed tracing and write a log for debugging
   --yes                 Run non-interactively and assume yes to prompts
-  --enable-caddy        Enable the optional Caddy reverse proxy (sets ENABLE_CADDY=1)
   --enable-sab          Enable SABnzbd for this run (sets SABNZBD_ENABLED=1)
   --rotate-api-key      Force regeneration of the Gluetun API key
-  --rotate-caddy-auth   Force regeneration of the Caddy basic auth credentials
   --sync-api-keys       Force Sonarr/Radarr/Prowlarr API key sync into Configarr secrets
   --no-auto-api-sync    Disable automatic Configarr API key sync for this run
-  --setup-host-dns      Run the host DNS takeover helper during installation
   --refresh-aliases     Regenerate helper aliases and reload your shell
   --force-unlock        Remove an existing installer lock before continuing
   --uninstall           Remove the ARR stack and revert host changes
@@ -658,10 +653,6 @@ main() {
         ASSUME_YES=1
         shift
         ;;
-      --enable-caddy)
-        ENABLE_CADDY=1
-        shift
-        ;;
       --enable-sab)
         SABNZBD_ENABLED=1
         shift
@@ -669,11 +660,6 @@ main() {
       --rotate-api-key)
         # shellcheck disable=SC2034 # consumed in scripts/config-secrets.sh
         FORCE_ROTATE_API_KEY=1
-        shift
-        ;;
-      --rotate-caddy-auth)
-        # shellcheck disable=SC2034 # consumed in scripts/config-assets.sh
-        FORCE_REGEN_CADDY_AUTH=1
         shift
         ;;
       --sync-api-keys)
@@ -686,10 +672,6 @@ main() {
         ;;
       --force-unlock)
         ARR_FORCE_UNLOCK=1
-        shift
-        ;;
-      --setup-host-dns)
-        SETUP_HOST_DNS=1
         shift
         ;;
       --refresh-aliases)
@@ -761,13 +743,6 @@ main() {
   preflight_compose_interpolation
   validate_compose_or_die
   write_gluetun_control_assets
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    ensure_caddy_auth
-    write_caddy_assets
-    validate_caddy_config
-  else
-    msg "Skipping Caddy assets (ENABLE_CADDY=0)"
-  fi
   sync_gluetun_library
   sync_vpn_auto_reconnect_assets
   write_qbt_helper_script
@@ -777,12 +752,6 @@ main() {
   write_qbt_config
   if ! write_aliases_file; then
     warn "Helper aliases file could not be generated"
-  fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    configure_local_dns_entries
-  fi
-  if [[ "${SETUP_HOST_DNS:-0}" == "1" ]]; then
-    run_host_dns_setup
   fi
   write_configarr_assets
   verify_permissions
@@ -814,31 +783,6 @@ main() {
 
   export ARR_SAB_API_KEY_STATE="${ARR_SAB_API_KEY_STATE:-empty}"
   export ARR_SAB_API_KEY_SOURCE="${ARR_SAB_API_KEY_SOURCE:-}"
-
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
-    local doctor_script="${REPO_ROOT}/scripts/doctor.sh"
-    if [[ -x "${doctor_script}" ]]; then
-      msg "🩺 Running LAN diagnostics"
-      export ARR_INTERNAL_PORT_CONFLICTS="${ARR_INTERNAL_PORT_CONFLICTS:-0}"
-      export ARR_INTERNAL_PORT_CONFLICT_DETAIL="${ARR_INTERNAL_PORT_CONFLICT_DETAIL:-}"
-      if ! LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}" \
-        LAN_IP="${LAN_IP}" \
-        ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}" \
-        LOCAL_DNS_STATE="${LOCAL_DNS_STATE}" \
-        LOCAL_DNS_STATE_REASON="${LOCAL_DNS_STATE_REASON}" \
-        LOCALHOST_IP="${LOCALHOST_IP}" \
-        DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE}" \
-        GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT}" \
-        EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS}" \
-        bash "${doctor_script}"; then
-        warn "LAN diagnostics reported issues"
-      fi
-    else
-      warn "Doctor script missing or not executable at ${doctor_script}"
-    fi
-  elif [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    msg "🩺 Skipping LAN diagnostics (ENABLE_CADDY=0)"
-  fi
 
   msg "Installation completed at $(arr_date_local '+%Y-%m-%d %H:%M:%S %Z')"
   show_summary

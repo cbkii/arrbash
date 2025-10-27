@@ -219,13 +219,7 @@ filter_conditionals() {
 : "${FLARR_INT_PORT:=8191}"
 : "${SABNZBD_INT_PORT:=8080}"
 : "${SABNZBD_PORT:=${SABNZBD_INT_PORT}}"
-: "${CADDY_HTTP_PORT:=80}"
-: "${CADDY_HTTPS_PORT:=443}"
-: "${CADDY_DOMAIN_SUFFIX:=${LAN_DOMAIN_SUFFIX:-home.arpa}}"
-
 EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "${EXPOSE_DIRECT_PORTS:-0}")"
-ENABLE_CADDY="$(arr_normalize_bool "${ENABLE_CADDY:-0}")"
-ENABLE_LOCAL_DNS="$(arr_normalize_bool "${ENABLE_LOCAL_DNS:-0}")"
 SABNZBD_ENABLED="$(arr_normalize_bool "${SABNZBD_ENABLED:-0}")"
 SABNZBD_USE_VPN="$(arr_normalize_bool "${SABNZBD_USE_VPN:-0}")"
 PF_ASYNC_ENABLE="$(arr_normalize_bool "${PF_ASYNC_ENABLE:-1}")"
@@ -236,7 +230,7 @@ QBT_ENFORCE_WEBUI="$(arr_normalize_bool "${QBT_ENFORCE_WEBUI:-1}")"
 ENABLE_CONFIGARR="$(arr_normalize_bool "${ENABLE_CONFIGARR:-1}")"
 SPLIT_VPN="$(arr_normalize_bool "${SPLIT_VPN:-0}")"
 
-export ENABLE_CADDY EXPOSE_DIRECT_PORTS SABNZBD_ENABLED
+export EXPOSE_DIRECT_PORTS SABNZBD_ENABLED
 
 if [[ -z "${SONARR_PORT:-}" ]]; then SONARR_PORT="$SONARR_INT_PORT"; fi
 if [[ -z "${RADARR_PORT:-}" ]]; then RADARR_PORT="$RADARR_INT_PORT"; fi
@@ -293,18 +287,7 @@ if [[ -z "${OPENVPN_PASSWORD:-}" ]] && declare -f arr_derive_openvpn_password >/
 fi
 : "${OPENVPN_USER_ENFORCED:=${OPENVPN_USER:+1}}"
 
-if declare -f sanitize_user >/dev/null 2>&1; then
-  CADDY_BASIC_AUTH_USER="$(sanitize_user "${CADDY_BASIC_AUTH_USER:-}")"
-else
-  CADDY_BASIC_AUTH_USER="${CADDY_BASIC_AUTH_USER:-}"
-fi
-
-if [[ "${ENABLE_CADDY}" == "1" ]] && ! validate_caddy_user "$CADDY_BASIC_AUTH_USER"; then
-  printf 'CADDY_BASIC_AUTH_USER sanitized to an empty or invalid value; set a username containing only letters, numbers, dots, underscores, or hyphens before enabling Caddy.\n' >&2
-  exit 1
-fi
-
-OUT_PATH="${OUT_ARG}" 
+OUT_PATH="${OUT_ARG}"
 if [[ -z "$OUT_PATH" ]]; then
   OUT_PATH="${ARR_ENV_FILE}"
 fi

@@ -30,8 +30,8 @@ arr_setup_defaults() {
     LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX#.}"
   fi
 
-  LOCAL_DNS_STATE="inactive"
-  LOCAL_DNS_STATE_REASON="Local DNS disabled (ENABLE_LOCAL_DNS=0)"
+  LOCAL_DNS_STATE="removed"
+  LOCAL_DNS_STATE_REASON="Local DNS helper removed (custom domain routing disabled)"
   : "$LOCAL_DNS_STATE" "$LOCAL_DNS_STATE_REASON" # referenced by other modules after defaults load
 
   if [[ -z "${QBT_DOCKER_MODS+x}" ]]; then
@@ -60,18 +60,6 @@ arr_setup_defaults() {
   # shellcheck disable=SC2034
   VUETORRENT_VERSION=""
 
-  if [[ -n "${CADDY_DOMAIN_SUFFIX:-}" ]]; then
-    CADDY_DOMAIN_SUFFIX="${CADDY_DOMAIN_SUFFIX#.}"
-  fi
-
-  if [[ -z "${CADDY_DOMAIN_SUFFIX:-}" && -n "${LAN_DOMAIN_SUFFIX:-}" ]]; then
-    CADDY_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}"
-  fi
-
-  ARR_DOMAIN_SUFFIX_CLEAN="${CADDY_DOMAIN_SUFFIX#.}"
-  export ARR_DOMAIN_SUFFIX_CLEAN
-
-  export CADDY_DOMAIN_SUFFIX
   export LAN_DOMAIN_SUFFIX
 
   PROTON_USER_VALUE=""
@@ -185,7 +173,7 @@ arr_setup_defaults() {
     if declare -p ARR_DOCKER_SERVICES_DEFAULT >/dev/null 2>&1 && ((${#ARR_DOCKER_SERVICES_DEFAULT[@]} > 0)); then
       ARR_DOCKER_SERVICES=("${ARR_DOCKER_SERVICES_DEFAULT[@]}")
     else
-      ARR_DOCKER_SERVICES=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr sabnzbd configarr caddy local_dns)
+      ARR_DOCKER_SERVICES=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr sabnzbd configarr)
     fi
   fi
   : "${ARR_DOCKER_SERVICES[*]}"

@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Purpose: Orchestrate stack startup, compose operations, and VPN readiness checks.
-# Inputs: Uses ARR_STACK_DIR, ARR_DOCKER_DIR, ENABLE_CADDY, SABNZBD_ENABLED, LOCAL_DNS_STATE, and Compose tooling.
+# Inputs: Uses ARR_STACK_DIR, ARR_DOCKER_DIR, SABNZBD_ENABLED, and Compose tooling.
 # Outputs: Manages container lifecycle, updates run failure markers, and prints service status summaries.
 # Exit codes: Functions return non-zero when compose commands, VPN readiness, or Docker configuration adjustments fail.
 if [[ -n "${__SERVICE_LIFECYCLE_LOADED:-}" ]]; then
@@ -602,12 +602,6 @@ start_vpn_auto_reconnect_if_enabled() {
 show_service_status() {
   msg "Service status summary:"
   local -a services=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    services+=(caddy)
-  fi
-  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
-    services+=(local_dns)
-  fi
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     services+=(sabnzbd)
   fi
@@ -632,139 +626,6 @@ show_service_status() {
   fi
 }
 
-# Disables Docker's userland proxy to let dnsmasq bind :53 reliably
-ensure_docker_userland_proxy_disabled() {
-  if [[ "${LOCAL_DNS_STATE:-inactive}" != "active" ]]; then
-    msg "Skipping userland-proxy update (local DNS inactive)"
-    return 0
-  fi
-
-  local conf="${ARR_DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
-  local conf_dir
-  conf_dir="$(dirname "$conf")"
-
-  local merge_tool_preference="${ARR_DAEMON_JSON_TOOL:-}"
-  local merge_tool=""
-
-  if [[ -n "$merge_tool_preference" && "$merge_tool_preference" != "jq" ]]; then
-    warn "Only jq is supported for editing ${conf}; ignoring ARR_DAEMON_JSON_TOOL=${merge_tool_preference}"
-  fi
-
-  if command -v jq >/dev/null 2>&1; then
-    merge_tool="jq"
-  else
-    warn "jq is required to edit ${conf}. Install jq and rerun."
-    return 1
-  fi
-
-  if [[ ! -e "$conf" ]]; then
-    if [[ ! -d "$conf_dir" ]] && ! mkdir -p "$conf_dir"; then
-      warn "Failed to create ${conf_dir}"
-      return 1
-    fi
-  fi
-
-  if [[ -f "$conf" && ! -w "$conf" && ! -w "$conf_dir" ]]; then
-    warn "Docker daemon.json requires root to modify."
-    warn "Run with sudo or set {\"userland-proxy\": false} in ${conf} manually."
-    return 1
-  fi
-
-  if [[ "$merge_tool" == "jq" && -s "$conf" ]]; then
-    if jq -e '."userland-proxy" == false' "$conf" >/dev/null 2>&1; then
-      msg "Docker userland-proxy already disabled"
-      return 0
-    fi
-    if ! jq empty "$conf" >/dev/null 2>&1; then
-      warn "${conf} contains invalid JSON; fix the file manually before continuing."
-      return 1
-    fi
-
-  fi
-
-  local backup
-  # Any edits to ${conf} are reversible: restore the generated backup over ${conf}
-  # (e.g. `sudo cp "${backup}" "${conf}"`) and restart Docker to roll back the DNS
-  # userland-proxy change if needed.
-  backup="${conf}.${STACK}.$(date +%Y%m%d-%H%M%S).bak"
-  if [[ -f "$conf" ]]; then
-    if ! cp -p "$conf" "$backup"; then
-      warn "Failed to create backup at ${backup}"
-      return 1
-    fi
-  else
-    printf '{}\n' >"$backup" 2>/dev/null || true
-  fi
-
-  local tmp
-  if ! tmp="$(arr_mktemp_file "${conf}.XXXXXX.tmp")"; then
-    warn "Failed to create temporary file for ${conf}"
-    return 1
-  fi
-
-  local merge_status=0
-  if [[ "$merge_tool" == "jq" ]]; then
-    if [[ -s "$conf" ]]; then
-      jq -S '."userland-proxy" = false' "$conf" >"$tmp" 2>/dev/null || merge_status=$?
-    else
-      printf '{\n  "userland-proxy": false\n}\n' >"$tmp" || merge_status=1
-    fi
-  fi
-
-  if ((merge_status != 0)); then
-    arr_cleanup_temp_path "$tmp"
-    warn "Failed to merge userland-proxy setting into ${conf}"
-    warn "Backup saved at ${backup}"
-    return 1
-  fi
-
-  if ! mv "$tmp" "$conf"; then
-    arr_cleanup_temp_path "$tmp"
-    warn "Failed to replace ${conf}. Backup saved at ${backup}"
-    return 1
-  fi
-  arr_unregister_temp_path "$tmp"
-  if [[ -f "$backup" ]]; then
-    chmod --reference "$backup" "$conf" 2>/dev/null || ensure_nonsecret_file_mode "$conf"
-  else
-    ensure_nonsecret_file_mode "$conf"
-  fi
-
-  local restart_allowed=0
-  if [[ "${ASSUME_YES:-0}" == "1" || "${ARR_HOST_RESTART_OK:-0}" == "1" ]]; then
-    restart_allowed=1
-  fi
-
-  if ((restart_allowed)); then
-    if command -v systemctl >/dev/null 2>&1; then
-      if ! systemctl restart docker >/dev/null 2>&1; then
-        warn "Failed to restart Docker; run 'sudo systemctl restart docker' manually."
-        warn "Rollback available at: ${backup}"
-        return 1
-      fi
-      if ! systemctl is-active --quiet docker; then
-        warn "Docker failed to report healthy after restart; inspect 'journalctl -xeu docker'."
-        return 1
-      fi
-      msg "Docker daemon restarted to apply userland-proxy change"
-    elif command -v service >/dev/null 2>&1; then
-      if ! service docker restart >/dev/null 2>&1; then
-        warn "Failed to restart Docker; run 'sudo service docker restart' manually."
-        warn "Rollback available at: ${backup}"
-        return 1
-      fi
-      msg "Docker daemon restarted to apply userland-proxy change"
-    else
-      warn "Docker restart command not found; restart the daemon manually to apply changes."
-    fi
-  else
-    warn "Docker restart required to apply userland-proxy change. Re-run with --yes or ARR_HOST_RESTART_OK=1."
-  fi
-
-  msg "Docker userland-proxy set to false"
-  return 0
-}
-
 # Orchestrates service startup: cleanup, validation, image pulls, health waits, summaries
 start_stack() {
   step "Starting service stack"
@@ -774,10 +635,6 @@ start_stack() {
   arr_clear_run_failure || true
 
   safe_cleanup
-
-  if ! ensure_docker_userland_proxy_disabled; then
-    return 1
-  fi
 
   if ! validate_images; then
     return 1
@@ -840,14 +697,7 @@ start_stack() {
   start_vpn_auto_reconnect_if_enabled
   service_start_sabnzbd
 
-  local services=()
-  if [[ "${LOCAL_DNS_STATE:-inactive}" == "active" ]]; then
-    services+=(local_dns)
-  fi
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    services+=(caddy)
-  fi
-  services+=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
+  local services=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     services+=(sabnzbd)
   fi
@@ -897,12 +747,6 @@ start_stack() {
     for service in "${created_services[@]}"; do
       docker start "$(service_container_name "$service")" 2>/dev/null || true
     done
-  fi
-
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    if ! sync_caddy_ca_public_copy --wait; then
-      warn "Caddy CA root certificate is not published yet; fetch http://ca.${ARR_DOMAIN_SUFFIX_CLEAN}/root.crt after Caddy issues it."
-    fi
   fi
 
   if ((qb_started)); then

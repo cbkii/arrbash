@@ -1989,12 +1989,6 @@ arr_derive_gluetun_firewall_input_ports() {
     ports+=("$port")
   fi
 
-  if [[ "$split_mode" != "1" && "${ENABLE_CADDY:-0}" == "1" ]]; then
-    for port in "${CADDY_HTTP_PORT:-}" "${CADDY_HTTPS_PORT:-}"; do
-      [[ -n "$port" ]] && ports+=("$port")
-    done
-  fi
-
   if [[ "$expose_direct" == "1" ]]; then
     for port in \
       "${QBT_PORT:-}" "${SONARR_PORT:-}" "${RADARR_PORT:-}" \
@@ -2058,31 +2052,7 @@ arr_derive_openvpn_password() {
 }
 
 arr_derive_compose_profiles_csv() {
-  local -a profiles=(ipdirect)
-
-  if [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
-    profiles+=(proxy)
-  fi
-  if [[ "${ENABLE_LOCAL_DNS:-0}" == "1" ]]; then
-    profiles+=(localdns)
-  fi
-
-  if ((${#profiles[@]} == 0)); then
-    printf '\n'
-    return 0
-  fi
-
-  local -A seen=()
-  local -a deduped=()
-  local profile
-  for profile in "${profiles[@]}"; do
-    if [[ -n "$profile" && -z "${seen[$profile]:-}" ]]; then
-      seen["$profile"]=1
-      deduped+=("$profile")
-    fi
-  done
-
-  IFS=, printf '%s\n' "${deduped[*]}"
+  printf '%s\n' "ipdirect"
 }
 
 arr_assign_upstream_dns_env() {

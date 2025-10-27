@@ -2,7 +2,7 @@
 
 # Configuration guide
 
-Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `.env` now comes from `.env.template` via `scripts/gen-env.sh`, so the template is the single source of truth for Compose variables. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it. Generated artifacts (`.env`, `docker-compose.yml`, `Caddyfile`, etc.) are overwritten on every run—never edit them manually.
+Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `.env` now comes from `.env.template` via `scripts/gen-env.sh`, so the template is the single source of truth for Compose variables. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it. Generated artifacts (`.env`, `docker-compose.yml`, and helper scripts) are overwritten on every run—never edit them manually.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `d
 
 ## Configuration layers
 
-1. **CLI flags** – run-scoped toggles (for example `./arr.sh --enable-caddy`) apply after the read-only guard. They override exported variables and `userr.conf`, so use them for temporary changes.
+1. **CLI flags** – run-scoped toggles apply after the read-only guard. They override exported variables and `userr.conf`, so use them for temporary changes.
 2. **Shell environment** – anything exported before running `./arr.sh` overrides `userr.conf` and defaults, but CLI flags are applied last. Paths like `ARR_USERCONF_PATH` may be normalised to an absolute path while loading.
 3. **`${ARRCONF_DIR}/userr.conf`** – your saved settings (defaults to `${ARR_DATA_ROOT}/${STACK}configs/userr.conf`). Keep it outside version control and rerun the installer after every edit.
 4. **`arrconf/userr.conf.defaults.sh`** – repo defaults.
@@ -22,7 +22,7 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 
 ### Placeholder handling, quoting, and feature gates
 - `.env.template` uses `# @if VAR` / `# @endif` guards to include optional blocks only when their controlling variable resolves to a truthy value (`1`, `true`, `yes`, or `on`). `scripts/gen-env.sh` exports just the placeholders that survive those checks and substitutes them via `envsubst`, writing `KEY=value` lines with no additional quoting or escaping. Compose reads the resulting `.env` literally, so values containing spaces, `#`, or other shell metacharacters must already be valid for `.env` syntax.
-- `docker-compose.yml` is rendered from Bash templates that always double-quote scalars and escape backslashes, quotes, and newlines. Optional services (Caddy, Configarr, SABnzbd, VPN helpers, etc.) only contribute sections and environment keys when their feature flag is enabled. Leave variables such as `CADDY_BASIC_AUTH_HASH` or `SABNZBD_API_KEY` blank in `userr.conf`—the installer backfills them from preserved secrets where possible.
+- `docker-compose.yml` is rendered from Bash templates that always double-quote scalars and escape backslashes, quotes, and newlines. Optional services (Configarr, SABnzbd, VPN helpers, etc.) only contribute sections and environment keys when their feature flag is enabled. Leave variables such as `SABNZBD_API_KEY` blank in `userr.conf`—the installer backfills them from preserved secrets where possible.
 
 ## Core settings to review
 
@@ -32,7 +32,9 @@ The installer prints a configuration table during preflight. Cancel with `Ctrl+C
 | --- | --- | --- |
 | `LAN_IP` | *(empty)* | Set to your host's LAN address before exposing ports so published services bind correctly. |
 | `LOCALHOST_IP` | `127.0.0.1` | Keep on loopback so health checks reach the Gluetun control API. |
-| `LAN_DOMAIN_SUFFIX` | `home.arpa` | Optional hostname suffix used by local DNS and Caddy URLs. |
+| `LAN_DOMAIN_SUFFIX` | `home.arpa` | Legacy hostname suffix preserved for compatibility with older helper scripts. |
+| `SERVER_COUNTRIES` | `Netherlands,Singapore` | ProtonVPN countries passed to Gluetun when selecting an exit region. |
+| `SERVER_NAMES` | *(empty)* | Optional ProtonVPN server hostnames for Gluetun when you need a specific endpoint. |
 | `SPLIT_VPN` | `0` | `1` routes only qBittorrent through Gluetun; `0` tunnels the whole stack. |
 | `EXPOSE_DIRECT_PORTS` | `1` | Leave enabled for simple `http://${LAN_IP}:PORT` access; set `0` to hide UIs behind Docker networking. |
 | `DNS_DISTRIBUTION_MODE` | `router` | Choose `router` to push DNS via DHCP Option 6 or `per-device` to configure each client manually. |
@@ -93,8 +95,6 @@ Changing `ARR_DOCKER_DIR` moves all service state directories. Rerun `./arr.sh -
 | --- | --- | --- |
 | `QBT_USER` / `QBT_PASS` | `admin` / `adminadmin` | Keep credentials in sync with the WebUI; rerun the installer so `.env` updates. |
 | `GLUETUN_API_KEY` | *(empty)* | Leave blank to auto-generate; helpers rotate it when missing. |
-| `CADDY_BASIC_AUTH_USER` | `user` | Username required outside `CADDY_LAN_CIDRS`; hash updates follow automatically. |
-| `CADDY_BASIC_AUTH_HASH` | *(empty)* | Stored in `.env`; regenerated by the installer when blank. |
 | `QBT_AUTH_WHITELIST` | `127.0.0.1/32,${LAN_IP}/32` (derived) | CIDRs allowed to bypass the qBittorrent login; LAN defaults apply automatically. |
 
 ### VPN automation
@@ -126,7 +126,7 @@ Changing `ARR_DOCKER_DIR` moves all service state directories. Rerun `./arr.sh -
    # Cancel before container startup if the preview looks wrong.
    ```
 
-3. Review the summary. Never edit generated files (`.env`, `docker-compose.yml`, `Caddyfile`) by hand.
+3. Review the summary. Never edit generated files (`.env`, `docker-compose.yml`, or helper scripts) by hand.
 4. Confirm preserved secrets remain in sync:
   ```bash
   grep -E '^QBT_(USER|PASS)=' .env
@@ -136,15 +136,8 @@ Changing `ARR_DOCKER_DIR` moves all service state directories. Rerun `./arr.sh -
 
 Toggle these extras in `${ARRCONF_DIR}/userr.conf` or via the matching `./arr.sh` flags. Variables scoped to a disabled feature are omitted from `.env` and `docker-compose.yml`, so leave their values blank until you enable the feature. Rerun the installer after every change so generated files and helper aliases stay in sync.
 
-### Caddy HTTPS proxy
-- Set `ENABLE_CADDY=1` or run `./arr.sh --enable-caddy --yes` for a one-off enable.
-- Caddy publishes HTTPS on `CADDY_HTTP_PORT`/`CADDY_HTTPS_PORT` (defaults 80/443) and serves hostnames like `https://qbittorrent.${LAN_DOMAIN_SUFFIX}`.
-- Fetch the root certificate once and import it on each device. See [Networking](networking.md#local-https-via-caddy-optional) for the certificate flow.
-
-### Local DNS resolver
-- Set `ENABLE_LOCAL_DNS=1` to request the dnsmasq container. The installer records the real outcome in `LOCAL_DNS_STATE` and `LOCAL_DNS_STATE_REASON` so you know if another service blocked port 53.
-- Free the host resolver port with `./scripts/host-dns-setup.sh` when required, then rerun the installer.
-- Client setup guidance lives in [Networking](networking.md#local-dns-optional).
+### Reverse proxy & local DNS helpers (removed)
+Legacy Caddy and dnsmasq helpers have been retired. All services now publish directly on LAN ports or through Gluetun’s forwarded ports. Configure HTTPS or LAN DNS independently if you still need them.
 
 ### Configarr automation
 - Set `ENABLE_CONFIGARR=1` to let Configarr push opinionated defaults into Sonarr and Radarr.
@@ -157,7 +150,6 @@ Toggle these extras in `${ARRCONF_DIR}/userr.conf` or via the matching `./arr.sh
 - Adjust ports with `SABNZBD_PORT` (host) and `SABNZBD_INT_PORT` (container). Leave the internal port at 8080 when SAB shares the VPN namespace so it does not clash with qBittorrent’s WebUI (`8082`).
 - `SABNZBD_HOST`, `SABNZBD_TIMEOUT`, and `SABNZBD_CATEGORY` tune helper defaults. Override `SABNZBD_IMAGE` if you need a specific container tag.
 - The installer preserves your API key. If `.env` still shows `REPLACE_WITH_SABNZBD_API_KEY`, reruns extract `api_key` from `sabnzbd.ini`, store a dated backup, and write the new value.
-- When SAB runs on the LAN and Caddy is enabled, the stack publishes `https://sabnzbd.${LAN_DOMAIN_SUFFIX}` automatically. VPN mode skips LAN mappings, so reach it through Gluetun instead.
 - Use the helper commands described in [Operations](operations.md#sabnzbd-helper) to submit jobs or check status.
 
 ### VueTorrent WebUI (qBittorrent alternative)

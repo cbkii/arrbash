@@ -460,13 +460,6 @@ webui_port() {
   printf '%s' "$port"
 }
 
-# Builds LAN domain used behind Caddy for qBittorrent
-webui_domain() {
-  local suffix="${CADDY_DOMAIN_SUFFIX:-home.arpa}"
-  suffix="${suffix#.}"
-  printf 'qbittorrent.%s' "$suffix"
-}
-
 # Computes path to qBittorrent.conf within dockarr tree
 config_file_path() {
   local root="${DOCKER_DATA:-}"
@@ -522,8 +515,12 @@ derive_subnet() {
 show_info() {
   log_info "qBittorrent Access Information:"
   log_info "================================"
-  log_info "LAN URL:  http://$(webui_domain)/"
-  log_info "HTTPS:    https://$(webui_domain)/ (trust the Caddy internal CA)"
+  local host
+  local port
+  host="$(webui_host)"
+  port="$(webui_port)"
+  log_info "LAN URL:  http://${host}:${port}/"
+  log_info "HTTPS:    Bring your own reverse proxy or VPN if you require TLS."
   log_info ""
 
   local temp_pass
@@ -538,7 +535,7 @@ show_info() {
   fi
 
   log_info ""
-  log_info "Remote clients must authenticate through Caddy using user '${CADDY_BASIC_AUTH_USER:-user}' and the password hashed in ${ARR_DOCKER_DIR}/caddy/Caddyfile."
+  log_info "Remote access: publish through your own reverse proxy or VPN."
 }
 
 # Resets qBittorrent credentials and surfaces the new temporary password

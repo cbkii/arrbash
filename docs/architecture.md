@@ -12,16 +12,12 @@ The installer renders configuration from a few scripts, then launches Docker con
 | Sonarr / Radarr / Lidarr / Prowlarr / Bazarr | Media automation apps on the LAN bridge. | `http://LAN_IP:${SONARR_PORT}`, `:${RADARR_PORT}`, `:${LIDARR_PORT}`, etc. |
 | FlareSolverr | Captcha solver service used by indexers. | `http://LAN_IP:${FLARR_PORT}`. |
 | Configarr (optional) | Keeps Sonarr/Radarr configuration in sync. | Runs headless; configure via Configarr secrets. |
-| Caddy (optional) | HTTPS reverse proxy with internal CA. | `https://<service>.<LAN_DOMAIN_SUFFIX>` with basic auth for remote access. |
-| local_dns (optional) | dnsmasq-based resolver that answers `*.home.arpa`. | List the arrbash host as primary DNS on clients. |
-
-The installer publishes LAN ports when `EXPOSE_DIRECT_PORTS=1`. When disabled, reach services through Docker networks or the optional proxy.
+Legacy helpers for Caddy and local DNS have been removed. All services now publish directly on LAN ports or through Gluetun’s forwarded ports.
 
 ## Generated files
 `./arr.sh` writes artifacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:
 - `.env` – rendered by `scripts/gen-env.sh` using `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`, then persisted for reuse across runs.
 - `docker-compose.yml` – defines service profiles, networks, and health checks using the resolved values from `.env`.
-- `Caddyfile` – created when Caddy is enabled and validated with `caddy validate` before use.
 - `.aliasarr` – helper alias definitions sourced in your shell.
 - `${ARR_DOCKER_DIR}` – persistent application data, credentials, and Gluetun hooks.
 

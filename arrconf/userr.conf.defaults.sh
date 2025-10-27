@@ -57,11 +57,8 @@ TIMEZONE="${TIMEZONE:-Australia/Sydney}"
 LAN_IP="${LAN_IP:-}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
 SERVER_COUNTRIES="${SERVER_COUNTRIES:-Netherlands,Singapore}"
-# SERVER_NAMES=""  # Optionally pin Proton server hostnames if PF keeps returning 0 (comma-separated list)
+SERVER_NAMES="${SERVER_NAMES:-}"
 PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES:-}"
-
-# Domain suffix used by optional DNS/Caddy hostnames (default to RFC 8375 recommendation)
-LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX:-home.arpa}"
 
 # Helper utilities for defaults that may also be sourced by other scripts
 if ! declare -f arr_trim_whitespace >/dev/null 2>&1; then
@@ -121,8 +118,6 @@ ARR_DOCKER_SERVICES_DEFAULT=(
   flaresolverr
   sabnzbd
   configarr
-  caddy
-  local_dns
 )
 
 if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 || ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
@@ -139,69 +134,11 @@ arr_set_docker_services_list() {
 
 arr_set_docker_services_list
 
-# Upstream DNS resolvers for fallback (support legacy *_1/*_2 and new list form)
-ARR_DEFAULT_UPSTREAM_DNS=("1.1.1.1" "1.0.0.1")
-
-arr_dns_candidates=()
-
-if [[ -n "${UPSTREAM_DNS_1:-}" ]]; then
-  arr_dns_candidates+=("$(arr_trim_whitespace "$UPSTREAM_DNS_1")")
-fi
-
-if [[ -n "${UPSTREAM_DNS_2:-}" ]]; then
-  arr_dns_candidates+=("$(arr_trim_whitespace "$UPSTREAM_DNS_2")")
-fi
-
-if [[ -n "${UPSTREAM_DNS_SERVERS:-}" ]]; then
-  while IFS= read -r server; do
-    arr_dns_candidates+=("$server")
-  done < <(arr_parse_csv "$UPSTREAM_DNS_SERVERS")
-fi
-
-if ((${#arr_dns_candidates[@]} == 0)); then
-  arr_dns_candidates=("${ARR_DEFAULT_UPSTREAM_DNS[@]}")
-fi
-
-ARR_UPSTREAM_DNS_CHAIN=()
-while IFS= read -r _arr_dns_entry; do
-  [[ -n "$_arr_dns_entry" ]] || continue
-  ARR_UPSTREAM_DNS_CHAIN+=("$_arr_dns_entry")
-done < <(
-  printf '%s\n' "${arr_dns_candidates[@]}" | awk 'NF && !seen[$0]++'
-)
-unset _arr_dns_entry
-
-if ((${#ARR_UPSTREAM_DNS_CHAIN[@]} == 0)); then
-  ARR_UPSTREAM_DNS_CHAIN=("${ARR_DEFAULT_UPSTREAM_DNS[@]}")
-fi
-
-UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS:-$(arr_join_by ',' "${ARR_UPSTREAM_DNS_CHAIN[@]}")}"
-
-if [[ -z "${UPSTREAM_DNS_1:-}" ]]; then
-  UPSTREAM_DNS_1="$(printf '%s\n' "${ARR_UPSTREAM_DNS_CHAIN[@]}" | sed -n '1p')"
-fi
-
-if [[ -z "${UPSTREAM_DNS_2:-}" ]]; then
-  UPSTREAM_DNS_2="$(printf '%s\n' "${ARR_UPSTREAM_DNS_CHAIN[@]}" | sed -n '2p')"
-fi
-
-# Enable internal local DNS resolver service
-ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS:-0}"
-ENABLE_CADDY="${ENABLE_CADDY:-0}"
 SPLIT_VPN="${SPLIT_VPN:-0}"
 ENABLE_CONFIGARR="${ENABLE_CONFIGARR:-1}"
 
-# How LAN clients learn the resolver address
-#   router     – configure DHCP Option 6 on your router to ${LAN_IP}
-#   per-device – leave router DNS untouched and set DNS=${LAN_IP} on important clients
-DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE:-router}"
-
 # Host port preflight behaviour: enforce (default), warn, skip, or fix (auto-remediate then warn)
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE:-enforce}"
-
-# Reverse proxy hostnames (Caddy defaults to LAN suffix when unset)
-CADDY_DOMAIN_SUFFIX="${CADDY_DOMAIN_SUFFIX:-${LAN_DOMAIN_SUFFIX}}"
-CADDY_LAN_CIDRS="${CADDY_LAN_CIDRS:-127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
 
 # Gluetun control server
 GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
@@ -234,8 +171,6 @@ VPN_ROTATION_MAX_PER_DAY="${VPN_ROTATION_MAX_PER_DAY:-6}"
 VPN_ROTATION_JITTER_SECONDS="${VPN_ROTATION_JITTER_SECONDS:-0}"
 
 # Service ports
-CADDY_HTTP_PORT="${CADDY_HTTP_PORT:-80}"
-CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT:-443}"
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
 GLUETUN_CONNECTIVITY_PROBE_URLS="${GLUETUN_CONNECTIVITY_PROBE_URLS:-https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace}"
 
@@ -274,7 +209,7 @@ SABNZBD_CATEGORY="${SABNZBD_CATEGORY:-${STACK}}"
 SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT:-15}"
 ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT:-sabnzbd}"
 
-# Expose application ports directly on the host alongside Caddy's reverse proxy
+# Expose application ports directly on the host (legacy Caddy proxy removed)
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-1}"
 
 # qBittorrent credentials (override after first login)
@@ -287,10 +222,7 @@ fi
 # Comma-separated CIDR list that can bypass the qBittorrent WebUI login
 QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
 
-# Caddy Basic Auth credentials (bcrypt hash generated automatically when empty)
-CADDY_BASIC_AUTH_USER="${CADDY_BASIC_AUTH_USER:-user}"
-CADDY_BASIC_AUTH_HASH="${CADDY_BASIC_AUTH_HASH:-}"
-
+# Legacy Caddy Basic Auth credentials (unused)
 # Images
 GLUETUN_IMAGE="${GLUETUN_IMAGE:-qmcgaw/gluetun:v3.40.0}"
 QBITTORRENT_IMAGE="${QBITTORRENT_IMAGE:-lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415}"
@@ -302,8 +234,6 @@ BAZARR_IMAGE="${BAZARR_IMAGE:-lscr.io/linuxserver/bazarr:latest}"
 FLARR_IMAGE="${FLARR_IMAGE:-ghcr.io/flaresolverr/flaresolverr:v3.3.21}"
 SABNZBD_IMAGE="${SABNZBD_IMAGE:-lscr.io/linuxserver/sabnzbd:latest}"
 CONFIGARR_IMAGE="${CONFIGARR_IMAGE:-ghcr.io/raydak-labs/configarr:latest}"
-CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.8.4}"
-LOCALDNS_IMAGE="${LOCALDNS_IMAGE:-4km3/dnsmasq:2.90-r3}"
 #
 # ConfigArr quality/profile defaults
 ARR_VIDEO_MIN_RES="${ARR_VIDEO_MIN_RES:-720p}"
@@ -328,7 +258,6 @@ ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS:-1}"
 # Behaviour flags
 ASSUME_YES="${ASSUME_YES:-0}"
 FORCE_ROTATE_API_KEY="${FORCE_ROTATE_API_KEY:-0}"
-FORCE_REGEN_CADDY_AUTH="${FORCE_REGEN_CADDY_AUTH:-0}"
 SETUP_HOST_DNS="${SETUP_HOST_DNS:-0}"
 REFRESH_ALIASES="${REFRESH_ALIASES:-0}"
 
@@ -351,28 +280,16 @@ ARR_USERCONF_TEMPLATE_VARS=(
   ARR_INSTALL_LOG
   ARR_COLOR_OUTPUT
   TIMEZONE
-  LAN_DOMAIN_SUFFIX
-  CADDY_DOMAIN_SUFFIX
   SERVER_COUNTRIES
+  SERVER_NAMES
   PVPN_ROTATE_COUNTRIES
   GLUETUN_CONTROL_PORT
-  ENABLE_LOCAL_DNS
-  ENABLE_CADDY
-  CADDY_HTTP_PORT
-  CADDY_HTTPS_PORT
   SPLIT_VPN
   ENABLE_CONFIGARR
-  DNS_DISTRIBUTION_MODE
   ARR_PORT_CHECK_MODE
-  UPSTREAM_DNS_SERVERS
-  UPSTREAM_DNS_1
-  UPSTREAM_DNS_2
-  UPSTREAM_DNS_2_DISPLAY
-  CADDY_LAN_CIDRS
   EXPOSE_DIRECT_PORTS
   QBT_DOCKER_MODS
   QBT_AUTH_WHITELIST
-  CADDY_BASIC_AUTH_USER
   QBT_INT_PORT
   QBT_PORT
   QBT_BIND_ADDR
@@ -431,8 +348,6 @@ ARR_USERCONF_TEMPLATE_VARS=(
   FLARR_IMAGE
   SABNZBD_IMAGE
   CONFIGARR_IMAGE
-  CADDY_IMAGE
-  LOCALDNS_IMAGE
   ARR_VIDEO_MIN_RES
   ARR_VIDEO_MAX_RES
   ARR_EP_MIN_MB
@@ -458,8 +373,6 @@ ARR_USERCONF_IMPLICIT_VARS=(
   ARR_STACK_DIR
   ARR_ENV_FILE
   ARR_DOCKER_DIR
-  CADDY_IMAGE
-  LOCALDNS_IMAGE
   ARR_PERMISSION_PROFILE
   DOWNLOADS_DIR
   COMPLETED_DIR
@@ -492,11 +405,7 @@ ARR_DERIVED_ENV_VARS=(
   GLUETUN_API_KEY
   GLUETUN_FIREWALL_INPUT_PORTS
   GLUETUN_FIREWALL_OUTBOUND_SUBNETS
-  CADDY_BASIC_AUTH_HASH
 )
-
-# shellcheck disable=SC2034  # exported for template rendering via envsubst
-UPSTREAM_DNS_2_DISPLAY="${UPSTREAM_DNS_2:-<unset>}"
 
 arr_export_userconf_template_vars() {
   local var=""
@@ -609,26 +518,14 @@ TIMEZONE="${TIMEZONE}"            # Timezone for container logs and schedules (d
 # --- Networking ---
 LAN_IP=""                              # Bind services to one LAN IP (set a DHCP reservation or static IP before install)
 LOCALHOST_IP="127.0.0.1"               # Loopback used by the Gluetun control API
-LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX}"          # Suffix appended to service hostnames (default: ${LAN_DOMAIN_SUFFIX})
-CADDY_DOMAIN_SUFFIX="${CADDY_DOMAIN_SUFFIX}"  # Override Caddy hostname suffix independently of LAN DNS (default: ${CADDY_DOMAIN_SUFFIX})
 SERVER_COUNTRIES="${SERVER_COUNTRIES}"              # ProtonVPN exit country list (default: ${SERVER_COUNTRIES})
-# SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) if PF stays at 0
+# SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) when Gluetun should stick to a specific server
 PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES}"  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT}"            # Host port that exposes the Gluetun control API (default: ${GLUETUN_CONTROL_PORT})
-ENABLE_LOCAL_DNS="${ENABLE_LOCAL_DNS}"                   # Advanced: enable the optional dnsmasq container (0/1, default: ${ENABLE_LOCAL_DNS})
-ENABLE_CADDY="${ENABLE_CADDY}"                       # Optional Caddy reverse proxy (run ./arr.sh --enable-caddy or set 1 to add HTTPS hostnames)
-CADDY_HTTP_PORT="${CADDY_HTTP_PORT}"           # Host port published for plain HTTP healthz/apps (default: ${CADDY_HTTP_PORT})
-CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT}"         # Host port published for HTTPS proxy endpoints (default: ${CADDY_HTTPS_PORT})
 # SPLIT_VPN=1 → Only qbittorrent behind VPN; other services run outside it.
-# Disables Caddy & Local DNS (initial implementation).
 SPLIT_VPN="${SPLIT_VPN}"
 ENABLE_CONFIGARR="${ENABLE_CONFIGARR}"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
-DNS_DISTRIBUTION_MODE="${DNS_DISTRIBUTION_MODE}"         # router (DHCP Option 6) or per-device DNS settings (default: ${DNS_DISTRIBUTION_MODE})
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing, fix auto-clears blockers
-UPSTREAM_DNS_SERVERS="${UPSTREAM_DNS_SERVERS}"          # Comma-separated resolver list used by dnsmasq (default chain shown)
-UPSTREAM_DNS_1="${UPSTREAM_DNS_1}"               # Legacy primary resolver override (default derived: ${UPSTREAM_DNS_1})
-UPSTREAM_DNS_2="${UPSTREAM_DNS_2}"               # Legacy secondary resolver override (default derived: ${UPSTREAM_DNS_2_DISPLAY})
-CADDY_LAN_CIDRS="${CADDY_LAN_CIDRS}"  # Clients allowed to skip Caddy auth (default: ${CADDY_LAN_CIDRS})
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS}"                # Keep 1 so WebUIs publish on http://${LAN_IP}:PORT (requires LAN_IP set to your private IPv4)
 
 # --- Credentials ---
@@ -637,8 +534,6 @@ QBT_PASS="adminadmin"                  # Initial qBittorrent password (update im
 GLUETUN_API_KEY=""                     # Pre-seed a Gluetun API key or leave empty to auto-generate
 QBT_DOCKER_MODS="${QBT_DOCKER_MODS}"  # Vuetorrent WebUI mod (set empty to disable)
 QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBittorrent login prompt (default: ${QBT_AUTH_WHITELIST})
-CADDY_BASIC_AUTH_USER="${CADDY_BASIC_AUTH_USER}"           # Username clients outside CADDY_LAN_CIDRS must use (default: ${CADDY_BASIC_AUTH_USER})
-CADDY_BASIC_AUTH_HASH=""               # Bcrypt hash for the Basic Auth password (regen when empty)
 
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="${SABNZBD_ENABLED}"             # 1 enables SABnzbd container/helper integration (default: ${SABNZBD_ENABLED})
@@ -697,8 +592,6 @@ VPN_MAX_RETRY_MINUTES="${VPN_MAX_RETRY_MINUTES}"              # Retry budget bef
 # FLARR_IMAGE="${FLARR_IMAGE}"      # Override the FlareSolverr container tag
 # SABNZBD_IMAGE="${SABNZBD_IMAGE}"                    # Override the SABnzbd container tag
 # CONFIGARR_IMAGE="${CONFIGARR_IMAGE}"            # Override the Configarr container tag
-# CADDY_IMAGE="${CADDY_IMAGE}"                      # Override the Caddy reverse-proxy container tag
-# LOCALDNS_IMAGE="${LOCALDNS_IMAGE}"                # Override the dnsmasq container tag when local DNS is enabled
 
 # --- ConfigArr quality/profile defaults ---
 ARR_VIDEO_MIN_RES="${ARR_VIDEO_MIN_RES}"         # Minimum allowed resolution (default: ${ARR_VIDEO_MIN_RES})
@@ -723,7 +616,6 @@ ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS}"       # Decimals precision for minimu
 # --- Behaviour toggles ---
 # ASSUME_YES="0"                         # Skip confirmation prompts when scripting installs
 # FORCE_ROTATE_API_KEY="0"               # Force regeneration of the Gluetun API key on next run
-# FORCE_REGEN_CADDY_AUTH="0"             # Rotate the Caddy username/password on next run
 # SETUP_HOST_DNS="0"                      # Automate host DNS takeover helper (or call with --setup-host-dns)
 # REFRESH_ALIASES="0"                     # Regenerate helper aliases without running the installer
 EOF

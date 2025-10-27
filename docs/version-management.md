@@ -18,7 +18,6 @@ The stack pins each image to a tested tag. Registries occasionally remove old ma
 | Prowlarr | `lscr.io/linuxserver/prowlarr` | `latest` | Floating tag to avoid churn. |
 | Bazarr | `lscr.io/linuxserver/bazarr` | `latest` | Floating tag to avoid churn. |
 | FlareSolverr | `ghcr.io/flaresolverr/flaresolverr` | `v3.3.21` | Keep pinned to a stable release. |
-| Caddy | `caddy` | `2.8.4` | Use upstream stable. |
 
 ## Update workflow
 1. Back up your data:

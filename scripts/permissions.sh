@@ -112,11 +112,6 @@ verify_permissions() {
   local -a data_dirs=("${ARR_DOCKER_DIR}")
   local service
   for service in "${ARR_DOCKER_SERVICES[@]}"; do
-    if [[ "$service" == "local_dns" ]]; then
-      if [[ "${LOCAL_DNS_STATE:-inactive}" != "active" ]]; then
-        continue
-      fi
-    fi
     data_dirs+=("${ARR_DOCKER_DIR}/${service}")
   done
 

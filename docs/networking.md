@@ -56,46 +56,9 @@ Tips:
   ```
 - Use `./arr.sh --sync-api-keys` to re-copy Sonarr/Radarr/Prowlarr API keys into Configarr when required.
 
-## Local DNS (optional)
-1. Set `ENABLE_LOCAL_DNS=1` and choose `LAN_DOMAIN_SUFFIX` (default `home.arpa`).
-2. Ensure the host frees port 53 before installing. If `systemd-resolved` or another resolver owns it, run:
-   ```bash
-   ./scripts/host-dns-setup.sh
-   ```
-   Revert later with `./scripts/host-dns-rollback.sh`.
-3. Rerun the installer. The `local_dns` container serves `*.home.arpa` records and forwards other queries upstream.
-4. Point clients at the arrbash host as their primary DNS server (DHCP Option 6 or per-device settings). Keep a trusted public resolver listed as secondary.
+## Local DNS and HTTPS helpers
 
-Check status with:
-```bash
-nslookup qbittorrent.${LAN_DOMAIN_SUFFIX:-home.arpa}
-ss -ulpn | grep ':53 '
-```
-
-### Runtime state vs request
-
-Setting `ENABLE_LOCAL_DNS=1` requests the resolver container, but the installer also calculates `LOCAL_DNS_STATE` to describe
-the actual outcome. Use it (and the companion `LOCAL_DNS_STATE_REASON`) in summaries, the doctor report, or helper scripts to
-diagnose why DNS might not be running yet.
-
-| `LOCAL_DNS_STATE` | Meaning | Common next steps |
-| --- | --- | --- |
-| `inactive` | Local DNS was not requested (`ENABLE_LOCAL_DNS=0`). | Enable it in `userr.conf` and rerun the installer. |
-| `blocked` | The request was denied because port 53 was already bound on the host. | Free the port (for example via `scripts/host-dns-setup.sh`) and rerun. |
-| `split-disabled` | Split VPN mode disables the dnsmasq container by design. | Switch back to full-tunnel mode if you need the resolver. |
-| `active` | The resolver container is included in `docker-compose.yml`. | Point clients at the host’s LAN IP as their DNS server. |
-
-`LOCAL_DNS_STATE_REASON` contains the human-readable explanation that matches the table above, so helpers can echo it directly.
-
-## Local HTTPS via Caddy (optional)
-1. Set `ENABLE_CADDY=1` in `userr.conf` (or run `./arr.sh --enable-caddy --yes`).
-2. Rerun the installer; it renders `Caddyfile`, validates it with `caddy validate`, and publishes HTTPS on ports 80/443.
-3. Fetch the public root certificate once:
-   ```bash
-   curl -o root.crt http://ca.${LAN_DOMAIN_SUFFIX:-home.arpa}/root.crt
-   ```
-   Alternatively run `./scripts/export-caddy-ca.sh ~/root.crt` on the host, or `./scripts/install-caddy-ca.sh` for automated trust on Debian/Ubuntu.
-4. Import `root.crt` into each device’s trusted root store. Browsers will then accept URLs such as `https://qbittorrent.home.arpa`.
+Legacy dnsmasq and Caddy helpers have been retired. Manage hostname overrides and HTTPS termination with your own tooling when needed. arrbash now exposes services directly on the LAN (when `EXPOSE_DIRECT_PORTS=1`) and relies on Gluetun to publish qBittorrent’s forwarded ports.
 
 ## VPN auto-reconnect (optional)
 - Enable by setting `VPN_AUTO_RECONNECT_ENABLED=1` and rerunning the installer. The daemon monitors qBittorrent throughput and rotates Proton servers when sustained speeds fall below `VPN_SPEED_THRESHOLD_KBPS` for `VPN_CONSECUTIVE_CHECKS` intervals.
