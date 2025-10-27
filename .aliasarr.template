@@ -813,6 +813,132 @@ _arr_pf_log_file() {
   printf '%s/%s' "${ARR_DOCKER_DIR}/gluetun" "$name"
 }
 
+_arr_pf_status_file_path() {
+  local path
+  path="${PM_STATUS_FILE:-$(_arr_env_get PM_STATUS_FILE 2>/dev/null || echo '')}"
+  if [ -z "$path" ]; then
+    path="/tmp/gluetun/forwarded_port"
+  fi
+  printf '%s' "$path"
+}
+
+_arr_pf_host_status_file() {
+  local status_file
+  status_file="$(_arr_pf_status_file_path)"
+  if command -v gluetun_port_forward_status_host_path >/dev/null 2>&1; then
+    VPN_PORT_FORWARDING_STATUS_FILE="$status_file" gluetun_port_forward_status_host_path
+    return
+  fi
+  printf '%s' "$status_file"
+}
+
+_arr_pf_valid_port() {
+  case "$1" in
+    ''|0|*[!0-9]*) return 1 ;;
+    *)
+      if [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; then
+        return 0
+      fi
+      return 1
+      ;;
+  esac
+}
+
+_arr_pf_pm_script() {
+  local candidate
+  candidate="${ARR_STACK_DIR}/scripts/port-manager/pm-watch.sh"
+  if [ -x "$candidate" ]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+  candidate="${ARR_STACK_DIR}/../scripts/port-manager/pm-watch.sh"
+  if [ -x "$candidate" ]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+  warn "pm-watch.sh not found; ensure port-manager helpers are installed"
+  return 1
+}
+
+_arr_pf_run_once() {
+  local override="$1"
+  local dry_run="$2"
+  local script
+  script="$(_arr_pf_pm_script)" || return 1
+  local status_file
+  status_file="$(_arr_pf_status_file_path)"
+
+  local qbt_user="${QBT_USER:-$(_arr_env_get QBT_USER 2>/dev/null || printf '')}"
+  local qbt_pass="${QBT_PASS:-$(_arr_env_get QBT_PASS 2>/dev/null || printf '')}"
+  local qbt_web_port="${QBT_WEB_PORT:-$(_arr_env_get QBT_WEB_PORT 2>/dev/null || printf '')}"
+  local control_port="${GLUETUN_CONTROL_PORT:-$(_arr_env_get GLUETUN_CONTROL_PORT 2>/dev/null || printf '')}"
+  local api_key="${GLUETUN_API_KEY:-$(_arr_env_get GLUETUN_API_KEY 2>/dev/null || printf '')}"
+  local qbt_host="${QBT_HOST:-$(_arr_env_get QBT_HOST 2>/dev/null || printf '')}"
+
+  if [ -z "$qbt_host" ]; then
+    qbt_host="${LAN_IP:-$(_arr_env_get LAN_IP 2>/dev/null || printf '')}"
+  fi
+  if [ -z "$qbt_host" ]; then
+    qbt_host="${LOCALHOST_IP:-$(_arr_env_get LOCALHOST_IP 2>/dev/null || printf '127.0.0.1')}"
+  fi
+
+  if [ -z "$qbt_user" ] || [ -z "$qbt_pass" ]; then
+    warn "qBittorrent credentials not available (QBT_USER/QBT_PASS)"
+    return 1
+  fi
+  if [ -z "$qbt_web_port" ]; then
+    qbt_web_port=8080
+  fi
+  if [ -z "$control_port" ]; then
+    control_port=8000
+  fi
+
+  local -a env_args=(
+    "PM_RUN_ONCE=1"
+    "PM_STATUS_FILE=${status_file}"
+    "QBT_USER=${qbt_user}"
+    "QBT_PASS=${qbt_pass}"
+    "QBT_WEB_PORT=${qbt_web_port}"
+    "QBT_HOST=${qbt_host}"
+    "GLUETUN_CONTROL_PORT=${control_port}"
+  )
+
+  if [ -n "${api_key}" ]; then
+    env_args+=("GLUETUN_API_KEY=${api_key}")
+  fi
+  if [ -n "${PM_LOG_LEVEL:-}" ]; then
+    env_args+=("PM_LOG_LEVEL=${PM_LOG_LEVEL}")
+  fi
+  if [ -n "$override" ]; then
+    env_args+=("PM_OVERRIDE_PORT=${override}")
+  fi
+  if [ -n "$dry_run" ]; then
+    env_args+=("PM_DRY_RUN=${dry_run}")
+  fi
+
+  if _arr_docker_available && _arr_compose_cmd; then
+    local container_id
+    container_id="$(_arr_container_id_for_service port-manager 0 2>/dev/null || printf '')"
+    if [ -n "$container_id" ]; then
+      if _arr_compose exec port-manager env "${env_args[@]}" /port-manager/pm-watch.sh; then
+        return 0
+      fi
+      warn "port-manager container exec failed; attempting on-demand run"
+    fi
+
+    local -a run_args=(--rm)
+    local env_var
+    for env_var in "${env_args[@]}"; do
+      run_args+=(-e "$env_var")
+    done
+    if _arr_compose run "${run_args[@]}" port-manager /port-manager/pm-watch.sh; then
+      return 0
+    fi
+  fi
+
+  env "${env_args[@]}" "$script"
+}
+
 _arr_vpn_last_error=""
 
 _arr_docker_available() { command -v docker >/dev/null 2>&1; }
@@ -1473,6 +1599,13 @@ ProtonVPN & Gluetun (arr.vpn ...):
   arr.vpn paths                Display credential/config paths for ProtonVPN assets
   arr.vpn creds                Open ${ARRCONF_DIR}/proton.auth in $EDITOR for quick edits
 
+Port manager helpers (arr.pf ...):
+  arr.pf port                 Print the forwarded port (file first, then control API)
+  arr.pf sync                 Run pm-watch.sh once to refresh qBittorrent
+  arr.pf tail                 Follow the forwarded port file with timestamps
+  arr.pf logs                 Stream port-manager container logs
+  arr.pf test <port>          Dry-run an explicit listen_port update
+
 ARR service surfaces:
   arr.gluetun.help             Documented Gluetun control commands
   arr.qbt.help                 qBittorrent Web API helpers
@@ -1901,6 +2034,82 @@ arr.vpn.pf() {
     warn "${_arr_gluetun_last_error:-Unable to query forwarded port payload.}"
     return 1
   fi
+}
+
+arr.pf.port() {
+  local status_file port
+  status_file="$(_arr_pf_status_file_path)"
+  port="$(VPN_PORT_FORWARDING_STATUS_FILE="$status_file" gluetun_read_forwarded_port_file 2>/dev/null || printf '')"
+  if _arr_pf_valid_port "$port"; then
+    printf '%s\n' "$port"
+    return 0
+  fi
+  if command -v fetch_forwarded_port >/dev/null 2>&1; then
+    port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
+    if _arr_pf_valid_port "$port"; then
+      printf '%s\n' "$port"
+      return 0
+    fi
+  fi
+  warn 'Forwarded port not available.'
+  return 1
+}
+
+arr.pf.sync() {
+  _arr_pf_run_once "" 0
+}
+
+arr.pf.tail() {
+  local file
+  file="$(_arr_pf_host_status_file)"
+  if [ ! -f "$file" ]; then
+    warn "Forwarded port file not found yet: ${file}"
+  fi
+  if ! command -v date >/dev/null 2>&1; then
+    tail -f "$file"
+    return
+  fi
+  tail -n 0 -F "$file" | while IFS= read -r line; do
+    printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$line"
+  done
+}
+
+arr.pf.logs() {
+  if ! _arr_docker_available; then
+    warn "Docker command not available in this shell."
+    return 1
+  fi
+  local container
+  container="$(_arr_container_id_for_service port-manager 1 2>/dev/null || printf '')"
+  if [ -z "$container" ]; then
+    warn 'port-manager container not found.'
+    return 1
+  fi
+  docker logs -f "$container"
+}
+
+arr.pf.test() {
+  if [ $# -ne 1 ]; then
+    printf 'Usage: arr.pf.test <port>\n' >&2
+    return 1
+  fi
+  local port="$1"
+  if ! _arr_pf_valid_port "$port"; then
+    warn "Invalid port: ${port}"
+    return 1
+  fi
+  _arr_pf_run_once "$port" 1
+}
+
+arr.pf.help() {
+  cat <<'EOF'
+Port manager helpers:
+  arr.pf.port        Show the forwarded port (file first, then Gluetun control API)
+  arr.pf.sync        Run a one-shot port sync using pm-watch.sh
+  arr.pf.tail        Follow the forwarded port status file with timestamps
+  arr.pf.logs        Stream docker logs from the port-manager container
+  arr.pf.test <port> Dry-run qBittorrent listen_port update with an explicit port
+EOF
 }
 
 arr.vpn.health() {

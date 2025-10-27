@@ -190,6 +190,10 @@ SAB_SHORTCUTS
     fi
   fi
 
+  if ! grep -Fq "arr.pf.port" "$aliases_file" 2>/dev/null; then
+    warn "Port manager aliases missing from ${aliases_file}; regenerate aliases to enable arr.pf.* helpers"
+  fi
+
   if ! grep -Fq "arr.vpn.auto.status" "$aliases_file" 2>/dev/null; then
     {
       printf '\n# VPN auto-reconnect helpers\n'

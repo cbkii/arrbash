@@ -60,6 +60,14 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
   ./arr.sh --help
   ```
 
+## Proton VPN port forwarding behaviour
+- When you choose **OpenVPN**, arrbash appends `+pmp` to the Proton username at runtime so Proton grants an inbound port. Leave your stored credentials without the suffix; the installer injects it only for Gluetun.
+- When you use **WireGuard**, download the Proton config with **NAT-PMP (Port Forwarding)** enabled. Gluetun refuses to start if the config lacks those directives because Proton will never issue a port otherwise.
+- Gluetun writes the active forwarded port to `/tmp/gluetun/forwarded_port` and mirrors it through the control API at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`.
+- Only the Gluetun container publishes ports to your LAN. qBittorrent and the *Arr apps run in Gluetun’s network namespace so torrent traffic never leaks directly.
+- The control server binds to `127.0.0.1`, requires the `GLUETUN_API_KEY`, and exposes only the minimal routes arrbash needs. Do **not** map it to the LAN.
+- Set `PORT_MANAGER_ENABLE=1` to launch the optional `port-manager` sidecar. It watches Gluetun’s forwarded port file/control server and updates qBittorrent’s Web API to listen on the leased port while disabling random ports.
+
 To remove the stack and clean up generated assets later, run:
 
 ```bash

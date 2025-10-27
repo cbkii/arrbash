@@ -19,6 +19,186 @@ VPN_AUTO_HEALTH_IP=""
 VPN_AUTO_HEALTH_PORT=0
 VPN_AUTO_HEALTH_PORT_STATUS=""
 VPN_AUTO_HEALTH_REASON=""
+VPN_AUTO_WIREGUARD_SWITCHED=0
+VPN_AUTO_WIREGUARD_SWITCH_REASON=""
+
+vpn_auto_env_path() {
+  local env_file="${ARR_ENV_FILE:-}"
+  if [[ -z "$env_file" ]]; then
+    if declare -f arr_env_file >/dev/null 2>&1; then
+      env_file="$(arr_env_file)"
+    elif [[ -n "${ARR_STACK_DIR:-}" ]]; then
+      env_file="${ARR_STACK_DIR%/}/.env"
+    fi
+  fi
+  printf '%s' "$env_file"
+}
+
+vpn_auto_env_set() {
+  local key="$1"
+  local value="$2"
+  local env_file
+  env_file="$(vpn_auto_env_path)"
+  if [[ -z "$env_file" ]]; then
+    return 1
+  fi
+
+  local dir
+  dir="$(dirname -- "$env_file")"
+  if declare -f ensure_dir >/dev/null 2>&1; then
+    ensure_dir "$dir"
+  fi
+
+  local tmp
+  if ! tmp="$(arr_mktemp_file "${env_file}.XXXXXX.tmp" '600')"; then
+    return 1
+  fi
+
+  if [[ -f "$env_file" ]]; then
+    if ! awk -v key="$key" -v value="$value" '
+      BEGIN { updated = 0 }
+      $0 ~ ("^" key "=") {
+        if (!updated) {
+          print key "=" value
+          updated = 1
+          next
+        }
+      }
+      { print }
+      END { if (!updated) print key "=" value }
+    ' "$env_file" >"$tmp" 2>/dev/null; then
+      arr_cleanup_temp_path "$tmp"
+      return 1
+    fi
+  else
+    printf '%s=%s\n' "$key" "$value" >"$tmp"
+  fi
+
+  if mv "$tmp" "$env_file" 2>/dev/null; then
+    arr_unregister_temp_path "$tmp"
+    if declare -f ensure_secret_file_mode >/dev/null 2>&1; then
+      ensure_secret_file_mode "$env_file"
+    fi
+    return 0
+  fi
+
+  arr_cleanup_temp_path "$tmp"
+  return 1
+}
+
+vpn_auto_wireguard_forwarded_port() {
+  local port=""
+  if port="$(gluetun_read_forwarded_port_file 2>/dev/null || printf '')"; then
+    if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)); then
+      printf '%s' "$port"
+      return 0
+    fi
+  fi
+
+  port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
+  if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)); then
+    printf '%s' "$port"
+    return 0
+  fi
+
+  return 1
+}
+
+vpn_auto_wireguard_wait_for_port() {
+  local __port_var="${1:-}"
+  local timeout
+  timeout="$(vpn_auto_wireguard_fallback_timeout_seconds)"
+  if [[ -z "$timeout" || ! "$timeout" =~ ^[0-9]+$ ]]; then
+    timeout=120
+  fi
+
+  msg "VPN auto: waiting up to ${timeout}s for WireGuard port forwarding"
+  local start
+  start="$(vpn_auto_now_epoch)"
+  while true; do
+    local port=""
+    if port="$(vpn_auto_wireguard_forwarded_port 2>/dev/null || printf '')"; then
+      if [[ -n "$port" ]]; then
+        if [[ -n "$__port_var" ]]; then
+          printf -v "$__port_var" '%s' "$port"
+        fi
+        return 0
+      fi
+    fi
+
+    local now
+    now="$(vpn_auto_now_epoch)"
+    if ((now - start >= timeout)); then
+      break
+    fi
+    sleep 5
+  done
+
+  return 1
+}
+
+vpn_auto_switch_to_openvpn() {
+  local reason="$1"
+
+  if ! vpn_auto_env_set "VPN_TYPE" "openvpn"; then
+    warn "VPN auto: failed to update VPN_TYPE=openvpn in .env"
+    return 1
+  fi
+
+  local recreate_ok=0
+  if vpn_auto_compose_available; then
+    if arr_resolve_compose_cmd 0 >/dev/null 2>&1; then
+      if ( cd "${ARR_STACK_DIR:-.}" 2>/dev/null && "${DOCKER_COMPOSE_CMD[@]}" up -d --force-recreate gluetun >/dev/null 2>&1 ); then
+        recreate_ok=1
+      fi
+    fi
+  fi
+
+  if ((recreate_ok == 0)); then
+    if ! vpn_auto_restart_gluetun_container; then
+      warn "VPN auto: failed to restart Gluetun after switching to OpenVPN"
+      return 1
+    fi
+  fi
+
+  vpn_auto_state_record_protocol_switch "wireguard" "openvpn" "$reason"
+  VPN_AUTO_STATE_PENDING_PORT_SYNC=1
+  VPN_AUTO_STATE_LAST_ERROR="$reason"
+  vpn_auto_append_history "protocol-switch" "success" "$reason"
+  return 0
+}
+
+vpn_auto_handle_wireguard_pf_fallback() {
+  local vpn_type="${VPN_TYPE:-openvpn}"
+  vpn_type="$(printf '%s' "$vpn_type" | tr '[:upper:]' '[:lower:]')"
+  VPN_AUTO_STATE_LAST_PROTOCOL="$vpn_type"
+
+  if [[ "$vpn_type" != "wireguard" ]]; then
+    return 0
+  fi
+
+  local forwarded_port=""
+  if vpn_auto_wireguard_wait_for_port forwarded_port; then
+    return 0
+  fi
+
+  local timeout
+  timeout="$(vpn_auto_wireguard_fallback_timeout_seconds)"
+  if [[ -z "$timeout" || ! "$timeout" =~ ^[0-9]+$ ]]; then
+    timeout=120
+  fi
+  local reason="WireGuard port forwarding unavailable after ${timeout}s"
+  warn "VPN auto: ${reason}; switching to OpenVPN fallback"
+
+  if ! vpn_auto_switch_to_openvpn "$reason"; then
+    return 1
+  fi
+
+  VPN_AUTO_WIREGUARD_SWITCHED=1
+  VPN_AUTO_WIREGUARD_SWITCH_REASON="$reason"
+  VPN_TYPE="openvpn"
+  return 0
+}
 
 vpn_auto_control_request() {
   local path="$1"
@@ -293,6 +473,18 @@ vpn_auto_update_status() {
 vpn_auto_reconnect_process_once() {
   vpn_auto_reconnect_load_env
   vpn_auto_state_load
+
+  VPN_AUTO_WIREGUARD_SWITCHED=0
+  VPN_AUTO_WIREGUARD_SWITCH_REASON=""
+  if ! vpn_auto_handle_wireguard_pf_fallback; then
+    vpn_auto_state_save
+    return 1
+  fi
+  if ((VPN_AUTO_WIREGUARD_SWITCHED)); then
+    vpn_auto_update_status "switching" "${VPN_AUTO_WIREGUARD_SWITCH_REASON}"
+    vpn_auto_state_save
+    return 0
+  fi
 
   local now
   now="$(vpn_auto_now_epoch)"
