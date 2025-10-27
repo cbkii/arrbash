@@ -284,106 +284,81 @@ WARNING
 
   if [[ "${VPN_AUTO_RECONNECT_ENABLED:-0}" == "1" ]]; then
     msg "VPN Auto-Reconnect:"
-    local auto_required="${VPN_CONSECUTIVE_CHECKS:-3}"
-    [[ "$auto_required" =~ ^[0-9]+$ ]] || auto_required=3
-    local auto_status="unknown"
-    local auto_detail=""
-    local auto_consecutive="0"
-    local auto_country=""
-    local auto_last_reconnect=""
-    local auto_cooldown="0"
-    local auto_retry_backoff="0"
-    local auto_retry_total="0"
-    local auto_next_decision="0"
-    local auto_last_low=""
-    local auto_classification="monitoring"
-    local auto_rotation_count="0"
-    local auto_rotation_cap="0"
-    local auto_next_possible=""
-    local auto_jitter="0"
     if [[ -f "$vpn_auto_status_file" ]]; then
+      local auto_status="unknown"
+      local auto_detail=""
+      local auto_failures="0"
+      local auto_ip=""
+      local auto_port="0"
+      local auto_qbt_port="0"
+      local auto_last_action=""
+      local auto_last_recovery=""
+      local auto_cooldown=""
+      local auto_last_error=""
+      local auto_control_restart=""
+      local auto_container_restart=""
+      local auto_port_missing=""
       if command -v jq >/dev/null 2>&1; then
         auto_status="$(jq -r '.status // "unknown"' "$vpn_auto_status_file" 2>/dev/null || printf 'unknown')"
         auto_detail="$(jq -r '.detail // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
-        auto_consecutive="$(jq -r '.consecutive_low // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
-        auto_country="$(jq -r '.last_country // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
-        auto_last_reconnect="$(jq -r '.last_reconnect // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
-        auto_cooldown="$(jq -r '.cooldown_until // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
-        auto_retry_backoff="$(jq -r '.retry_backoff // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
-        auto_retry_total="$(jq -r '.retry_total // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
-        auto_next_decision="$(jq -r '.next_decision_at // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
-        auto_last_low="$(jq -r '.last_low // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
-        auto_classification="$(jq -r '.classification // "monitoring"' "$vpn_auto_status_file" 2>/dev/null || printf 'monitoring')"
-        auto_rotation_count="$(jq -r '.rotation_count_day // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
-        auto_rotation_cap="$(jq -r '.rotation_cap // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
-        auto_next_possible="$(jq -r '.next_possible_action // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
-        auto_jitter="$(jq -r '.jitter_applied // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_failures="$(jq -r '.consecutive_failures // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_ip="$(jq -r '.public_ip // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_port="$(jq -r '.forwarded_port // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_qbt_port="$(jq -r '.qbt_port // 0' "$vpn_auto_status_file" 2>/dev/null || printf '0')"
+        auto_last_action="$(jq -r '.last_action // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_last_recovery="$(jq -r '.last_recovery // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_cooldown="$(jq -r '.cooldown_until // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_last_error="$(jq -r '.last_error // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_control_restart="$(jq -r '.last_control_restart // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_container_restart="$(jq -r '.last_container_restart // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
+        auto_port_missing="$(jq -r '.port_missing_since // ""' "$vpn_auto_status_file" 2>/dev/null || printf '')"
       else
         auto_status="$(sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf 'unknown')"
         auto_detail="$(sed -n 's/.*"detail"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
-        auto_consecutive="$(sed -n 's/.*"consecutive_low"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
-        auto_country="$(sed -n 's/.*"last_country"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
-        auto_last_reconnect="$(sed -n 's/.*"last_reconnect"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
-        auto_cooldown="$(sed -n 's/.*"cooldown_until"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
-        auto_retry_backoff="$(sed -n 's/.*"retry_backoff"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
-        auto_retry_total="$(sed -n 's/.*"retry_total"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
-        auto_next_decision="$(sed -n 's/.*"next_decision_at"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
-        auto_last_low="$(sed -n 's/.*"last_low"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
-        auto_classification="$(sed -n 's/.*"classification"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf 'monitoring')"
-        auto_rotation_count="$(sed -n 's/.*"rotation_count_day"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
-        auto_rotation_cap="$(sed -n 's/.*"rotation_cap"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
-        auto_next_possible="$(sed -n 's/.*"next_possible_action"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
-        auto_jitter="$(sed -n 's/.*"jitter_applied"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_failures="$(sed -n 's/.*"consecutive_failures"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_ip="$(sed -n 's/.*"public_ip"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_port="$(sed -n 's/.*"forwarded_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_qbt_port="$(sed -n 's/.*"qbt_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '0')"
+        auto_last_action="$(sed -n 's/.*"last_action"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_last_recovery="$(sed -n 's/.*"last_recovery"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_cooldown="$(sed -n 's/.*"cooldown_until"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_last_error="$(sed -n 's/.*"last_error"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_control_restart="$(sed -n 's/.*"last_control_restart"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_container_restart="$(sed -n 's/.*"last_container_restart"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
+        auto_port_missing="$(sed -n 's/.*"port_missing_since"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
       fi
-      [[ -n "$auto_status" ]] || auto_status="unknown"
-      [[ "$auto_consecutive" =~ ^[0-9]+$ ]] || auto_consecutive=0
-      [[ "$auto_retry_backoff" =~ ^[0-9]+$ ]] || auto_retry_backoff=0
-      [[ "$auto_retry_total" =~ ^[0-9]+$ ]] || auto_retry_total=0
-      [[ "$auto_cooldown" =~ ^[0-9]+$ ]] || auto_cooldown=0
-      [[ "$auto_next_decision" =~ ^[0-9]+$ ]] || auto_next_decision=0
-      [[ "$auto_rotation_count" =~ ^[0-9]+$ ]] || auto_rotation_count=0
-      [[ "$auto_rotation_cap" =~ ^[0-9]+$ ]] || auto_rotation_cap=0
-      [[ "$auto_jitter" =~ ^[0-9]+$ ]] || auto_jitter=0
-      if [[ "$auto_next_possible" == "null" ]]; then
-        auto_next_possible=""
+      msg "  Status: ${auto_status}${auto_detail:+ (${auto_detail})}"
+      msg "  Consecutive failures: ${auto_failures}"
+      if [[ -n "$auto_ip" ]]; then
+        msg "  Public IP: ${auto_ip}"
       fi
-      local status_line="  Status: ${auto_status}"
-      if [[ -n "$auto_detail" ]]; then
-        status_line+=" (${auto_detail})"
-      fi
-      status_line+=" (classification=${auto_classification}; consecutive_low=${auto_consecutive}/${auto_required})"
-      msg "$status_line"
-      if [[ -n "$auto_last_reconnect" ]]; then
-        local reconnect_line="  Last reconnect: ${auto_last_reconnect}"
-        if [[ -n "$auto_country" ]]; then
-          reconnect_line+=" (country: ${auto_country})"
+      if [[ "$auto_port" =~ ^[0-9]+$ && "$auto_port" -gt 0 ]]; then
+        local port_line="  Forwarded port: ${auto_port}"
+        if [[ "$auto_qbt_port" =~ ^[0-9]+$ && "$auto_qbt_port" -gt 0 ]]; then
+          port_line+=" (qBittorrent: ${auto_qbt_port})"
         fi
-        msg "$reconnect_line"
+        msg "$port_line"
       fi
-      if [[ -n "$auto_last_low" ]]; then
-        msg "  Last low sample: ${auto_last_low}"
+      if [[ -n "$auto_port_missing" ]]; then
+        msg "  Port missing since: ${auto_port_missing}"
       fi
-      local now_epoch
-      now_epoch="$(arr_now_epoch)"
-      if ((auto_cooldown > now_epoch)); then
-        msg "  Cooldown until: $(summary_format_epoch "$auto_cooldown")"
+      if [[ -n "$auto_last_recovery" ]]; then
+        msg "  Last recovery: ${auto_last_recovery}"
       fi
-      if ((auto_next_decision > 0)); then
-        msg "  Next decision: $(summary_format_epoch "$auto_next_decision")"
+      if [[ -n "$auto_last_action" ]]; then
+        msg "  Last action: ${auto_last_action}"
       fi
-      if [[ -n "$auto_next_possible" ]]; then
-        msg "  Next possible action: ${auto_next_possible}"
+      if [[ -n "$auto_cooldown" ]]; then
+        msg "  Cooldown until: ${auto_cooldown}"
       fi
-      local rotation_line="  Rotation: ${auto_rotation_count}"
-      if ((auto_rotation_cap > 0)); then
-        rotation_line+="/${auto_rotation_cap} per day"
-      else
-        rotation_line+=" (uncapped)"
+      if [[ -n "$auto_control_restart" ]]; then
+        msg "  Last control restart: ${auto_control_restart}"
       fi
-      msg "$rotation_line"
-      msg "  Retry budget: ${auto_retry_total}/${VPN_MAX_RETRY_MINUTES:-20}m (backoff=${auto_retry_backoff}m)"
-      if ((auto_jitter > 0)); then
-        msg "  Last jitter applied: ${auto_jitter}s"
+      if [[ -n "$auto_container_restart" ]]; then
+        msg "  Last container restart: ${auto_container_restart}"
+      fi
+      if [[ -n "$auto_last_error" ]]; then
+        msg "  Last error: ${auto_last_error}"
       fi
     else
       msg "  Status: (no status file yet)"
@@ -395,7 +370,8 @@ WARNING
       end_fmt=$(printf '%02d' "${VPN_ALLOWED_HOURS_END:-0}" 2>/dev/null || printf '%02d' 0)
       window_display="${start_fmt}–${end_fmt} UTC"
     fi
-    msg "  Threshold: ${VPN_SPEED_THRESHOLD_KBPS:-12} KB/s; Interval: ${VPN_CHECK_INTERVAL_MINUTES:-20}m"
+    msg "  Interval: ${VPN_CHECK_INTERVAL_MINUTES:-20}m; Cooldown: ${VPN_COOLDOWN_MINUTES:-15}m"
+    msg "  Port grace: ${VPN_PORT_GRACE_SECONDS:-300}s"
     msg "  Allowed window: ${window_display}"
     msg "  Use arr.vpn.auto.status / arr.vpn.auto.history for diagnostics."
   elif [[ -f "$vpn_auto_status_file" || -f "$vpn_auto_state_file" ]]; then
