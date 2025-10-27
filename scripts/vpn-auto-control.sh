@@ -8,6 +8,200 @@ if [[ -n "${__VPN_AUTO_CONTROL_LOADED:-}" ]]; then
 fi
 __VPN_AUTO_CONTROL_LOADED=1
 
+VPN_AUTO_HEALTH_STATUS=""
+VPN_AUTO_HEALTH_IP=""
+VPN_AUTO_HEALTH_PORT=0
+VPN_AUTO_HEALTH_REASON=""
+
+# ProtonVPN deployments expect port forwarding; flag the requirement centrally.
+vpn_auto_reconnect_forwarding_expected() {
+  [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]
+}
+
+# Query Gluetun's control server for the OpenVPN status using the documented API.
+# Earlier revisions shell'd out to `docker inspect` which missed the control plane
+# entirely and failed when Gluetun changed its healthcheck names. The control
+# server is now the single source of truth.
+vpn_auto_reconnect_gluetun_status() {
+  local payload=""
+  payload="$(gluetun_control_get "/v1/openvpn/status" 2>/dev/null || printf '')"
+  if [[ -z "$payload" ]]; then
+    return 1
+  fi
+
+  local status=""
+  if command -v jq >/dev/null 2>&1; then
+    status="$(printf '%s' "$payload" | jq -r '.status // empty' 2>/dev/null || printf '')"
+  fi
+
+  if [[ -z "$status" ]]; then
+    status="$(printf '%s' "$payload" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1 || printf '')"
+  fi
+
+  [[ -n "$status" ]] || return 1
+  printf '%s' "$status"
+}
+
+# Wrapper for fetch_public_ip so health checks can call it without duplicating
+# the IPv4/IPv6 parsing logic already centralised in gluetun.sh.
+vpn_auto_reconnect_public_ip() {
+  fetch_public_ip 2>/dev/null || printf ''
+}
+
+# Wrapper for fetch_forwarded_port with numeric validation.
+vpn_auto_reconnect_forwarded_port() {
+  local value
+  value="$(fetch_forwarded_port 2>/dev/null || printf '0')"
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    value=0
+  fi
+  printf '%s' "$value"
+}
+
+# Collect Gluetun health data with short retries to avoid flapping on a single
+# transient failure. Results populate VPN_AUTO_HEALTH_* globals.
+vpn_auto_reconnect_health_snapshot() {
+  VPN_AUTO_HEALTH_STATUS=""
+  VPN_AUTO_HEALTH_IP=""
+  VPN_AUTO_HEALTH_PORT=0
+  VPN_AUTO_HEALTH_REASON=""
+
+  local attempts=0
+  local max_attempts=3
+  local require_port=0
+  if vpn_auto_reconnect_forwarding_expected; then
+    require_port=1
+  fi
+
+  local now
+  now="$(vpn_auto_reconnect_now_epoch)"
+  local last_reconnect_epoch=0
+  if [[ -n "${VPN_AUTO_STATE_LAST_RECONNECT:-}" ]]; then
+    last_reconnect_epoch="$(vpn_auto_reconnect_iso_to_epoch "$VPN_AUTO_STATE_LAST_RECONNECT" || printf '0')"
+  fi
+  [[ "$last_reconnect_epoch" =~ ^[0-9]+$ ]] || last_reconnect_epoch=0
+
+  while ((attempts < max_attempts)); do
+    local status
+    status="$(vpn_auto_reconnect_gluetun_status 2>/dev/null || printf '')"
+    local public_ip
+    public_ip="$(vpn_auto_reconnect_public_ip || printf '')"
+    local forwarded_port
+    forwarded_port="$(vpn_auto_reconnect_forwarded_port)"
+
+    if [[ -n "$status" ]]; then
+      VPN_AUTO_HEALTH_STATUS="$status"
+    fi
+    if [[ -n "$public_ip" ]]; then
+      VPN_AUTO_HEALTH_IP="$public_ip"
+    fi
+    VPN_AUTO_HEALTH_PORT="$forwarded_port"
+
+    local status_ok=0
+    if [[ "$status" == "running" ]]; then
+      status_ok=1
+    fi
+
+    local ip_ok=0
+    if [[ -n "$public_ip" ]]; then
+      ip_ok=1
+    fi
+
+    local port_ok=1
+    if ((require_port)); then
+      if ((forwarded_port > 0)); then
+        port_ok=1
+      else
+        port_ok=0
+        if ((last_reconnect_epoch > 0 && now - last_reconnect_epoch < 180)); then
+          port_ok=1
+        fi
+      fi
+    fi
+
+    if ((status_ok && ip_ok && port_ok)); then
+      VPN_AUTO_HEALTH_REASON=""
+      return 0
+    fi
+
+    local reasons=()
+    if ((status_ok == 0)); then
+      reasons+=("OpenVPN status ${status:-unknown}")
+    fi
+    if ((ip_ok == 0)); then
+      reasons+=("no exit IP")
+    fi
+    if ((require_port)) && ((port_ok == 0)); then
+      reasons+=("forwarded port pending")
+    fi
+    if ((${#reasons[@]} > 0)); then
+      VPN_AUTO_HEALTH_REASON="$(IFS='; '; printf '%s' "${reasons[*]}")"
+    else
+      VPN_AUTO_HEALTH_REASON="control query failed"
+    fi
+
+    attempts=$((attempts + 1))
+    if ((attempts < max_attempts)); then
+      sleep 3
+    fi
+  done
+
+  [[ -n "$VPN_AUTO_HEALTH_REASON" ]] || VPN_AUTO_HEALTH_REASON="control server unreachable"
+  return 1
+}
+
+# Execute the Gluetun port-forward hook inside the container to keep qBittorrent
+# aligned with the forwarded port. Running it inside the namespace preserves the
+# kill-switch guarantees; previous host-side curls leaked traffic outside Gluetun.
+vpn_auto_reconnect_run_pf_hook() {
+  local port="$1"
+  if [[ -z "$port" ]]; then
+    return 1
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    warn "VPN auto cannot sync qBittorrent port: docker command missing"
+    return 1
+  fi
+
+  local container
+  container="$(service_container_name gluetun)"
+
+  if ! docker exec "$container" test -x /gluetun/hooks/update-qbt-port.sh >/dev/null 2>&1; then
+    warn "VPN auto cannot locate /gluetun/hooks/update-qbt-port.sh inside ${container}"
+    return 1
+  fi
+
+  if ! docker exec "$container" /gluetun/hooks/update-qbt-port.sh "$port" >/dev/null 2>&1; then
+    warn "VPN auto failed to invoke Gluetun port-forward hook"
+    return 1
+  fi
+
+  return 0
+}
+
+# Ensure qBittorrent listens on the forwarded port exposed by Gluetun.
+vpn_auto_reconnect_sync_qbt_port() {
+  local forwarded
+  forwarded="$(vpn_auto_reconnect_forwarded_port)"
+  if [[ ! "$forwarded" =~ ^[0-9]+$ ]] || ((forwarded <= 0)); then
+    return 0
+  fi
+
+  local current=""
+  current="$(vpn_auto_reconnect_qbt_listen_port 2>/dev/null || printf '0')"
+  if [[ ! "$current" =~ ^[0-9]+$ ]]; then
+    current=0
+  fi
+
+  if ((current == forwarded)); then
+    return 0
+  fi
+
+  msg "Forwarded port ${forwarded} differs from qBittorrent listen port ${current}; triggering hook resync"
+  vpn_auto_reconnect_run_pf_hook "$forwarded"
+}
+
 vpn_auto_reconnect_apply_jitter_delay() {
   local jitter
   jitter="$(vpn_auto_reconnect_jitter_seconds)"
@@ -25,71 +219,45 @@ vpn_auto_reconnect_apply_jitter_delay() {
   return 0
 }
 
-# Issues OpenVPN cycle via Gluetun control API and records result
-vpn_auto_reconnect_restart_gluetun() {
+# Restart Gluetun safely using the documented control API first. The old
+# implementation called `docker restart gluetun`, bypassed ARR_STACK_DIR, and
+# risked reattaching qBittorrent outside the kill switch. We now cycle OpenVPN in
+# place and only fall back to Compose when absolutely necessary.
+vpn_auto_reconnect_cycle_openvpn() {
+  if gluetun_cycle_openvpn; then
+    return 0
+  fi
+
+  msg "Gluetun control API restart failed; attempting docker compose restart"
+
   if ! command -v docker >/dev/null 2>&1; then
-    log_warn "VPN auto cannot restart Gluetun: docker command missing"
+    warn "VPN auto cannot restart Gluetun: docker command missing"
     return 1
   fi
-  if ! docker inspect gluetun >/dev/null 2>&1; then
-    log_warn "VPN auto cannot restart Gluetun: container not found"
+
+  if ! restart_stack_service gluetun; then
+    warn "VPN auto failed to restart Gluetun via docker compose"
     return 1
   fi
-  if ! docker restart gluetun >/dev/null 2>&1; then
-    log_warn "VPN auto failed to restart Gluetun"
-    return 1
-  fi
+
+  sleep 5
   return 0
 }
 
-# Waits for Gluetun health and public IP endpoints to report success
+# Waits for Gluetun to report a healthy tunnel using the control server.
 vpn_auto_reconnect_wait_for_health() {
   local timeout=120
   local interval=5
   local elapsed=0
-  local host="${LOCALHOST_IP:-127.0.0.1}"
-  local port="${GLUETUN_CONTROL_PORT:-8000}"
-  local url
-  if [[ $host == *:* && $host != [* ]]; then
-    url="http://[$host]:${port}/v1/openvpn/status"
-  else
-    url="http://${host}:${port}/v1/openvpn/status"
-  fi
-  if ! command -v docker >/dev/null 2>&1; then
-    log_warn "VPN auto cannot confirm Gluetun health: docker command missing"
-    return 1
-  fi
-
-  local curl_available=1
-  local -a curl_cmd=()
-  if command -v curl >/dev/null 2>&1; then
-    curl_cmd=(curl -fsS --max-time 5)
-    if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
-      curl_cmd+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
-    fi
-  else
-    curl_available=0
-    if [[ "${VPN_AUTO_RECONNECT_CURL_WARNED:-0}" -eq 0 ]]; then
-      log_warn "VPN auto skipping Gluetun API verification: curl not available"
-      VPN_AUTO_RECONNECT_CURL_WARNED=1
-    fi
-  fi
 
   while ((elapsed < timeout)); do
-    local status
-    status="$(docker inspect --format '{{.State.Health.Status}}' gluetun 2>/dev/null || printf '')"
-    if [[ "$status" == "healthy" ]]; then
-      if ((curl_available == 0)); then
-        return 0
-      fi
-      if "${curl_cmd[@]}" "$url" >/dev/null 2>&1; then
-        return 0
-      fi
+    if vpn_auto_reconnect_health_snapshot; then
+      return 0
     fi
     sleep "$interval"
     elapsed=$((elapsed + interval))
   done
-  log_warn "VPN auto health endpoint did not respond within ${timeout}s"
+
   return 1
 }
 
@@ -101,13 +269,16 @@ vpn_auto_reconnect_apply_country() {
   fi
   local sanitized=""
   if ! sanitized="$(vpn_auto_reconnect_sanitize_country_csv "$country" 2>/dev/null)" || [[ -z "$sanitized" ]]; then
-    # Fall back to the current configuration or a conservative default when input is invalid.
     sanitized="$(vpn_auto_reconnect_sanitize_country_csv "${SERVER_COUNTRIES:-}" 2>/dev/null || printf '')"
     if [[ -z "$sanitized" ]]; then
       sanitized="Netherlands"
     fi
   fi
-  persist_env_var "SERVER_COUNTRIES" "$sanitized"
+
+  # Earlier versions rewrote SERVER_COUNTRIES inside .env on every rotation,
+  # forcing unnecessary compose churn. Record the choice for status reporting but
+  # leave config management to explicit arr.env.* calls.
+  # shellcheck disable=SC2034  # exported in status JSON
   VPN_AUTO_STATE_LAST_COUNTRY="${sanitized%%,*}"
 }
 
@@ -139,7 +310,7 @@ vpn_auto_reconnect_attempt() {
   fi
   # Apply jitter immediately before restarting to avoid herd behaviour.
   vpn_auto_reconnect_apply_jitter_delay
-  if ! vpn_auto_reconnect_restart_gluetun; then
+  if ! vpn_auto_reconnect_cycle_openvpn; then
     vpn_auto_reconnect_failure_history_update "$country" "$now"
     VPN_AUTO_STATE_RESTART_FAILURES=$((${VPN_AUTO_STATE_RESTART_FAILURES:-0} + 1))
     vpn_auto_reconnect_write_status "error" "Gluetun restart failed"
@@ -157,7 +328,8 @@ vpn_auto_reconnect_attempt() {
   VPN_AUTO_STATE_RESTART_FAILURES=0
   if ! vpn_auto_reconnect_wait_for_health; then
     vpn_auto_reconnect_failure_history_update "$country" "$now"
-    vpn_auto_reconnect_write_status "error" "VPN health check failed"
+    local reason="${VPN_AUTO_HEALTH_REASON:-VPN health check failed}"
+    vpn_auto_reconnect_write_status "error" "$reason"
     vpn_auto_reconnect_append_history "attempt" "$country" "false" "health-check" "$pre_attempt_low" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "${VPN_AUTO_STATE_CLASSIFICATION:-failure}"
     return 1
   fi
@@ -171,9 +343,17 @@ vpn_auto_reconnect_attempt() {
   vpn_auto_reconnect_register_rotation_success
   vpn_auto_reconnect_failure_history_clear "$country"
   vpn_auto_reconnect_resync_pf
+  vpn_auto_reconnect_sync_qbt_port || true
   vpn_auto_reconnect_set_next_action "$VPN_AUTO_STATE_COOLDOWN_UNTIL"
   VPN_AUTO_STATE_CLASSIFICATION="busy"
-  vpn_auto_reconnect_write_status "reconnected" "Reconnected to ${country} (PF worker resync triggered)"
+  local summary="Reconnected to ${country}"
+  if [[ -n "$VPN_AUTO_HEALTH_IP" ]]; then
+    summary+="; exit ${VPN_AUTO_HEALTH_IP}"
+  fi
+  if ((VPN_AUTO_HEALTH_PORT > 0)); then
+    summary+="; forwarded port ${VPN_AUTO_HEALTH_PORT}"
+  fi
+  vpn_auto_reconnect_write_status "reconnected" "$summary"
   vpn_auto_reconnect_append_history "attempt" "$country" "true" "reconnected" "$pre_attempt_low" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "${VPN_AUTO_STATE_CLASSIFICATION:-failure}"
   return 0
 }
@@ -200,6 +380,7 @@ vpn_auto_reconnect_handle_retry_failure() {
   if ((total >= max_minutes)); then
     VPN_AUTO_STATE_AUTO_DISABLED=1
     VPN_AUTO_STATE_DISABLED_UNTIL=$(($(vpn_auto_reconnect_now_epoch) + $(vpn_auto_reconnect_cooldown_seconds)))
+    # shellcheck disable=SC2034  # surfaced via status writer
     VPN_AUTO_STATE_LAST_STATUS="Auto-disabled after retry budget exhausted"
     vpn_auto_reconnect_write_status "disabled" "Retry budget exceeded; touch .vpn-auto-reconnect-once to override"
     vpn_auto_reconnect_set_next_action "$VPN_AUTO_STATE_DISABLED_UNTIL"
@@ -260,18 +441,44 @@ vpn_auto_reconnect_should_attempt() {
   return 0
 }
 
-# Single iteration of worker loop handling force flags, reconnect logic, and persistence
+# Single iteration of worker loop handling force flags, reconnect logic, and persistence.
+# Earlier revs guessed tunnel health via qBittorrent throughput and external IP curls,
+# which produced false positives and ignored Gluetun's control server. The new flow
+# trusts Gluetun's API for status, exit IP, and forwarded port, then falls back to the
+# documented stop/start controls when recovery is required.
 vpn_auto_reconnect_process_once() {
   vpn_auto_reconnect_load_env
   vpn_auto_reconnect_reset_rotation_window
   vpn_auto_reconnect_load_state
   VPN_AUTO_RECONNECT_SUPPRESS_RETRY=0
+
   local force=0
   if vpn_auto_reconnect_force_once_requested; then
     force=1
   fi
 
+  local health_ok=0
+  local health_detail=""
+  if vpn_auto_reconnect_health_snapshot; then
+    health_ok=1
+    if [[ -n "$VPN_AUTO_HEALTH_STATUS" ]]; then
+      health_detail="OpenVPN ${VPN_AUTO_HEALTH_STATUS}"
+    fi
+    if [[ -n "$VPN_AUTO_HEALTH_IP" ]]; then
+      health_detail+="; exit ${VPN_AUTO_HEALTH_IP}"
+    fi
+    if vpn_auto_reconnect_forwarding_expected && ((VPN_AUTO_HEALTH_PORT > 0)); then
+      health_detail+="; forwarded port ${VPN_AUTO_HEALTH_PORT}"
+    fi
+    health_detail="${health_detail#; }"
+  else
+    health_detail="${VPN_AUTO_HEALTH_REASON:-control server unreachable}"
+  fi
+
   if ! vpn_auto_reconnect_should_attempt "$force"; then
+    if ((force == 0 && health_ok)); then
+      vpn_auto_reconnect_sync_qbt_port || true
+    fi
     vpn_auto_reconnect_write_state
     return 0
   fi
@@ -281,182 +488,22 @@ vpn_auto_reconnect_process_once() {
     VPN_AUTO_STATE_AUTO_DISABLED=0
     VPN_AUTO_STATE_DISABLED_UNTIL=0
     vpn_auto_reconnect_write_status "forcing" "One-shot reconnect override active"
-  fi
-
-  local transfer
-  transfer="$(vpn_auto_reconnect_fetch_transfer_info || printf '')"
-  if [[ -z "$transfer" ]]; then
-    VPN_AUTO_STATE_CLASSIFICATION="busy"
-    vpn_auto_reconnect_write_status "error" "Failed to query qBittorrent speeds"
-    vpn_auto_reconnect_write_state
-    return 1
-  fi
-
-  if ! vpn_auto_has_jq; then
-    VPN_AUTO_STATE_CONSECUTIVE_LOW=0
-    VPN_AUTO_STATE_CLASSIFICATION="monitoring"
-    if ((VPN_AUTO_RECONNECT_JQ_WARNED == 0)); then
-      VPN_AUTO_RECONNECT_JQ_WARNED=1
-      VPN_AUTO_STATE_LAST_STATUS="jq missing; auto-reconnect paused"
-      vpn_auto_reconnect_write_status "degraded" "jq missing; auto-reconnect paused"
-    fi
+  elif ((health_ok)); then
+    VPN_AUTO_STATE_CLASSIFICATION="healthy"
+    vpn_auto_reconnect_write_status "healthy" "${health_detail:-Gluetun tunnel healthy}"
+    vpn_auto_reconnect_sync_qbt_port || true
     vpn_auto_reconnect_write_state
     return 0
   fi
-  VPN_AUTO_RECONNECT_JQ_WARNED=0
 
-  local dl_speed
-  local up_speed
-  dl_speed="$(jq -r '.dl_info_speed // 0' <<<"$transfer" 2>/dev/null || printf '0')"
-  up_speed="$(jq -r '.up_info_speed // 0' <<<"$transfer" 2>/dev/null || printf '0')"
-  [[ "$dl_speed" =~ ^[0-9]+$ ]] || dl_speed=0
-  [[ "$up_speed" =~ ^[0-9]+$ ]] || up_speed=0
-  local total_speed=$((dl_speed + up_speed))
-  local threshold
-  threshold="$(vpn_auto_reconnect_speed_threshold_bytes)"
-  local status_detail="Down ${dl_speed} B/s, Up ${up_speed} B/s"
-
-  local now_epoch
-  now_epoch="$(vpn_auto_reconnect_now_epoch)"
-  local previous_low="${VPN_AUTO_STATE_CONSECUTIVE_LOW:-0}"
-  [[ "$previous_low" =~ ^[0-9]+$ ]] || previous_low=0
-  if ((total_speed < threshold)); then
-    if ((previous_low == 0)); then
-      vpn_auto_reconnect_record_low "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    fi
-    VPN_AUTO_STATE_CONSECUTIVE_LOW=$((previous_low + 1))
+  VPN_AUTO_STATE_CONSECUTIVE_LOW=0
+  VPN_AUTO_STATE_CLASSIFICATION="recovering"
+  if [[ -n "$health_detail" ]]; then
+    vpn_auto_reconnect_write_status "recovering" "Recovering from: ${health_detail}"
   else
-    VPN_AUTO_STATE_CONSECUTIVE_LOW=0
+    vpn_auto_reconnect_write_status "recovering" "Attempting Gluetun reconnect"
   fi
 
-  local explicit_activity=0
-  if vpn_auto_reconnect_detect_activity; then
-    explicit_activity=1
-  fi
-  if ((dl_speed > 1048576 || up_speed > 1048576)); then
-    explicit_activity=1
-  fi
-  if vpn_auto_reconnect_high_load_detected; then
-    explicit_activity=1
-  fi
-
-  local active_download
-  local active_upload
-  local active_combined
-  active_download="$(jq -r '.active_download_count // 0' <<<"$transfer" 2>/dev/null || printf '0')"
-  active_upload="$(jq -r '.active_upload_count // 0' <<<"$transfer" 2>/dev/null || printf '0')"
-  active_combined=$((active_download + active_upload))
-  if ((active_combined == 0)); then
-    active_combined="$(jq -r '.active_torrents_count // 0' <<<"$transfer" 2>/dev/null || printf '0')"
-  fi
-  if [[ ! "$active_combined" =~ ^[0-9]+$ ]]; then
-    active_combined=0
-  fi
-
-  local last_activity_epoch=0
-  if [[ -n "${VPN_AUTO_STATE_LAST_ACTIVITY:-}" ]]; then
-    last_activity_epoch="$(vpn_auto_reconnect_iso_to_epoch "$VPN_AUTO_STATE_LAST_ACTIVITY" || printf '0')"
-  fi
-  [[ "$last_activity_epoch" =~ ^[0-9]+$ ]] || last_activity_epoch=0
-  local recent_activity=0
-  if ((last_activity_epoch > 0 && now_epoch - last_activity_epoch <= VPN_AUTO_RECONNECT_ACTIVITY_GRACE_SECONDS)); then
-    recent_activity=1
-  fi
-  if ((explicit_activity)); then
-    recent_activity=1
-  fi
-
-  local last_low_epoch=0
-  if [[ -n "${VPN_AUTO_STATE_LAST_LOW:-}" ]]; then
-    last_low_epoch="$(vpn_auto_reconnect_iso_to_epoch "$VPN_AUTO_STATE_LAST_LOW" || printf '0')"
-  fi
-  [[ "$last_low_epoch" =~ ^[0-9]+$ ]] || last_low_epoch=0
-
-  # Determine the coarse classification before applying failure heuristics.
-  local classification="low"
-  if ((total_speed >= threshold)); then
-    classification="busy"
-  elif ((recent_activity)); then
-    classification="busy"
-  elif ((active_combined == 0 && last_low_epoch > 0 && now_epoch - last_low_epoch >= VPN_AUTO_RECONNECT_IDLE_GRACE_SECONDS)); then
-    classification="idle"
-  fi
-
-  local required
-  required="$(vpn_auto_reconnect_consecutive_required)"
-  [[ "$required" =~ ^[0-9]+$ ]] || required=3
-  if ((force)); then
-    VPN_AUTO_STATE_CONSECUTIVE_LOW=$required
-    classification="failure"
-  fi
-
-  if [[ "$classification" == "busy" ]]; then
-    VPN_AUTO_STATE_CONSECUTIVE_LOW=0
-    VPN_AUTO_STATE_CLASSIFICATION="busy"
-    vpn_auto_reconnect_write_status "busy" "${status_detail} (activity detected)"
-    vpn_auto_reconnect_write_state
-    return 0
-  fi
-
-  if [[ "$classification" == "idle" ]]; then
-    VPN_AUTO_STATE_CONSECUTIVE_LOW=0
-    VPN_AUTO_STATE_CLASSIFICATION="idle"
-    vpn_auto_reconnect_write_status "idle" "${status_detail} (idle; awaiting demand)"
-    vpn_auto_reconnect_write_state
-    return 0
-  fi
-
-  local pf_snapshot
-  pf_snapshot="$(vpn_auto_reconnect_pf_status_snapshot)"
-  local pf_status="$pf_snapshot"
-  local pf_last_success=""
-  if [[ "$pf_snapshot" == *"|"* ]]; then
-    pf_status="${pf_snapshot%%|*}"
-    pf_last_success="${pf_snapshot#*|}"
-  fi
-  local pf_last_epoch=0
-  if [[ -n "$pf_last_success" ]]; then
-    pf_last_epoch="$(vpn_auto_reconnect_iso_to_epoch "$pf_last_success" || printf '0')"
-  fi
-  [[ "$pf_last_epoch" =~ ^[0-9]+$ ]] || pf_last_epoch=0
-  local pf_recent_success=0
-  if ((pf_last_epoch > 0 && now_epoch - pf_last_epoch <= VPN_AUTO_RECONNECT_PF_SUCCESS_GRACE)); then
-    pf_recent_success=1
-  fi
-  local pf_status_lc="${pf_status,,}"
-  local pf_acquired=0
-  if [[ "$pf_status_lc" == "acquired" ]]; then
-    pf_acquired=1
-  fi
-  if ((pf_recent_success)); then
-    pf_acquired=1
-  fi
-
-  local seeding_floor="${VPN_AUTO_RECONNECT_SEEDING_FLOOR_BYTES:-0}"
-  [[ "$seeding_floor" =~ ^[0-9]+$ ]] || seeding_floor=0
-  local failure_candidate=0
-  if ((force)); then
-    failure_candidate=1
-  elif ((VPN_AUTO_STATE_CONSECUTIVE_LOW >= required)) && ((up_speed <= seeding_floor)) && ((pf_acquired == 0)); then
-    failure_candidate=1
-  fi
-  if ((failure_candidate)); then
-    classification="failure"
-  fi
-
-  VPN_AUTO_STATE_CLASSIFICATION="$classification"
-
-  if [[ "$classification" != "failure" ]]; then
-    local remaining=$((required - VPN_AUTO_STATE_CONSECUTIVE_LOW))
-    if ((remaining < 0)); then
-      remaining=0
-    fi
-    vpn_auto_reconnect_write_status "monitoring" "${status_detail} (consecutive_low=${VPN_AUTO_STATE_CONSECUTIVE_LOW}/${required})"
-    vpn_auto_reconnect_write_state
-    return 0
-  fi
-
-  # Cap guard – enforce VPN_ROTATION_MAX_PER_DAY unless forced.
   if vpn_auto_reconnect_daily_cap_exceeded "$force"; then
     local cap
     cap="$(vpn_auto_reconnect_rotation_cap)"
@@ -464,7 +511,7 @@ vpn_auto_reconnect_process_once() {
     local next_day=$((${VPN_AUTO_STATE_ROTATION_DAY_EPOCH:-0} + 86400))
     vpn_auto_reconnect_set_next_action "$next_day"
     vpn_auto_reconnect_write_status "waiting" "Daily rotation cap reached (${VPN_AUTO_STATE_ROTATION_COUNT_DAY}/${cap})"
-    vpn_auto_reconnect_append_history "skip" "" "false" "cap" "${VPN_AUTO_STATE_CONSECUTIVE_LOW}" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "$classification"
+    vpn_auto_reconnect_append_history "skip" "" "false" "cap" "${VPN_AUTO_STATE_CONSECUTIVE_LOW}" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "recovering"
     vpn_auto_reconnect_write_state
     return 0
   fi
@@ -472,7 +519,7 @@ vpn_auto_reconnect_process_once() {
   local country
   if ! country="$(vpn_auto_reconnect_pick_country)"; then
     vpn_auto_reconnect_write_status "error" "No Proton countries available"
-    vpn_auto_reconnect_append_history "skip" "" "false" "no-country" "${VPN_AUTO_STATE_CONSECUTIVE_LOW}" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "$classification"
+    vpn_auto_reconnect_append_history "skip" "" "false" "no-country" "${VPN_AUTO_STATE_CONSECUTIVE_LOW}" "${VPN_AUTO_STATE_RETRY_TOTAL}" "${VPN_AUTO_STATE_JITTER_APPLIED}" "recovering"
     vpn_auto_reconnect_write_state
     return 1
   fi
@@ -487,6 +534,30 @@ vpn_auto_reconnect_process_once() {
     return 1
   fi
 
+  if ! vpn_auto_reconnect_health_snapshot; then
+    health_detail="${VPN_AUTO_HEALTH_REASON:-Reconnected; awaiting Gluetun health}"
+    health_ok=0
+  else
+    health_ok=1
+    health_detail="OpenVPN ${VPN_AUTO_HEALTH_STATUS:-running}"
+    if [[ -n "$VPN_AUTO_HEALTH_IP" ]]; then
+      health_detail+="; exit ${VPN_AUTO_HEALTH_IP}"
+    fi
+    if vpn_auto_reconnect_forwarding_expected && ((VPN_AUTO_HEALTH_PORT > 0)); then
+      health_detail+="; forwarded port ${VPN_AUTO_HEALTH_PORT}"
+    fi
+    health_detail="${health_detail#; }"
+  fi
+
+  if ((health_ok)); then
+    VPN_AUTO_STATE_CLASSIFICATION="healthy"
+    vpn_auto_reconnect_write_status "healthy" "${health_detail:-Gluetun tunnel healthy}"
+  else
+    VPN_AUTO_STATE_CLASSIFICATION="degraded"
+    vpn_auto_reconnect_write_status "degraded" "$health_detail"
+  fi
+
+  vpn_auto_reconnect_sync_qbt_port || true
   vpn_auto_reconnect_write_state
   return 0
 }

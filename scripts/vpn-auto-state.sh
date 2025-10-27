@@ -63,14 +63,9 @@ _escape_json_string() {
 #     • Backoff budget persists across attempts and surfaces retry metadata in status.json.
 
 VPN_AUTO_RECONNECT_STATE_VERSION=2
-VPN_AUTO_RECONNECT_CURL_WARNED=0
-VPN_AUTO_RECONNECT_JQ_WARNED=0
-VPN_AUTO_RECONNECT_JQ_AVAILABLE=-1
+ VPN_AUTO_RECONNECT_JQ_AVAILABLE=-1
 VPN_AUTO_RECONNECT_CURRENT_INTERVAL=0
-VPN_AUTO_RECONNECT_IDLE_GRACE_SECONDS=1800
-VPN_AUTO_RECONNECT_ACTIVITY_GRACE_SECONDS=1800
-VPN_AUTO_RECONNECT_PF_SUCCESS_GRACE=86400
-VPN_AUTO_RECONNECT_SEEDING_FLOOR_BYTES=4096
+# shellcheck disable=SC2034  # toggled in vpn-auto-control
 VPN_AUTO_RECONNECT_SUPPRESS_RETRY=0
 
 # Resolves Gluetun root directory via shared helpers when available
@@ -279,13 +274,23 @@ vpn_auto_reconnect_iso_to_epoch() {
 # Splits comma-separated lists into trimmed lines for iteration
 vpn_auto_reconnect_split_csv() {
   local raw="$1"
-  local IFS=','
-  read -r -a _var <<<"$raw"
-  local value
-  for value in "${_var[@]}"; do
-    value="$(trim_string "$value")"
-    [[ -z "$value" ]] && continue
-    printf '%s\n' "$value"
+  if [[ -z "$raw" ]]; then
+    return 0
+  fi
+
+  raw="${raw//$'\r'/,}"
+  raw="${raw//$'\n'/,}"
+  raw="${raw//$'\t'/,}"
+
+  # Ensure trailing delimiter so the final token is emitted without arrays.
+  raw="${raw},"
+  local token=""
+  while [[ "$raw" == *","* ]]; do
+    token="${raw%%,*}"
+    raw="${raw#*,}"
+    token="$(trim_string "$token")"
+    [[ -z "$token" ]] && continue
+    printf '%s\n' "$token"
   done
 }
 
@@ -301,48 +306,55 @@ vpn_auto_reconnect_parse_countries() {
   if [[ -z "$combined" ]]; then
     combined="Switzerland,Iceland,Romania,Netherlands"
   fi
-  local sanitized
+
+  local sanitized=""
   if ! sanitized="$(vpn_auto_reconnect_sanitize_country_csv "$combined" 2>/dev/null)" || [[ -z "$sanitized" ]]; then
     sanitized="Switzerland,Iceland,Romania,Netherlands"
   fi
-  local -a ordered=()
-  local -A seen=()
-  local entry lower
+
+  local seen="|"
+  local entry=""
   while IFS= read -r entry; do
     [[ -z "$entry" ]] && continue
-    lower="${entry,,}"
-    if [[ -z "${seen[$lower]+x}" ]]; then
-      ordered+=("$entry")
-      seen[$lower]=1
+    local lower
+    lower="$(printf '%s' "$entry" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$seen" == *"|${lower}|"* ]]; then
+      continue
     fi
-  done < <(vpn_auto_reconnect_split_csv "$sanitized")
-  printf '%s\n' "${ordered[@]}"
+    seen+="${lower}|"
+    printf '%s\n' "$entry"
+  done <<EOF
+$(vpn_auto_reconnect_split_csv "$sanitized")
+EOF
 }
 
 # Validates/normalizes comma-separated country codes
 vpn_auto_reconnect_sanitize_country_csv() {
   local raw="${1:-}"
   [[ -n "$raw" ]] || return 1
-  raw="${raw//$'\r'/,}"
-  raw="${raw//$'\n'/,}"
-  raw="${raw//$'\t'/,}"
-  local -a cleaned=()
-  local entry
+
+  local first=1
+  local result=""
+  local entry=""
   while IFS= read -r entry; do
+    [[ -z "$entry" ]] && continue
     entry="${entry//[^[:alnum:]\- ,]/ }"
     entry="${entry//  / }"
     entry="$(trim_string "$entry")"
     entry="$(printf '%s' "$entry" | tr -s ' ' ' ')"
     entry="$(trim_string "$entry")"
     [[ -z "$entry" ]] && continue
-    cleaned+=("$entry")
-  done < <(vpn_auto_reconnect_split_csv "$raw")
-  ((${#cleaned[@]} > 0)) || return 1
-  local result="${cleaned[0]}"
-  local item
-  for item in "${cleaned[@]:1}"; do
-    result+=",$item"
-  done
+    if ((first)); then
+      result="$entry"
+      first=0
+    else
+      result+=",$entry"
+    fi
+  done <<EOF
+$(vpn_auto_reconnect_split_csv "$raw")
+EOF
+
+  [[ -n "$result" ]] || return 1
   printf '%s\n' "$result"
 }
 
@@ -425,29 +437,29 @@ vpn_auto_reconnect_load_state() {
     ' <<<"$json" 2>/dev/null
   )" && [[ -n "$jq_output" ]]; then
     local failure_history_json=""
-    # Read jq_output into array and validate field count
-    IFS=$'\t' read -r -a vpn_auto_state_fields <<<"$jq_output"
-    if [[ ${#vpn_auto_state_fields[@]} -eq 20 ]]; then
-      VPN_AUTO_STATE_CONSECUTIVE_LOW="${vpn_auto_state_fields[0]}"
-      VPN_AUTO_STATE_ROTATION_INDEX="${vpn_auto_state_fields[1]}"
-      VPN_AUTO_STATE_LAST_COUNTRY="${vpn_auto_state_fields[2]}"
-      VPN_AUTO_STATE_LAST_RECONNECT="${vpn_auto_state_fields[3]}"
-      VPN_AUTO_STATE_LAST_STATUS="${vpn_auto_state_fields[4]}"
-      VPN_AUTO_STATE_LAST_ACTIVITY="${vpn_auto_state_fields[5]}"
-      VPN_AUTO_STATE_LAST_LOW="${vpn_auto_state_fields[6]}"
-      VPN_AUTO_STATE_COOLDOWN_UNTIL="${vpn_auto_state_fields[7]}"
-      VPN_AUTO_STATE_DISABLED_UNTIL="${vpn_auto_state_fields[8]}"
-      VPN_AUTO_STATE_AUTO_DISABLED="${vpn_auto_state_fields[9]}"
-      VPN_AUTO_STATE_RETRY_BACKOFF="${vpn_auto_state_fields[10]}"
-      VPN_AUTO_STATE_RETRY_TOTAL="${vpn_auto_state_fields[11]}"
-      VPN_AUTO_STATE_NEXT_DECISION="${vpn_auto_state_fields[12]}"
-      VPN_AUTO_STATE_ROTATION_DAY_EPOCH="${vpn_auto_state_fields[13]}"
-      VPN_AUTO_STATE_ROTATION_COUNT_DAY="${vpn_auto_state_fields[14]}"
-      VPN_AUTO_STATE_CLASSIFICATION="${vpn_auto_state_fields[15]}"
-      VPN_AUTO_STATE_JITTER_APPLIED="${vpn_auto_state_fields[16]}"
-      VPN_AUTO_STATE_NEXT_ACTION="${vpn_auto_state_fields[17]}"
-      VPN_AUTO_STATE_RESTART_FAILURES="${vpn_auto_state_fields[18]}"
-      VPN_AUTO_STATE_FAILURE_HISTORY="${vpn_auto_state_fields[19]:-$(printf '{}')}"
+    # shellcheck disable=SC2086  # field splitting intentional for TSV payload
+    IFS=$'\t' set -- $jq_output
+    if (($# == 20)); then
+      VPN_AUTO_STATE_CONSECUTIVE_LOW="$1"
+      VPN_AUTO_STATE_ROTATION_INDEX="$2"
+      VPN_AUTO_STATE_LAST_COUNTRY="$3"
+      VPN_AUTO_STATE_LAST_RECONNECT="$4"
+      VPN_AUTO_STATE_LAST_STATUS="$5"
+      VPN_AUTO_STATE_LAST_ACTIVITY="$6"
+      VPN_AUTO_STATE_LAST_LOW="$7"
+      VPN_AUTO_STATE_COOLDOWN_UNTIL="$8"
+      VPN_AUTO_STATE_DISABLED_UNTIL="$9"
+      VPN_AUTO_STATE_AUTO_DISABLED="${10}"
+      VPN_AUTO_STATE_RETRY_BACKOFF="${11}"
+      VPN_AUTO_STATE_RETRY_TOTAL="${12}"
+      VPN_AUTO_STATE_NEXT_DECISION="${13}"
+      VPN_AUTO_STATE_ROTATION_DAY_EPOCH="${14}"
+      VPN_AUTO_STATE_ROTATION_COUNT_DAY="${15}"
+      VPN_AUTO_STATE_CLASSIFICATION="${16}"
+      VPN_AUTO_STATE_JITTER_APPLIED="${17}"
+      VPN_AUTO_STATE_NEXT_ACTION="${18}"
+      VPN_AUTO_STATE_RESTART_FAILURES="${19}"
+      VPN_AUTO_STATE_FAILURE_HISTORY="${20:-$(printf '{}')}"
     else
       # Fallback to per-field extraction if field count is wrong
       VPN_AUTO_STATE_CONSECUTIVE_LOW="$(jq -r '.consecutive_low // 0' <<<"$json" 2>/dev/null || printf '0')"

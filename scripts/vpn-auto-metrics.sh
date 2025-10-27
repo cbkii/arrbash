@@ -138,35 +138,87 @@ vpn_auto_reconnect_high_load_detected() {
 
 # Chooses next ProtonVPN country based on rotation list and failure history
 vpn_auto_reconnect_pick_country() {
-  local -a countries
-  mapfile -t countries < <(vpn_auto_reconnect_parse_countries)
-  if ((${#countries[@]} == 0)); then
+  local list
+  if ! list="$(vpn_auto_reconnect_parse_countries)" || [[ -z "$list" ]]; then
     return 1
   fi
+
   local cooldown
   cooldown="$(vpn_auto_reconnect_cooldown_seconds)"
-  local max_index=${#countries[@]}
-  local index="${VPN_AUTO_STATE_ROTATION_INDEX:-0}"
-  if [[ ! "$index" =~ ^[0-9]+$ ]]; then
-    index=0
+  local index_raw="${VPN_AUTO_STATE_ROTATION_INDEX:-0}"
+  [[ "$index_raw" =~ ^[0-9]+$ ]] || index_raw=0
+
+  local total
+  total=$(printf '%s\n' "$list" | grep -c . || printf '0')
+  if ((total == 0)); then
+    return 1
   fi
+
   local attempts=0
-  while ((attempts < max_index)); do
-    local candidate_index=$(((index + attempts) % max_index))
-    # shellcheck disable=SC2178,SC2128  # candidate comes from array indexing but is used as a scalar
-    local candidate="${countries[$candidate_index]}"
-    # Skip countries that recently failed within the cooldown window
-    if ! vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
-      VPN_AUTO_STATE_ROTATION_INDEX="$candidate_index"
+  local candidate=""
+  while ((attempts < total)); do
+    local candidate_index=$(((index_raw + attempts) % total + 1))
+    candidate="$(printf '%s' "$list" | sed -n "${candidate_index}p")"
+    if [[ -n "$candidate" ]] && ! vpn_auto_reconnect_failure_recent "$candidate" "$cooldown"; then
+      VPN_AUTO_STATE_ROTATION_INDEX=$((candidate_index - 1))
       printf '%s\n' "$candidate"
       return 0
     fi
     ((attempts++))
   done
-  # All candidates are cooling down; fall back to sequential rotation.
-  local fallback_index=$(((index + 1) % max_index))
-  VPN_AUTO_STATE_ROTATION_INDEX="$fallback_index"
-  printf '%s\n' "${countries[$fallback_index]}"
+
+  # Every candidate is cooling down; advance index sequentially.
+  local fallback_index=$(((index_raw + 1) % total + 1))
+  candidate="$(printf '%s' "$list" | sed -n "${fallback_index}p")"
+  VPN_AUTO_STATE_ROTATION_INDEX=$((fallback_index - 1))
+  printf '%s\n' "$candidate"
   return 0
+}
+
+# Fetches the qBittorrent preferences payload and keeps the session warm.
+vpn_auto_reconnect_fetch_preferences() {
+  local default_base="http://${LOCALHOST_IP:-127.0.0.1}:${QBT_INT_PORT:-8082}"
+  local base="${QBITTORRENT_ADDR:-${default_base}}"
+  local url="${base%/}/api/v2/app/preferences"
+  local cookie
+  cookie="$(vpn_auto_reconnect_cookie_file)"
+  ensure_dir_mode "$(dirname -- "$cookie")" "$DATA_DIR_MODE"
+
+  if ! vpn_auto_reconnect_ensure_fresh_session; then
+    vpn_auto_reconnect_login_qbt || return 1
+  fi
+
+  local -a curl_cmd=(curl -fsS --max-time 10 -c "$cookie" -b "$cookie" "$url")
+  local response=""
+  if ! response="$("${curl_cmd[@]}" 2>/dev/null)"; then
+    if vpn_auto_reconnect_login_qbt; then
+      response="$("${curl_cmd[@]}" 2>/dev/null || printf '')"
+    fi
+  fi
+  printf '%s' "$response"
+}
+
+# Determines the listen port reported by qBittorrent's WebUI preferences.
+vpn_auto_reconnect_qbt_listen_port() {
+  local payload
+  payload="$(vpn_auto_reconnect_fetch_preferences 2>/dev/null || printf '')"
+  if [[ -z "$payload" ]]; then
+    return 1
+  fi
+
+  local port=""
+  if command -v jq >/dev/null 2>&1; then
+    port="$(printf '%s' "$payload" | jq -r '.listen_port // 0' 2>/dev/null || printf '0')"
+  fi
+
+  if [[ -z "$port" || "$port" == "0" || "$port" == "null" ]]; then
+    port="$(printf '%s' "$payload" | sed -n 's/.*"listen_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1 || printf '0')"
+  fi
+
+  if [[ -z "$port" ]]; then
+    return 1
+  fi
+
+  printf '%s' "$port"
 }
 

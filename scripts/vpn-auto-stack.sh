@@ -11,6 +11,10 @@ __VPN_AUTO_STACK_LOADED=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=scripts/gluetun.sh
+. "${SCRIPT_DIR}/gluetun.sh"
+# shellcheck source=scripts/service-runtime.sh
+. "${SCRIPT_DIR}/service-runtime.sh"
 # shellcheck source=scripts/vpn-auto-state.sh
 . "${SCRIPT_DIR}/vpn-auto-state.sh"
 # shellcheck source=scripts/vpn-auto-config.sh
