@@ -1834,8 +1834,8 @@ arr.vpn.status() {
         fi
         ;;
       '"'*'"')
-        ip_value="${ip_payload#"}"
-        ip_value="${ip_value%"}"
+        ip_value="${ip_payload#\"}"
+        ip_value="${ip_value%\"}"
         ;;
       *)
         ip_value="$ip_payload"
@@ -3125,7 +3125,9 @@ arr.diag.env() {
         printf '  %-13s url=%s auth=%s\n' "$svc" "$(_arr_service_base qbittorrent)" "$user_state"
         ;;
       *)
-        printf '  %-13s url=%s\n' "$svc" "$(_arr_service_base "$svc")"
+        local svc_url
+        svc_url="$(_arr_service_base "$svc")"
+        printf '  %-13s url=%s\n' "$svc" "$svc_url"
         ;;
     esac
   done
