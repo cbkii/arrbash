@@ -58,7 +58,7 @@ Tips:
 
 ## Local DNS and HTTPS helpers
 
-Legacy dnsmasq and Caddy helpers have been retired. Manage hostname overrides and HTTPS termination with your own tooling when needed. arrbash now exposes services directly on the LAN (when `EXPOSE_DIRECT_PORTS=1`) and relies on Gluetun to publish qBittorrent’s forwarded ports.
+Legacy LAN DNS and HTTPS helpers have been retired. Manage hostname overrides and TLS termination with your own tooling when needed. arrbash now exposes services directly on the LAN (when `EXPOSE_DIRECT_PORTS=1`) and relies on Gluetun to publish qBittorrent’s forwarded ports.
 
 ## VPN auto-reconnect (optional)
 - Enable by setting `VPN_AUTO_RECONNECT_ENABLED=1` and rerunning the installer. The daemon now polls Gluetun’s control server (`/v1/openvpn/status`, `/v1/publicip/ip`, `/v1/openvpn/portforwarded`) instead of curling external IP services.

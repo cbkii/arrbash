@@ -23,14 +23,7 @@ service_runtime_compose() {
 
 service_container_name() {
   local service="$1"
-  case "$service" in
-    local_dns)
-      printf '%s' "arr_local_dns"
-      ;;
-    *)
-      printf '%s' "$service"
-      ;;
-  esac
+  printf '%s' "$service"
 }
 
 declare -a ARR_STACK_PREVIOUS_RUNNING_SERVICES=()
@@ -124,7 +117,7 @@ arr_restore_stack_runtime_state() {
   local -a restore_order=()
   local service=""
 
-  for service in gluetun local_dns; do
+  for service in gluetun; do
     local item=""
     for item in "${ARR_STACK_PREVIOUS_RUNNING_SERVICES[@]}"; do
       if [[ "$item" == "$service" && -z "${seen[$service]:-}" ]]; then

@@ -81,7 +81,7 @@ collect_port_requirements() {
     _requirements_ref+=("tcp|${qbt_http_port}|qBittorrent WebUI|${LAN_IP}")
   fi
 
-  # Local DNS and Caddy have been removed; no additional port requirements.
+  # Local DNS helpers have been removed; no additional port requirements.
 }
 
 detect_internal_port_conflicts() {

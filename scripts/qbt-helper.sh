@@ -520,7 +520,7 @@ show_info() {
   host="$(webui_host)"
   port="$(webui_port)"
   log_info "LAN URL:  http://${host}:${port}/"
-  log_info "HTTPS:    Bring your own reverse proxy or VPN if you require TLS."
+  log_info "HTTPS:    Terminate TLS via your preferred VPN, SSH tunnel, or HTTPS gateway."
   log_info ""
 
   local temp_pass
@@ -535,7 +535,7 @@ show_info() {
   fi
 
   log_info ""
-  log_info "Remote access: publish through your own reverse proxy or VPN."
+  log_info "Remote access: publish ports through your preferred secure channel."
 }
 
 # Resets qBittorrent credentials and surfaces the new temporary password

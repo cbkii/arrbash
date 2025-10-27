@@ -219,26 +219,6 @@ HOOK
   ensure_file_mode "${hooks_dir}/update-qbt-port.sh" 700
 }
 
-# Ensures Caddy basic auth credentials exist, regenerating bcrypt/hash artifacts as needed
-ensure_caddy_auth() {
-  msg "🌐 Reverse proxy helper removed; skipping legacy Caddy auth configuration."
-  return 0
-}
-
-
-# Publishes Caddy's internal CA to a readable location for LAN distribution
-sync_caddy_ca_public_copy() {
-  return 0
-}
-
-
-# Generates Caddyfile and copies CA assets when proxying is enabled
-write_caddy_assets() {
-  msg "🌐 Reverse proxy helper removed; no Caddy assets generated."
-  return 0
-}
-
-
 # Copies the shared Gluetun helper script into the stack workspace
 sync_gluetun_library() {
   step "📚 Syncing Gluetun helper library"

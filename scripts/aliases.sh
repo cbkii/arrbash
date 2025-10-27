@@ -334,10 +334,6 @@ VPN_AUTO_ALIAS
   cp "$aliases_file" "$configured_template"
   ensure_nonsecret_file_mode "$configured_template"
 
-  local legacy_alias_file="${ARR_STACK_DIR}/.arraliases"
-  local legacy_configured="${REPO_ROOT}/.arraliases.configured"
-  rm -f "$legacy_alias_file" "$legacy_configured"
-
   msg "✅ Helper aliases written to: $aliases_file"
   msg "   Source them with: source $aliases_file"
   msg "   Repo copy updated: $configured_template"

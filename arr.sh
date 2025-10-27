@@ -593,7 +593,6 @@ modules=(
   "vpn-auto-stack.sh"
   "apikeys.sh"
   "aliases.sh"
-  "dns.sh"
   "summary.sh"
   "shell.sh"
 )

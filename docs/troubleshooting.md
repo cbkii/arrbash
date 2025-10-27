@@ -21,7 +21,7 @@ tmux set-environment -ur ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR 2
 ```
 
 ## DNS and HTTPS issues
-arrbash no longer provisions a reverse proxy or LAN DNS resolver. If you require friendly hostnames or HTTPS termination, deploy and manage your own tooling (Pi-hole/unbound, AdGuard Home, nginx, Traefik, etc.) and point clients at it.
+arrbash no longer provisions LAN DNS or HTTPS automation. If you require friendly hostnames or TLS termination, deploy and manage your own tooling (Pi-hole/unbound, AdGuard Home, nginx, Traefik, etc.) and point clients at it.
 
 ### `ERR_NAME_NOT_RESOLVED`
 - When you operate your own resolver, ensure LAN clients use it (DHCP Option 6 or per-device configuration).
@@ -44,7 +44,7 @@ arrbash no longer provisions a reverse proxy or LAN DNS resolver. If you require
 
 ## VPN and torrent issues
 ### qBittorrent unreachable after enabling `SPLIT_VPN=1`
-- In split mode only qBittorrent is published automatically. Set `EXPOSE_DIRECT_PORTS=1` or provide your own proxy.
+- In split mode only qBittorrent is published automatically. Set `EXPOSE_DIRECT_PORTS=1` or expose the additional services through your own gateway.
 - Verify:
   ```bash
   docker compose ps --format '{{.Service}}\t{{.Publishers}}'

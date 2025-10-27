@@ -92,16 +92,6 @@ if ! type -t sanitize_user >/dev/null 2>&1; then
   }
 fi
 
-if ! type -t validate_caddy_user >/dev/null 2>&1; then
-  validate_caddy_user() {
-    local candidate="${1:-}"
-
-    [[ -n "$candidate" ]] || return 1
-
-    [[ "$candidate" =~ ^[A-Za-z0-9._-]+$ ]]
-  }
-fi
-
 resolve_path() {
   local path="$1"
   if [[ -z "$path" ]]; then
@@ -262,9 +252,6 @@ if declare -f arr_assign_upstream_dns_env >/dev/null 2>&1; then
 fi
 : "${UPSTREAM_DNS_2_DISPLAY:=${UPSTREAM_DNS_2:-<unset>}}"
 
-if [[ -z "${DNS_HOST_ENTRY:-}" ]] && declare -f arr_derive_dns_host_entry >/dev/null 2>&1; then
-  DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
-fi
 if [[ -z "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS:-}" ]] && declare -f arr_derive_gluetun_firewall_outbound_subnets >/dev/null 2>&1; then
   GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
 fi

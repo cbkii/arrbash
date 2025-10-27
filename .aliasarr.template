@@ -1,4 +1,8 @@
 # shellcheck disable=SC1090,SC2154
+# Alias sanity summary:
+# - arr.vpn.* helpers rely on Gluetun's control API via scripts/gluetun.sh.
+# - Template no longer references legacy .arraliases, proxy, or internal CA helpers.
+# - Behaviour remains identical for bash and zsh users sourcing the generated file.
 
 ARR_STACK_DIR=${ARR_STACK_DIR:-__ARR_STACK_DIR__}
 
@@ -535,25 +539,12 @@ _arr_wait_for_container_health() {
 
 _arr_stack_restart_services() {
   local -a order=()
-  local enable_local_dns="${ENABLE_LOCAL_DNS:-$(_arr_env_get ENABLE_LOCAL_DNS)}"
-  local local_dns_state="$(_arr_env_get LOCAL_DNS_STATE)"
 
   _arr_services_populate
-
-  if [ "$local_dns_state" = "active" ] || _arr_bool "$enable_local_dns"; then
-    order+=(local_dns)
-  fi
-
-  if [ "$(_arr_enable_caddy)" = "1" ]; then
-    order+=(caddy)
-  fi
 
   local svc
   for svc in "${_arr_services[@]}"; do
     case "$svc" in
-      local_dns|caddy)
-        continue
-        ;;
       sabnzbd)
         if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
           order+=(sabnzbd)
@@ -577,16 +568,6 @@ _arr_host() {
     host="$(_arr_loopback)"
   fi
   printf '%s' "$host"
-}
-
-_arr_domain_suffix() {
-  local suffix
-  suffix="$(_arr_env_get CADDY_DOMAIN_SUFFIX)"
-  if [ -z "$suffix" ]; then
-    suffix="$(_arr_env_get LAN_DOMAIN_SUFFIX)"
-  fi
-  suffix="${suffix#.}"
-  printf '%s' "$suffix"
 }
 
 _arr_first_available_value() {
@@ -638,9 +619,6 @@ _arr_service_port() {
     sabnzbd)
       value="$(_arr_first_available_value SABNZBD_PORT SABNZBD_INT_PORT)"
       ;;
-    caddy)
-      value="$(_arr_first_available_value CADDY_HTTP_PORT)"
-      ;;
     *)
       return 1
       ;;
@@ -652,52 +630,31 @@ _arr_service_port() {
   return 1
 }
 
-_arr_enable_caddy() {
-  local raw="${ENABLE_CADDY:-}"
-  if [ -z "$raw" ]; then
-    raw="$(_arr_env_get ENABLE_CADDY)"
-  fi
-  if _arr_bool "$raw"; then
-    printf '1'
-  else
-    printf '0'
-  fi
-}
-
 _arr_service_base() {
-  local svc="$1" enable_caddy="$(_arr_enable_caddy)" host
-  if [ "$svc" = "caddy" ]; then
-    if [ "$enable_caddy" = "1" ]; then
-      printf 'http://health.%s' "$(_arr_domain_suffix)"
-    else
-      printf 'http://%s:%s' "$(_arr_host)" "$(_arr_service_port caddy)"
-    fi
-    return
-  fi
-
-  if [ "$enable_caddy" = "1" ]; then
-    case "$svc" in
-      qbittorrent|sonarr|radarr|lidarr|prowlarr|bazarr|flaresolverr|sabnzbd)
-        printf 'http://%s.%s' "$svc" "$(_arr_domain_suffix)"
-        return
-        ;;
-    esac
-  fi
+  local svc="$1"
+  local host=""
+  local port=""
 
   case "$svc" in
-    qbittorrent|sonarr|radarr|lidarr|prowlarr|bazarr|flaresolverr|sabnzbd)
-      if [ "$svc" = "sabnzbd" ]; then
-        host="${SABNZBD_HOST:-$(_arr_env_get SABNZBD_HOST)}"
-        if [ -z "$host" ] || [ "$host" = "0.0.0.0" ]; then
-          host="$(_arr_host)"
-        fi
-      else
+    qbittorrent|sonarr|radarr|lidarr|prowlarr|bazarr|flaresolverr)
+      host="$(_arr_host)"
+      ;;
+    sabnzbd)
+      host="${SABNZBD_HOST:-$(_arr_env_get SABNZBD_HOST)}"
+      if [ -z "$host" ] || [ "$host" = "0.0.0.0" ]; then
         host="$(_arr_host)"
       fi
-      printf 'http://%s:%s' "$host" "$(_arr_service_port "$svc")"
-      return
+      ;;
+    *)
+      return 1
       ;;
   esac
+
+  if ! port="$(_arr_service_port "$svc")"; then
+    return 1
+  fi
+
+  printf 'http://%s:%s' "$host" "$port"
 }
 
 _arr_url_host() {
@@ -1418,39 +1375,11 @@ arr.data.usage() {
 }
 
 arr.open() {
-  local enable_caddy enable_local_dns
-  enable_caddy="$(_arr_env_get ENABLE_CADDY)"
-  enable_local_dns="$(_arr_env_get ENABLE_LOCAL_DNS)"
   local opener=""
   if command -v xdg-open >/dev/null 2>&1; then
     opener=xdg-open
   elif command -v open >/dev/null 2>&1; then
     opener=open
-  fi
-
-  if [ "$enable_caddy" = "1" ]; then
-    local suffix entries
-    suffix="$(_arr_domain_suffix)"
-    entries='qBittorrent qbittorrent
-Sonarr sonarr
-Radarr radarr
-Lidarr lidarr
-Prowlarr prowlarr
-Bazarr bazarr
-FlareSolverr flaresolverr'
-    printf 'Service URLs (via Caddy reverse proxy):\n'
-    while read -r name host; do
-      [ -n "$name" ] || continue
-      local url
-      url="http://${host}.${suffix}"
-      printf '  %s -> %s\n' "$name" "$url"
-      if [ -n "$opener" ]; then
-        "$opener" "$url" >/dev/null 2>&1 &
-      fi
-    done <<EOF
-$entries
-EOF
-    return
   fi
 
   local host qbt_port sonarr_port radarr_port lidarr_port prowlarr_port bazarr_port flaresolverr_port
@@ -1463,7 +1392,7 @@ EOF
   bazarr_port="${BAZARR_PORT:-$(_arr_env_get BAZARR_PORT)}"
   flaresolverr_port="${FLARR_PORT:-$(_arr_env_get FLARR_PORT)}"
 
-  printf 'Caddy disabled (ENABLE_CADDY=0). Showing direct IP:PORT endpoints instead.\n'
+  printf 'Direct service endpoints:\n'
   local -a urls=(
     "qBittorrent" "http://${host}:${qbt_port}"
     "Sonarr" "http://${host}:${sonarr_port}"
@@ -1484,12 +1413,6 @@ EOF
     fi
     i=$((i + 2))
   done
-
-  if [ "${enable_local_dns:-0}" = "1" ]; then
-    printf '\nLocal DNS is enabled. Hostnames resolve, but they serve plain HTTP on the ports above until you enable Caddy.\n'
-  else
-    printf '\nTip: Enable Caddy (set ENABLE_CADDY=1) for HTTPS hostnames once you need them.\n'
-  fi
 }
 
 arr.help() {
@@ -1511,7 +1434,7 @@ Core stack management:
   arr.health                   Summarise container health checks
   arr.backup [dest]            Create tarball backups of service configs under ARR_DOCKER_DIR
   arr.compose.config [args]    Inspect the rendered docker compose configuration
-  arr.open                     Print (and optionally open) service URLs (direct or via Caddy)
+  arr.open                     Print (and optionally open) service URLs
   arr.data.usage               Report disk usage for each service directory in ${ARR_DOCKER_DIR}
 
 Environment helpers:
@@ -1522,7 +1445,7 @@ Environment helpers:
 Stack diagnostics:
   arr.all.health               Hit health-ish endpoints across the stack
   arr.all.status               Summarise version/status across services
-  arr.all.urls                 Show current base URLs (direct vs Caddy)
+  arr.all.urls                 Show current base URLs
   arr.check.ports              Quick HTTP reachability checks
   arr.diag.env                 Dump derived environment context (without secrets)
 
@@ -1559,7 +1482,6 @@ ARR service surfaces:
   arr.baz.help                 Bazarr API helpers
   arr.fsolv.help               FlareSolverr helpers
   arr.sab.help                 SABnzbd helper commands (if enabled)
-  arr.caddy.help               Caddy health endpoint helper
 
 Compatibility utilities:
   arr.son.url|logs|restart|refresh|rss
@@ -2860,28 +2782,6 @@ arr.fsolv.solve() {
   "${cmd[@]}" | _arr_pretty_guess
 }
 
-arr.caddy.help() {
-  cat <<'EOF'
-Caddy helpers:
-  arr.caddy.health            GET /healthz
-EOF
-}
-
-arr.caddy.health() {
-  local base="$(_arr_service_base caddy)"
-  local -a cmd=(curl -fsS)
-  local -a resolve=()
-  while IFS= read -r _arr_resolve; do
-    resolve+=("$_arr_resolve")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  unset _arr_resolve
-  if [ ${#resolve[@]} -gt 0 ]; then
-    cmd+=("${resolve[@]}")
-  fi
-  cmd+=("${base}/healthz")
-  "${cmd[@]}" | _arr_pretty_guess
-}
-
 _arr_clone_alias_group() {
   local new_prefix="$1"
   local legacy_prefix="$2"
@@ -2937,7 +2837,6 @@ arr.all.health() {
   _arr_section_exec "Prowlarr health" arr.prowl.health || rc=1
   _arr_section_exec "Bazarr info" arr.baz.info || rc=1
   _arr_section_exec "FlareSolverr health" arr.fsolv.health || rc=1
-  _arr_section_exec "Caddy health" arr.caddy.health || rc=1
   return $rc
 }
 
@@ -2951,40 +2850,22 @@ arr.all.status() {
   _arr_section_exec "Prowlarr status" arr.prowl.status || rc=1
   _arr_section_exec "Bazarr info" arr.baz.info || rc=1
   _arr_section_exec "FlareSolverr health" arr.fsolv.health || rc=1
-  _arr_section_exec "Caddy health" arr.caddy.health || rc=1
   return $rc
 }
 
 arr.all.urls() {
-  local enable_caddy="$(_arr_enable_caddy)"
-  if [ "$enable_caddy" = "1" ]; then
-    printf 'Caddy URLs (http):\n'
-    local suffix="$(_arr_domain_suffix)"
-    local svc
-    for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
-      printf '  %-13s http://%s.%s\n' "$svc" "$svc" "$suffix"
-    done
-    printf '  %-13s %s\n' "caddy" "$(_arr_service_base caddy)/healthz"
-  else
-    printf 'Direct service endpoints:\n'
-    local svc
-    for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
-      printf '  %-13s %s\n' "$svc" "$(_arr_service_base "$svc")"
-    done
-    printf '  %-13s %s\n' "caddy" "$(_arr_service_base caddy)/healthz"
-  fi
+  printf 'Direct service endpoints:\n'
+  local svc
+  for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
+    printf '  %-13s %s\n' "$svc" "$(_arr_service_base "$svc")"
+  done
 }
 
 arr.check.ports() {
-  local enable_caddy="$(_arr_enable_caddy)"
   local expose="${EXPOSE_DIRECT_PORTS:-$(_arr_env_get EXPOSE_DIRECT_PORTS)}"
-  if [ "$enable_caddy" = "1" ]; then
-    printf 'Checking Caddy virtual hosts via HTTP...\n'
-  else
-    printf 'Checking direct service ports on %s...\n' "$(_arr_host)"
-    if [ -n "$expose" ] && ! _arr_bool "$expose"; then
-      printf '  Warning: EXPOSE_DIRECT_PORTS=%s (services may be unreachable externally)\n' "$expose"
-    fi
+  printf 'Checking direct service ports on %s...\n' "$(_arr_host)"
+  if [ -n "$expose" ] && ! _arr_bool "$expose"; then
+    printf '  Warning: EXPOSE_DIRECT_PORTS=%s (services may be unreachable externally)\n' "$expose"
   fi
   local svc base http rc=0
   for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
@@ -3011,7 +2892,6 @@ arr.check.ports() {
 }
 
 arr.diag.env() {
-  local enable_caddy="$(_arr_enable_caddy)"
   local expose="${EXPOSE_DIRECT_PORTS:-$(_arr_env_get EXPOSE_DIRECT_PORTS)}"
   local split_vpn="${SPLIT_VPN:-$(_arr_env_get SPLIT_VPN)}"
   printf 'ARR stack directory: %s\n' "$ARR_STACK_DIR"
@@ -3019,13 +2899,11 @@ arr.diag.env() {
   printf 'Config directory:    %s\n' "$ARRCONF_DIR"
   printf 'Docker data dir:     %s\n' "$ARR_DOCKER_DIR"
   printf 'LAN host/IP:         %s\n' "$(_arr_host)"
-  printf 'Caddy enabled:       %s\n' "$enable_caddy"
-  printf 'Caddy domain suffix: %s\n' "$(_arr_domain_suffix)"
   printf 'Direct ports exposed:%s\n' "${expose:-unset}"
   printf 'SPLIT_VPN:           %s\n' "${split_vpn:-unset}"
   printf 'Services:\n'
   local svc
-  for svc in gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr caddy; do
+  for svc in gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
     case "$svc" in
       gluetun)
         printf '  %-13s host=%s port=%s key=%s\n' "$svc" "$(_arr_gluetun_host)" "$(_arr_gluetun_port)" "$( [ -n "$(_arr_gluetun_key)" ] && echo 'set' || echo 'missing')"

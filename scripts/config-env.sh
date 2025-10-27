@@ -339,13 +339,6 @@ prepare_env_context() {
     OPENVPN_PASSWORD=""
   fi
 
-  # shellcheck disable=SC2034  # consumed by env template generation
-  if type -t arr_derive_dns_host_entry >/dev/null 2>&1; then
-    DNS_HOST_ENTRY="$(arr_derive_dns_host_entry)"
-  else
-    DNS_HOST_ENTRY=""
-  fi
-  # shellcheck disable=SC2034  # consumed by env template generation
   if type -t arr_derive_gluetun_firewall_outbound_subnets >/dev/null 2>&1; then
     GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(arr_derive_gluetun_firewall_outbound_subnets)"
   else

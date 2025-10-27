@@ -88,7 +88,7 @@ To remove the stack and clean up generated assets later, run:
 - Rotate qBittorrent credentials and update `QBT_USER`/`QBT_PASS` in `userr.conf`.
 - Verify Proton port forwarding is active. The summary should show a forwarded port; follow the Gluetun recovery steps if it fails.
 - Confirm optional services and containers match your plan (see [Optional services and containers](./docs/configuration.md#optional-services-and-containers)).
-- Confirm direct LAN exposure meets your needs; HTTPS reverse proxy support has been removed.
+- Confirm direct LAN exposure meets your needs; arrbash does not manage HTTPS certificates for you.
 - Spot-check published ports with `ss -tulpn` to ensure only expected services listen on the LAN.
 - Review [credential hygiene tips](./docs/security.md#credential-hygiene) so core logins and API keys stay rotated.
 
