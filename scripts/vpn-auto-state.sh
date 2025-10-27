@@ -16,7 +16,7 @@ if [[ -n "${__VPN_AUTO_STATE_LOADED:-}" ]]; then
 fi
 __VPN_AUTO_STATE_LOADED=1
 
-VPN_AUTO_STATE_SCHEMA_VERSION=1
+VPN_AUTO_STATE_SCHEMA_VERSION=2
 
 vpn_auto_state_reset() {
   VPN_AUTO_STATE_LAST_STATUS="unknown"
@@ -36,6 +36,11 @@ vpn_auto_state_reset() {
   VPN_AUTO_STATE_PENDING_PORT_SYNC=0
   VPN_AUTO_STATE_LAST_ACTION="none"
   VPN_AUTO_STATE_LAST_ERROR=""
+  VPN_AUTO_STATE_LAST_PROTOCOL=""
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_FROM=""
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_TO=""
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_REASON=""
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_EPOCH=0
 }
 
 vpn_auto_state_reset
@@ -228,6 +233,11 @@ vpn_auto_state_load() {
   VPN_AUTO_STATE_PENDING_PORT_SYNC="$(vpn_auto_json_get_number "$json" pending_port_sync)"
   VPN_AUTO_STATE_LAST_ACTION="$(vpn_auto_json_get_string "$json" last_action)"
   VPN_AUTO_STATE_LAST_ERROR="$(vpn_auto_json_get_string "$json" last_error)"
+  VPN_AUTO_STATE_LAST_PROTOCOL="$(vpn_auto_json_get_string "$json" last_protocol)"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_FROM="$(vpn_auto_json_get_string "$json" last_protocol_switch_from)"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_TO="$(vpn_auto_json_get_string "$json" last_protocol_switch_to)"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_REASON="$(vpn_auto_json_get_string "$json" last_protocol_switch_reason)"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_EPOCH="$(vpn_auto_json_get_number "$json" last_protocol_switch_epoch)"
 }
 
 vpn_auto_state_save() {
@@ -262,8 +272,13 @@ vpn_auto_state_save() {
         --argjson pending_port_sync "${VPN_AUTO_STATE_PENDING_PORT_SYNC:-0}" \
         --arg last_action "${VPN_AUTO_STATE_LAST_ACTION:-}" \
         --arg last_error "${VPN_AUTO_STATE_LAST_ERROR:-}" \
+        --arg last_protocol "${VPN_AUTO_STATE_LAST_PROTOCOL:-}" \
+        --arg last_protocol_switch_from "${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_FROM:-}" \
+        --arg last_protocol_switch_to "${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_TO:-}" \
+        --arg last_protocol_switch_reason "${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_REASON:-}" \
+        --argjson last_protocol_switch_epoch "${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_EPOCH:-0}" \
         --argjson updated "$now" \
-        '{version:$version,updated:$updated,last_status:$last_status,last_detail:$last_detail,last_public_ip:$last_public_ip,last_forward_port:$last_forward_port,last_qbt_port:$last_qbt_port,last_check_epoch:$last_check_epoch,last_healthy_epoch:$last_healthy_epoch,last_port_success_epoch:$last_port_success_epoch,port_missing_since_epoch:$port_missing_since_epoch,consecutive_failures:$consecutive_failures,last_recovery_epoch:$last_recovery_epoch,last_control_restart_epoch:$last_control_restart_epoch,last_container_restart_epoch:$last_container_restart_epoch,cooldown_until_epoch:$cooldown_until_epoch,pending_port_sync:$pending_port_sync,last_action:$last_action,last_error:$last_error}'
+        '{version:$version,updated:$updated,last_status:$last_status,last_detail:$last_detail,last_public_ip:$last_public_ip,last_forward_port:$last_forward_port,last_qbt_port:$last_qbt_port,last_check_epoch:$last_check_epoch,last_healthy_epoch:$last_healthy_epoch,last_port_success_epoch:$last_port_success_epoch,port_missing_since_epoch:$port_missing_since_epoch,consecutive_failures:$consecutive_failures,last_recovery_epoch:$last_recovery_epoch,last_control_restart_epoch:$last_control_restart_epoch,last_container_restart_epoch:$last_container_restart_epoch,cooldown_until_epoch:$cooldown_until_epoch,pending_port_sync:$pending_port_sync,last_action:$last_action,last_error:$last_error,last_protocol:$last_protocol,last_protocol_switch_from:$last_protocol_switch_from,last_protocol_switch_to:$last_protocol_switch_to,last_protocol_switch_reason:$last_protocol_switch_reason,last_protocol_switch_epoch:$last_protocol_switch_epoch}'
     } 2>/dev/null)"
   fi
   if [[ -z "$json" ]]; then
@@ -288,7 +303,12 @@ vpn_auto_state_save() {
   "cooldown_until_epoch": ${VPN_AUTO_STATE_COOLDOWN_UNTIL_EPOCH:-0},
   "pending_port_sync": ${VPN_AUTO_STATE_PENDING_PORT_SYNC:-0},
   "last_action": "${VPN_AUTO_STATE_LAST_ACTION:-}",
-  "last_error": "${VPN_AUTO_STATE_LAST_ERROR:-}"
+  "last_error": "${VPN_AUTO_STATE_LAST_ERROR:-}",
+  "last_protocol": "${VPN_AUTO_STATE_LAST_PROTOCOL:-}",
+  "last_protocol_switch_from": "${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_FROM:-}",
+  "last_protocol_switch_to": "${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_TO:-}",
+  "last_protocol_switch_reason": "${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_REASON:-}",
+  "last_protocol_switch_epoch": ${VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_EPOCH:-0}
 }
 JSON
     } 2>/dev/null)
@@ -354,6 +374,21 @@ JSON
   fi
   printf '%s\n' "$payload" >"$file"
   ensure_nonsecret_file_mode "$file"
+}
+
+vpn_auto_state_record_protocol_switch() {
+  local from="$1"
+  local to="$2"
+  local reason="$3"
+  local epoch
+  epoch="$(vpn_auto_now_epoch)"
+
+  VPN_AUTO_STATE_LAST_PROTOCOL="$to"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_FROM="$from"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_TO="$to"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_REASON="$reason"
+  VPN_AUTO_STATE_LAST_PROTOCOL_SWITCH_EPOCH="$epoch"
+  VPN_AUTO_STATE_LAST_ACTION="protocol-switch"
 }
 
 vpn_auto_append_history() {

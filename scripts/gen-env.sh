@@ -201,6 +201,7 @@ filter_conditionals() {
 
 : "${QBT_INT_PORT:=8082}"
 : "${QBT_PORT:=${QBT_INT_PORT}}"
+: "${QBT_WEB_PORT:=8080}"
 : "${SONARR_INT_PORT:=8989}"
 : "${RADARR_INT_PORT:=7878}"
 : "${LIDARR_INT_PORT:=8686}"
@@ -219,8 +220,14 @@ VPN_AUTO_RECONNECT_ENABLED="$(arr_normalize_bool "${VPN_AUTO_RECONNECT_ENABLED:-
 QBT_ENFORCE_WEBUI="$(arr_normalize_bool "${QBT_ENFORCE_WEBUI:-1}")"
 ENABLE_CONFIGARR="$(arr_normalize_bool "${ENABLE_CONFIGARR:-1}")"
 SPLIT_VPN="$(arr_normalize_bool "${SPLIT_VPN:-0}")"
+PORT_MANAGER_ENABLE="$(arr_normalize_bool "${PORT_MANAGER_ENABLE:-0}")"
 
-export EXPOSE_DIRECT_PORTS SABNZBD_ENABLED
+: "${PM_STATUS_FILE:=/tmp/gluetun/forwarded_port}"
+: "${PM_POLL_SECONDS:=5}"
+: "${PM_DRY_RUN:=0}"
+: "${PM_LOG_LEVEL:=info}"
+
+export EXPOSE_DIRECT_PORTS SABNZBD_ENABLED PORT_MANAGER_ENABLE
 
 if [[ -z "${SONARR_PORT:-}" ]]; then SONARR_PORT="$SONARR_INT_PORT"; fi
 if [[ -z "${RADARR_PORT:-}" ]]; then RADARR_PORT="$RADARR_INT_PORT"; fi
@@ -266,6 +273,7 @@ if [[ -z "${COMPOSE_PROFILES:-}" ]] && declare -f arr_derive_compose_profiles_cs
 fi
 : "${VPN_SERVICE_PROVIDER:=${VPN_SERVICE_PROVIDER:-protonvpn}}"
 : "${VPN_TYPE:=${VPN_TYPE:-openvpn}}"
+: "${WG_FALLBACK_TIMEOUT_SECONDS:=120}"
 if [[ -z "${OPENVPN_USER:-}" ]] && declare -f arr_derive_openvpn_user >/dev/null 2>&1; then
   OPENVPN_USER="$(arr_derive_openvpn_user)"
 fi

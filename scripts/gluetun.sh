@@ -142,6 +142,85 @@ _pf_gluetun_root() {
   printf '%s/gluetun' "${docker_root%/}"
 }
 
+gluetun_port_forward_status_host_path() {
+  local status_file="${VPN_PORT_FORWARDING_STATUS_FILE:-/tmp/gluetun/forwarded_port}"
+  local host_path="$status_file"
+
+  if [[ "$host_path" == /tmp/gluetun/* ]]; then
+    local suffix="${host_path#/tmp/gluetun/}"
+    local root
+    root="$(_pf_gluetun_root)"
+    if [[ -n "$root" ]]; then
+      host_path="${root%/}/${suffix}"
+    fi
+  fi
+
+  printf '%s' "$host_path"
+}
+
+gluetun_read_forwarded_port_file() {
+  local path
+  path="$(gluetun_port_forward_status_host_path)"
+  if [[ -z "$path" || ! -f "$path" ]]; then
+    return 1
+  fi
+
+  local port
+  port="$(LC_ALL=C awk 'NR==1 {print $1; exit}' "$path" 2>/dev/null | tr -d '\r')"
+  if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)); then
+    printf '%s' "$port"
+    return 0
+  fi
+
+  return 1
+}
+
+gluetun_wireguard_config_path() {
+  local root
+  root="$(_pf_gluetun_root)"
+  printf '%s/wireguard/wg0.conf' "${root%/}"
+}
+
+gluetun_wireguard_natpmp_enabled() {
+  local config_path="${1:-}"
+  if [[ -z "$config_path" ]]; then
+    config_path="$(gluetun_wireguard_config_path)"
+  fi
+
+  if [[ -z "$config_path" || ! -f "$config_path" ]]; then
+    return 2
+  fi
+
+  if LC_ALL=C grep -qi 'nat[-_]*pmp' "$config_path" 2>/dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+gluetun_require_wireguard_natpmp() {
+  local config_path="${1:-}"
+  if [[ -z "$config_path" ]]; then
+    config_path="$(gluetun_wireguard_config_path)"
+  fi
+
+  if [[ -z "$config_path" || ! -f "$config_path" ]]; then
+    if declare -f warn >/dev/null 2>&1; then
+      warn "WireGuard config not found at ${config_path:-<unknown>}; download a Proton NAT-PMP (Port Forwarding) configuration"
+    fi
+    return 1
+  fi
+
+  if ! gluetun_wireguard_natpmp_enabled "$config_path"; then
+    if declare -f warn >/dev/null 2>&1; then
+      warn "WireGuard config at ${config_path} missing NAT-PMP directives; re-download from ProtonVPN with NAT-PMP (Port Forwarding) enabled"
+    fi
+    return 1
+  fi
+
+  return 0
+}
+
 # Returns absolute path to the async port-forward state file
 pf_state_path() {
   local state_file="${PF_ASYNC_STATE_FILE:-pf-state.json}"
@@ -570,14 +649,9 @@ start_async_pf_if_enabled() {
 
 # Builds base URL for Gluetun control API from LAN/localhost settings
 _gluetun_control_base() {
-  local port host
+  local port
   port="${GLUETUN_CONTROL_PORT:-8000}"
-  host="${LOCALHOST_IP:-127.0.0.1}"
-  if [[ $host == *:* && $host != [* ]]; then
-    printf 'http://[%s]:%s' "$host" "$port"
-  else
-    printf 'http://%s:%s' "$host" "$port"
-  fi
+  printf 'http://127.0.0.1:%s' "$port"
 }
 
 # Performs authenticated GET against Gluetun control API with jq-compatible output
@@ -598,7 +672,7 @@ gluetun_control_get() {
 
   local -a curl_args=(-fsS --max-time 8)
   if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
-    curl_args+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
+    curl_args+=(-H "X-API-Key: ${GLUETUN_API_KEY}")
   fi
 
   curl "${curl_args[@]}" "$url" 2>/dev/null

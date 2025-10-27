@@ -67,6 +67,17 @@ vpn_auto_reconnect_retry_delay_seconds() {
   printf '%s' "$seconds"
 }
 
+vpn_auto_wireguard_fallback_timeout_seconds() {
+  local seconds="${WG_FALLBACK_TIMEOUT_SECONDS:-120}"
+  case "$seconds" in
+    ''|*[!0-9]*) seconds=120 ;;
+  esac
+  if ((seconds <= 0)); then
+    seconds=120
+  fi
+  printf '%s' "$seconds"
+}
+
 vpn_auto_reconnect_pf_grace_seconds() {
   local seconds="${VPN_PORT_GRACE_SECONDS:-300}"
   case "$seconds" in

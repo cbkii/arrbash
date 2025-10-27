@@ -41,14 +41,19 @@ Tips:
 - If Gluetun is disabled, SAB automatically falls back to the LAN bridge so downloads continue.
 
 ## Proton port forwarding
-- Proton port forwarding is optional—the installer makes a quick attempt after VPN startup and continues even without a lease (you'll see a non-fatal notice in the summary).
-- Gluetun acquires the Proton forwarded port after the VPN is healthy. The installer writes hooks in `${ARR_DOCKER_DIR}/gluetun` and spawns an async worker so other services can start without waiting.
-- Worker state lives in `${ARR_DOCKER_DIR}/gluetun/pf-state.json`; logs stream to `${ARR_DOCKER_DIR}/gluetun/port-forwarding.log`.
-- Helper aliases (available after sourcing `.aliasarr`) expose status:
+- **OpenVPN usernames require `+pmp`.** Proton only hands out a forwarded port when the username contains the `+pmp` suffix. arrbash injects it at runtime so you can keep your stored credentials unchanged.
+- **WireGuard configs must include NAT-PMP.** Download the Proton WireGuard profile with **NAT-PMP (Port Forwarding)** enabled; Gluetun refuses to start without it because Proton will never assign a port.
+- **Forwarded port status lives in `/tmp/gluetun/forwarded_port`.** arrbash mounts the directory via a named volume (`gluetun_state`) so helpers and Arr apps can read the file. The same value is exposed over Gluetun’s control server at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`.
+- **Only Gluetun publishes ports.** qBittorrent, Arr apps, and the optional `port-manager` container all run inside Gluetun’s namespace via `network_mode: "service:gluetun"`, preventing accidental LAN exposure of VPN traffic.
+- **Control server safety.** The control API binds to `127.0.0.1`, enforces an API key, and arrbash whitelists only the status/port routes it needs. Do not remap it to the LAN.
+- **Optional port-manager sidecar.** Set `PORT_MANAGER_ENABLE=1` to run `/scripts/port-manager/pm-watch.sh` in a lightweight container. It polls the forwarded port file/control server and updates qBittorrent through `/api/v2/app/setPreferences`, disabling random ports so the client sticks to the leased port.
+- **Helper aliases (source `.aliasarr`).**
   ```bash
-  arr.vpn.port.state   # JSON snapshot
-  arr.vpn.port.watch   # Follow the worker log
-  arr.vpn.port.sync    # Force a manual retry
+  arr.pf.port   # print the forwarded port (file first, API fallback)
+  arr.pf.sync   # run a one-shot sync using pm-watch.sh logic
+  arr.pf.tail   # tail -f the forwarded port file with timestamps
+  arr.pf.logs   # follow docker logs for the port-manager sidecar
+  arr.pf.test 12345  # dry-run a qBittorrent update to a specific port
   ```
 - Rotate the Gluetun API key anytime with:
   ```bash
