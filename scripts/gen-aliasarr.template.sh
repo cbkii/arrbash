@@ -178,6 +178,38 @@ _arr_sanitize_error() {
   printf '%s' "$value"
 }
 
+_arr_clean_ip_payload() {
+  local payload="$1"
+  payload="$(printf '%s' "$payload" | tr -d '\r')"
+  payload="$(_arr_trim "$payload")"
+  printf '%s' "$payload"
+}
+
+_arr_extract_public_ip() {
+  local payload="$1"
+  local value=""
+
+  if [ -z "$payload" ]; then
+    return 0
+  fi
+
+  value="$(_arr_json_get "$payload" public_ip)"
+  if [ -z "$value" ]; then
+    value="$(_arr_json_get "$payload" ip)"
+  fi
+
+  if [ -z "$value" ]; then
+    value="$(printf '%s\n' "$payload" | sed -n 's/^"\(.*\)"$/\1/p' | head -n1)"
+  fi
+
+  if [ -z "$value" ]; then
+    value="$payload"
+  fi
+
+  value="$(_arr_trim "$value")"
+  printf '%s' "$value"
+}
+
 _arr_csv_to_array() {
   local input="$1"
   [ -n "$input" ] || return 0
@@ -1823,28 +1855,12 @@ arr.vpn.status() {
   fi
   msg "Tunnel status: ${tunnel_status}"
 
-  local ip_payload ip_value ip_error
+  local ip_payload_raw ip_payload ip_value ip_error
   ip_value=""
   ip_error=""
-  if ip_payload="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
-    ip_payload="$(printf '%s' "$ip_payload" | tr -d '\r')"
-    ip_payload="$(_arr_trim "$ip_payload")"
-    case "$ip_payload" in
-      '{'*)
-        ip_value="$(_arr_json_get "$ip_payload" public_ip)"
-        if [ -z "$ip_value" ]; then
-          ip_value="$(_arr_json_get "$ip_payload" ip)"
-        fi
-        ;;
-      '"'*'"')
-        ip_value="${ip_payload#"}"
-        ip_value="${ip_value%"}"
-        ;;
-      *)
-        ip_value="$ip_payload"
-        ;;
-    esac
-    ip_value="$(_arr_trim "$ip_value")"
+  if ip_payload_raw="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
+    ip_payload="$(_arr_clean_ip_payload "$ip_payload_raw")"
+    ip_value="$(_arr_extract_public_ip "$ip_payload")"
   else
     ip_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
   fi
