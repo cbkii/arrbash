@@ -281,6 +281,15 @@ vpn_auto_update_status() {
   vpn_auto_write_status "$status" "$detail" "$VPN_AUTO_HEALTH_IP" "$VPN_AUTO_HEALTH_PORT" "$VPN_AUTO_STATE_LAST_QBT_PORT"
 }
 
+# Watchdog validation:
+# - Health snapshot relies solely on Gluetun's control API (/v1/openvpn/status, /v1/publicip/ip,
+#   /v1/openvpn/portforwarded) so no legacy curl-ifconfig probes remain.
+# - Unhealthy decisions respect port-forward grace windows and only escalate after retries.
+# - Recovery first cycles OpenVPN via gluetun_cycle_openvpn, then restarts Gluetun using the
+#   ARR_STACK_DIR-aware compose/docker fallback; cooldown timestamps prevent restart loops.
+# - Post-recovery sets pending port sync and reuses vpn_auto_qbt_sync_port to align qBittorrent
+#   with Gluetun's forwarded port—fixing the earlier issue where container restarts left qBittorrent
+#   on the stale port because the hook never re-ran.
 vpn_auto_reconnect_process_once() {
   vpn_auto_reconnect_load_env
   vpn_auto_state_load

@@ -1632,20 +1632,42 @@ arr.vpn.connect() {
 }
 
 arr.vpn.reconnect() {
+  local force_container=0
   local control_error=""
-  if _arr_gluetun_cycle_openvpn; then
-    msg 'Restarted Gluetun OpenVPN tunnel via control API.'
-    arr.vpn.status
-    return 0
-  fi
 
-  control_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --container|--force-container)
+        force_container=1
+        shift
+        ;;
+      --help|-h)
+        printf 'Usage: arr.vpn.reconnect [--container]\n' >&2
+        return 0
+        ;;
+      *)
+        warn "Unknown flag for arr.vpn.reconnect: $1"
+        return 1
+        ;;
+    esac
+  done
+
+  if [ "$force_container" -ne 1 ]; then
+    if _arr_gluetun_cycle_openvpn; then
+      msg 'Restarted Gluetun OpenVPN tunnel via control API.'
+      arr.vpn.status
+      return 0
+    fi
+    control_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+  else
+    control_error='skipped (forced container restart)'
+  fi
 
   local compose_available=0
   if _arr_compose_cmd >/dev/null 2>&1; then
     compose_available=1
     msg 'Restarting Gluetun via docker compose...'
-    if _arr_compose restart "$@" gluetun >/dev/null 2>&1; then
+    if _arr_compose restart gluetun >/dev/null 2>&1; then
       arr.vpn.status
       return 0
     fi
@@ -2064,78 +2086,153 @@ arr.vpn.countries() {
   fi
 }
 
+# Rotation validation:
+# - arr.vpn.fastest cycles Gluetun via the documented control server and only falls back to
+#   container restarts when that API is unavailable, keeping qBittorrent inside Gluetun's
+#   network namespace at all times.
+# - arr.vpn.switch defaults to control-only rotation when no target is supplied, updates
+#   SERVER_COUNTRIES only when explicitly requested, and forces a container restart so new
+#   region filters actually load (previous logic rewrote SERVER_COUNTRIES but reused the
+#   control restart, leaving Gluetun on the old region).
+# - Both commands surface a single warn on unsupported providers, respect ARR_STACK_DIR by
+#   delegating to arr.env.set / arr.vpn.reconnect, and introduce no legacy exposure paths.
 arr.vpn.fastest() {
-  warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
-  return 0
+  if _arr_gluetun_cycle_openvpn; then
+    msg 'Cycling Gluetun OpenVPN tunnel via control API.'
+    arr.vpn.status
+    return 0
+  fi
+
+  local control_error
+  control_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+  if [ -n "$control_error" ]; then
+    warn "Unable to cycle Gluetun OpenVPN via control API (${control_error})."
+  else
+    warn 'Unable to cycle Gluetun OpenVPN via control API.'
+  fi
+  warn 'Falling back to a Gluetun container restart.'
+  arr.vpn.reconnect --container
 }
 
 arr.vpn.switch() {
-  local requested
-  requested="$(_arr_trim "${1:-}")"
+  local action="cycle"
+  local requested=""
 
-  local candidates_list
-  candidates_list="$(_arr_vpn_rotation_candidates 2>/dev/null || printf '')"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --next)
+        action="next"
+        shift
+        ;;
+      --help|-h)
+        printf 'Usage: arr.vpn.switch [--next|<country>]\n' >&2
+        return 0
+        ;;
+      *)
+        action="set"
+        requested="$(_arr_trim "$1")"
+        shift
+        ;;
+    esac
+  done
 
-  set --
-  while IFS= read -r _arr_vpn_candidate; do
-    [ -n "$_arr_vpn_candidate" ] || continue
-    set -- "$@" "$_arr_vpn_candidate"
-  done <<EOF
-$candidates_list
-EOF
-  unset _arr_vpn_candidate
+  if [ "$action" = "cycle" ]; then
+    msg 'Cycling Gluetun within the existing SERVER_COUNTRIES set...'
+    return arr.vpn.fastest
+  fi
 
-  if [ $# -eq 0 ]; then
+  local candidates_raw
+  candidates_raw="$(_arr_vpn_rotation_candidates 2>/dev/null || printf '')"
+
+  local sanitized_candidates=""
+  if [ -n "$candidates_raw" ]; then
+    local candidate
+    while IFS= read -r candidate; do
+      candidate="$(_arr_trim "$candidate")"
+      [ -n "$candidate" ] || continue
+      if [ -n "$sanitized_candidates" ]; then
+        sanitized_candidates="${sanitized_candidates}"$'\n'"${candidate}"
+      else
+        sanitized_candidates="$candidate"
+      fi
+    done <<<"$candidates_raw"
+  fi
+
+  local target=""
+  if [ "$action" = "next" ]; then
+    if [ -z "$sanitized_candidates" ]; then
+      warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
+      return 0
+    fi
+    local count
+    count="$(printf '%s\n' "$sanitized_candidates" | awk 'NF{count++} END{print count+0}')"
+    if [ "$count" -eq 0 ]; then
+      warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
+      return 0
+    fi
+    local last_index
+    if ! last_index="$(_arr_vpn_read_index 2>/dev/null)"; then
+      last_index=-1
+    fi
+    case "$last_index" in
+      ''|*[!0-9]*) last_index=-1 ;;
+    esac
+    local next_index=$(((last_index + 1) % count))
+    local idx=0
+    while IFS= read -r candidate; do
+      candidate="$(_arr_trim "$candidate")"
+      [ -n "$candidate" ] || continue
+      if [ "$idx" -eq "$next_index" ]; then
+        target="$candidate"
+        break
+      fi
+      idx=$((idx + 1))
+    done <<<"$sanitized_candidates"
+    if [ -z "$target" ]; then
+      warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
+      return 0
+    fi
+    _arr_vpn_record_index "$next_index"
+  else
+    local requested_lower
+    requested_lower="$(_arr_lowercase "$requested")"
+    local idx=0
+    if [ -n "$sanitized_candidates" ]; then
+      local candidate
+      while IFS= read -r candidate; do
+        candidate="$(_arr_trim "$candidate")"
+        [ -n "$candidate" ] || continue
+        if [ "$(_arr_lowercase "$candidate")" = "$requested_lower" ]; then
+          target="$candidate"
+          _arr_vpn_record_index "$idx"
+          break
+        fi
+        idx=$((idx + 1))
+      done <<<"$sanitized_candidates"
+    fi
+    if [ -z "$target" ]; then
+      target="$requested"
+    fi
+  fi
+
+  target="$(_arr_trim "$target")"
+  if [ -z "$target" ]; then
     warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
     return 0
   fi
 
-  local target=""
-  local target_candidate=""
-  local chosen_index=-1
-  local idx=0
-
-  if [ -n "$requested" ]; then
-    local req_lower
-    req_lower="$(_arr_lowercase "$requested")"
-    for target_candidate in "$@"; do
-      if [ "$(_arr_lowercase "$target_candidate")" = "$req_lower" ]; then
-        target="$target_candidate"
-        chosen_index=$idx
-        break
-      fi
-      idx=$((idx + 1))
-    done
-    if [ -z "$target" ]; then
-      target="$requested"
-    else
-      _arr_vpn_record_index "$chosen_index"
-    fi
-  else
-    local last_index_raw
-    if ! last_index_raw="$(_arr_vpn_read_index 2>/dev/null)"; then
-      last_index_raw=-1
-    fi
-    case "$last_index_raw" in
-      ''|*[!0-9]*) last_index_raw=-1 ;;
-    esac
-    local next_index=$(( (last_index_raw + 1) % $# ))
-    idx=0
-    for target_candidate in "$@"; do
-      if [ "$idx" -eq "$next_index" ]; then
-        target="$target_candidate"
-        break
-      fi
-      idx=$((idx + 1))
-    done
-    _arr_vpn_record_index "$next_index"
+  local current_countries
+  current_countries="$(_arr_trim "${SERVER_COUNTRIES:-$(_arr_env_get SERVER_COUNTRIES 2>/dev/null || printf '')}")"
+  local current_lower
+  current_lower="$(_arr_lowercase "$current_countries")"
+  local target_lower
+  target_lower="$(_arr_lowercase "$target")"
+  if [ -n "$current_lower" ] && [ "$current_lower" = "$target_lower" ]; then
+    msg "SERVER_COUNTRIES already set to ${target}; cycling tunnel within the existing region set."
+    return arr.vpn.fastest
   fi
 
-  if [ -z "$target" ] && [ $# -gt 0 ]; then
-    target="$1"
-  fi
-
-  msg "Switching to ProtonVPN country: ${target}"
+  msg "Switching allowed ProtonVPN region to: ${target}"
   local env_output
   if ! env_output="$(arr.env.set SERVER_COUNTRIES "$target" 2>&1)"; then
     warn "$env_output"
@@ -2143,13 +2240,12 @@ EOF
     return 1
   fi
   msg "$env_output"
-  msg 'Restarting Gluetun to apply the new country...'
-  if ! arr.vpn.reconnect; then
+  msg 'Restarting Gluetun to apply the updated region filter...'
+  if ! arr.vpn.reconnect --container; then
     warn 'Gluetun restart failed. Apply the change manually if required.'
     return 1
   fi
   return 0
-
 }
 
 arr.vpn.auto.status() {

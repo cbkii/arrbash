@@ -61,8 +61,10 @@ Tips:
 Legacy dnsmasq and Caddy helpers have been retired. Manage hostname overrides and HTTPS termination with your own tooling when needed. arrbash now exposes services directly on the LAN (when `EXPOSE_DIRECT_PORTS=1`) and relies on Gluetun to publish qBittorrent’s forwarded ports.
 
 ## VPN auto-reconnect (optional)
-- Enable by setting `VPN_AUTO_RECONNECT_ENABLED=1` and rerunning the installer. The daemon monitors qBittorrent throughput and rotates Proton servers when sustained speeds fall below `VPN_SPEED_THRESHOLD_KBPS` for `VPN_CONSECUTIVE_CHECKS` intervals.
-- Adjust quiet hours and cooldowns with `VPN_ALLOWED_HOURS_START`, `VPN_ALLOWED_HOURS_END`, `VPN_COOLDOWN_MINUTES`, and `VPN_MAX_RETRY_MINUTES`.
+- Enable by setting `VPN_AUTO_RECONNECT_ENABLED=1` and rerunning the installer. The daemon now polls Gluetun’s control server (`/v1/openvpn/status`, `/v1/publicip/ip`, `/v1/openvpn/portforwarded`) instead of curling external IP services.
+- The tunnel is marked unhealthy only when OpenVPN is not `running`, the exit IP is missing, or a Proton NAT-PMP port fails to appear after `VPN_PORT_GRACE_SECONDS`. Each failure triggers a control-server stop/start first and only falls back to restarting the Gluetun container via the stack’s compose wrapper when required.
+- After a recovery the daemon re-runs the qBittorrent port hook so the client always listens on the forwarded port Gluetun negotiated with ProtonVPN.
+- Cooldowns respect `VPN_COOLDOWN_MINUTES`, `VPN_RETRY_DELAY_SECONDS`, and `VPN_MAX_RETRY_MINUTES`; manual overrides continue to work via `.vpn-auto-reconnect-<flag>` files.
 - Use helper aliases after sourcing `.aliasarr`:
   ```bash
   arr.vpn.auto.status
@@ -70,7 +72,12 @@ Legacy dnsmasq and Caddy helpers have been retired. Manage hostname overrides an
   arr.vpn.auto.resume  # remove pause/kill overrides
   arr.vpn.auto.once    # request a single reconnect
   ```
-- Runtime status lives in `${ARR_STACK_DIR}/.vpn-auto-reconnect-status.json`; detailed logs sit under `${ARR_DOCKER_DIR}/gluetun/auto-reconnect/`.
+- Runtime status lives in `${ARR_STACK_DIR}/.vpn-auto-reconnect-status.json`; detailed logs sit under `${ARR_DOCKER_DIR}/gluetun/auto-reconnect/daemon.log`.
+
+### Manual VPN rotation
+- `arr.vpn.fastest` cycles OpenVPN in-place using Gluetun’s control API so you get a fresh exit IP while keeping qBittorrent inside Gluetun’s `network_mode: "service:gluetun"` boundary.
+- `arr.vpn.switch` without arguments behaves the same as `arr.vpn.fastest`. Pass `--next` to walk through `PVPN_ROTATE_COUNTRIES`, or provide an explicit country name to rewrite `SERVER_COUNTRIES` and restart Gluetun safely via `arr.vpn.reconnect --container`.
+- Gluetun’s `UPDATER_PERIOD=24h` keeps the Proton server list current, so rotations always consider fresh endpoints without manual maintenance.
 
 ## Related topics
 - [Configuration](configuration.md) – variables referenced above.

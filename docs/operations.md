@@ -30,6 +30,7 @@ source "${ARR_STACK_DIR:-$(pwd)}/.aliasarr"
 ```
 Common helpers include:
 - `arr.vpn.status` – display Gluetun health.
+- `arr.vpn.fastest`, `arr.vpn.switch` – rotate ProtonVPN endpoints via Gluetun’s control server (`--next` or `<country>` to change regions).
 - `arr.vpn.port`, `arr.vpn.port.state`, `arr.vpn.port.watch` – inspect Proton port forwarding.
 - `arr.logs` – follow stack logs.
 - `arr.open` – print LAN URLs for qBittorrent, Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, and FlareSolverr.
