@@ -220,9 +220,9 @@ arr_resolve_absolute_path() {
 
 if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   _arr_common_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  YAML_EMIT_LIB="${YAML_EMIT_LIB:-${_arr_common_dir}/yaml-emit.sh}"
+  YAML_EMIT_LIB="${YAML_EMIT_LIB:-${_arr_common_dir}/gen-yaml-emit.sh}"
   if [[ -f "${YAML_EMIT_LIB}" ]]; then
-    # shellcheck source=scripts/yaml-emit.sh
+    # shellcheck source=scripts/gen-yaml-emit.sh
     . "${YAML_EMIT_LIB}"
   else
     warn "[ERROR] Missing emission helper library: ${YAML_EMIT_LIB}"
@@ -233,9 +233,9 @@ fi
 
 if [[ -z "${ARR_PORT_PROBE_LIB_SOURCED:-}" ]]; then
   _arr_port_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  PORT_PROBE_LIB="${PORT_PROBE_LIB:-${_arr_port_lib_dir}/port-probe.sh}"
+  PORT_PROBE_LIB="${PORT_PROBE_LIB:-${_arr_port_lib_dir}/vpn-port-probe.sh}"
   if [[ -f "${PORT_PROBE_LIB}" ]]; then
-    # shellcheck source=scripts/port-probe.sh
+    # shellcheck source=scripts/vpn-port-probe.sh
     . "${PORT_PROBE_LIB}"
   else
     warn "[ERROR] Missing port probe helper: ${PORT_PROBE_LIB}"
@@ -2450,6 +2450,7 @@ arr_verify_compose_placeholders() {
   done < <(arr_compose_collect_canonical_env_names "$env_file")
   local _arr_unexpected=0
   local _arr_placeholder="" _arr_name="" _arr_sep=""
+  local _arr_display=""
   local _arr_matches=""
   # Match ${VAR}, ${VAR-...}, ${VAR:-...}, ${VAR=...}, ${VAR:=...}, ${VAR?...}, ${VAR:+...}
   local _arr_matches_rc=0
@@ -2492,9 +2493,8 @@ arr_verify_compose_placeholders() {
     if [[ ${!_arr_name+x} ]]; then
       continue
     fi
-    warn "Unexpected placeholder \\${${_arr_name}} in ${compose_file}"
-    local _arr_display=""
     printf -v _arr_display "\${%s}" "$_arr_name"
+    warn "Unexpected placeholder ${_arr_display} in ${compose_file}"
     _arr_missing+=("${_arr_display}")
     _arr_unexpected=1
   done <<<"$_arr_matches"

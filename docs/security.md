@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Security
+
+[← Back to README](../README.md)
 
 Keep the deployment private to your LAN and rotate credentials regularly.
 
@@ -24,7 +24,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 
 ## Updates and audits
 - Review generated summaries from `./arr.sh` for unexpected URLs or credentials.
-- Use `scripts/doctor.sh` to spot misconfigurations before exposing services outside the LAN.
+- Use `scripts/fix-doctor.sh` to spot misconfigurations before exposing services outside the LAN.
 - Before pushing changes, search the repo for accidental personal data or unofficial links:
   ```bash
   git grep -nE '(yourname|@|home\\.local)'

@@ -1,6 +1,6 @@
 # shellcheck disable=SC1090,SC2154
 # Alias sanity summary:
-# - arr.vpn.* helpers rely on Gluetun's control API via scripts/gluetun.sh.
+# - arr.vpn.* helpers rely on Gluetun's control API via scripts/vpn-gluetun.sh.
 # - Template no longer references legacy .arraliases, proxy, or internal CA helpers.
 # - Behaviour remains identical for bash and zsh users sourcing the generated file.
 
@@ -140,7 +140,7 @@ if command -v arr_set_docker_services_list >/dev/null 2>&1; then
   arr_set_docker_services_list
 fi
 
-_arr_gluetun_lib="${ARR_STACK_DIR}/scripts/gluetun.sh"
+_arr_gluetun_lib="${ARR_STACK_DIR}/scripts/vpn-gluetun.sh"
 if [ -f "${_arr_gluetun_lib}" ]; then
   # shellcheck disable=SC1090
   . "${_arr_gluetun_lib}"
@@ -846,17 +846,17 @@ _arr_pf_valid_port() {
 
 _arr_pf_pm_script() {
   local candidate
-  candidate="${ARR_STACK_DIR}/scripts/port-manager/pm-watch.sh"
+  candidate="${ARR_STACK_DIR}/scripts/vpn-port-watch.sh"
   if [ -x "$candidate" ]; then
     printf '%s' "$candidate"
     return 0
   fi
-  candidate="${ARR_STACK_DIR}/../scripts/port-manager/pm-watch.sh"
+  candidate="${ARR_STACK_DIR}/../scripts/vpn-port-watch.sh"
   if [ -x "$candidate" ]; then
     printf '%s' "$candidate"
     return 0
   fi
-  warn "pm-watch.sh not found; ensure port-manager helpers are installed"
+  warn "vpn-port-watch.sh not found; ensure port-manager helpers are installed"
   return 1
 }
 
@@ -920,7 +920,7 @@ _arr_pf_run_once() {
     local container_id
     container_id="$(_arr_container_id_for_service port-manager 0 2>/dev/null || printf '')"
     if [ -n "$container_id" ]; then
-      if _arr_compose exec port-manager env "${env_args[@]}" /port-manager/pm-watch.sh; then
+      if _arr_compose exec port-manager env "${env_args[@]}" /pm-watch.sh; then
         return 0
       fi
       warn "port-manager container exec failed; attempting on-demand run"
@@ -931,7 +931,7 @@ _arr_pf_run_once() {
     for env_var in "${env_args[@]}"; do
       run_args+=(-e "$env_var")
     done
-    if _arr_compose run "${run_args[@]}" port-manager /port-manager/pm-watch.sh; then
+    if _arr_compose run "${run_args[@]}" port-manager /pm-watch.sh; then
       return 0
     fi
   fi
@@ -1601,7 +1601,7 @@ ProtonVPN & Gluetun (arr.vpn ...):
 
 Port manager helpers (arr.pf ...):
   arr.pf port                 Print the forwarded port (file first, then control API)
-  arr.pf sync                 Run pm-watch.sh once to refresh qBittorrent
+  arr.pf sync                 Run vpn-port-watch.sh once to refresh qBittorrent
   arr.pf tail                 Follow the forwarded port file with timestamps
   arr.pf logs                 Stream port-manager container logs
   arr.pf test <port>          Dry-run an explicit listen_port update
@@ -1989,7 +1989,7 @@ arr.vpn.port.sync() {
     warn "GLUETUN_API_KEY not found. Run ./arr.sh --rotate-api-key to refresh it."
     return 1
   fi
-  ( cd "$ARR_STACK_DIR" && GLUETUN_API_KEY="$key" PF_ASYNC_ENABLE=1 bash -c '. scripts/gluetun.sh; async_port_forward_worker --oneshot' )
+  ( cd "$ARR_STACK_DIR" && GLUETUN_API_KEY="$key" PF_ASYNC_ENABLE=1 bash -c '. scripts/vpn-gluetun.sh; async_port_forward_worker --oneshot' )
 }
 
 arr.vpn.paths() { printf 'Config: %s\nAuth: %s\n' "${ARRCONF_DIR}" "${ARR_DOCKER_DIR}/gluetun"; }
@@ -2105,7 +2105,7 @@ arr.pf.help() {
   cat <<'EOF'
 Port manager helpers:
   arr.pf.port        Show the forwarded port (file first, then Gluetun control API)
-  arr.pf.sync        Run a one-shot port sync using pm-watch.sh
+  arr.pf.sync        Run a one-shot port sync using vpn-port-watch.sh
   arr.pf.tail        Follow the forwarded port status file with timestamps
   arr.pf.logs        Stream docker logs from the port-manager container
   arr.pf.test <port> Dry-run qBittorrent listen_port update with an explicit port

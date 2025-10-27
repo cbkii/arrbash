@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Glossary
+
+[← Back to README](../README.md)
 
 Key terms referenced throughout the documentation.
 

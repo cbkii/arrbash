@@ -97,7 +97,7 @@ verify_permissions() {
 
   local -a nonsecret_files=(
     "${ARR_STACK_DIR}/docker-compose.yml"
-    "${REPO_ROOT}/.aliasarr.configured"
+    "${ARR_STACK_DIR}/.aliasarr.conf.snapshot"
     "${ARR_DOCKER_DIR}/configarr/config.yml"
   )
 

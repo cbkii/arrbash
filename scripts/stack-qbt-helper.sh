@@ -375,8 +375,8 @@ fi
 ARR_STACK_DIR="$STACK_DIR"
 export ARR_STACK_DIR
 
-# shellcheck source=scripts/common.sh
-. "${STACK_DIR}/scripts/common.sh"
+# shellcheck source=scripts/stack-common.sh
+. "${STACK_DIR}/scripts/stack-common.sh"
 
 if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
   # shellcheck disable=SC1091

@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Purpose: Handle manual override flags for the VPN watchdog.
-# Inputs: ARR_STACK_DIR, helper functions from common.sh.
+# Inputs: ARR_STACK_DIR, helper functions from stack-common.sh.
 # Outputs: Exposes helpers queried by the watchdog loop (pause, kill, wake, force-once).
 #
 # Historical issue: earlier revisions attempted to track complex qBittorrent activity

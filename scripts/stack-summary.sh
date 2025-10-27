@@ -433,7 +433,7 @@ POLICY
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     local sab_helper_path="${ARR_STACK_DIR%/}/scripts/sab-helper.sh"
     if [[ ! -x "$sab_helper_path" ]]; then
-      sab_helper_path="${SCRIPT_LIB_DIR}/sab-helper.sh"
+      sab_helper_path="${SCRIPT_LIB_DIR}/stack-sab-helper.sh"
     fi
     msg "---- SABnzbd ----"
     local sab_helper_scheme="${SABNZBD_HELPER_SCHEME:-http}"

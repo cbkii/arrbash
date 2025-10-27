@@ -5,11 +5,11 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
-# shellcheck source=scripts/common.sh
-. "${REPO_ROOT}/scripts/common.sh"
+# shellcheck source=scripts/stack-common.sh
+. "${REPO_ROOT}/scripts/stack-common.sh"
 
-# shellcheck source=scripts/userconf.sh
-. "${REPO_ROOT}/scripts/userconf.sh"
+# shellcheck source=scripts/env-userconf.sh
+. "${REPO_ROOT}/scripts/env-userconf.sh"
 
 if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
   # shellcheck disable=SC1091
@@ -345,7 +345,7 @@ doctor_check_sabnzbd() {
 
   local helper="${ARR_STACK_DIR%/}/scripts/sab-helper.sh"
   if [[ ! -x "$helper" ]]; then
-    helper="${REPO_ROOT}/scripts/sab-helper.sh"
+    helper="${REPO_ROOT}/scripts/stack-sab-helper.sh"
   fi
 
   if [[ ! -x "$helper" ]]; then

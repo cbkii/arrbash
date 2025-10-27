@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # port-manager sidecar
+
+[← Back to README](../README.md)
 
 The optional `port-manager` container keeps qBittorrent’s listening port aligned with the ProtonVPN lease that Gluetun negotiates. It reads the forwarded-port file Gluetun maintains, falls back to the control API when necessary, and updates qBittorrent via its Web API.
 
@@ -14,7 +14,7 @@ The optional `port-manager` container keeps qBittorrent’s listening port align
    ```bash
    ./arr.sh --yes
    ```
-4. Bring the stack back up. The generator creates a lightweight Alpine container that shares Gluetun’s network namespace, mounts `/tmp/gluetun` read-only, and runs `scripts/port-manager/pm-watch.sh`.
+4. Bring the stack back up. The generator creates a lightweight Alpine container that shares Gluetun’s network namespace, mounts `/tmp/gluetun` read-only, and runs `scripts/vpn-port-watch.sh`.
 
 ## Helper aliases
 Source `.aliasarr` to gain quick access to the new helpers:
@@ -22,7 +22,7 @@ Source `.aliasarr` to gain quick access to the new helpers:
 ```bash
 arr.pf.help      # overview of port-manager commands
 arr.pf.port      # print the forwarded port (file first, control API fallback)
-arr.pf.sync      # run a one-shot sync using pm-watch.sh logic
+arr.pf.sync      # run a one-shot sync using vpn-port-watch.sh logic
 arr.pf.tail      # tail -f the forwarded port status file with timestamps
 arr.pf.logs      # follow docker logs for the port-manager container
 arr.pf.test 4444 # dry-run a qBittorrent update to a specific port

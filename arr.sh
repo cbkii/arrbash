@@ -297,10 +297,10 @@ if ((${#_arr_canonical_config_vars[@]})); then
   arr_capture_env_overrides "$@"
 fi
 
-USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
-LOG_LIB="${REPO_ROOT}/scripts/logging.sh"
+USERCONF_LIB="${REPO_ROOT}/scripts/env-userconf.sh"
+LOG_LIB="${REPO_ROOT}/scripts/stack-logging.sh"
 if [[ -f "${USERCONF_LIB}" ]]; then
-  # shellcheck source=scripts/userconf.sh
+  # shellcheck source=scripts/env-userconf.sh
   . "${USERCONF_LIB}"
 else
   if declare -f warn >/dev/null 2>&1; then
@@ -312,13 +312,13 @@ else
 fi
 
 if [[ -f "${LOG_LIB}" ]]; then
-  # shellcheck source=scripts/logging.sh disable=SC1091
+  # shellcheck source=scripts/stack-logging.sh disable=SC1091
   . "${LOG_LIB}"
 fi
 
-COMMON_LIB="${REPO_ROOT}/scripts/common.sh"
+COMMON_LIB="${REPO_ROOT}/scripts/stack-common.sh"
 if [[ -f "${COMMON_LIB}" ]]; then
-  # shellcheck source=scripts/common.sh
+  # shellcheck source=scripts/stack-common.sh
   . "${COMMON_LIB}"
 else
   if declare -f warn >/dev/null 2>&1; then
@@ -571,30 +571,30 @@ arr_snapshot_immutable_vars
 
 SCRIPT_LIB_DIR="${REPO_ROOT}/scripts"
 
-YAML_EMIT_LIB="${REPO_ROOT}/scripts/yaml-emit.sh"
+YAML_EMIT_LIB="${REPO_ROOT}/scripts/gen-yaml-emit.sh"
 if [[ -f "${YAML_EMIT_LIB}" ]]; then
-  # shellcheck source=scripts/yaml-emit.sh
+  # shellcheck source=scripts/gen-yaml-emit.sh
   . "${YAML_EMIT_LIB}"
 else
   warn "[ERROR] Missing emission helper library: ${YAML_EMIT_LIB}"
   exit 1
 fi
 modules=(
-  "common.sh"
-  "defaults.sh"
-  "network.sh"
-  "config.sh"
-  "permissions.sh"
-  "preflight.sh"
-  "preserve.sh"
-  "compose-stack.sh"
-  "migrations.sh"
-  "service-stack.sh"
+  "stack-common.sh"
+  "stack-defaults.sh"
+  "stack-network.sh"
+  "env-config.sh"
+  "fix-permissions.sh"
+  "stack-preflight.sh"
+  "stack-preserve.sh"
+  "stack-compose.sh"
+  "stack-migrations.sh"
+  "stack-service-stack.sh"
   "vpn-auto-stack.sh"
-  "apikeys.sh"
-  "aliases.sh"
-  "summary.sh"
-  "shell.sh"
+  "stack-apikeys.sh"
+  "gen-aliasarr.sh"
+  "stack-summary.sh"
+  "stack-shell.sh"
 )
 for module in "${modules[@]}"; do
   f="${SCRIPT_LIB_DIR}/${module}"
@@ -627,9 +627,9 @@ Options:
 USAGE
 }
 
-GLUETUN_LIB="${REPO_ROOT}/scripts/gluetun.sh"
+GLUETUN_LIB="${REPO_ROOT}/scripts/vpn-gluetun.sh"
 if [[ -f "${GLUETUN_LIB}" ]]; then
-  # shellcheck source=scripts/gluetun.sh disable=SC1091,SC1094
+  # shellcheck source=scripts/vpn-gluetun.sh disable=SC1091,SC1094
   . "${GLUETUN_LIB}"
 else
   warn "Gluetun helper library not found at ${GLUETUN_LIB}"
@@ -648,7 +648,7 @@ main() {
         shift
         ;;
       --yes)
-        # shellcheck disable=SC2034 # used by scripts/preflight.sh
+        # shellcheck disable=SC2034 # used by scripts/stack-preflight.sh
         ASSUME_YES=1
         shift
         ;;
@@ -657,7 +657,7 @@ main() {
         shift
         ;;
       --rotate-api-key)
-        # shellcheck disable=SC2034 # consumed in scripts/config-secrets.sh
+        # shellcheck disable=SC2034 # consumed in scripts/stack-secrets.sh
         FORCE_ROTATE_API_KEY=1
         shift
         ;;
@@ -699,7 +699,7 @@ main() {
     if [[ "${ASSUME_YES:-0}" == "1" ]]; then
       uninstall_args+=("--yes")
     fi
-    exec "${REPO_ROOT}/scripts/uninstall.sh" "${uninstall_args[@]}"
+    exec "${REPO_ROOT}/scripts/stack-uninstall.sh" "${uninstall_args[@]}"
   fi
 
   if [[ "${ARR_TRACE:-0}" == "1" ]] && declare -f arr_trace_start >/dev/null 2>&1; then
@@ -744,6 +744,9 @@ main() {
   write_gluetun_control_assets
   sync_gluetun_library
   sync_vpn_auto_reconnect_assets
+  if [[ "${PORT_MANAGER_ENABLE:-0}" == "1" ]]; then
+    write_vpn_port_watch_script
+  fi
   write_qbt_helper_script
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     write_sab_helper_script
@@ -760,11 +763,11 @@ main() {
 
   check_immutable_integrity "post-start"
 
-  # shellcheck disable=SC2034 # consumed by scripts/summary.sh
+  # shellcheck disable=SC2034 # consumed by scripts/stack-summary.sh
   API_KEYS_SYNCED_DETAILS=""
   API_KEYS_SYNCED_PLACEHOLDERS=0
 
-  # shellcheck disable=SC2034 # values consumed by scripts/summary.sh
+  # shellcheck disable=SC2034 # values consumed by scripts/stack-summary.sh
   if [[ "${FORCE_SYNC_API_KEYS:-0}" == "1" ]]; then
     arr_sync_arr_api_keys 1 || true
   elif [[ "${DISABLE_AUTO_API_KEY_SYNC:-0}" == "1" ]]; then

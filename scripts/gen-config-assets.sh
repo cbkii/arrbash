@@ -225,8 +225,8 @@ sync_gluetun_library() {
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
-  cp "${REPO_ROOT}/scripts/gluetun.sh" "$ARR_STACK_DIR/scripts/gluetun.sh"
-  ensure_file_mode "$ARR_STACK_DIR/scripts/gluetun.sh" 755
+  cp "${REPO_ROOT}/scripts/vpn-gluetun.sh" "$ARR_STACK_DIR/scripts/vpn-gluetun.sh"
+  ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-gluetun.sh" 755
 }
 
 # Syncs VPN auto-reconnect scripts with executable permissions into the stack
@@ -252,13 +252,25 @@ sync_vpn_auto_reconnect_assets() {
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh" 755
 }
 
+# Installs the VPN port sync helper into the stack scripts directory
+write_vpn_port_watch_script() {
+  step "🛰️ Writing VPN port sync helper"
+
+  ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
+
+  cp "${REPO_ROOT}/scripts/vpn-port-watch.sh" "$ARR_STACK_DIR/scripts/vpn-port-watch.sh"
+  ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-port-watch.sh" 755
+
+  msg "  VPN port watch helper: ${ARR_STACK_DIR}/scripts/vpn-port-watch.sh"
+}
+
 # Installs SABnzbd helper into the stack scripts directory
 write_sab_helper_script() {
   step "🧰 Writing SABnzbd helper script"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
-  cp "${REPO_ROOT}/scripts/sab-helper.sh" "$ARR_STACK_DIR/scripts/sab-helper.sh"
+  cp "${REPO_ROOT}/scripts/stack-sab-helper.sh" "$ARR_STACK_DIR/scripts/sab-helper.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/sab-helper.sh" 755
 
   msg "  SABnzbd helper: ${ARR_STACK_DIR}/scripts/sab-helper.sh"
@@ -270,7 +282,7 @@ write_qbt_helper_script() {
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
-  cp "${REPO_ROOT}/scripts/qbt-helper.sh" "$ARR_STACK_DIR/scripts/qbt-helper.sh"
+  cp "${REPO_ROOT}/scripts/stack-qbt-helper.sh" "$ARR_STACK_DIR/scripts/qbt-helper.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/qbt-helper.sh" 755
 
   rm -f "$ARR_STACK_DIR/scripts/qbt-webui.sh"

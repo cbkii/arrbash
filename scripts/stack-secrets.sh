@@ -10,11 +10,11 @@ __CONFIG_SECRETS_LOADED=1
 
 if ! declare -f gluetun_version_requires_auth_config >/dev/null 2>&1; then
   _config_secrets_gluetun_lib=""
-  if [[ -n "${REPO_ROOT:-}" && -f "${REPO_ROOT}/scripts/gluetun.sh" ]]; then
-    _config_secrets_gluetun_lib="${REPO_ROOT}/scripts/gluetun.sh"
+  if [[ -n "${REPO_ROOT:-}" && -f "${REPO_ROOT}/scripts/vpn-gluetun.sh" ]]; then
+    _config_secrets_gluetun_lib="${REPO_ROOT}/scripts/vpn-gluetun.sh"
   else
     _config_secrets_gluetun_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-${0}}")" && pwd)"
-    _config_secrets_gluetun_lib="${_config_secrets_gluetun_dir}/gluetun.sh"
+    _config_secrets_gluetun_lib="${_config_secrets_gluetun_dir}/vpn-gluetun.sh"
     unset _config_secrets_gluetun_dir
   fi
 

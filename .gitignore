@@ -1,7 +1,7 @@
 # Environment and secrets
 .env
 .aliasarr
-.aliasarr.configured
+.aliasarr.conf.snapshot
 */proton.auth
 *.auth
 *.conf
