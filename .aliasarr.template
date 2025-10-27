@@ -166,6 +166,14 @@ _arr_lowercase() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+_arr_sanitize_error() {
+  local value="$1"
+  value="${value//$'\r'/ }"
+  value="${value//$'\n'/ }"
+  value="$(_arr_trim "$value")"
+  printf '%s' "$value"
+}
+
 _arr_csv_to_array() {
   local input="$1"
   [ -n "$input" ] || return 0
@@ -189,6 +197,32 @@ _arr_unique_lines() {
       print $0
     }
   }'
+}
+
+_arr_json_get() {
+  local payload="$1"
+  local key="$2"
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s\n' "$payload" | jq -r --arg key "$key" '.[$key] // empty' 2>/dev/null
+    return
+  fi
+
+  local sanitized value
+  sanitized="$(printf '%s\n' "$payload" | tr -d '\r')"
+  value="$(printf '%s\n' "$sanitized" | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\\1/p" | head -n1)"
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+    return
+  fi
+  value="$(printf '%s\n' "$sanitized" | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\\1/p" | head -n1)"
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+    return
+  fi
+  value="$(printf '%s\n' "$sanitized" | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\(true\|false\).*/\\1/p" | head -n1)"
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+  fi
 }
 
 _arr_bool() {
@@ -910,6 +944,8 @@ _arr_gluetun_last_error=""
 
 _arr_gluetun_api() {
   local endpoint="$1"
+  local method="${2:-GET}"
+  local data="${3:-}"
   _arr_gluetun_last_error=""
 
   if ! _arr_has_cmd curl; then
@@ -924,12 +960,22 @@ _arr_gluetun_api() {
     return 1
   fi
 
-  local port host url response result
+  local port host url
   port="$(_arr_gluetun_port)"
   host="$(_arr_gluetun_host)"
   url="http://${host}:${port}${endpoint}"
 
-  response=$(curl -fsS -H "X-Api-Key: ${key}" "$url" 2>&1)
+  local -a curl_cmd=(curl -fsS -H "X-Api-Key: ${key}")
+  if [ "$method" != "GET" ]; then
+    curl_cmd+=(-X "$method")
+  fi
+  if [ -n "$data" ]; then
+    curl_cmd+=(-H "Content-Type: application/json" --data "$data")
+  fi
+  curl_cmd+=("$url")
+
+  local response result
+  response="$("${curl_cmd[@]}" 2>&1)"
   result=$?
 
   if [ $result -eq 0 ]; then
@@ -937,19 +983,77 @@ _arr_gluetun_api() {
     return 0
   fi
 
-  if [ -n "$response" ]; then
-    _arr_gluetun_last_error="Gluetun API error: ${response}"
+  local sanitized_response
+  sanitized_response="$(_arr_sanitize_error "$response")"
+  if [ -n "$sanitized_response" ]; then
+    case "$sanitized_response" in
+      curl:*|*Could\ not\ resolve*|*Failed\ to\ connect*|*Connection\ refused*)
+        _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
+        ;;
+      *)
+        _arr_gluetun_last_error="$sanitized_response"
+        ;;
+    esac
   else
     _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
   fi
 
   if ! _arr_vpn_container_id >/dev/null 2>&1; then
     if [ -n "${_arr_vpn_last_error:-}" ]; then
-      _arr_gluetun_last_error="${_arr_vpn_last_error}"
+      _arr_gluetun_last_error="$(_arr_sanitize_error "${_arr_vpn_last_error}")"
     fi
   fi
 
   return 1
+}
+
+_arr_gluetun_is_transport_error() {
+  case "${_arr_gluetun_last_error:-}" in
+    ''|Unable\ to\ reach*|Unable\ to\ locate\ a\ Gluetun\ container.*|curl\ is\ not\ available*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+_arr_gluetun_set_openvpn_status() {
+  local desired="$1"
+  local payload
+  payload="{\"status\":\"${desired}\"}"
+  if _arr_gluetun_api /v1/openvpn/status PUT "$payload" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+_arr_gluetun_cycle_openvpn() {
+  if ! _arr_gluetun_set_openvpn_status stopped; then
+    local err
+    err="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+    if [ -n "$err" ]; then
+      _arr_gluetun_last_error="Unable to stop OpenVPN tunnel via control API: ${err}"
+    else
+      _arr_gluetun_last_error="Unable to stop OpenVPN tunnel via control API."
+    fi
+    return 1
+  fi
+
+  if command -v sleep >/dev/null 2>&1; then
+    sleep 1
+  fi
+
+  if ! _arr_gluetun_set_openvpn_status running; then
+    local err
+    err="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+    if [ -n "$err" ]; then
+      _arr_gluetun_last_error="Unable to start OpenVPN tunnel via control API: ${err}"
+    else
+      _arr_gluetun_last_error="Unable to start OpenVPN tunnel via control API."
+    fi
+    return 1
+  fi
+
+  return 0
 }
 
 _arr_qbt_base() { _arr_service_base qbittorrent; }
@@ -1528,124 +1632,208 @@ arr.vpn.connect() {
 }
 
 arr.vpn.reconnect() {
-  local -a args=("$@")
+  local control_error=""
+  if _arr_gluetun_cycle_openvpn; then
+    msg 'Restarted Gluetun OpenVPN tunnel via control API.'
+    arr.vpn.status
+    return 0
+  fi
 
+  control_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+
+  local compose_available=0
   if _arr_compose_cmd >/dev/null 2>&1; then
-    if _arr_compose restart "${args[@]}" gluetun; then
+    compose_available=1
+    msg 'Restarting Gluetun via docker compose...'
+    if _arr_compose restart "$@" gluetun >/dev/null 2>&1; then
+      arr.vpn.status
       return 0
     fi
   fi
 
-  if [ ${#args[@]} -gt 0 ]; then
-    warn "docker compose restart options are unavailable from this shell (compose command missing)."
-    return 1
+  local docker_available=0
+  local container=""
+  if _arr_docker_available; then
+    docker_available=1
+    container="$(_arr_vpn_container_id 1 2>/dev/null || printf '')"
+    if [ -n "$container" ]; then
+      msg 'Restarting Gluetun container via docker...'
+      if docker restart "$container" >/dev/null 2>&1; then
+        arr.vpn.status
+        return 0
+      fi
+    fi
   fi
 
-  if ! _arr_docker_available; then
-    warn "Unable to restart Gluetun: docker command not available in this shell."
-    return 1
+  local parts
+  if [ -n "$control_error" ]; then
+    parts="control API: ${control_error}"
+  else
+    parts="control API unavailable"
   fi
 
-  local container
-  container="$(_arr_vpn_container_id 1 2>/dev/null || printf '')"
-  if [ -z "$container" ]; then
-    warn "${_arr_vpn_last_error:-Unable to locate a Gluetun container.}"
-    return 1
+  if [ "$compose_available" -eq 1 ]; then
+    parts="${parts}; docker compose restart failed"
+  else
+    parts="${parts}; docker compose command unavailable"
   fi
 
-  if docker restart "$container" >/dev/null 2>&1; then
-    return 0
+  if [ "$docker_available" -eq 1 ]; then
+    if [ -n "$container" ]; then
+      parts="${parts}; docker restart failed"
+    else
+      local container_error
+      container_error="$(_arr_sanitize_error "${_arr_vpn_last_error:-}")"
+      if [ -n "$container_error" ]; then
+        parts="${parts}; ${container_error}"
+      else
+        parts="${parts}; Gluetun container not found"
+      fi
+    fi
+  else
+    parts="${parts}; docker command unavailable"
   fi
 
-  warn "Failed to restart Gluetun container (${container})."
+  parts="$(_arr_trim "$parts")"
+  warn "VPN reconnect is not available in this environment (${parts})."
   return 1
 }
 
 arr.vpn.status() {
-  local warnings=""
-  local ip_payload summary=""
+  local status_payload
+  if ! status_payload="$(_arr_gluetun_api /v1/openvpn/status 2>/dev/null)"; then
+    if _arr_gluetun_is_transport_error; then
+      warn 'VPN status is not available in this environment (cannot reach Gluetun control API).'
+    else
+      local err
+      err="$(_arr_sanitize_error "${_arr_gluetun_last_error:-Unable to query Gluetun OpenVPN status.}")"
+      warn "$err"
+    fi
+    return 0
+  fi
 
+  local provider
+  provider="${VPN_SERVICE_PROVIDER:-$(_arr_env_get VPN_SERVICE_PROVIDER 2>/dev/null || printf '')}"
+  provider="$(_arr_trim "$provider")"
+  if [ -z "$provider" ]; then
+    provider="protonvpn"
+  fi
+  local provider_display
+  case "$(_arr_lowercase "$provider")" in
+    protonvpn) provider_display="ProtonVPN" ;;
+    *) provider_display="$provider" ;;
+  esac
+
+  local countries
+  countries="${SERVER_COUNTRIES:-$(_arr_env_get SERVER_COUNTRIES 2>/dev/null || printf '')}"
+  countries="$(_arr_trim "$countries")"
+  local region_display
+  if [ -n "$countries" ]; then
+    region_display="$countries"
+  else
+    region_display="not configured"
+  fi
+  msg "Provider: ${provider_display} (regions: ${region_display})"
+
+  local tunnel_status
+  tunnel_status="$(_arr_json_get "$status_payload" status)"
+  tunnel_status="$(_arr_trim "${tunnel_status:-}")"
+  if [ -z "$tunnel_status" ]; then
+    tunnel_status="unknown"
+  fi
+  msg "Tunnel status: ${tunnel_status}"
+
+  local ip_payload ip_value ip_error
+  ip_value=""
+  ip_error=""
   if ip_payload="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
-    if command -v gluetun_public_ip_summary >/dev/null 2>&1; then
-      summary="$(gluetun_public_ip_summary "$ip_payload" 2>/dev/null || printf '')"
-      if [ -n "$summary" ]; then
-        printf 'Public IP: %s\n' "$summary"
-        if [ -n "${GLUETUN_PUBLIC_IP_HOSTNAME:-}" ]; then
-          printf 'Hostname: %s\n' "$GLUETUN_PUBLIC_IP_HOSTNAME"
+    ip_payload="$(printf '%s' "$ip_payload" | tr -d '\r')"
+    ip_payload="$(_arr_trim "$ip_payload")"
+    case "$ip_payload" in
+      '{'*)
+        ip_value="$(_arr_json_get "$ip_payload" public_ip)"
+        if [ -z "$ip_value" ]; then
+          ip_value="$(_arr_json_get "$ip_payload" ip)"
         fi
-      else
-        printf 'Public IP payload: %s\n' "$ip_payload"
-      fi
+        ;;
+      '"'*'"')
+        ip_value="${ip_payload#"}"
+        ip_value="${ip_value%"}"
+        ;;
+      *)
+        ip_value="$ip_payload"
+        ;;
+    esac
+    ip_value="$(_arr_trim "$ip_value")"
+  else
+    ip_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+  fi
+  if [ -n "$ip_value" ]; then
+    msg "Exit IP: ${ip_value}"
+  else
+    if [ -n "$ip_error" ]; then
+      msg "Exit IP: unavailable (${ip_error})"
     else
-      printf 'Public IP: %s\n' "$ip_payload"
-    fi
-  else
-    local ip_warn="${_arr_gluetun_last_error:-Unable to query public IP from Gluetun.}"
-    if [ -n "$ip_warn" ]; then
-      if [ -z "$warnings" ]; then
-        warnings="$ip_warn"
-      else
-        warnings="${warnings}\n${ip_warn}"
-      fi
+      msg 'Exit IP: unavailable'
     fi
   fi
 
-  local type="$(_arr_env_get VPN_TYPE)"
-  if [ "${type:-openvpn}" = "openvpn" ]; then
-    local pf_payload=""
-    if pf_payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null)"; then
-      if command -v gluetun_port_forward_summary >/dev/null 2>&1; then
-        summary="$(gluetun_port_forward_summary "$pf_payload" 2>/dev/null || printf '')"
-        if [ -n "$summary" ]; then
-          printf 'Forwarded port: %s\n' "$summary"
-        else
-          printf 'Forwarded port payload: %s\n' "$pf_payload"
-        fi
-      else
-        printf 'Forwarded port payload: %s\n' "$pf_payload"
-      fi
+  local vpn_type pf_setting provider_key
+  vpn_type="${VPN_TYPE:-$(_arr_env_get VPN_TYPE 2>/dev/null || printf '')}"
+  vpn_type="$(_arr_lowercase "$vpn_type")"
+  if [ -z "$vpn_type" ]; then
+    vpn_type="openvpn"
+  fi
+  pf_setting="${VPN_PORT_FORWARDING:-$(_arr_env_get VPN_PORT_FORWARDING 2>/dev/null || printf '')}"
+  if [ -z "$pf_setting" ]; then
+    pf_setting="on"
+  fi
+  pf_setting="$(_arr_lowercase "$pf_setting")"
+  provider_key="$(_arr_lowercase "$provider")"
+  local pf_enabled=1
+  case "$pf_setting" in
+    ''|0|off|false|disabled|no) pf_enabled=0 ;;
+  esac
+
+  if [ "$vpn_type" != "openvpn" ] || [ "$provider_key" != "protonvpn" ] || [ "$pf_enabled" -ne 1 ]; then
+    msg 'Forwarded port: not available for this configuration'
+    return 0
+  fi
+
+  local pf_payload pf_port pf_status pf_error
+  if pf_payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null)"; then
+    pf_port="$(_arr_json_get "$pf_payload" port)"
+    pf_status="$(_arr_json_get "$pf_payload" status)"
+    pf_port="$(_arr_trim "${pf_port:-}")"
+    pf_status="$(_arr_trim "${pf_status:-}")"
+    local port_value=""
+    if [ -n "$pf_port" ]; then
+      case "$pf_port" in
+        ''|*[!0-9]*)
+          ;;
+        0)
+          ;;
+        *)
+          port_value="$pf_port"
+          ;;
+      esac
+    fi
+    if [ -n "$port_value" ]; then
+      msg "Forwarded port: ${port_value}"
     else
-      local pf_warn="${_arr_gluetun_last_error:-Unable to query forwarded port.}"
-      if [ -n "$pf_warn" ]; then
-        if [ -z "$warnings" ]; then
-          warnings="$pf_warn"
-        else
-          warnings="${warnings}\n${pf_warn}"
-        fi
+      if [ -n "$pf_status" ]; then
+        msg "Forwarded port: not currently assigned (status: ${pf_status})"
+      else
+        msg 'Forwarded port: not currently assigned'
       fi
     fi
   else
-    printf 'Port forwarding is only available for OpenVPN configurations.\n'
-  fi
-
-  local container_status
-  if container_status="$(_arr_vpn_container_health_status 1 2>/dev/null)"; then
-    if [ -n "$container_status" ]; then
-      local container_name
-      container_name="$(_arr_vpn_container_name 1 2>/dev/null || printf '')"
-      if [ -n "$container_name" ]; then
-        printf 'Gluetun container (%s): %s\n' "$container_name" "$container_status"
-      else
-        printf 'Gluetun container: %s\n' "$container_status"
-      fi
+    pf_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
+    if [ -n "$pf_error" ]; then
+      msg "Forwarded port: unavailable (${pf_error})"
+    else
+      msg 'Forwarded port: unavailable'
     fi
-  else
-    local status_warn="${_arr_vpn_last_error:-Unable to determine Gluetun container status.}"
-    if [ -n "$status_warn" ]; then
-      if [ -z "$warnings" ]; then
-        warnings="$status_warn"
-      else
-        warnings="${warnings}\n${status_warn}"
-      fi
-    fi
-  fi
-
-  if [ -n "$warnings" ]; then
-    printf '%s\n' "$warnings" | _arr_unique_lines | while IFS= read -r warn_line; do
-      [ -n "$warn_line" ] || continue
-      warn "$warn_line"
-    done
-    return 1
   fi
 }
 
@@ -1877,55 +2065,46 @@ arr.vpn.countries() {
 }
 
 arr.vpn.fastest() {
-  local container
-  container="$(_arr_vpn_container_id 0 2>/dev/null)" || container=""
-  if [ -z "$container" ]; then
-    warn "${_arr_vpn_last_error:-Unable to locate Gluetun container.}"
-    return 1
-  fi
-
-  if ! _arr_docker_available; then
-    warn "Docker command not available in this shell."
-    return 1
-  fi
-
-  if docker exec "$container" /bin/sh -c 'command -v gluetun >/dev/null 2>&1' >/dev/null 2>&1; then
-    if docker exec "$container" /bin/sh -c 'gluetun servers --format table --sort latency --limit 15' 2>/dev/null; then
-      return 0
-    fi
-    warn "Unable to query gluetun CLI for fastest endpoints."
-    return 1
-  fi
-
-  warn "Gluetun CLI is not available in the running container; fastest endpoint lookup is unavailable."
-  return 1
+  warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
+  return 0
 }
 
 arr.vpn.switch() {
-  local requested="$(_arr_trim "${1:-}")"
-  local -a countries=()
-  while IFS= read -r _arr_country; do
-    countries+=("$_arr_country")
-  done < <(_arr_vpn_rotation_candidates)
-  unset _arr_country
-  if [ ${#countries[@]} -eq 0 ]; then
-    warn 'No ProtonVPN countries available for rotation.'
-    return 1
+  local requested
+  requested="$(_arr_trim "${1:-}")"
+
+  local candidates_list
+  candidates_list="$(_arr_vpn_rotation_candidates 2>/dev/null || printf '')"
+
+  set --
+  while IFS= read -r _arr_vpn_candidate; do
+    [ -n "$_arr_vpn_candidate" ] || continue
+    set -- "$@" "$_arr_vpn_candidate"
+  done <<EOF
+$candidates_list
+EOF
+  unset _arr_vpn_candidate
+
+  if [ $# -eq 0 ]; then
+    warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
+    return 0
   fi
 
   local target=""
+  local target_candidate=""
   local chosen_index=-1
-  local total=${#countries[@]}
+  local idx=0
 
   if [ -n "$requested" ]; then
-    local req_lower="$(_arr_lowercase "$requested")"
-    local i
-    for i in "${!countries[@]}"; do
-      if [ "$(_arr_lowercase "${countries[$i]}")" = "$req_lower" ]; then
-        target="${countries[$i]}"
-        chosen_index=$i
+    local req_lower
+    req_lower="$(_arr_lowercase "$requested")"
+    for target_candidate in "$@"; do
+      if [ "$(_arr_lowercase "$target_candidate")" = "$req_lower" ]; then
+        target="$target_candidate"
+        chosen_index=$idx
         break
       fi
+      idx=$((idx + 1))
     done
     if [ -z "$target" ]; then
       target="$requested"
@@ -1940,24 +2119,37 @@ arr.vpn.switch() {
     case "$last_index_raw" in
       ''|*[!0-9]*) last_index_raw=-1 ;;
     esac
-    local next_index=$(( (last_index_raw + 1) % total ))
-    target="${countries[$next_index]}"
+    local next_index=$(( (last_index_raw + 1) % $# ))
+    idx=0
+    for target_candidate in "$@"; do
+      if [ "$idx" -eq "$next_index" ]; then
+        target="$target_candidate"
+        break
+      fi
+      idx=$((idx + 1))
+    done
     _arr_vpn_record_index "$next_index"
   fi
 
-  printf 'Switching to ProtonVPN country: %s\n' "$target"
+  if [ -z "$target" ] && [ $# -gt 0 ]; then
+    target="$1"
+  fi
+
+  msg "Switching to ProtonVPN country: ${target}"
   local env_output
   if ! env_output="$(arr.env.set SERVER_COUNTRIES "$target" 2>&1)"; then
     warn "$env_output"
     warn "Failed to update SERVER_COUNTRIES in ${ARR_ENV_FILE}."
     return 1
   fi
-  printf '%s\n' "$env_output"
+  msg "$env_output"
   msg 'Restarting Gluetun to apply the new country...'
   if ! arr.vpn.reconnect; then
     warn 'Gluetun restart failed. Apply the change manually if required.'
     return 1
   fi
+  return 0
+
 }
 
 arr.vpn.auto.status() {
