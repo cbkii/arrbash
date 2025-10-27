@@ -39,6 +39,7 @@ EXPOSE_DIRECT_PORTS="1"      # default: 1; publish WebUIs on http://${LAN_IP}:PO
 
 # --- Ports (user-facing) ---
 ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (enforce/warn/skip/fix with warn fallback)
+PORT_MANAGER_ENABLE="0"      # default: 0; launch port-manager sidecar to sync Proton forwarded port
 QBT_INT_PORT="8082"      # default: 8082; internal qBittorrent WebUI port
 QBT_PORT="${QBT_INT_PORT}"      # default: ${QBT_INT_PORT} (8082); qBittorrent WebUI LAN port
 QBT_BIND_ADDR="0.0.0.0"      # default: 0.0.0.0; qBittorrent WebUI bind address inside the container

@@ -1830,7 +1830,7 @@ YAML
     die "Failed to emit qBittorrent service definition"
   fi
 
-  if [[ "${PORT_MANAGER_ENABLE}" == "1" ]]; then
+  if [[ "${PORT_MANAGER_ENABLE:-0}" == "1" ]]; then
     if ! arr_compose_emit_port_manager_service "$tmp"; then
       die "Failed to emit port-manager service definition"
     fi
@@ -2066,7 +2066,7 @@ YAML
     die "Failed to emit qBittorrent service definition"
   fi
 
-  if [[ "${PORT_MANAGER_ENABLE}" == "1" ]]; then
+  if [[ "${PORT_MANAGER_ENABLE:-0}" == "1" ]]; then
     if ! arr_compose_emit_port_manager_service "$tmp"; then
       die "Failed to emit port-manager service definition"
     fi
