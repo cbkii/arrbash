@@ -1990,7 +1990,8 @@ arr_derive_gluetun_firewall_input_ports() {
     return 0
   fi
 
-  IFS=, printf '%s\n' "${deduped[*]}"
+  local IFS=,
+  printf '%s\n' "${deduped[*]}"
 }
 
 arr_derive_openvpn_user() {

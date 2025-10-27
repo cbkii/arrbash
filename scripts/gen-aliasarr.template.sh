@@ -315,6 +315,9 @@ _arr_env_get_list() {
   raw="$(_arr_env_get "$key" 2>/dev/null || true)"
   [ -n "$raw" ] || return 1
 
+  raw="${raw//,/ }"
+  raw="${raw//$'\n'/ }"
+  raw="${raw//$'\t'/ }"
   local old_ifs="$IFS"
   IFS=' '
   set -f
