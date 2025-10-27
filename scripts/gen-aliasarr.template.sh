@@ -1835,12 +1835,9 @@ arr.vpn.status() {
           ip_value="$(_arr_json_get "$ip_payload" ip)"
         fi
         ;;
-      '"')
-        if (( ${#ip_payload} >= 2 )) && [[ ${ip_payload: -1} == '"' ]]; then
-          ip_value="${ip_payload:1:${#ip_payload}-2}"
-        else
-          ip_value="$ip_payload"
-        fi
+      '"'*'"')
+        ip_value="${ip_payload#\"}"
+        ip_value="${ip_value%\"}"
         ;;
       *)
         ip_value="$ip_payload"
@@ -3130,7 +3127,9 @@ arr.diag.env() {
         printf '  %-13s url=%s auth=%s\n' "$svc" "$(_arr_service_base qbittorrent)" "$user_state"
         ;;
       *)
-        printf '  %-13s url=%s\n' "$svc" "$(_arr_service_base "$svc")"
+        local svc_url
+        svc_url="$(_arr_service_base "$svc")"
+        printf '  %-13s url=%s\n' "$svc" "$svc_url"
         ;;
     esac
   done
