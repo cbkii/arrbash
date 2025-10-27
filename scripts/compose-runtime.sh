@@ -1754,8 +1754,6 @@ write_compose_split_mode() {
   tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
   compose_prepare_gluetun_runtime
-  compose_prepare_gluetun_runtime
-
   # Compose sanity: qBittorrent remains published through Gluetun (network_mode service:gluetun)
   # while the other *Arr apps stay on arr_net; no legacy proxy/DNS surfaces were reintroduced.
   cat <<'YAML' >>"$tmp"
