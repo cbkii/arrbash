@@ -19,5 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/vpn-auto-signals.sh"
 # shellcheck source=scripts/vpn-auto-metrics.sh
 . "${SCRIPT_DIR}/vpn-auto-metrics.sh"
+# shellcheck source=scripts/gluetun.sh
+. "${SCRIPT_DIR}/gluetun.sh"
 # shellcheck source=scripts/vpn-auto-control.sh
 . "${SCRIPT_DIR}/vpn-auto-control.sh"

@@ -79,10 +79,15 @@ arrbash no longer provisions a reverse proxy or LAN DNS resolver. If you require
   ```bash
   grep VPN_AUTO_RECONNECT_ENABLED ${ARRCONF_DIR}/userr.conf
   ```
+- Check the JSON status the watchdog writes:
+  ```bash
+  arr.vpn.auto.status
+  ```
 - Clear pause/kill overrides:
   ```bash
   arr.vpn.auto.resume
   ```
+- Use `arr.vpn.status` to ensure Gluetun’s control server responds (the watchdog relies on `/v1/openvpn/status`, `/v1/publicip/ip`, and `/v1/openvpn/portforwarded`).
 - Inspect logs under `${ARR_DOCKER_DIR}/gluetun/auto-reconnect/daemon.log` for recent actions.
 
 ## WebUI and credentials

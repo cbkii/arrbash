@@ -28,7 +28,7 @@ run_once() {
   # shellcheck disable=SC2034 # exported for metrics and other helpers
   VPN_AUTO_RECONNECT_CURRENT_INTERVAL="$interval_once"
   if ! vpn_auto_reconnect_process_once; then
-    log_warn "VPN auto iteration reported errors"
+    warn "VPN auto iteration reported errors"
     return 1
   fi
   return 0
@@ -59,7 +59,7 @@ main() {
     return $?
   fi
 
-  log_info "VPN auto daemon starting"
+  msg "VPN auto daemon starting"
   local -i max_loops=0
   if [[ -n "${VPN_AUTO_RECONNECT_MAX_LOOPS:-}" && "${VPN_AUTO_RECONNECT_MAX_LOOPS}" =~ ^[0-9]+$ ]]; then
     max_loops="${VPN_AUTO_RECONNECT_MAX_LOOPS}"
@@ -67,7 +67,7 @@ main() {
   local -i loop_count=0
   while true; do
     if ((max_loops > 0 && loop_count >= max_loops)); then
-      log_info "VPN auto daemon stopping after ${loop_count} iteration(s)"
+      msg "VPN auto daemon stopping after ${loop_count} iteration(s)"
       break
     fi
     loop_count+=1
@@ -85,7 +85,7 @@ main() {
     VPN_AUTO_RECONNECT_CURRENT_INTERVAL="$interval"
 
     if ! run_once; then
-      log_warn "VPN auto iteration failed"
+      warn "VPN auto iteration failed"
     fi
     local -i wake_window=60
     if ((interval < wake_window)); then
@@ -100,7 +100,7 @@ main() {
       if [[ -n "$wake_file" && -f "$wake_file" ]]; then
         vpn_auto_reconnect_consume_wake
         wake_triggered=1
-        log_info "VPN auto wake file detected; running early"
+        msg "VPN auto wake file detected; running early"
         break
       fi
       local -i chunk=$wake_step
