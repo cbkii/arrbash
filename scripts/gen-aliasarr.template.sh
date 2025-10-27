@@ -200,7 +200,6 @@ _arr_extract_public_ip() {
 
   if [ -z "$value" ]; then
     value="$(printf '%s\n' "$payload" | LC_ALL=C sed -n 's/^"\(.*\)"$/\1/p' | head -n1)"
-  
     if [ -z "$value" ]; then
       value="${payload#\"}"
       value="${value%\"}"
