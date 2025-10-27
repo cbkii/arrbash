@@ -165,6 +165,10 @@ if [[ -f "$CONF_PATH" ]]; then
   . "$CONF_PATH"
 fi
 
+if command -v arr_set_docker_services_list >/dev/null 2>&1; then
+  arr_set_docker_services_list
+fi
+
 filter_conditionals() {
   awk '
     function truthy(v) {
