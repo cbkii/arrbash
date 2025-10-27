@@ -16,7 +16,7 @@ Use these Compose examples to deploy qBittorrent together with Prowlarr, Sonarr,
 - Proton **WireGuard** configs must be downloaded with **NAT-PMP (Port Forwarding)** enabled. Gluetun refuses to start if those directives are missing because Proton will never negotiate a port.
 - Gluetun records the leased port in `/tmp/gluetun/forwarded_port` and mirrors it over the control server at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`. arrbash mounts that path into dependent containers via a `gluetun_state` volume.
 - Only Gluetun publishes ports to the LAN. qBittorrent and optional helpers share Gluetun’s namespace using `network_mode: "service:gluetun"`, so torrent traffic never bypasses the VPN.
-- The control server binds to `127.0.0.1`, requires `GLUETUN_API_KEY`, and exposes only basic status/port routes. Never map it to the LAN.
+- The control server listens on all container interfaces (`:${GLUETUN_CONTROL_PORT}`) but is published only to the host loopback (`127.0.0.1:${GLUETUN_CONTROL_PORT}`), requires `GLUETUN_API_KEY`, and exposes only basic status/port routes. Never map it to the LAN.
 - Enable the optional `port-manager` service with `PORT_MANAGER_ENABLE=1` to watch the forwarded port file/control server and push the value into qBittorrent’s Web API (`setPreferences`).
 
 ## A) Split-mode ON (`SPLIT_VPN=1`, Arr apps on LAN)
@@ -41,7 +41,7 @@ services:
       VPN_TYPE: "${VPN_TYPE}"
       GLUETUN_FIREWALL_INPUT_PORTS: "${GLUETUN_FIREWALL_INPUT_PORTS}"   # VPN provider lease (NOT Docker ports)
       GLUETUN_FIREWALL_OUTBOUND_SUBNETS: "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}"
-      HTTP_CONTROL_SERVER_ADDRESS: "127.0.0.1:${GLUETUN_CONTROL_PORT}"
+      HTTP_CONTROL_SERVER_ADDRESS: ":${GLUETUN_CONTROL_PORT}"
       HTTP_CONTROL_SERVER_AUTH: "apikey"
       HTTP_CONTROL_SERVER_APIKEY: "${GLUETUN_API_KEY}"
       VPN_PORT_FORWARDING: "on"
@@ -155,7 +155,7 @@ services:
       VPN_TYPE: "${VPN_TYPE}"
       GLUETUN_FIREWALL_INPUT_PORTS: "${GLUETUN_FIREWALL_INPUT_PORTS}"   # Optional provider port-forward lease range
       GLUETUN_FIREWALL_OUTBOUND_SUBNETS: "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}"
-      HTTP_CONTROL_SERVER_ADDRESS: "127.0.0.1:${GLUETUN_CONTROL_PORT}"
+      HTTP_CONTROL_SERVER_ADDRESS: ":${GLUETUN_CONTROL_PORT}"
       HTTP_CONTROL_SERVER_AUTH: "apikey"
       HTTP_CONTROL_SERVER_APIKEY: "${GLUETUN_API_KEY}"
       VPN_PORT_FORWARDING: "on"
