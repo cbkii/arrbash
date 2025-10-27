@@ -199,9 +199,14 @@ _arr_extract_public_ip() {
   fi
 
   if [ -z "$value" ]; then
-    value="$(printf '%s\n' "$payload" | sed -n 's/^"\(.*\)"$/\1/p' | head -n1)"
-    value="${payload#\"}"
-    value="${value%\"}"
+  if [ -z "$value" ]; then
+    value="$(printf '%s\n' "$payload" | LC_ALL=C sed -n 's/^"\(.*\)"$/\1/p' | head -n1)"
+    # Fallback: strip quotes via parameter expansion if sed didn't remove them
+    if [ "$value" != "${value#\"}" ] || [ "$value" != "${value%\"}" ]; then
+      value="${payload#\"}"
+      value="${value%\"}"
+    fi
+  fi
   fi
 
   if [ -z "$value" ]; then
