@@ -126,9 +126,15 @@ fi
 
 arr_set_docker_services_list() {
   if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 && ((${#ARR_DOCKER_SERVICES[@]} > 0)); then
+    # shellcheck disable=SC2034  # exported via .env generation
     ARR_DOCKER_SERVICES_LIST="$(arr_join_by ' ' "${ARR_DOCKER_SERVICES[@]}")"
+    # shellcheck disable=SC2034  # exported via .env generation
+    ARR_DOCKER_SERVICES_CSV="$(arr_join_by ',' "${ARR_DOCKER_SERVICES[@]}")"
   else
+    # shellcheck disable=SC2034  # exported via .env generation
     ARR_DOCKER_SERVICES_LIST=""
+    # shellcheck disable=SC2034  # exported via .env generation
+    ARR_DOCKER_SERVICES_CSV=""
   fi
 }
 
@@ -394,6 +400,8 @@ ARR_USERCONF_IMPLICIT_VARS=(
 # Derived (non-user) environment keys prepared for .env generation; kept here
 # so tooling can validate compose interpolation without needing .env.example.
 ARR_DERIVED_ENV_VARS=(
+  ARR_DOCKER_SERVICES_LIST
+  ARR_DOCKER_SERVICES_CSV
   VPN_TYPE
   OPENVPN_USER
   OPENVPN_PASSWORD

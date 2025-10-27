@@ -265,6 +265,10 @@ fi
 if [[ -z "${GLUETUN_FIREWALL_INPUT_PORTS:-}" ]] && declare -f arr_derive_gluetun_firewall_input_ports >/dev/null 2>&1; then
   GLUETUN_FIREWALL_INPUT_PORTS="$(arr_derive_gluetun_firewall_input_ports)"
 fi
+if declare -f normalize_csv >/dev/null 2>&1; then
+  GLUETUN_FIREWALL_INPUT_PORTS="$(normalize_csv "${GLUETUN_FIREWALL_INPUT_PORTS:-}")"
+  GLUETUN_FIREWALL_OUTBOUND_SUBNETS="$(normalize_csv "${GLUETUN_FIREWALL_OUTBOUND_SUBNETS:-}")"
+fi
 if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   COMPOSE_PROJECT_NAME="${STACK}"
 fi
