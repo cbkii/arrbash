@@ -16,7 +16,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ./arr.sh --sync-api-keys       # resync Sonarr/Radarr/Prowlarr keys into Configarr
   ./arr.sh --no-auto-api-sync    # skip automatic Configarr sync for one run
   ./arr.sh --force-unlock        # clear a stale installer lock (override concurrency guard)
-  ./arr.sh --refresh-aliases     # rebuild .aliasarr
+  ./arr.sh --refresh-aliases     # refresh helper aliases and diagnostics
   ./arr.sh --uninstall           # stop services, remove assets, and restore host defaults
   ```
 
@@ -37,7 +37,7 @@ Common helpers include:
 - `arr.config.sync` – trigger Configarr after manual API key updates.
 - `arr.vpn.auto.*` – manage the VPN auto-reconnect daemon.
 
-Reload aliases whenever you rerun the installer.
+Reload aliases whenever you rerun the installer. `./arr.sh --refresh-aliases` rewrites `.aliasarr`, updates the shell RC helper block, and refreshes `${ARR_STACK_DIR}/scripts/diagnose-vpn.sh` so the bundled VPN diagnostics stay current.
 
 ## Targeted scripts
 Run these from the repository root:

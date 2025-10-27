@@ -625,12 +625,11 @@ refresh_aliases() {
 
   ensure_dir "$ARR_STACK_DIR"
 
-  if ! write_aliases_file; then
+  if ! install_aliases; then
     warn "Unable to regenerate helper aliases"
     return 1
   fi
 
-  arr_mark_shell_reload_pending
   if reload_shell_rc --clear-env; then
     msg "♻️ Shell configuration reloaded"
   fi
