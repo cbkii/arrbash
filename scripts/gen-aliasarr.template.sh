@@ -1826,8 +1826,10 @@ arr.vpn.status() {
   if ip_payload="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
     ip_payload="$(printf '%s' "$ip_payload" | tr -d '\r')"
     ip_payload="$(_arr_trim "$ip_payload")"
-    case "$ip_payload" in
-      '{'*)
+    local first_char
+    first_char="${ip_payload:0:1}"
+    case "$first_char" in
+      "{")
         ip_value="$(_arr_json_get "$ip_payload" public_ip)"
         if [ -z "$ip_value" ]; then
           ip_value="$(_arr_json_get "$ip_payload" ip)"
