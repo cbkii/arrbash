@@ -86,10 +86,6 @@ if ! pm_has_curl && ! pm_has_wget; then
   exit 1
 fi
 
-pm_escape_squote() {
-  printf '%s' "$1" | sed "s/'/'\\\\''/g"
-}
-
 pm_http_get() {
   pm_get_url="$1"
   pm_get_header="${2:-}"
@@ -116,31 +112,53 @@ pm_http_post_capture() {
   pm_post_body="$3"
   pm_post_header_file="$4"
   shift 4 || true
-  if pm_has_curl; then
-    pm_cmd="curl -fsS -m 10 -D '$(pm_escape_squote "$pm_post_header_file")' -o '$(pm_escape_squote "$pm_post_body")'"
+
+  pm_headers_tmp=""
+  if [ "$#" -gt 0 ]; then
+    pm_headers_tmp="$(mktemp "${TMPDIR:-/tmp}/pm-headers.XXXXXX" 2>/dev/null || mktemp /tmp/pm-headers.XXXXXX)"
+    if [ -z "$pm_headers_tmp" ] || [ ! -w "$pm_headers_tmp" ]; then
+      pm_log error "unable to create temporary header file"
+      return 1
+    fi
     while [ "$#" -gt 0 ]; do
       pm_header="$1"
       shift || true
-      if [ -n "$pm_header" ]; then
-        pm_cmd="$pm_cmd -H '$(pm_escape_squote "$pm_header")'"
-      fi
+      [ -n "$pm_header" ] || continue
+      printf '%s\n' "$pm_header" >>"$pm_headers_tmp"
     done
-    pm_cmd="$pm_cmd --data '$(pm_escape_squote "$pm_post_data")' '$(pm_escape_squote "$pm_post_url")'"
-    eval "$pm_cmd"
-  elif pm_has_wget; then
-    pm_cmd="wget -q -S -O '$(pm_escape_squote "$pm_post_body")'"
-    while [ "$#" -gt 0 ]; do
-      pm_header="$1"
-      shift || true
-      if [ -n "$pm_header" ]; then
-        pm_cmd="$pm_cmd --header '$(pm_escape_squote "$pm_header")'"
-      fi
-    done
-    pm_cmd="$pm_cmd --post-data '$(pm_escape_squote "$pm_post_data")' '$(pm_escape_squote "$pm_post_url")' 2>'$(pm_escape_squote "$pm_post_header_file")'"
-    eval "$pm_cmd"
-  else
-    return 1
   fi
+
+  if pm_has_curl; then
+    set -- curl -fsS -m 10 -D "$pm_post_header_file" -o "$pm_post_body"
+    if [ -n "$pm_headers_tmp" ] && [ -f "$pm_headers_tmp" ]; then
+      while IFS= read -r pm_header; do
+        [ -n "$pm_header" ] || continue
+        set -- "$@" -H "$pm_header"
+      done <"$pm_headers_tmp"
+    fi
+    set -- "$@" --data "$pm_post_data" "$pm_post_url"
+    "$@"
+    pm_status=$?
+  elif pm_has_wget; then
+    set -- wget -q -S -O "$pm_post_body"
+    if [ -n "$pm_headers_tmp" ] && [ -f "$pm_headers_tmp" ]; then
+      while IFS= read -r pm_header; do
+        [ -n "$pm_header" ] || continue
+        set -- "$@" --header "$pm_header"
+      done <"$pm_headers_tmp"
+    fi
+    set -- "$@" --post-data "$pm_post_data" "$pm_post_url"
+    "$@" 2>"$pm_post_header_file"
+    pm_status=$?
+  else
+    pm_status=1
+  fi
+
+  if [ -n "$pm_headers_tmp" ]; then
+    rm -f "$pm_headers_tmp"
+  fi
+
+  return "$pm_status"
 }
 
 pm_extract_status() {
