@@ -49,7 +49,7 @@ ARR_ENV_FILE=${ARR_ENV_FILE:-__ARR_ENV_FILE__}
 ARR_DOCKER_DIR=${ARR_DOCKER_DIR:-__ARR_DOCKER_DIR__}
 ARRCONF_DIR=${ARRCONF_DIR:-__ARRCONF_DIR__}
 : "${ARR_ENV_FILE:=${ARR_STACK_DIR}/.env}"
-: "${ARR_DOCKER_DIR:=${ARR_STACK_DIR}/docker-data}"
+: "${ARR_DOCKER_DIR:=${ARR_STACK_DIR}/dockarr}"
 : "${ARRCONF_DIR:=${ARR_STACK_DIR}/arrconf}"
 
 _arr_alias_resolve_var() {
@@ -132,12 +132,28 @@ _arr_alias_source_if_present() {
 _arr_alias_source_if_present "${ARRCONF_DIR}/userr.conf.defaults.sh"
 _arr_alias_source_if_present "${ARRCONF_DIR}/userr.conf"
 
+if command -v arr_set_docker_services_list >/dev/null 2>&1; then
+  arr_set_docker_services_list
+fi
+
 _arr_gluetun_lib="${ARR_STACK_DIR}/scripts/gluetun.sh"
 if [ -f "${_arr_gluetun_lib}" ]; then
   # shellcheck disable=SC1090
   . "${_arr_gluetun_lib}"
 fi
 unset _arr_gluetun_lib
+
+if ! command -v msg >/dev/null 2>&1; then
+  msg() { printf '%s\n' "$*"; }
+fi
+
+if ! command -v warn >/dev/null 2>&1; then
+  warn() { printf '[WARN] %s\n' "$*" >&2; }
+fi
+
+if ! command -v step >/dev/null 2>&1; then
+  step() { msg "$@"; }
+fi
 
 _arr_trim() {
   local value="$1"
@@ -203,7 +219,7 @@ _arr_vpn_auto_state_dir() {
     printf '%s\n' "$primary"
     return 0
   fi
-  printf '%s\n' "${ARR_STACK_DIR}/docker-data/gluetun/auto-reconnect"
+  printf '%s\n' "${ARR_STACK_DIR}/dockarr/gluetun/auto-reconnect"
 }
 
 _arr_vpn_record_index() {
@@ -255,6 +271,23 @@ _arr_env_get() {
   awk -F= -v k="$key" '$1==k{print substr($0, index($0,"=")+1); exit}' "$ARR_ENV_FILE"
 }
 
+_arr_env_get_list() {
+  local key="$1"
+  local raw
+  raw="$(_arr_env_get "$key" 2>/dev/null || true)"
+  [ -n "$raw" ] || return 1
+
+  local old_ifs="$IFS"
+  IFS=' '
+  set -f
+  for word in $raw; do
+    [ -n "$word" ] || continue
+    printf '%s\n' "$word"
+  done
+  set +f
+  IFS="$old_ifs"
+}
+
 _arr_loopback() {
   local host
   host="$(_arr_env_get LOCALHOST_IP)"
@@ -264,12 +297,105 @@ _arr_loopback() {
   printf '%s' "$host"
 }
 
-_arr_services=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr configarr caddy local_dns)
-if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
-  _arr_services+=(sabnzbd)
-fi
+_arr_services=()
+_arr_services_cached=0
 
-_arr_compose() { (cd "$ARR_STACK_DIR" && docker compose "$@" ); }
+_arr_services_populate() {
+  if ((_arr_services_cached)); then
+    return 0
+  fi
+
+  _arr_services=()
+
+  if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1; then
+    # shellcheck disable=SC2154 # ARR_DOCKER_SERVICES may come from sourced config
+    if ((${#ARR_DOCKER_SERVICES[@]} > 0)); then
+      _arr_services=("${ARR_DOCKER_SERVICES[@]}")
+    fi
+  fi
+
+  if ((${#_arr_services[@]} == 0)); then
+    while IFS= read -r svc; do
+      [ -n "$svc" ] || continue
+      _arr_services+=("$svc")
+    done <<EOF
+$(_arr_env_get_list ARR_DOCKER_SERVICES 2>/dev/null || true)
+EOF
+  fi
+
+  if ((${#_arr_services[@]} == 0)); then
+    local services_output
+    services_output="$(_arr_compose_services 2>/dev/null || true)"
+    if [ -n "$services_output" ]; then
+      while IFS= read -r svc; do
+        [ -n "$svc" ] || continue
+        _arr_services+=("$svc")
+      done <<EOF
+$services_output
+EOF
+    fi
+  fi
+
+  if ((${#_arr_services[@]} == 0)) && _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
+    _arr_services+=(sabnzbd)
+  fi
+
+  _arr_services_cached=1
+}
+
+_arr_compose_cmd_cache=()
+_arr_compose_cmd_cached=0
+
+_arr_compose_cmd() {
+  if ((_arr_compose_cmd_cached)); then
+    if ((${#_arr_compose_cmd_cache[@]} > 0)); then
+      return 0
+    fi
+    return 1
+  fi
+
+  _arr_compose_cmd_cache=()
+
+  if ((${#DOCKER_COMPOSE_CMD[@]} > 0)) && [ -n "${DOCKER_COMPOSE_CMD[*]}" ]; then
+    _arr_compose_cmd_cache=("${DOCKER_COMPOSE_CMD[@]}")
+    _arr_compose_cmd_cached=1
+    return 0
+  fi
+
+  if [ -n "${DOCKER_COMPOSE_CMD:-}" ]; then
+    # shellcheck disable=SC2206 # word-splitting is intentional to respect user-provided command
+    _arr_compose_cmd_cache=($DOCKER_COMPOSE_CMD)
+    if ((${#_arr_compose_cmd_cache[@]} > 0)); then
+      _arr_compose_cmd_cached=1
+      return 0
+    fi
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    _arr_compose_cmd_cache=(docker compose)
+    _arr_compose_cmd_cached=1
+    return 0
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    _arr_compose_cmd_cache=(docker-compose)
+    _arr_compose_cmd_cached=1
+    return 0
+  fi
+
+  printf 'arr: docker compose command not found.\n' >&2
+  _arr_compose_cmd_cached=0
+  _arr_compose_cmd_cache=()
+  return 1
+}
+
+_arr_compose() {
+  if ! _arr_compose_cmd; then
+    return 1
+  fi
+
+  (cd "$ARR_STACK_DIR" && "${_arr_compose_cmd_cache[@]}" "$@" )
+}
 
 _arr_compose_services_cache=""
 _arr_compose_services_cache_rc=0
@@ -302,6 +428,7 @@ _arr_service_defined() {
   fi
 
   local fallback
+  _arr_services_populate
   for fallback in "${_arr_services[@]}"; do
     if [ "$fallback" = "$svc" ]; then
       return 0
@@ -310,17 +437,44 @@ _arr_service_defined() {
   return 1
 }
 
+_arr_service_container_id() {
+  local svc="$1"
+
+  if [ -z "$svc" ]; then
+    return 1
+  fi
+
+  local id=""
+  id="$(_arr_compose ps -q "$svc" 2>/dev/null | head -n1 | tr -d '\r')"
+
+  if [ -z "$id" ]; then
+    return 1
+  fi
+
+  printf '%s' "$id"
+}
+
 _arr_wait_for_container_health() {
-  local container="$1"
+  local svc="$1"
   local timeout="${2:-150}"
   local interval="${3:-5}"
   local waited=0
+  local container=""
 
-  if [ -z "$container" ]; then
+  if [ -z "$svc" ]; then
     return 1
   fi
 
   while [ "$waited" -lt "$timeout" ]; do
+    if [ -z "$container" ]; then
+      container="$(_arr_service_container_id "$svc" 2>/dev/null || true)"
+      if [ -z "$container" ]; then
+        sleep "$interval"
+        waited=$((waited + interval))
+        continue
+      fi
+    fi
+
     local status
     status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || printf '')"
 
@@ -331,6 +485,9 @@ _arr_wait_for_container_health() {
       unhealthy|exited|dead)
         printf 'arr: %s reported status %s while waiting for health.\n' "$container" "$status" >&2
         return 1
+        ;;
+      '')
+        container=""
         ;;
     esac
 
@@ -347,6 +504,8 @@ _arr_stack_restart_services() {
   local enable_local_dns="${ENABLE_LOCAL_DNS:-$(_arr_env_get ENABLE_LOCAL_DNS)}"
   local local_dns_state="$(_arr_env_get LOCAL_DNS_STATE)"
 
+  _arr_services_populate
+
   if [ "$local_dns_state" = "active" ] || _arr_bool "$enable_local_dns"; then
     order+=(local_dns)
   fi
@@ -355,11 +514,22 @@ _arr_stack_restart_services() {
     order+=(caddy)
   fi
 
-  order+=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
-
-  if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
-    order+=(sabnzbd)
-  fi
+  local svc
+  for svc in "${_arr_services[@]}"; do
+    case "$svc" in
+      local_dns|caddy)
+        continue
+        ;;
+      sabnzbd)
+        if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
+          order+=(sabnzbd)
+        fi
+        ;;
+      qbittorrent|sonarr|radarr|lidarr|prowlarr|bazarr|flaresolverr)
+        order+=("$svc")
+        ;;
+    esac
+  done
 
   printf '%s\n' "${order[@]}"
 }
@@ -379,34 +549,73 @@ _arr_domain_suffix() {
   local suffix
   suffix="$(_arr_env_get CADDY_DOMAIN_SUFFIX)"
   if [ -z "$suffix" ]; then
-    suffix="lan"
+    suffix="$(_arr_env_get LAN_DOMAIN_SUFFIX)"
   fi
   suffix="${suffix#.}"
   printf '%s' "$suffix"
 }
 
+_arr_first_available_value() {
+  local name value=""
+  for name in "$@"; do
+    if [ -z "$name" ]; then
+      continue
+    fi
+    # shellcheck disable=SC1083
+    eval "value=\"\${${name}:-}\""
+    if [ -n "${value:-}" ]; then
+      printf '%s' "$value"
+      return 0
+    fi
+    value="$(_arr_env_get "$name" 2>/dev/null || true)"
+    if [ -n "${value:-}" ]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  done
+  return 1
+}
+
 _arr_service_port() {
-  local svc="$1" env_var default value
+  local svc="$1"
+  local value=""
   case "$svc" in
-    qbittorrent) env_var=QBT_PORT; default=8082 ;;
-    sonarr)      env_var=SONARR_PORT;        default=8989 ;;
-    radarr)      env_var=RADARR_PORT;        default=7878 ;;
-    lidarr)      env_var=LIDARR_PORT;        default=8686 ;;
-    prowlarr)    env_var=PROWLARR_PORT;      default=9696 ;;
-    bazarr)      env_var=BAZARR_PORT;        default=6767 ;;
-    flaresolverr)env_var=FLARR_PORT;  default=8191 ;;
-    sabnzbd)     env_var=SABNZBD_PORT;       default=8080 ;;
-    caddy)       env_var=CADDY_PORT;         default=80   ;;
-    *)           return 1 ;;
+    qbittorrent)
+      value="$(_arr_first_available_value QBT_PORT QBT_INT_PORT)"
+      ;;
+    sonarr)
+      value="$(_arr_first_available_value SONARR_PORT SONARR_INT_PORT)"
+      ;;
+    radarr)
+      value="$(_arr_first_available_value RADARR_PORT RADARR_INT_PORT)"
+      ;;
+    lidarr)
+      value="$(_arr_first_available_value LIDARR_PORT LIDARR_INT_PORT)"
+      ;;
+    prowlarr)
+      value="$(_arr_first_available_value PROWLARR_PORT PROWLARR_INT_PORT)"
+      ;;
+    bazarr)
+      value="$(_arr_first_available_value BAZARR_PORT BAZARR_INT_PORT)"
+      ;;
+    flaresolverr)
+      value="$(_arr_first_available_value FLARR_PORT FLARR_INT_PORT)"
+      ;;
+    sabnzbd)
+      value="$(_arr_first_available_value SABNZBD_PORT SABNZBD_INT_PORT)"
+      ;;
+    caddy)
+      value="$(_arr_first_available_value CADDY_HTTP_PORT)"
+      ;;
+    *)
+      return 1
+      ;;
   esac
-  eval "value=\${$env_var:-}"
-  if [ -z "$value" ]; then
-    value="$(_arr_env_get "$env_var")"
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+    return 0
   fi
-  if [ -z "$value" ]; then
-    value="$default"
-  fi
-  printf '%s' "$value"
+  return 1
 }
 
 _arr_enable_caddy() {
@@ -613,27 +822,133 @@ _arr_pf_log_file() {
   printf '%s/%s' "${ARR_DOCKER_DIR}/gluetun" "$name"
 }
 
-_arr_gluetun_api() {
-  local endpoint="$1"
-  local key="$(_arr_gluetun_key)"
-  local port="$(_arr_gluetun_port)"
-  local host="$(_arr_gluetun_host)"
+_arr_vpn_last_error=""
 
-  if [ -z "$key" ]; then
-    echo "Error: GLUETUN_API_KEY not found. Run: ./arr.sh --rotate-api-key" >&2
+_arr_docker_available() { command -v docker >/dev/null 2>&1; }
+
+_arr_container_id_for_service() {
+  local service="$1"
+  local include_stopped="${2:-0}"
+  local error_var="${3:-}"
+
+  if [ -z "$service" ]; then
+    if [ -n "$error_var" ]; then
+      printf -v "$error_var" 'Service name is required.'
+    fi
     return 1
   fi
 
-  local response
-  response=$(curl -fsS -H "X-Api-Key: ${key}" "http://${host}:${port}${endpoint}" 2>&1)
-  local result=$?
+  if ! _arr_docker_available; then
+    if [ -n "$error_var" ]; then
+      printf -v "$error_var" 'Docker command not available in this shell.'
+    fi
+    return 1
+  fi
+
+  local -a ps_flags=()
+  if [ "$include_stopped" = "1" ]; then
+    ps_flags=(-a)
+  fi
+
+  local id
+  id="$(docker ps "${ps_flags[@]}" --filter "label=com.docker.compose.service=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+  if [ -z "$id" ]; then
+    id="$(docker ps "${ps_flags[@]}" --filter "name=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+  fi
+
+  if [ -z "$id" ] && [ "$include_stopped" != "1" ]; then
+    ps_flags=(-a)
+    id="$(docker ps "${ps_flags[@]}" --filter "label=com.docker.compose.service=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+    if [ -z "$id" ]; then
+      id="$(docker ps "${ps_flags[@]}" --filter "name=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+    fi
+  fi
+
+  if [ -n "$id" ]; then
+    printf '%s' "$id"
+    return 0
+  fi
+
+  if [ -n "$error_var" ]; then
+    printf -v "$error_var" 'Unable to locate a container for service %s.' "$service"
+  fi
+
+  return 1
+}
+
+_arr_vpn_container_id() {
+  local include_stopped="${1:-0}"
+  _arr_vpn_last_error=""
+  if _arr_container_id_for_service gluetun "$include_stopped" _arr_vpn_last_error; then
+    return 0
+  fi
+  if [ -z "${_arr_vpn_last_error:-}" ]; then
+    _arr_vpn_last_error="Unable to locate a Gluetun container."
+  fi
+  return 1
+}
+
+_arr_vpn_container_name() {
+  local include_stopped="${1:-0}"
+  local container
+  if ! container="$(_arr_vpn_container_id "$include_stopped" 2>/dev/null || true)"; then
+    return 1
+  fi
+  docker inspect --format '{{.Name}}' "$container" 2>/dev/null | sed 's#^/##'
+}
+
+_arr_vpn_container_health_status() {
+  local include_stopped="${1:-1}"
+  local container
+  if ! container="$(_arr_vpn_container_id "$include_stopped" 2>/dev/null || true)"; then
+    return 1
+  fi
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null
+}
+
+_arr_gluetun_last_error=""
+
+_arr_gluetun_api() {
+  local endpoint="$1"
+  _arr_gluetun_last_error=""
+
+  if ! _arr_has_cmd curl; then
+    _arr_gluetun_last_error="curl is not available to query the Gluetun control API."
+    return 1
+  fi
+
+  local key
+  key="$(_arr_gluetun_key)"
+  if [ -z "$key" ]; then
+    _arr_gluetun_last_error="GLUETUN_API_KEY not found. Run ./arr.sh --rotate-api-key to generate one."
+    return 1
+  fi
+
+  local port host url response result
+  port="$(_arr_gluetun_port)"
+  host="$(_arr_gluetun_host)"
+  url="http://${host}:${port}${endpoint}"
+
+  response=$(curl -fsS -H "X-Api-Key: ${key}" "$url" 2>&1)
+  result=$?
 
   if [ $result -eq 0 ]; then
     printf '%s\n' "$response"
     return 0
   fi
 
-  echo "API call failed. Check: docker logs gluetun" >&2
+  if [ -n "$response" ]; then
+    _arr_gluetun_last_error="Gluetun API error: ${response}"
+  else
+    _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
+  fi
+
+  if ! _arr_vpn_container_id >/dev/null 2>&1; then
+    if [ -n "${_arr_vpn_last_error:-}" ]; then
+      _arr_gluetun_last_error="${_arr_vpn_last_error}"
+    fi
+  fi
+
   return 1
 }
 
@@ -793,7 +1108,14 @@ arr.compose() { _arr_compose "$@"; }
 
 arr.up() { _arr_compose up -d "$@"; }
 arr.down() { _arr_compose down "$@"; }
-arr.restart() { if [ $# -eq 0 ]; then _arr_compose restart "${_arr_services[@]}"; else _arr_compose restart "$@"; fi }
+arr.restart() {
+  if [ $# -eq 0 ]; then
+    _arr_services_populate
+    _arr_compose restart "${_arr_services[@]}"
+  else
+    _arr_compose restart "$@"
+  fi
+}
 arr.restart.stack() {
   printf '==> Stopping stack containers\n'
   if ! _arr_compose stop >/dev/null 2>&1; then
@@ -839,19 +1161,31 @@ arr.restart.stack() {
 
   sleep 5
 
-  local -a created=()
+  local -a created_svcs=()
+  local -a created_ids=()
   for svc in "${desired[@]}"; do
+    local container_id
+    container_id="$(_arr_service_container_id "$svc" 2>/dev/null || true)"
+    if [ -z "$container_id" ]; then
+      continue
+    fi
     local status
-    status="$(docker inspect --format '{{.State.Status}}' "$svc" 2>/dev/null || printf '')"
+    status="$(docker inspect --format '{{.State.Status}}' "$container_id" 2>/dev/null || printf '')"
     if [ "$status" = "created" ]; then
-      created+=("$svc")
+      created_svcs+=("$svc")
+      created_ids+=("$container_id")
     fi
   done
 
-  if [ ${#created[@]} -gt 0 ]; then
-    printf 'arr: forcing start for services stuck in created state: %s\n' "${created[*]}" >&2
-    for svc in "${created[@]}"; do
-      docker start "$svc" >/dev/null 2>&1 || true
+  if [ ${#created_svcs[@]} -gt 0 ]; then
+    printf 'arr: forcing start for services stuck in created state: %s\n' "${created_svcs[*]}" >&2
+    local idx
+    for idx in "${!created_svcs[@]}"; do
+      local svc_name="${created_svcs[$idx]}"
+      if ! _arr_compose start "$svc_name" >/dev/null 2>&1; then
+        local container_id="${created_ids[$idx]}"
+        docker start "$container_id" >/dev/null 2>&1 || true
+      fi
     done
   fi
 
@@ -867,7 +1201,10 @@ arr.logs() {
   _arr_compose logs "${tail_args[@]}" -f "$@"
 }
 arr.ps() { _arr_compose ps "$@"; }
-arr.stats() { docker stats "${_arr_services[@]}" "$@"; }
+arr.stats() {
+  _arr_services_populate
+  docker stats "${_arr_services[@]}" "$@"
+}
 arr.shell() {
   local svc="${1:-qbittorrent}"; shift || true
   if _arr_is_tty; then
@@ -877,20 +1214,29 @@ arr.shell() {
   fi
 }
 arr.health() {
-  local svc
+  _arr_services_populate
+  local svc container_id status label
   for svc in "${_arr_services[@]}"; do
-    local status
-    if status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$svc" 2>/dev/null)"; then
-      printf '%s: %s\n' "$svc" "$status"
+    label="$svc"
+    container_id="$(_arr_service_container_id "$svc" 2>/dev/null || true)"
+    if [ -n "$container_id" ]; then
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || printf '')"
     else
-      printf '%s: not running\n' "$svc"
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$svc" 2>/dev/null || printf '')"
+    fi
+    if [ -n "$status" ]; then
+      printf '%s: %s\n' "$label" "$status"
+    else
+      printf '%s: not running\n' "$label"
     fi
   done
 }
 arr.backup() {
   local dest="${1:-${ARR_STACK_DIR}/backups/$(date +%Y%m%d-%H%M%S)}"
   mkdir -p "$dest"
-  for svc in gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr caddy; do
+  _arr_services_populate
+  local svc
+  for svc in "${_arr_services[@]}"; do
     if [ -d "${ARR_DOCKER_DIR}/${svc}" ]; then
       tar -czf "${dest}/${svc}.tgz" -C "${ARR_DOCKER_DIR}" "$svc"
     fi
@@ -1119,14 +1465,14 @@ Compatibility utilities:
   arr.fsolv.url|logs|restart
 
 Legacy prefixes (sonarr, radarr, bazarr, fsolver, flaresolverr, prowlarr) remain as wrappers.
-
-Tip: Run 'source ${ARR_STACK_DIR}/.arraliases' in your shell to load the legacy alias set.
 EOF
 }
 
 arr.vpn() {
-  local action="${1:-status}"
+  local raw_action="${1:-status}"
   shift || true
+  local action
+  action="$(_arr_lowercase "$raw_action")"
   case "$action" in
     connect|c) arr.vpn.connect "$@";;
     reconnect|restart|r) arr.vpn.reconnect "$@";;
@@ -1147,18 +1493,77 @@ arr.vpn() {
       return 0
       ;;
     *)
-      printf 'Unknown arr.vpn action: %s\n' "$action" >&2
-      printf 'Run arr.help for the full alias list.\n' >&2
+      warn "arr.vpn subcommand '${raw_action}' is not available."
       return 1
       ;;
   esac
 }
 
-arr.vpn.connect() { (cd "$ARR_STACK_DIR" && docker compose up -d gluetun qbittorrent "$@"); }
-arr.vpn.reconnect() { docker restart gluetun "$@"; }
+arr.vpn.connect() {
+  local -a compose_args=("$@")
+
+  if _arr_compose_cmd >/dev/null 2>&1; then
+    if _arr_compose up -d "${compose_args[@]}" gluetun qbittorrent; then
+      return 0
+    fi
+  fi
+
+  if ! _arr_docker_available; then
+    warn "Unable to start Gluetun: docker command not available in this shell."
+    return 1
+  fi
+
+  local container qb_container
+  container="$(_arr_vpn_container_id 1 2>/dev/null || printf '')"
+  if [ -n "$container" ] && docker start "$container" >/dev/null 2>&1; then
+    qb_container="$(_arr_container_id_for_service qbittorrent 1 2>/dev/null || printf '')"
+    if [ -n "$qb_container" ]; then
+      docker start "$qb_container" >/dev/null 2>&1 || true
+    fi
+    return 0
+  fi
+
+  warn "Unable to start Gluetun via compose; run this command on the host where the stack is installed."
+  return 1
+}
+
+arr.vpn.reconnect() {
+  local -a args=("$@")
+
+  if _arr_compose_cmd >/dev/null 2>&1; then
+    if _arr_compose restart "${args[@]}" gluetun; then
+      return 0
+    fi
+  fi
+
+  if [ ${#args[@]} -gt 0 ]; then
+    warn "docker compose restart options are unavailable from this shell (compose command missing)."
+    return 1
+  fi
+
+  if ! _arr_docker_available; then
+    warn "Unable to restart Gluetun: docker command not available in this shell."
+    return 1
+  fi
+
+  local container
+  container="$(_arr_vpn_container_id 1 2>/dev/null || printf '')"
+  if [ -z "$container" ]; then
+    warn "${_arr_vpn_last_error:-Unable to locate a Gluetun container.}"
+    return 1
+  fi
+
+  if docker restart "$container" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  warn "Failed to restart Gluetun container (${container})."
+  return 1
+}
 
 arr.vpn.status() {
-  local ip_payload="" pf_payload="" summary=""
+  local warnings=""
+  local ip_payload summary=""
 
   if ip_payload="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
     if command -v gluetun_public_ip_summary >/dev/null 2>&1; then
@@ -1172,14 +1577,22 @@ arr.vpn.status() {
         printf 'Public IP payload: %s\n' "$ip_payload"
       fi
     else
-      printf '%s\n' "$ip_payload"
+      printf 'Public IP: %s\n' "$ip_payload"
     fi
   else
-    echo 'Public IP: unavailable (API call failed)'
+    local ip_warn="${_arr_gluetun_last_error:-Unable to query public IP from Gluetun.}"
+    if [ -n "$ip_warn" ]; then
+      if [ -z "$warnings" ]; then
+        warnings="$ip_warn"
+      else
+        warnings="${warnings}\n${ip_warn}"
+      fi
+    fi
   fi
 
   local type="$(_arr_env_get VPN_TYPE)"
   if [ "${type:-openvpn}" = "openvpn" ]; then
+    local pf_payload=""
     if pf_payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null)"; then
       if command -v gluetun_port_forward_summary >/dev/null 2>&1; then
         summary="$(gluetun_port_forward_summary "$pf_payload" 2>/dev/null || printf '')"
@@ -1189,13 +1602,50 @@ arr.vpn.status() {
           printf 'Forwarded port payload: %s\n' "$pf_payload"
         fi
       else
-        printf '%s\n' "$pf_payload"
+        printf 'Forwarded port payload: %s\n' "$pf_payload"
       fi
     else
-      echo 'Forwarded port: unavailable (API call failed)'
+      local pf_warn="${_arr_gluetun_last_error:-Unable to query forwarded port.}"
+      if [ -n "$pf_warn" ]; then
+        if [ -z "$warnings" ]; then
+          warnings="$pf_warn"
+        else
+          warnings="${warnings}\n${pf_warn}"
+        fi
+      fi
     fi
   else
-    echo 'Port forwarding is only available for OpenVPN configurations.'
+    printf 'Port forwarding is only available for OpenVPN configurations.\n'
+  fi
+
+  local container_status
+  if container_status="$(_arr_vpn_container_health_status 1 2>/dev/null)"; then
+    if [ -n "$container_status" ]; then
+      local container_name
+      container_name="$(_arr_vpn_container_name 1 2>/dev/null || printf '')"
+      if [ -n "$container_name" ]; then
+        printf 'Gluetun container (%s): %s\n' "$container_name" "$container_status"
+      else
+        printf 'Gluetun container: %s\n' "$container_status"
+      fi
+    fi
+  else
+    local status_warn="${_arr_vpn_last_error:-Unable to determine Gluetun container status.}"
+    if [ -n "$status_warn" ]; then
+      if [ -z "$warnings" ]; then
+        warnings="$status_warn"
+      else
+        warnings="${warnings}\n${status_warn}"
+      fi
+    fi
+  fi
+
+  if [ -n "$warnings" ]; then
+    printf '%s\n' "$warnings" | _arr_unique_lines | while IFS= read -r warn_line; do
+      [ -n "$warn_line" ] || continue
+      warn "$warn_line"
+    done
+    return 1
   fi
 }
 
@@ -1204,7 +1654,7 @@ arr.vpn.creds() { "${EDITOR:-nano}" "${ARRCONF_DIR}/proton.auth"; }
 arr.vpn.port() {
   local type="$(_arr_env_get VPN_TYPE)"
   if [ "${type:-openvpn}" != "openvpn" ]; then
-    echo 'Port forwarding is only available for OpenVPN configurations.' >&2
+    warn 'Port forwarding is only available for OpenVPN configurations.'
     return 1
   fi
   local state_file="$(_arr_pf_state_file)"
@@ -1222,12 +1672,12 @@ arr.vpn.port() {
       return 0
     fi
     if [ -n "$cached_status" ] && [ "$cached_status" != "pending" ]; then
-      printf 'State: %s (see %s)\n' "$cached_status" "$state_file" >&2
+      warn "State: ${cached_status} (see ${state_file})"
     fi
   fi
   local payload summary
   if ! payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null)"; then
-    echo 'Unable to query forwarded port.' >&2
+    warn "${_arr_gluetun_last_error:-Unable to query forwarded port.}"
     return 1
   fi
   if command -v gluetun_port_forward_summary >/dev/null 2>&1; then
@@ -1249,7 +1699,7 @@ arr.vpn.port() {
 arr.vpn.port.state() {
   local file="$(_arr_pf_state_file)"
   if [ ! -f "$file" ]; then
-    echo "State file not found: $file" >&2
+    warn "State file not found: ${file}"
     return 1
   fi
   cat "$file"
@@ -1261,7 +1711,7 @@ arr.vpn.port.watch() {
   dir="$(dirname "$file")"
   mkdir -p "$dir"
   if [ ! -f "$file" ]; then
-    echo "Creating log placeholder at $file" >&2
+    msg "Creating log placeholder at ${file}"
     : >"$file"
   fi
   tail -n 20 -f "$file"
@@ -1270,16 +1720,39 @@ arr.vpn.port.watch() {
 arr.vpn.port.sync() {
   local key
   key="$(_arr_gluetun_key)"
+  if [ -z "$key" ]; then
+    warn "GLUETUN_API_KEY not found. Run ./arr.sh --rotate-api-key to refresh it."
+    return 1
+  fi
   ( cd "$ARR_STACK_DIR" && GLUETUN_API_KEY="$key" PF_ASYNC_ENABLE=1 bash -c '. scripts/gluetun.sh; async_port_forward_worker --oneshot' )
 }
 
 arr.vpn.paths() { printf 'Config: %s\nAuth: %s\n' "${ARRCONF_DIR}" "${ARR_DOCKER_DIR}/gluetun"; }
 
-arr.vpn.logs() { docker logs -f gluetun; }
+arr.vpn.logs() {
+  local container
+  container="$(_arr_vpn_container_id 1 2>/dev/null)" || container=""
+  if [ -z "$container" ]; then
+    warn "${_arr_vpn_last_error:-Unable to locate Gluetun container for log streaming.}"
+    return 1
+  fi
+
+  if ! _arr_docker_available; then
+    warn "Docker command not available in this shell."
+    return 1
+  fi
+
+  local -a log_args=("$@")
+  if [ ${#log_args[@]} -eq 0 ]; then
+    log_args=(-f)
+  fi
+
+  docker logs "${log_args[@]}" "$container"
+}
 arr.vpn.ip() {
-  local payload="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"
-  if [ -z "$payload" ]; then
-    echo 'Unable to query public IP.' >&2
+  local payload
+  if ! payload="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
+    warn "${_arr_gluetun_last_error:-Unable to query public IP.}"
     return 1
   fi
   if command -v gluetun_public_ip_details >/dev/null 2>&1 && gluetun_public_ip_details "$payload"; then
@@ -1288,29 +1761,65 @@ arr.vpn.ip() {
   fi
   printf '%s\n' "$payload"
 }
-arr.vpn.pf() { _arr_gluetun_api /v1/openvpn/portforwarded && printf '\n'; }
-arr.vpn.health() { docker inspect --format '{{.State.Health.Status}}' gluetun 2>/dev/null || echo unknown; }
+
+arr.vpn.pf() {
+  if _arr_gluetun_api /v1/openvpn/portforwarded; then
+    printf '\n'
+  else
+    warn "${_arr_gluetun_last_error:-Unable to query forwarded port payload.}"
+    return 1
+  fi
+}
+
+arr.vpn.health() {
+  local container
+  container="$(_arr_vpn_container_id 1 2>/dev/null)" || container=""
+  if [ -z "$container" ]; then
+    warn "${_arr_vpn_last_error:-Unable to locate Gluetun container.}"
+    return 1
+  fi
+
+  if ! _arr_docker_available; then
+    warn "Docker command not available in this shell."
+    return 1
+  fi
+
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || printf 'unknown\n'
+}
 
 arr.vpn.servers() {
   local limit="${1:-20}"
-  local payload
 
   case "$limit" in
     ''|*[!0-9]*) limit=20 ;;
   esac
 
-  if docker exec gluetun /bin/sh -c 'command -v gluetun >/dev/null 2>&1' >/dev/null 2>&1; then
-    docker exec gluetun /bin/sh -c "gluetun servers --format table --limit ${limit}" 2>/dev/null || {
-      echo "Unable to query gluetun CLI for server catalog" >&2
-      return 1
-    }
-    return 0
+  local container
+  container="$(_arr_vpn_container_id 0 2>/dev/null)" || container=""
+  if [ -z "$container" ]; then
+    warn "${_arr_vpn_last_error:-Unable to locate Gluetun container.}"
+    return 1
   fi
 
-  payload="$(docker exec gluetun cat /gluetun/servers.json 2>/dev/null)" || {
-    echo "Unable to read gluetun server catalog" >&2
+  if ! _arr_docker_available; then
+    warn "Docker command not available in this shell."
     return 1
-  }
+  fi
+
+  if docker exec "$container" /bin/sh -c 'command -v gluetun >/dev/null 2>&1' >/dev/null 2>&1; then
+    if docker exec "$container" /bin/sh -c "gluetun servers --format table --limit ${limit}" 2>/dev/null; then
+      return 0
+    fi
+    warn "Unable to query gluetun CLI for server catalog."
+    return 1
+  fi
+
+  local payload
+  payload="$(docker exec "$container" cat /gluetun/servers.json 2>/dev/null || printf '')"
+  if [ -z "$payload" ]; then
+    warn "Unable to read gluetun server catalog."
+    return 1
+  fi
 
   printf '%s\n' "$payload" | awk -v limit="$limit" '
     BEGIN {
@@ -1345,7 +1854,7 @@ arr.vpn.servers() {
       }
     }
   ' || {
-    echo "Unable to parse server catalog" >&2
+    warn "Unable to parse server catalog."
     return 1
   }
 }
@@ -1368,7 +1877,28 @@ arr.vpn.countries() {
 }
 
 arr.vpn.fastest() {
-  docker exec gluetun /bin/sh -c 'gluetun servers --format table --limit 15' 2>/dev/null || echo "gluetun CLI not available."
+  local container
+  container="$(_arr_vpn_container_id 0 2>/dev/null)" || container=""
+  if [ -z "$container" ]; then
+    warn "${_arr_vpn_last_error:-Unable to locate Gluetun container.}"
+    return 1
+  fi
+
+  if ! _arr_docker_available; then
+    warn "Docker command not available in this shell."
+    return 1
+  fi
+
+  if docker exec "$container" /bin/sh -c 'command -v gluetun >/dev/null 2>&1' >/dev/null 2>&1; then
+    if docker exec "$container" /bin/sh -c 'gluetun servers --format table --sort latency --limit 15' 2>/dev/null; then
+      return 0
+    fi
+    warn "Unable to query gluetun CLI for fastest endpoints."
+    return 1
+  fi
+
+  warn "Gluetun CLI is not available in the running container; fastest endpoint lookup is unavailable."
+  return 1
 }
 
 arr.vpn.switch() {
@@ -1379,7 +1909,7 @@ arr.vpn.switch() {
   done < <(_arr_vpn_rotation_candidates)
   unset _arr_country
   if [ ${#countries[@]} -eq 0 ]; then
-    echo 'No ProtonVPN countries available for rotation.' >&2
+    warn 'No ProtonVPN countries available for rotation.'
     return 1
   fi
 
@@ -1418,14 +1948,14 @@ arr.vpn.switch() {
   printf 'Switching to ProtonVPN country: %s\n' "$target"
   local env_output
   if ! env_output="$(arr.env.set SERVER_COUNTRIES "$target" 2>&1)"; then
-    printf '%s\n' "$env_output" >&2
-    echo "Failed to update SERVER_COUNTRIES in ${ARR_ENV_FILE}" >&2
+    warn "$env_output"
+    warn "Failed to update SERVER_COUNTRIES in ${ARR_ENV_FILE}."
     return 1
   fi
   printf '%s\n' "$env_output"
-  echo 'Restarting Gluetun to apply the new country...'
+  msg 'Restarting Gluetun to apply the new country...'
   if ! arr.vpn.reconnect; then
-    echo 'Gluetun restart failed. Apply the change manually if required.' >&2
+    warn 'Gluetun restart failed. Apply the change manually if required.'
     return 1
   fi
 }

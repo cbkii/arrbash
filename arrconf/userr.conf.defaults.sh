@@ -110,6 +110,35 @@ if ! declare -f arr_join_by >/dev/null 2>&1; then
   }
 fi
 
+ARR_DOCKER_SERVICES_DEFAULT=(
+  gluetun
+  qbittorrent
+  sonarr
+  radarr
+  lidarr
+  prowlarr
+  bazarr
+  flaresolverr
+  sabnzbd
+  configarr
+  caddy
+  local_dns
+)
+
+if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 || ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
+  ARR_DOCKER_SERVICES=("${ARR_DOCKER_SERVICES_DEFAULT[@]}")
+fi
+
+arr_set_docker_services_list() {
+  if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 && ((${#ARR_DOCKER_SERVICES[@]} > 0)); then
+    ARR_DOCKER_SERVICES_LIST="$(arr_join_by ' ' "${ARR_DOCKER_SERVICES[@]}")"
+  else
+    ARR_DOCKER_SERVICES_LIST=""
+  fi
+}
+
+arr_set_docker_services_list
+
 # Upstream DNS resolvers for fallback (support legacy *_1/*_2 and new list form)
 ARR_DEFAULT_UPSTREAM_DNS=("1.1.1.1" "1.0.0.1")
 
