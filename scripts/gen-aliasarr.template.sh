@@ -206,7 +206,6 @@ _arr_extract_public_ip() {
       value="${value%\"}"
     fi
   fi
-  fi
 
   if [ -z "$value" ]; then
     value="$payload"
