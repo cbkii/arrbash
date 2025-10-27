@@ -86,7 +86,9 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
 ## Coding Style & Conventions
 
-* Use **Bash** with strict safety: `#!/usr/bin/env bash`, `set -Eeuo pipefail`.
+* Use **Bash** with strict safety: `#!/usr/bin/env bash`, `set -Eeuo pipefail`. When authoring shell code, ensure constructs remain
+  **zsh-compatible** (e.g., avoid Bash-only arrays where unnecessary, prefer POSIX-compatible parameter expansion, and test critical
+  scripts with `zsh` when feasible) so contributors using Z shell can run the tooling seamlessly.
 * Scripts must check dependencies (`curl`, `jq`, `openssl`, etc.) and fail with clear messages.
 * Permissions: secrets/auth files default to `600`; never commit real credentials.
 * Standalone helpers bootstrap with:
