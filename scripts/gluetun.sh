@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # Common helpers for interacting with the Gluetun control server.
+# Audit: quoting tightened for curl args; JSON payloads built with jq while keeping bash targeting.
 
 : "${PF_MAX_TOTAL_WAIT:=60}"
 : "${PF_POLL_INTERVAL:=5}"
@@ -880,11 +881,19 @@ fetch_public_ip() {
 gluetun_update_openvpn_status() {
   local desired="$1"
 
-  if [[ -z "$desired" ]]; then
+  if [[ -z "${desired}" ]]; then
     return 1
   fi
 
+  # JSON audit:
+  # - Construct request body with jq -n/--arg to escape caller-provided values safely.
+  # - Keep Content-Type header aligned with JSON payload emission.
+
   if ! command -v curl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if ! command -v jq >/dev/null 2>&1; then
     return 1
   fi
 
@@ -896,7 +905,16 @@ gluetun_update_openvpn_status() {
     curl_args+=(-H "X-Api-Key: ${GLUETUN_API_KEY}")
   fi
 
-  curl "${curl_args[@]}" --data "{\"status\":\"${desired}\"}" "${api_base}/v1/openvpn/status" >/dev/null 2>&1
+  local json_payload=""
+  if ! json_payload="$(
+    jq -n \
+      --arg status "${desired}" \
+      '{status:$status}'
+  )"; then
+    return 1
+  fi
+
+  curl "${curl_args[@]}" --data "${json_payload}" "${api_base}/v1/openvpn/status" >/dev/null 2>&1
 }
 
 # Requests Gluetun to reconnect OpenVPN; used for PF recovery loops

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SABnzbd helper – query and manage the ARR Stack SABnzbd instance
+# Audit: quoted env parsing sentinels while keeping the read loop portable for bash/zsh.
 
 set -euo pipefail
 
@@ -63,7 +64,7 @@ load_env() {
   [[ -f "$ENV_FILE" ]] || return 0
 
   local line key raw value
-  while IFS= read -r line || [[ -n $line ]]; do
+  while IFS= read -r line || [[ -n "${line}" ]]; do
     line="${line//$'\r'/}"
     [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
     [[ $line =~ ^[[:space:]]*export[[:space:]]+(.+)$ ]] && line="${BASH_REMATCH[1]}"

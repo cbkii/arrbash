@@ -9,6 +9,7 @@
 # such as mapfile/arrays. Those constructs crashed under zsh and obscured the actual
 # Gluetun health state the watchdog needs to track. The new implementation keeps a
 # minimal, portable schema focused on Gluetun control API health and recovery data.
+# Audit: quoting tightened for persistence; history JSON relies on jq while staying shell-portable.
 
 if [[ -n "${__VPN_AUTO_STATE_LOADED:-}" ]]; then
   return 0
@@ -369,22 +370,24 @@ vpn_auto_append_history() {
   ensure_dir_mode "$dir" "$DATA_DIR_MODE"
   local ts
   ts="$(vpn_auto_iso_now)"
-  local entry
-  if vpn_auto_has_jq; then
-    entry="$({
-      jq -nc \
-        --arg ts "$ts" \
-        --arg action "$action" \
-        --arg status "$status" \
-        --arg detail "$detail" \
-        --argjson failures "${VPN_AUTO_STATE_CONSECUTIVE_FAILURES:-0}" \
-        '{ts:$ts,action:$action,status:$status,detail:($detail==""?null:$detail),consecutive_failures:$failures}'
-    } 2>/dev/null)"
+  local entry=""
+  # JSON audit:
+  # - Serialize history entries with jq to guarantee valid escaping of arbitrary detail text.
+  if ! vpn_auto_has_jq; then
+    return 0
   fi
-  if [[ -z "$entry" ]]; then
-    entry="{\"ts\":\"${ts}\",\"action\":\"${action}\",\"status\":\"${status}\",\"detail\":\"${detail}\",\"consecutive_failures\":${VPN_AUTO_STATE_CONSECUTIVE_FAILURES:-0}}"
+  if ! entry="$({
+    jq -nc \
+      --arg ts "${ts}" \
+      --arg action "${action}" \
+      --arg status "${status}" \
+      --arg detail "${detail}" \
+      --argjson failures "${VPN_AUTO_STATE_CONSECUTIVE_FAILURES:-0}" \
+      '{ts:$ts,action:$action,status:$status,detail:($detail==""?null:$detail),consecutive_failures:$failures}'
+  } 2>/dev/null)"; then
+    return 0
   fi
-  printf '%s\n' "$entry" >>"$file"
+  printf '%s\n' "${entry}" >>"${file}"
   ensure_nonsecret_file_mode "$file"
   local limit="${VPN_AUTO_HISTORY_MAX_LINES:-500}"
   if [[ "$limit" =~ ^[0-9]+$ ]] && ((limit > 0)); then

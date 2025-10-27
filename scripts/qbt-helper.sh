@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # qBittorrent Helper - Manage authentication and access defaults
+# Audit: quoted env parsing sentinels while preserving portability for bash/zsh callers.
 
 set -euo pipefail
 
@@ -391,7 +392,7 @@ load_env() {
   [[ -f "$ENV_FILE" ]] || return
 
   local line key raw value
-  while IFS= read -r line || [[ -n $line ]]; do
+  while IFS= read -r line || [[ -n "${line}" ]]; do
     line="${line//$'\r'/}"
     [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
     [[ $line =~ ^[[:space:]]*export[[:space:]]+(.+)$ ]] && line="${BASH_REMATCH[1]}"
