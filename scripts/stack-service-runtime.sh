@@ -117,7 +117,11 @@ arr_restore_stack_runtime_state() {
   local -a restore_order=()
   local service=""
 
-  for service in gluetun; do
+  local -a priority_services=(
+    gluetun
+  )
+
+  for service in "${priority_services[@]}"; do
     local item=""
     for item in "${ARR_STACK_PREVIOUS_RUNNING_SERVICES[@]}"; do
       if [[ "$item" == "$service" && -z "${seen[$service]:-}" ]]; then

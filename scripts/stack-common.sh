@@ -1952,7 +1952,6 @@ arr_derive_gluetun_firewall_outbound_subnets() {
 }
 
 arr_derive_gluetun_firewall_input_ports() {
-  local split_mode="${SPLIT_VPN:-0}"
   local expose_direct="${EXPOSE_DIRECT_PORTS:-0}"
   local -a ports=()
   local port=""
