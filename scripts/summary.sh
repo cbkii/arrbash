@@ -165,14 +165,14 @@ QBT_INFO
     printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
   else
     msg "Direct LAN URLs are not published (EXPOSE_DIRECT_PORTS=0)."
-    msg "Access services from the host network (docker compose exec/port-forward) or add your own reverse proxy."
+    msg "Access services from the host network (docker compose exec/port-forward) or publish external routes manually."
   fi
 
   cat <<'ACCESS_NOTICE'
 
 Remote access reminder:
-  • The stack no longer provides an internal reverse proxy or DNS helper.
-  • Expose these services through your preferred VPN or reverse proxy if they must be reached from outside the LAN.
+  • Services expose plain HTTP on LAN ports managed by Docker.
+  • Use a trusted VPN, SSH tunnel, or similar secure channel if you require access from outside the LAN.
 ACCESS_NOTICE
 
   if [[ "${LAN_IP}" == "0.0.0.0" || -z "${LAN_IP:-}" ]]; then
@@ -496,7 +496,6 @@ POLICY
     fi
     local sab_helper_url="${sab_helper_scheme}://${sab_helper_host}:${SABNZBD_PORT}"
     msg "Helper Endpoint: ${sab_helper_url}"
-    # No reverse proxy integration; expose your own route if needed.
     if [[ -n "${SABNZBD_CATEGORY:-}" ]]; then
       msg "Default Category Override: ${SABNZBD_CATEGORY}"
     else

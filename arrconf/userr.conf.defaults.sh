@@ -209,7 +209,7 @@ SABNZBD_CATEGORY="${SABNZBD_CATEGORY:-${STACK}}"
 SABNZBD_TIMEOUT="${SABNZBD_TIMEOUT:-15}"
 ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT:-sabnzbd}"
 
-# Expose application ports directly on the host (legacy Caddy proxy removed)
+# Expose application ports directly on the host
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-1}"
 
 # qBittorrent credentials (override after first login)
@@ -222,7 +222,6 @@ fi
 # Comma-separated CIDR list that can bypass the qBittorrent WebUI login
 QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
 
-# Legacy Caddy Basic Auth credentials (unused)
 # Images
 GLUETUN_IMAGE="${GLUETUN_IMAGE:-qmcgaw/gluetun:v3.40.0}"
 QBITTORRENT_IMAGE="${QBITTORRENT_IMAGE:-lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415}"
@@ -258,7 +257,6 @@ ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS:-1}"
 # Behaviour flags
 ASSUME_YES="${ASSUME_YES:-0}"
 FORCE_ROTATE_API_KEY="${FORCE_ROTATE_API_KEY:-0}"
-SETUP_HOST_DNS="${SETUP_HOST_DNS:-0}"
 REFRESH_ALIASES="${REFRESH_ALIASES:-0}"
 
 # -----------------------------------------------------------------------------
@@ -395,7 +393,6 @@ ARR_USERCONF_IMPLICIT_VARS=(
 # so tooling can validate compose interpolation without needing .env.example.
 ARR_DERIVED_ENV_VARS=(
   VPN_TYPE
-  DNS_HOST_ENTRY
   OPENVPN_USER
   OPENVPN_PASSWORD
   OPENVPN_USER_ENFORCED
@@ -616,7 +613,6 @@ ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS}"       # Decimals precision for minimu
 # --- Behaviour toggles ---
 # ASSUME_YES="0"                         # Skip confirmation prompts when scripting installs
 # FORCE_ROTATE_API_KEY="0"               # Force regeneration of the Gluetun API key on next run
-# SETUP_HOST_DNS="0"                      # Automate host DNS takeover helper (or call with --setup-host-dns)
 # REFRESH_ALIASES="0"                     # Regenerate helper aliases without running the installer
 EOF
 }

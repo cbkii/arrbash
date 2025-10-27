@@ -1929,31 +1929,6 @@ arr_host_access_hint() {
   printf '%s\n' "$hint"
 }
 
-arr_derive_dns_host_entry() {
-  local ip="${LAN_IP:-}"
-
-  if [[ -n "$ip" && "$ip" != "0.0.0.0" ]] && arr_validate_ipv4_safe "$ip" && arr_is_private_ipv4_safe "$ip"; then
-    printf '%s\n' "$ip"
-    return 0
-  fi
-
-  local candidate
-  local -a host_candidates=()
-  if command -v hostname >/dev/null 2>&1; then
-    mapfile -t host_candidates < <(arr_hostname_private_candidates 2>/dev/null || true)
-  fi
-
-  for candidate in "${host_candidates[@]}"; do
-    [[ -z "$candidate" ]] && continue
-    if arr_validate_ipv4_safe "$candidate" && arr_is_private_ipv4_safe "$candidate"; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-
-  printf '%s\n' "127.0.0.1"
-}
-
 arr_derive_gluetun_firewall_outbound_subnets() {
   local ip="${LAN_IP:-}"
   local -a candidates=("192.168.0.0/16" "10.0.0.0/8" "172.16.0.0/12")
@@ -2738,22 +2713,6 @@ sanitize_user() {
     sanitized="user"
   fi
   printf '%s' "$sanitized"
-}
-
-# Confirms that a sanitized Caddy username remains non-empty and within the
-# supported Basic Auth character set.
-validate_caddy_user() {
-  local candidate="${1:-}"
-
-  if [[ -z "$candidate" ]]; then
-    return 1
-  fi
-
-  if [[ ! "$candidate" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    return 1
-  fi
-
-  return 0
 }
 
 # Validates bcrypt hash formatting and cost bounds before accepting user input

@@ -15,7 +15,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 - Rotate the Gluetun API key periodically with `./arr.sh --rotate-api-key --yes` and restart the stack.
 
 ## Network exposure
-- Bind the stack to a private `LAN_IP` and avoid forwarding raw service ports through your router. Maintain your own reverse proxy if you need HTTPS off-LAN.
+- Bind the stack to a private `LAN_IP` and avoid forwarding raw service ports through your router. Terminate HTTPS through your own VPN, SSH tunnel, or dedicated gateway if you need off-LAN access.
 - Verify open ports regularly:
   ```bash
   sudo ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191'

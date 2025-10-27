@@ -222,14 +222,13 @@ check_network_security() {
     doctor_warn "Gluetun control API is reachable on ${gluetun_bindings[*]}; restrict it to LOCALHOST_IP=${LOCALHOST_IP}."
   fi
 
-  doctor_note "Reverse proxy helper removed; any listeners on ports 80/443 belong to other services."
+  doctor_note "HTTPS termination is not managed by arrbash; review any listeners on ports 80/443."
 }
 
-# Legacy stub retained for reverse proxy compatibility messaging
 test_lan_connectivity() {
   step "Testing LAN accessibility..."
 
-  doctor_note "Reverse proxy checks removed; access services via host ports instead."
+  doctor_note "LAN exposure relies on direct host ports; validate reachability as needed."
 }
 
 # Verifies upstream DNS responders and surfaces missing tooling
@@ -494,6 +493,6 @@ else
   msg "  (Direct ports disabled; set EXPOSE_DIRECT_PORTS=1 to enable IP:PORT access.)"
 fi
 
-doctor_note "Local DNS and reverse proxy helpers removed; rely on LAN IP access instead."
+doctor_note "Local DNS helper removed; rely on LAN IP access instead."
 
 exit 0

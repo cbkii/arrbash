@@ -21,7 +21,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ```
 
 - The installer validates dependencies, checks port availability, and prints a summary before starting services. Cancel with `Ctrl+C` if something looks wrong and adjust `userr.conf` or your host configuration.
-- `--uninstall` delegates to `scripts/uninstall.sh`, which tears down containers, removes generated stack files, and re-enables `systemd-resolved` if you previously ran the legacy DNS helper. Run it with `--yes` to skip the confirmation prompt.
+- `--uninstall` delegates to `scripts/uninstall.sh`, which tears down containers and removes generated stack files. Run it with `--yes` to skip the confirmation prompt.
 
 ## Helper aliases
 After running `./arr.sh` at least once, load the generated aliases in new shells:
@@ -43,11 +43,6 @@ Run these from the repository root:
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/host-dns-setup.sh` | Legacy stub that reports the DNS helper was removed. |
-| `scripts/host-dns-rollback.sh` | Legacy stub retained for compatibility messaging. |
-| `scripts/setup-lan-dns.sh` | Legacy stub retained for compatibility messaging. |
-| `scripts/install-caddy-ca.sh` | Legacy stub retained for reverse proxy compatibility messaging. |
-| `scripts/export-caddy-ca.sh` | Legacy stub retained for reverse proxy compatibility messaging. |
 | `scripts/qbt-helper.sh` | Show or reset qBittorrent WebUI credentials and whitelist entries. |
 | `scripts/doctor.sh` | Run the same port, DNS, HTTPS, and connectivity checks the installer performs. |
 | `scripts/fix-versions.sh` | Swap pinned LinuxServer tags to `latest` when a registry removes a manifest. |

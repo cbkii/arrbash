@@ -167,9 +167,6 @@ show_configuration_preview() {
     fi
   fi
 
-  local local_dns_summary="removed (custom domain routing no longer provided)"
-  local caddy_summary="removed (bring your own reverse proxy if needed)"
-
   local direct_ports_summary="disabled"
   if [[ "${EXPOSE_DIRECT_PORTS:-1}" == "1" ]]; then
     direct_ports_summary="enabled"
@@ -239,8 +236,6 @@ Network & system
   • VPN cooldown (minutes): ${VPN_COOLDOWN_MINUTES:-60}
   • VPN retry budget (minutes): ${VPN_MAX_RETRY_MINUTES:-20}
   • User/Group IDs: ${PUID}/${PGID}
-  • Local DNS: ${local_dns_summary}
-  • Reverse proxy helper: removed (access services via LAN ports)
   • Direct LAN ports: ${direct_ports_summary}
 
 Credentials & secrets
@@ -279,7 +274,6 @@ If anything looks incorrect, edit ${userconf_edit_target} before continuing.
 ------------------------------------------------------------
 CONFIG
 
-  # Reverse proxy and custom DNS helpers have been removed; no additional warnings required.
 }
 
 # Accepts explicit credentials but falls back to global PU/PW for backward compatibility.

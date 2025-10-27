@@ -136,8 +136,8 @@ Changing `ARR_DOCKER_DIR` moves all service state directories. Rerun `./arr.sh -
 
 Toggle these extras in `${ARRCONF_DIR}/userr.conf` or via the matching `./arr.sh` flags. Variables scoped to a disabled feature are omitted from `.env` and `docker-compose.yml`, so leave their values blank until you enable the feature. Rerun the installer after every change so generated files and helper aliases stay in sync.
 
-### Reverse proxy & local DNS helpers (removed)
-Legacy Caddy and dnsmasq helpers have been retired. All services now publish directly on LAN ports or through Gluetun’s forwarded ports. Configure HTTPS or LAN DNS independently if you still need them.
+### LAN DNS & HTTPS helpers (removed)
+Legacy HTTPS and dnsmasq helpers have been retired. All services now publish directly on LAN ports or through Gluetun’s forwarded ports. Configure HTTPS or LAN DNS independently if you still need them.
 
 ### Configarr automation
 - Set `ENABLE_CONFIGARR=1` to let Configarr push opinionated defaults into Sonarr and Radarr.

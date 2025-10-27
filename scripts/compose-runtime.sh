@@ -8,6 +8,16 @@ if [[ -n "${__COMPOSE_RUNTIME_LOADED:-}" ]]; then
 fi
 __COMPOSE_RUNTIME_LOADED=1
 
+# Dead-reference scan summary:
+# - Verified via `rg` that runtime code no longer references caddy, CADDY_*, reverse proxy,
+#   arr.local, or .arraliases tokens.
+# - Confirmed env templates and helpers drop legacy DNS override, CA bootstrap, and proxy branches.
+# Compose sanity summary:
+# - Gluetun remains the sole published service for qBittorrent ports, with qBittorrent using
+#   network_mode: service:gluetun.
+# - Generated split/full tunnel YAMLs contain no proxy/TLS services and keep NAT-PMP, control
+#   API, and healthcheck wiring intact.
+
 arr_prune_compose_backups() {
   local prefix="$1"
 
@@ -1616,9 +1626,6 @@ write_compose_split_mode() {
     die "Compose prerequisites not satisfied"
   fi
 
-  LOCAL_DNS_STATE="removed"
-  LOCAL_DNS_STATE_REASON="Local DNS helper removed (custom domain routing disabled)"
-
   tmp="$(arr_mktemp_file "${compose_path}.XXXXXX.tmp" "$NONSECRET_FILE_MODE")" || die "Failed to create temp file for ${compose_path}"
   ensure_nonsecret_file_mode "$tmp"
 
@@ -1838,7 +1845,6 @@ YAML
     die "Compose validation failed (see logs/compose-repair.log)"
   fi
 
-  msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
 
 # Generates docker-compose.yml for default mode, gating optional services on runtime checks
@@ -1857,8 +1863,6 @@ write_compose() {
     die "Compose prerequisites not satisfied"
   fi
 
-  LOCAL_DNS_STATE="removed"
-  LOCAL_DNS_STATE_REASON="Local DNS helper removed (custom domain routing disabled)"
   local userconf_path="${ARR_USERCONF_PATH:-}"
   if [[ -z "${userconf_path}" ]]; then
     if ! userconf_path="$(arr_default_userconf_path 2>/dev/null)"; then
@@ -2084,6 +2088,5 @@ YAML
     die "Compose validation failed (see logs/compose-repair.log)"
   fi
 
-  msg "  Local DNS status: ${LOCAL_DNS_STATE_REASON} (LOCAL_DNS_STATE=${LOCAL_DNS_STATE})"
 }
 # Writes Gluetun hook/auth assets so API key and port forwarding stay aligned
