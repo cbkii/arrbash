@@ -555,7 +555,7 @@ preflight() {
   fi
 
   if [[ -n "${ARR_USERCONF_OVERRIDE_PATH:-}" && "${ARR_USERCONF_OVERRIDE_PATH}" == "${default_userconf_canon}" ]]; then
-    # shellcheck disable=SC2034  # consumed by scripts/config.sh
+    # shellcheck disable=SC2034  # consumed by scripts/env-config.sh
     ARR_USERCONF_OVERRIDE_PATH=""
   fi
 

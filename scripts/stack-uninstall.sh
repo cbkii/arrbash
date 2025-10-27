@@ -2,7 +2,7 @@
 
 usage() {
   cat <<'USAGE'
-Usage: ./scripts/uninstall.sh [options]
+Usage: ./scripts/stack-uninstall.sh [options]
 
 Options:
   --yes                 Assume "yes" to all prompts and run non-interactively
@@ -17,18 +17,18 @@ USAGE
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
-COMMON_LIB="${REPO_ROOT}/scripts/common.sh"
+COMMON_LIB="${REPO_ROOT}/scripts/stack-common.sh"
 if [[ -f "$COMMON_LIB" ]]; then
-  # shellcheck source=scripts/common.sh
+  # shellcheck source=scripts/stack-common.sh
   . "$COMMON_LIB"
 else
   printf '[ERROR] Missing required module: %s\n' "$COMMON_LIB" >&2
   exit 1
 fi
 
-USERCONF_LIB="${REPO_ROOT}/scripts/userconf.sh"
+USERCONF_LIB="${REPO_ROOT}/scripts/env-userconf.sh"
 if [[ -f "$USERCONF_LIB" ]]; then
-  # shellcheck source=scripts/userconf.sh
+  # shellcheck source=scripts/env-userconf.sh
   . "$USERCONF_LIB"
 else
   die "Missing helper library: ${USERCONF_LIB}"

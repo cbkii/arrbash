@@ -61,9 +61,9 @@ _arr_gluetun_source_dir() {
 if ! declare -f arr_date_local >/dev/null 2>&1; then
   __arr_time_guard_dir="$(_arr_gluetun_source_dir)"
   REPO_ROOT="${REPO_ROOT:-$(cd "${__arr_time_guard_dir}/.." && pwd)}"
-  if [[ -f "${REPO_ROOT}/scripts/common.sh" ]]; then
-    # shellcheck source=scripts/common.sh
-    . "${REPO_ROOT}/scripts/common.sh"
+  if [[ -f "${REPO_ROOT}/scripts/stack-common.sh" ]]; then
+    # shellcheck source=scripts/stack-common.sh
+    . "${REPO_ROOT}/scripts/stack-common.sh"
   fi
   unset __arr_time_guard_dir
 fi

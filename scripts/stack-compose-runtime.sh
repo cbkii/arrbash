@@ -13,9 +13,9 @@ if ! declare -f gluetun_require_wireguard_natpmp >/dev/null 2>&1; then
   if [[ -z "${REPO_ROOT:-}" ]]; then
     REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-${0}}")/.." && pwd)"
   fi
-  if [[ -f "${REPO_ROOT}/scripts/gluetun.sh" ]]; then
-    # shellcheck source=scripts/gluetun.sh
-    . "${REPO_ROOT}/scripts/gluetun.sh"
+  if [[ -f "${REPO_ROOT}/scripts/vpn-gluetun.sh" ]]; then
+    # shellcheck source=scripts/vpn-gluetun.sh
+    . "${REPO_ROOT}/scripts/vpn-gluetun.sh"
   fi
 fi
 
@@ -43,7 +43,7 @@ compose_prepare_gluetun_runtime() {
         die "WireGuard configuration must be downloaded with Proton's NAT-PMP (Port Forwarding) enabled"
       fi
     else
-      die "WireGuard NAT-PMP validation helper unavailable; ensure scripts/gluetun.sh is sourced"
+      die "WireGuard NAT-PMP validation helper unavailable; ensure scripts/vpn-gluetun.sh is sourced"
     fi
   fi
 
@@ -1465,8 +1465,7 @@ arr_compose_emit_port_manager_service() {
   cat <<'YAML' >>"$dest"
     volumes:
       - "gluetun_state:/tmp/gluetun:ro"
-      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts/port-manager:/port-manager:ro"
-      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts/port-manager/pm-watch.sh:/pm-watch.sh:ro"
+      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts/vpn-port-watch.sh:/pm-watch.sh:ro"
     command: ["/pm-watch.sh"]
     restart: "unless-stopped"
     logging:

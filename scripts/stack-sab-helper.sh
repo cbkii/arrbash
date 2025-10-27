@@ -21,19 +21,19 @@ resolve_helper_path() {
   return 1
 }
 
-COMMON_HELPER="${STACK_DIR}/scripts/common.sh"
+COMMON_HELPER="${STACK_DIR}/scripts/stack-common.sh"
 if [[ ! -f "$COMMON_HELPER" ]]; then
-  if [[ -n "${REPO_ROOT:-}" ]] && resolve_helper_path "${REPO_ROOT}/scripts/common.sh" >/dev/null; then
-    COMMON_HELPER="${REPO_ROOT}/scripts/common.sh"
-  elif resolve_helper_path "${STACK_DIR_DEFAULT}/scripts/common.sh" >/dev/null; then
-    COMMON_HELPER="${STACK_DIR_DEFAULT}/scripts/common.sh"
+  if [[ -n "${REPO_ROOT:-}" ]] && resolve_helper_path "${REPO_ROOT}/scripts/stack-common.sh" >/dev/null; then
+    COMMON_HELPER="${REPO_ROOT}/scripts/stack-common.sh"
+  elif resolve_helper_path "${STACK_DIR_DEFAULT}/scripts/stack-common.sh" >/dev/null; then
+    COMMON_HELPER="${STACK_DIR_DEFAULT}/scripts/stack-common.sh"
   else
-    echo "sab-helper: common helpers missing (looked for ${STACK_DIR}/scripts/common.sh)" >&2
+    echo "sab-helper: common helpers missing (looked for ${STACK_DIR}/scripts/stack-common.sh)" >&2
     exit 1
   fi
 fi
 
-# shellcheck source=scripts/common.sh
+# shellcheck source=scripts/stack-common.sh
 . "$COMMON_HELPER"
 
 if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
@@ -42,19 +42,19 @@ if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
   . "${STACK_DIR}/arrconf/userr.conf.defaults.sh"
 fi
 
-CONFIG_HELPER="${STACK_DIR}/scripts/config.sh"
+CONFIG_HELPER="${STACK_DIR}/scripts/env-config.sh"
 if [[ ! -f "$CONFIG_HELPER" ]]; then
-  if [[ -n "${REPO_ROOT:-}" ]] && resolve_helper_path "${REPO_ROOT}/scripts/config.sh" >/dev/null; then
-    CONFIG_HELPER="${REPO_ROOT}/scripts/config.sh"
-  elif resolve_helper_path "${STACK_DIR_DEFAULT}/scripts/config.sh" >/dev/null; then
-    CONFIG_HELPER="${STACK_DIR_DEFAULT}/scripts/config.sh"
+  if [[ -n "${REPO_ROOT:-}" ]] && resolve_helper_path "${REPO_ROOT}/scripts/env-config.sh" >/dev/null; then
+    CONFIG_HELPER="${REPO_ROOT}/scripts/env-config.sh"
+  elif resolve_helper_path "${STACK_DIR_DEFAULT}/scripts/env-config.sh" >/dev/null; then
+    CONFIG_HELPER="${STACK_DIR_DEFAULT}/scripts/env-config.sh"
   else
     CONFIG_HELPER=""
   fi
 fi
 
 if [[ -n "$CONFIG_HELPER" ]]; then
-  # shellcheck source=scripts/config.sh
+# shellcheck source=scripts/env-config.sh
   . "$CONFIG_HELPER"
 fi
 

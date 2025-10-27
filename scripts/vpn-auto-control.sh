@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Purpose: Implement Gluetun health monitoring and recovery logic.
-# Inputs: Helper functions from vpn-auto-{state,config,signals,metrics}.sh and gluetun.sh.
+# Inputs: Helper functions from vpn-auto-{state,config,signals,metrics}.sh and vpn-gluetun.sh.
 # Outputs: Updates watchdog state, triggers recoveries, and keeps qBittorrent in sync.
 # Exit codes: Functions return non-zero when recovery steps fail; process_once returns 0 on success.
 #

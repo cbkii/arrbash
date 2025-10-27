@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Operations
+
+[← Back to README](../README.md)
 
 Use these commands to run the installer safely, rotate credentials, and call helper scripts.
 
@@ -21,7 +21,7 @@ Use these commands to run the installer safely, rotate credentials, and call hel
   ```
 
 - The installer validates dependencies, checks port availability, and prints a summary before starting services. Cancel with `Ctrl+C` if something looks wrong and adjust `userr.conf` or your host configuration.
-- `--uninstall` delegates to `scripts/uninstall.sh`, which tears down containers and removes generated stack files. Run it with `--yes` to skip the confirmation prompt.
+- `--uninstall` delegates to `scripts/stack-uninstall.sh`, which tears down containers and removes generated stack files. Run it with `--yes` to skip the confirmation prompt.
 
 ## Helper aliases
 After running `./arr.sh` at least once, load the generated aliases in new shells:
@@ -44,10 +44,10 @@ Run these from the repository root:
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/qbt-helper.sh` | Show or reset qBittorrent WebUI credentials and whitelist entries. |
-| `scripts/doctor.sh` | Run the same port, DNS, HTTPS, and connectivity checks the installer performs. |
+| `scripts/stack-qbt-helper.sh` | Show or reset qBittorrent WebUI credentials and whitelist entries. |
+| `scripts/fix-doctor.sh` | Run the same port, DNS, HTTPS, and connectivity checks the installer performs. |
 | `scripts/fix-versions.sh` | Swap pinned LinuxServer tags to `latest` when a registry removes a manifest. |
-| `scripts/sab-helper.sh` | Submit downloads, check SAB status, or open a shell when SABnzbd is enabled. |
+| `scripts/stack-sab-helper.sh` | Submit downloads, check SAB status, or open a shell when SABnzbd is enabled. |
 
 ## Routine maintenance
 1. Edit `${ARRCONF_DIR}/userr.conf` with new paths, credentials, or toggles.
@@ -57,7 +57,7 @@ Run these from the repository root:
    docker compose ps
    arr.vpn.status
    ```
-4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `scripts/qbt-helper.sh reset`).
+4. Rotate secrets periodically using the dedicated flags or helpers (`--rotate-api-key`, `scripts/stack-qbt-helper.sh reset`).
 
 ## Runtime hardening conventions
 
@@ -68,7 +68,7 @@ Run these from the repository root:
 
 ## Temporary file hygiene & privileged redirections
 
-Recent helpers in `scripts/common.sh` ensure temporary paths are tracked and cleaned even when scripts exit early:
+Recent helpers in `scripts/stack-common.sh` ensure temporary paths are tracked and cleaned even when scripts exit early:
 
 - `arr_register_temp_path` automatically runs when you call `arr_mktemp_file`/`arr_mktemp_dir`. Use `arr_unregister_temp_path` before promoting a temp file into place, and `arr_cleanup_temp_path` to delete a temp path and drop it from the registry safely.
 - `arr_run_sensitive_command` captures stdout/stderr in registered temps so elevated retries do not leak files. When writing sensitive files, keep redirections inside the privileged command (e.g., `arr_run_sensitive_command sh -c 'cmd >"$target"' sh "$target"`) or feed elevated reads into a normal writer (e.g., `arr_read_sensitive_file "$path" | tool >"$tmp"`).
@@ -77,8 +77,8 @@ Recent helpers in `scripts/common.sh` ensure temporary paths are tracked and cle
 
 - Temp cleanup (normal + manual delete):
   ```bash
-  bash -c 'source scripts/common.sh; tmp=$(arr_mktemp_file "/tmp/temp-registry.XXXXXX"); [[ -e "$tmp" ]]; arr_cleanup_temp_path "$tmp"; [[ ! -e "$tmp" ]]'
-  bash -c 'source scripts/common.sh; tmp=$(arr_mktemp_file "/tmp/temp-registry.XXXXXX"); printf "created %s\n" "$tmp" >&2'
+  bash -c 'source scripts/stack-common.sh; tmp=$(arr_mktemp_file "/tmp/temp-registry.XXXXXX"); [[ -e "$tmp" ]]; arr_cleanup_temp_path "$tmp"; [[ ! -e "$tmp" ]]'
+  bash -c 'source scripts/stack-common.sh; tmp=$(arr_mktemp_file "/tmp/temp-registry.XXXXXX"); printf "created %s\n" "$tmp" >&2'
   # After the second command exits, confirm the printed path no longer exists (global cleanup removed it).
   ```
 
@@ -86,9 +86,9 @@ These commands cover manual verification for temp registration, sudo redirection
 
 ## SABnzbd helper
 
-When `SABNZBD_ENABLED=1`, the installer copies `scripts/sab-helper.sh` into `${ARR_STACK_DIR}/scripts/` and refreshes handy aliases such as `sab-logs`, `sab-shell`, and `open-sab` (run `./arr.sh --refresh-aliases` if you need them immediately).
+When `SABNZBD_ENABLED=1`, the installer copies `scripts/stack-sab-helper.sh` into `${ARR_STACK_DIR}/scripts/` as `sab-helper.sh` and refreshes handy aliases such as `sab-logs`, `sab-shell`, and `open-sab` (run `./arr.sh --refresh-aliases` if you need them immediately).
 
-- View commands with `scripts/sab-helper.sh --help` or `sab-helper --help` from inside the stack directory.
+- View commands with `scripts/stack-sab-helper.sh --help` or `sab-helper --help` from inside the stack directory.
 - Common tasks: `status` (checks connectivity), `add-file` (upload an NZB), and `add-url` (submit a direct download link).
 - The helper prints a gentle warning and exits if SABnzbd is disabled, so you always know why a request failed.
 - Set `SABNZBD_HOST`, `SABNZBD_PORT`, and `SABNZBD_API_KEY` in `userr.conf` if you customised the WebUI or run SAB behind Gluetun.

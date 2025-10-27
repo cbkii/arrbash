@@ -5,8 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ARR_STACK_DIR="${ARR_STACK_DIR:-${REPO_ROOT}}"
 
-# shellcheck source=scripts/common.sh
-. "${REPO_ROOT}/scripts/common.sh"
+# shellcheck source=scripts/stack-common.sh
+. "${REPO_ROOT}/scripts/stack-common.sh"
 # shellcheck source=scripts/vpn-auto-stack.sh
 . "${REPO_ROOT}/scripts/vpn-auto-stack.sh"
 

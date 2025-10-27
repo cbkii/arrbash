@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Purpose: Manage persistent state and status files for the VPN watchdog.
-# Inputs: ARR_STACK_DIR, ARR_DOCKER_DIR, STACK, helper functions from scripts/common.sh.
+# Inputs: ARR_STACK_DIR, ARR_DOCKER_DIR, STACK, helper functions from scripts/stack-common.sh.
 # Outputs: JSON status/state documents consumed by arr.vpn.auto.* helpers and summary output.
 # Exit codes: Functions return non-zero when state cannot be loaded or persisted.
 #

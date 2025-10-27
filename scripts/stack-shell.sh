@@ -226,8 +226,14 @@ reload_shell_rc() {
     user_conf="$(arr_conf_dir)/userr.conf"
   fi
 
-  local rc_path="$(arr_shell_resolve_rc_path)"
-  local rc_source_path="$(arr_shell_resolve_rc_path --prefer-existing)"
+  local rc_path=""
+  if ! rc_path="$(arr_shell_resolve_rc_path)"; then
+    rc_path=""
+  fi
+  local rc_source_path=""
+  if ! rc_source_path="$(arr_shell_resolve_rc_path --prefer-existing)"; then
+    rc_source_path=""
+  fi
   if [[ -z "${rc_source_path}" && -n "${rc_path}" ]]; then
     rc_source_path="${rc_path}"
   fi

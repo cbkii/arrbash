@@ -181,7 +181,7 @@ service_sab_helper_path() {
     printf '%s\n' "$helper"
     return 0
   fi
-  helper="${REPO_ROOT}/scripts/sab-helper.sh"
+  helper="${REPO_ROOT}/scripts/stack-sab-helper.sh"
   if [[ -x "$helper" ]]; then
     printf '%s\n' "$helper"
     return 0

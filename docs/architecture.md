@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Architecture
+
+[← Back to README](../README.md)
 
 The installer renders configuration from a few scripts, then launches Docker containers for media automation and VPN routing.
 

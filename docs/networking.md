@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Networking and VPN
+
+[← Back to README](../README.md)
 
 Use these settings to choose how traffic flows, manage Proton VPN forwarding, and enable optional DNS or HTTPS features.
 
@@ -14,7 +14,7 @@ Use these settings to choose how traffic flows, manage Proton VPN forwarding, an
 1. Edit `${ARRCONF_DIR}/userr.conf` and set `SPLIT_VPN` as needed.
 2. (Optional, Recommended) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/Lidarr/etc. publish LAN ports in split mode.
 3. Rerun the installer:
-```bash
+   ```bash
    ./arr.sh --yes
    ```
 4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_PORT}` when running split tunnel (the
@@ -46,11 +46,11 @@ Tips:
 - **Forwarded port status lives in `/tmp/gluetun/forwarded_port`.** arrbash mounts the directory via a named volume (`gluetun_state`) so helpers and Arr apps can read the file. The same value is exposed over Gluetun’s control server at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`.
 - **Only Gluetun publishes ports.** qBittorrent, Arr apps, and the optional `port-manager` container all run inside Gluetun’s namespace via `network_mode: "service:gluetun"`, preventing accidental LAN exposure of VPN traffic.
 - **Control server safety.** The control API binds to `127.0.0.1`, enforces an API key, and arrbash whitelists only the status/port routes it needs. Do not remap it to the LAN.
-- **Optional port-manager sidecar.** Set `PORT_MANAGER_ENABLE=1` to run `/scripts/port-manager/pm-watch.sh` in a lightweight container. It polls the forwarded port file/control server and updates qBittorrent through `/api/v2/app/setPreferences`, disabling random ports so the client sticks to the leased port.
+- **Optional port-manager sidecar.** Set `PORT_MANAGER_ENABLE=1` to run `/scripts/vpn-port-watch.sh` in a lightweight container. It polls the forwarded port file/control server and updates qBittorrent through `/api/v2/app/setPreferences`, disabling random ports so the client sticks to the leased port.
 - **Helper aliases (source `.aliasarr`).**
   ```bash
   arr.pf.port   # print the forwarded port (file first, API fallback)
-  arr.pf.sync   # run a one-shot sync using pm-watch.sh logic
+  arr.pf.sync   # run a one-shot sync using vpn-port-watch.sh logic
   arr.pf.tail   # tail -f the forwarded port file with timestamps
   arr.pf.logs   # follow docker logs for the port-manager sidecar
   arr.pf.test 12345  # dry-run a qBittorrent update to a specific port

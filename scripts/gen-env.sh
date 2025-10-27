@@ -4,14 +4,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-COMMON_LIB="${REPO_ROOT}/scripts/common.sh"
-NETWORK_LIB="${REPO_ROOT}/scripts/network.sh"
+COMMON_LIB="${REPO_ROOT}/scripts/stack-common.sh"
+NETWORK_LIB="${REPO_ROOT}/scripts/stack-network.sh"
 if [[ -f "$COMMON_LIB" ]]; then
-  # shellcheck source=scripts/common.sh
+  # shellcheck source=scripts/stack-common.sh
   . "$COMMON_LIB"
 fi
 if [[ -f "$NETWORK_LIB" ]]; then
-  # shellcheck source=scripts/network.sh
+  # shellcheck source=scripts/stack-network.sh
   . "$NETWORK_LIB"
 fi
 

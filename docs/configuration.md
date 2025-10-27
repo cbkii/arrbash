@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Configuration guide
+
+[← Back to README](../README.md)
 
 Edit `${ARRCONF_DIR}/userr.conf` to control how the installer renders `.env`, `docker-compose.yml`, and helper files. `.env` now comes from `.env.template` via `scripts/gen-env.sh`, so the template is the single source of truth for Compose variables. `ARR_DATA_ROOT` defaults to `~/srv`, so generated files land under `~/srv/arr` unless you override the path. `./arr.sh` copies any exported environment variables, locks them read-only while your config loads, then reapplies them so CLI overrides always win. Before reading the file the installer looks for the first `userr.conf` under `${ARR_DATA_ROOT}` (depth 4) and then above the repo (for example `../userr.conf`). The chosen path appears in the preview table so you can confirm it. Generated artifacts (`.env`, `docker-compose.yml`, and helper scripts) are overwritten on every run—never edit them manually.
 
@@ -145,7 +145,7 @@ Legacy HTTPS and dnsmasq helpers have been retired. All services now publish dir
 - Disable for a run with `./arr.sh --no-auto-api-sync` if you need to make manual adjustments temporarily.
 
 ### SABnzbd downloader
-- Set `SABNZBD_ENABLED=1` (or run `./arr.sh --enable-sab --yes`) to add SABnzbd to the compose file and copy `scripts/sab-helper.sh` into the stack directory.
+- Set `SABNZBD_ENABLED=1` (or run `./arr.sh --enable-sab --yes`) to add SABnzbd to the compose file and copy `scripts/stack-sab-helper.sh` into the stack directory.
 - Choose where SAB runs with `SABNZBD_USE_VPN` (`0` keeps it on the LAN, `1` shares Gluetun). [Networking](networking.md#sabnzbd-network-placements) shows the available modes and how ports map when qBittorrent sits inside Gluetun.
 - Adjust ports with `SABNZBD_PORT` (host) and `SABNZBD_INT_PORT` (container). Leave the internal port at 8080 when SAB shares the VPN namespace so it does not clash with qBittorrent’s WebUI (`8082`).
 - `SABNZBD_HOST`, `SABNZBD_TIMEOUT`, and `SABNZBD_CATEGORY` tune helper defaults. Override `SABNZBD_IMAGE` if you need a specific container tag.

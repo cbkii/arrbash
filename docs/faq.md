@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Frequently asked questions
+
+[← Back to README](../README.md)
 
 Quick answers to common beginner questions about the stack.
 

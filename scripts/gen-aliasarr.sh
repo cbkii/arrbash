@@ -3,12 +3,12 @@
 write_aliases_file() {
   step "🛠️ Generating helper aliases file"
 
-  local template_file="${REPO_ROOT}/.aliasarr.template"
+  local template_file="${REPO_ROOT}/scripts/gen-aliasarr.template.sh"
   if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
     ARR_STACK_DIR="$(arr_stack_dir)"
   fi
   local aliases_file="${ARR_STACK_DIR}/.aliasarr"
-  local configured_template="${REPO_ROOT}/.aliasarr.configured"
+  local snapshot_file="${ARR_STACK_DIR}/.aliasarr.conf.snapshot"
 
   if [[ ! -f "$template_file" ]]; then
     warn "Alias template ${template_file} not found"
@@ -110,8 +110,8 @@ arr.sab._helper() {
   local cmd="$1"
   shift || true
   local helper="${ARR_STACK_DIR}/scripts/sab-helper.sh"
-  if [ ! -x "$helper" ] && [ -x "${ARR_STACK_DIR}/../scripts/sab-helper.sh" ]; then
-    helper="${ARR_STACK_DIR}/../scripts/sab-helper.sh"
+  if [ ! -x "$helper" ] && [ -x "${ARR_STACK_DIR}/../scripts/stack-sab-helper.sh" ]; then
+    helper="${ARR_STACK_DIR}/../scripts/stack-sab-helper.sh"
   fi
   if [ ! -x "$helper" ]; then
     warn "SAB helper not found: ${helper}"
@@ -335,18 +335,21 @@ VPN_AUTO_ALIAS
   fi
 
   ensure_file_mode "$aliases_file" "$ALIAS_HELPER_FILE_MODE"
-  cp "$aliases_file" "$configured_template"
-  ensure_nonsecret_file_mode "$configured_template"
+  cp "$aliases_file" "$snapshot_file"
+  ensure_nonsecret_file_mode "$snapshot_file"
 
   msg "✅ Helper aliases written to: $aliases_file"
   msg "   Source them with: source $aliases_file"
-  msg "   Repo copy updated: $configured_template"
+  msg "   Snapshot stored at: $snapshot_file"
 }
 
 update_alias_rc_block() {
   local alias_path="$1"
 
-  local rc_path="$(arr_shell_resolve_rc_path)"
+  local rc_path=""
+  if ! rc_path="$(arr_shell_resolve_rc_path)"; then
+    rc_path=""
+  fi
   if [[ -z "${rc_path}" ]]; then
     warn "Unable to determine shell rc for alias installation"
     return 1
@@ -435,6 +438,7 @@ install_aliases() {
     ARR_STACK_DIR="$(arr_stack_dir)"
   fi
   local alias_path="${ARR_STACK_DIR}/.aliasarr"
+  local snapshot_file="${ARR_STACK_DIR}/.aliasarr.conf.snapshot"
   if ! ensure_dir "$ARR_STACK_DIR"; then
     warn "Unable to create stack directory at ${ARR_STACK_DIR}"
     return 1
@@ -448,8 +452,8 @@ install_aliases() {
 
   if [[ "$needs_render" -eq 1 ]]; then
     if ! write_aliases_file; then
-      if [[ -f "${REPO_ROOT}/.aliasarr.configured" ]]; then
-        cp "${REPO_ROOT}/.aliasarr.configured" "$alias_path"
+      if [[ -f "${snapshot_file}" ]]; then
+        cp "${snapshot_file}" "$alias_path"
         ensure_file_mode "$alias_path" "$ALIAS_HELPER_FILE_MODE"
       else
         warn "Unable to render helper aliases (${alias_path})"
@@ -474,11 +478,11 @@ ARR_STACK_DIR="__ARR_STACK_DIR__"
 ARR_ENV_FILE="__ARR_ENV_FILE__"
 SCRIPT_LIB_DIR="${ARR_STACK_DIR}/scripts"
 
-if [[ -f "${SCRIPT_LIB_DIR}/common.sh" ]]; then
+if [[ -f "${SCRIPT_LIB_DIR}/stack-common.sh" ]]; then
   # shellcheck source=/dev/null
-  . "${SCRIPT_LIB_DIR}/common.sh"
+  . "${SCRIPT_LIB_DIR}/stack-common.sh"
 else
-  printf '[ERROR] Common helpers missing at %s\n' "${SCRIPT_LIB_DIR}/common.sh" >&2
+  printf '[ERROR] Common helpers missing at %s\n' "${SCRIPT_LIB_DIR}/stack-common.sh" >&2
   exit 1
 fi
 
@@ -506,7 +510,7 @@ if [[ -f "$ARR_ENV_FILE" ]]; then
   load_env_file "$ARR_ENV_FILE"
 fi
 
-GLUETUN_LIB="${ARR_STACK_DIR}/scripts/gluetun.sh"
+GLUETUN_LIB="${ARR_STACK_DIR}/scripts/vpn-gluetun.sh"
 if [[ -f "$GLUETUN_LIB" ]]; then
   # shellcheck source=/dev/null
   . "$GLUETUN_LIB"

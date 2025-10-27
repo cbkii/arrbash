@@ -1,6 +1,6 @@
-[← Back to README](../README.md)
-
 # Version management
+
+[← Back to README](../README.md)
 
 Track container tags safely so `$STACK` installs stay reproducible (defaults to `arr`).
 

@@ -79,7 +79,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
   * `arr_compose_reset_tracking`, `arr_compose_set_context`
   * `arr_compose_inline_escape`, `arr_compose_stream_line`, `arr_compose_stream_block`
   * `arr_emit_compose_env_file`
-* **Trim** `scripts/yaml-emit.sh` to YAML-only helpers actually used elsewhere; it must **not** write `.env`.
+* **Trim** `scripts/gen-yaml-emit.sh` to YAML-only helpers actually used elsewhere; it must **not** write `.env`.
 * **Do not** add migration wrappers/shims around `gen-env.sh`.
 
 ---
@@ -95,9 +95,9 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
   * `SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`,
   * derive `REPO_ROOT`,
-  * source `scripts/common.sh`,
+  * source `scripts/stack-common.sh`,
   * call `arr_escalate_privileges "$@"` before enabling strict mode when root access is required.
-* Reuse shared helpers in `scripts/common.sh` — **do not** reimplement `msg`, `warn`, `die`, permission logic, or env quoting/escaping already available.
+* Reuse shared helpers in `scripts/stack-common.sh` — **do not** reimplement `msg`, `warn`, `die`, permission logic, or env quoting/escaping already available.
 * Consistent indenting and quoting; always quote variables in paths.
 * Example/template files (`*.example`) reflect defaults or placeholders only.
 
