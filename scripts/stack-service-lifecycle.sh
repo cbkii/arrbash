@@ -614,14 +614,25 @@ show_service_status() {
     printf '  %-15s: %s\n' "$service" "$status"
   done
 
-  if [[ -f "${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}" ]]; then
-    local pf_state="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}"
-    local pf_status
-    pf_status="$(grep -Eo '"status"[[:space:]]*:[[:space:]]*"[^"]+"' "$pf_state" 2>/dev/null | head -n1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true)"
-    local pf_port
-    pf_port="$(grep -Eo '"port"[[:space:]]*:[[:space:]]*[0-9]+' "$pf_state" 2>/dev/null | head -n1 | sed 's/.*"port"[[:space:]]*:[[:space:]]*//' || true)"
-    if [[ -n "$pf_status" ]]; then
-      msg "Current PF status: ${pf_status} (port=${pf_port:-0})"
+  local port_guard_status="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
+  if [[ -f "$port_guard_status" ]]; then
+    local vpn_status=""
+    local forwarded_port="0"
+    local pf_enabled="false"
+    local qbt_state="unknown"
+    if command -v jq >/dev/null 2>&1; then
+      vpn_status="$(jq -r '.vpn_status // empty' "$port_guard_status" 2>/dev/null || true)"
+      forwarded_port="$(jq -r '.forwarded_port // 0' "$port_guard_status" 2>/dev/null || true)"
+      pf_enabled="$(jq -r 'if .pf_enabled == true then "true" else "false" end' "$port_guard_status" 2>/dev/null || printf 'false')"
+      qbt_state="$(jq -r '.qbt_status // "unknown"' "$port_guard_status" 2>/dev/null || printf 'unknown')"
+    else
+      vpn_status="$(awk -F '"' '/"vpn_status"/{print $4; exit}' "$port_guard_status" 2>/dev/null || true)"
+      forwarded_port="$(awk -F ':' '/"forwarded_port"/{gsub(/[^0-9]/, "", $2); print $2; exit}' "$port_guard_status" 2>/dev/null || true)"
+      pf_enabled="$(awk -F ':' '/"pf_enabled"/{gsub(/[^a-z]/, "", $2); print $2; exit}' "$port_guard_status" 2>/dev/null || printf 'false')"
+      qbt_state="$(awk -F '"' '/"qbt_status"/{print $4; exit}' "$port_guard_status" 2>/dev/null || printf 'unknown')"
+    fi
+    if [[ -n "$vpn_status" ]]; then
+      msg "vpn-port-guard: vpn_status=${vpn_status}, forwarded_port=${forwarded_port:-0}, pf_enabled=${pf_enabled}, qbt_status=${qbt_state}"
     fi
   fi
 }
@@ -661,37 +672,6 @@ start_stack() {
     docker logs --tail=120 gluetun 2>&1 | sed 's/^/    /' || true
     arr_write_run_failure "VPN not running: ${failure_reason}." "VPN_NOT_RUNNING"
     return 1
-  fi
-
-  if declare -f start_async_pf_if_enabled >/dev/null 2>&1; then
-    local pf_state_file=""
-    local pf_log_file=""
-    if declare -f pf_state_path >/dev/null 2>&1; then
-      pf_state_file="$(pf_state_path)"
-    else
-      pf_state_file="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}"
-    fi
-    if declare -f pf_log_path >/dev/null 2>&1; then
-      pf_log_file="$(pf_log_path)"
-    else
-      pf_log_file="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_LOG_FILE:-port-forwarding.log}"
-    fi
-
-    if [[ "${PF_ASYNC_ENABLE:-1}" == "1" && "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
-      msg "Launching asynchronous ProtonVPN port forwarding worker..."
-      msg "  Strict mode (GLUETUN_PF_STRICT): ${GLUETUN_PF_STRICT:-0}"
-      msg "  State file: ${pf_state_file}"
-      msg "  Log file:   ${pf_log_file}"
-      start_async_pf_if_enabled || {
-        if [[ "${GLUETUN_PF_STRICT:-0}" == "1" ]]; then
-          warn "Worker exited non-zero (strict)."
-        else
-          warn "Worker exited non-zero but GLUETUN_PF_STRICT=0 (continuing)."
-        fi
-      }
-    else
-      msg "Port forwarding worker skipped (PF_ASYNC_ENABLE=${PF_ASYNC_ENABLE:-1}, provider=${VPN_SERVICE_PROVIDER:-unknown}, forwarding=${VPN_PORT_FORWARDING:-off})."
-    fi
   fi
 
   start_vpn_auto_reconnect_if_enabled

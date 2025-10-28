@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+
 # Verifies required tooling (docker/compose/curl/jq) and records versions for logs
 install_missing() {
   msg "🔧 Checking dependencies"
@@ -26,6 +29,61 @@ install_missing() {
     msg "  Compose: ${compose_cmd_display} ${compose_version_display}"
   else
     msg "  Compose: ${compose_cmd_display} (unknown)"
+  fi
+}
+
+verify_vpn_port_guard_prereqs() {
+  msg "  Validating vpn-port-guard prerequisites"
+
+  local controller_path="${REPO_ROOT}/scripts/vpn-port-guard.sh"
+  local hook_path="${REPO_ROOT}/scripts/vpn-port-guard-hook.sh"
+
+  if [[ ! -x "$controller_path" ]]; then
+    die "Missing executable vpn-port-guard controller at ${controller_path}"
+  fi
+
+  if [[ ! -x "$hook_path" ]]; then
+    die "Missing executable vpn-port-guard hook at ${hook_path}"
+  fi
+
+  local state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
+  if [[ -z "${ARR_DOCKER_DIR:-}" ]]; then
+    die "ARR_DOCKER_DIR is not set; run ./arr.sh configure to establish stack directories"
+  fi
+
+  if ! mkdir -p "$state_dir" 2>/dev/null; then
+    die "Unable to create ${state_dir}; verify filesystem permissions"
+  fi
+
+  local probe="${state_dir}/.port-guard-preflight"
+  if ! touch "$probe" 2>/dev/null; then
+    die "Unable to write inside ${state_dir}; adjust permissions for vpn-port-guard state sharing"
+  fi
+  rm -f "$probe" 2>/dev/null || true
+
+  local status_file="${state_dir}/port-guard-status.json"
+  if [[ -f "$status_file" && ! -w "$status_file" ]]; then
+    die "Existing ${status_file} is not writable; fix permissions before continuing"
+  fi
+
+  if [[ -z "${GLUETUN_API_KEY:-}" ]]; then
+    warn "GLUETUN_API_KEY is empty; the installer will auto-generate one if required"
+  fi
+
+  if [[ -z "${QBT_USER:-}" || -z "${QBT_PASS:-}" ]]; then
+    warn "QBT_USER/QBT_PASS not set; qBittorrent Web API credentials are required for vpn-port-guard"
+  fi
+
+  local require_pf="${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}"
+  case "$require_pf" in
+    1|true|TRUE|yes|YES|on|ON)
+      warn "Strict mode enabled (CONTROLLER_REQUIRE_PORT_FORWARDING=true): torrents will pause whenever Proton forwarding is unavailable."
+      ;;
+  esac
+
+  local legacy_watch="${REPO_ROOT}/scripts/vpn-port-watch.sh"
+  if [[ -f "$legacy_watch" ]] && ! grep -q 'deprecated' "$legacy_watch" 2>/dev/null; then
+    warn "Legacy vpn-port-watch.sh detected; ensure it remains a stub and does not control qBittorrent"
   fi
 }
 
@@ -573,9 +631,7 @@ preflight() {
 
   install_missing
 
-  if [[ "${PF_ASYNC_ENABLE:-1}" == "1" ]] && ! command -v jq >/dev/null 2>&1; then
-    warn "jq is not installed; async ProtonVPN port forwarding state will be parsed without JSON tooling."
-  fi
+  verify_vpn_port_guard_prereqs
 
   if gluetun_version_requires_auth_config 2>/dev/null; then
     local auth_config_path="${ARR_DOCKER_DIR}/gluetun/auth/config.toml"

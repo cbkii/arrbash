@@ -62,11 +62,11 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
 
 ## Proton VPN port forwarding behaviour
 - When you choose **OpenVPN**, arrbash appends `+pmp` to the Proton username at runtime so Proton grants an inbound port. Leave your stored credentials without the suffix; the installer injects it only for Gluetun.
-- When you use **WireGuard**, download the Proton config with **NAT-PMP (Port Forwarding)** enabled. Gluetun refuses to start if the config lacks those directives because Proton will never issue a port otherwise.
+- Proton’s WireGuard NAT-PMP workflow is not part of this release. Stick with Proton’s OpenVPN credentials (with `+pmp`) to guarantee a forwardable port.
 - Gluetun writes the active forwarded port to `/tmp/gluetun/forwarded_port` and mirrors it through the control API at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`.
 - Only the Gluetun container publishes ports to your LAN. qBittorrent and the *Arr apps run in Gluetun’s network namespace so torrent traffic never leaks directly.
 - The control server binds to `127.0.0.1`, requires the `GLUETUN_API_KEY`, and exposes only the minimal routes arrbash needs. Do **not** map it to the LAN.
-- Set `PORT_MANAGER_ENABLE=1` to launch the optional `port-manager` sidecar. It watches Gluetun’s forwarded port file/control server and updates qBittorrent’s Web API to listen on the leased port while disabling random ports.
+- `vpn-port-guard` now runs alongside Gluetun by default. It keeps qBittorrent paused until the VPN is healthy, applies the Proton-forwarded port when available, and exposes `pf_enabled` in `/gluetun_state/port-guard-status.json`. By default torrents continue running behind the VPN even if Proton has not granted a port yet (reduced connectability); set `CONTROLLER_REQUIRE_PORT_FORWARDING=true` if you prefer strict 'pause unless forwarded' behaviour. The forwarded port is dynamic—expect it to rotate as ProtonVPN renews the NAT-PMP lease.
 
 To remove the stack and clean up generated assets later, run:
 
@@ -108,6 +108,7 @@ To remove the stack and clean up generated assets later, run:
 - [Operations](./docs/operations.md) – script reference, aliases, and recurring tasks.
 - [Security](./docs/security.md) – credential handling, exposure guidance, and verification checks.
 - [Troubleshooting](./docs/troubleshooting.md) – diagnostic steps and targeted fixes.
+- [vpn-port-guard](./docs/vpn-port-guard.md) – ProtonVPN NAT-PMP lifecycle and controller behaviour.
 - [Version management](./docs/version-management.md) – process for adjusting image tags safely.
 - [FAQ](./docs/faq.md) and [Glossary](./docs/glossary.md) – quick answers and terminology.
 - [Arr + Gluetun reference layouts](./docs/gluetun-compose.md) – split/full VPN Compose examples, connectivity checks, and port exposure guidance.

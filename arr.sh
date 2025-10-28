@@ -743,10 +743,8 @@ main() {
   validate_compose_or_die
   write_gluetun_control_assets
   sync_gluetun_library
+  sync_vpn_port_guard_assets
   sync_vpn_auto_reconnect_assets
-  if [[ "${PORT_MANAGER_ENABLE:-0}" == "1" ]]; then
-    write_vpn_port_watch_script
-  fi
   write_qbt_helper_script
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     write_sab_helper_script

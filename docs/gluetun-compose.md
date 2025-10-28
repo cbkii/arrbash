@@ -13,11 +13,11 @@ Use these Compose examples to deploy qBittorrent together with Prowlarr, Sonarr,
 
 ### Proton port forwarding essentials
 - Proton issues an inbound port only when your **OpenVPN** username includes `+pmp`. arrbash appends the suffix just before launching Gluetun, so keep the stored credential without it.
-- Proton **WireGuard** configs must be downloaded with **NAT-PMP (Port Forwarding)** enabled. Gluetun refuses to start if those directives are missing because Proton will never negotiate a port.
-- Gluetun records the leased port in `/tmp/gluetun/forwarded_port` and mirrors it over the control server at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`. arrbash mounts that path into dependent containers via a `gluetun_state` volume.
+- Proton’s WireGuard NAT-PMP flow is not yet supported here. Stick with Proton’s OpenVPN credentials (with `+pmp`) to guarantee the forwardable port arrbash expects.
+- Gluetun records the leased port in `/tmp/gluetun/forwarded_port` and mirrors it over the control server at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`. arrbash bind-mounts `${ARR_DOCKER_DIR}/gluetun/state` into dependent containers so both the NAT-PMP lease file and the controller status JSON live there.
 - Only Gluetun publishes ports to the LAN. qBittorrent and optional helpers share Gluetun’s namespace using `network_mode: "service:gluetun"`, so torrent traffic never bypasses the VPN.
-- The control server listens on all container interfaces (`:${GLUETUN_CONTROL_PORT}`) but is published only to the host loopback (`127.0.0.1:${GLUETUN_CONTROL_PORT}`), requires `GLUETUN_API_KEY`, and exposes only basic status/port routes. Never map it to the LAN.
-- Enable the optional `port-manager` service with `PORT_MANAGER_ENABLE=1` to watch the forwarded port file/control server and push the value into qBittorrent’s Web API (`setPreferences`).
+- The control server binds to `127.0.0.1:${GLUETUN_CONTROL_PORT}`, requires `GLUETUN_API_KEY`, and exposes only basic status/port routes. Never map it to the LAN.
+- `vpn-port-guard` now ships with the stack. It keeps qBittorrent paused until the VPN is healthy, applies the Proton lease via the Web API, and writes `pf_enabled` / `qbt_status` into `port-guard-status.json`. Torrents keep running without a leased port unless you opt into strict mode with `CONTROLLER_REQUIRE_PORT_FORWARDING=true`. See [vpn-port-guard](./vpn-port-guard.md) for lifecycle details.
 
 ## A) Split-mode ON (`SPLIT_VPN=1`, Arr apps on LAN)
 
@@ -47,14 +47,17 @@ services:
       VPN_PORT_FORWARDING: "on"
       VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
       VPN_PORT_FORWARDING_STATUS_FILE: "/tmp/gluetun/forwarded_port"
-      VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
+      VPN_PORT_FORWARDING_UP_COMMAND: "/scripts/vpn-port-guard-hook.sh up"
+      VPN_PORT_FORWARDING_DOWN_COMMAND: "/scripts/vpn-port-guard-hook.sh down"
       QBT_USER: "${QBT_USER}"
       QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
       TZ: "${TIMEZONE}"
-    volumes:
-      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
-      - "gluetun_state:/tmp/gluetun"
+      volumes:
+        - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
+        - "gluetun_state:/tmp/gluetun"
+        - "gluetun_state:/gluetun_state"
+        - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     ports:
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"   # split-mode on: publish qBittorrent via Gluetun
@@ -161,7 +164,8 @@ services:
       VPN_PORT_FORWARDING: "on"
       VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
       VPN_PORT_FORWARDING_STATUS_FILE: "/tmp/gluetun/forwarded_port"
-      VPN_PORT_FORWARDING_UP_COMMAND: "/gluetun/hooks/update-qbt-port.sh {{PORTS}}"
+      VPN_PORT_FORWARDING_UP_COMMAND: "/scripts/vpn-port-guard-hook.sh up"
+      VPN_PORT_FORWARDING_DOWN_COMMAND: "/scripts/vpn-port-guard-hook.sh down"
       QBT_USER: "${QBT_USER}"
       QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
@@ -169,6 +173,8 @@ services:
     volumes:
       - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
       - "gluetun_state:/tmp/gluetun"
+      - "gluetun_state:/gluetun_state"
+      - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     ports:
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
