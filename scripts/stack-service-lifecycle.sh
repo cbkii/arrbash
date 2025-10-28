@@ -618,21 +618,27 @@ show_service_status() {
   if [[ -f "$port_guard_status" ]]; then
     local vpn_status=""
     local forwarded_port="0"
-    local pf_enabled="false"
+    local forwarding_state="missing"
+    local controller_mode=""
     local qbt_state="unknown"
     if command -v jq >/dev/null 2>&1; then
       vpn_status="$(jq -r '.vpn_status // empty' "$port_guard_status" 2>/dev/null || true)"
       forwarded_port="$(jq -r '.forwarded_port // 0' "$port_guard_status" 2>/dev/null || true)"
-      pf_enabled="$(jq -r 'if .pf_enabled == true then "true" else "false" end' "$port_guard_status" 2>/dev/null || printf 'false')"
+      forwarding_state="$(jq -r '.forwarding_state // "missing"' "$port_guard_status" 2>/dev/null || printf 'missing')"
+      controller_mode="$(jq -r '.controller_mode // empty' "$port_guard_status" 2>/dev/null || printf '')"
       qbt_state="$(jq -r '.qbt_status // "unknown"' "$port_guard_status" 2>/dev/null || printf 'unknown')"
     else
       vpn_status="$(awk -F '"' '/"vpn_status"/{print $4; exit}' "$port_guard_status" 2>/dev/null || true)"
       forwarded_port="$(awk -F ':' '/"forwarded_port"/{gsub(/[^0-9]/, "", $2); print $2; exit}' "$port_guard_status" 2>/dev/null || true)"
-      pf_enabled="$(awk -F ':' '/"pf_enabled"/{gsub(/[^a-z]/, "", $2); print $2; exit}' "$port_guard_status" 2>/dev/null || printf 'false')"
+      forwarding_state="$(awk -F '"' '/"forwarding_state"/{print $4; exit}' "$port_guard_status" 2>/dev/null || printf 'missing')"
+      controller_mode="$(awk -F '"' '/"controller_mode"/{print $4; exit}' "$port_guard_status" 2>/dev/null || printf '')"
       qbt_state="$(awk -F '"' '/"qbt_status"/{print $4; exit}' "$port_guard_status" 2>/dev/null || printf 'unknown')"
     fi
     if [[ -n "$vpn_status" ]]; then
-      msg "vpn-port-guard: vpn_status=${vpn_status}, forwarded_port=${forwarded_port:-0}, pf_enabled=${pf_enabled}, qbt_status=${qbt_state}"
+      if [[ -z "$controller_mode" ]]; then
+        controller_mode="preferred"
+      fi
+      msg "vpn-port-guard: vpn_status=${vpn_status}, forwarding_state=${forwarding_state}, forwarded_port=${forwarded_port:-0}, controller_mode=${controller_mode}, qbt_status=${qbt_state}"
     fi
   fi
 }

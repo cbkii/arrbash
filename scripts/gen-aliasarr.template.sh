@@ -878,6 +878,55 @@ _arr_port_guard_forwarded_port() {
   fi
 }
 
+_arr_port_guard_forwarding_state() {
+  local file
+  file="$(_arr_port_guard_status_file)"
+  if [ ! -f "$file" ]; then
+    return 1
+  fi
+  if _arr_has_cmd jq; then
+    jq -r '.forwarding_state // empty' "$file" 2>/dev/null || return 1
+  else
+    awk -F ':' '/"forwarding_state"/ {gsub(/[^[:alpha:]-]/, "", $2); print $2; exit}' "$file"
+  fi
+}
+
+_arr_port_guard_controller_mode() {
+  local file
+  file="$(_arr_port_guard_status_file)"
+  if [ ! -f "$file" ]; then
+    return 1
+  fi
+  if _arr_has_cmd jq; then
+    jq -r '.controller_mode // empty' "$file" 2>/dev/null || return 1
+  else
+    awk -F ':' '/"controller_mode"/ {gsub(/[^[:alpha:]-]/, "", $2); print $2; exit}' "$file"
+  fi
+}
+
+_arr_port_guard_effective_mode() {
+  local json_mode=""
+  json_mode="$(_arr_port_guard_controller_mode 2>/dev/null || printf '')"
+  if [ -n "$json_mode" ]; then
+    printf '%s' "${json_mode}"
+    return 0
+  fi
+
+  local raw="${CONTROLLER_REQUIRE_PF:-$(_arr_env_get CONTROLLER_REQUIRE_PF 2>/dev/null || printf '')}"
+  if [ -z "$raw" ]; then
+    raw="${CONTROLLER_REQUIRE_PORT_FORWARDING:-$(_arr_env_get CONTROLLER_REQUIRE_PORT_FORWARDING 2>/dev/null || printf '')}"
+  fi
+  raw="$(_arr_lowercase "$raw")"
+  case "$raw" in
+    1|true|yes|on|required)
+      printf 'required'
+      ;;
+    *)
+      printf 'preferred'
+      ;;
+  esac
+}
+
 _arr_port_guard_pf_enabled() {
   local file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
@@ -1547,7 +1596,7 @@ Stack diagnostics:
   arr.diag.env                 Dump derived environment context (without secrets)
 
 ProtonVPN & Gluetun (arr.vpn ...):
-  arr.vpn status               Show VPN tunnel + vpn-port-guard summary (PF preferred, strict mode optional)
+  arr.vpn status               Show VPN tunnel + vpn-port-guard summary (PF preferred by default; set CONTROLLER_REQUIRE_PF=true for strict mode)
   arr.vpn switch [COUNTRY]     Rotate Proton servers. Without a country it advances through PVPN_ROTATE_COUNTRIES
   arr.vpn connect              Start Gluetun and qBittorrent containers
   arr.vpn reconnect            Restart the Gluetun tunnel (control API first, compose/docker fallback)
@@ -1827,35 +1876,47 @@ arr.vpn.status() {
     msg "Controller sees VPN: ${controller_vpn_status}"
   fi
 
-  local pf_enabled_raw pf_enabled_flag pf_port
+  local pf_enabled_raw pf_enabled_flag pf_port forwarding_state controller_mode
   pf_enabled_raw="$(_arr_port_guard_pf_enabled 2>/dev/null || printf '')"
-  local pf_enabled_lc="$(printf '%s' "$pf_enabled_raw" | tr '[:upper:]' '[:lower:]')"
+  local pf_enabled_lc
+  pf_enabled_lc="$(printf '%s' "$pf_enabled_raw" | tr '[:upper:]' '[:lower:]')"
   pf_enabled_flag=0
   case "$pf_enabled_lc" in
     1|true|yes|on) pf_enabled_flag=1 ;;
   esac
   pf_port="$(_arr_port_guard_forwarded_port 2>/dev/null || printf '0')"
-
-  local require_pf
-  require_pf="${CONTROLLER_REQUIRE_PORT_FORWARDING:-$(_arr_env_get CONTROLLER_REQUIRE_PORT_FORWARDING 2>/dev/null || printf '')}"
-  require_pf="$(printf '%s' "$require_pf" | tr '[:upper:]' '[:lower:]')"
-  local strict_mode=0
-  case "$require_pf" in
-    1|true|yes|on) strict_mode=1 ;;
-  esac
-
-  if [ "$pf_enabled_flag" -eq 1 ] && [ "$pf_port" -ne 0 ] 2>/dev/null; then
-    msg "Forwarded port: ${pf_port} (active via vpn-port-guard)"
-  else
-    if [ "$strict_mode" -eq 1 ]; then
-      msg 'Forwarded port: not currently assigned (strict mode enabled; qBittorrent will remain paused)'
-    else
-      msg 'Forwarded port: not currently assigned (pf_enabled=false; torrents continue in degraded seeding mode)'
-    fi
-  fi
+  forwarding_state="$(_arr_port_guard_forwarding_state 2>/dev/null || printf '')"
+  controller_mode="$(_arr_port_guard_effective_mode)"
 
   local qbt_status
   qbt_status="$(_arr_port_guard_json_value qbt_status 2>/dev/null || printf '')"
+
+  if [ -z "$forwarding_state" ]; then
+    if [ "$pf_port" -ne 0 ] 2>/dev/null; then
+      forwarding_state="active"
+    else
+      forwarding_state="missing"
+    fi
+  fi
+
+  msg "vpn-port-guard mode: ${controller_mode}"
+
+  if [ "$pf_port" -ne 0 ] 2>/dev/null; then
+    if [ "$pf_enabled_flag" -eq 1 ]; then
+      msg "Forwarded port: ${pf_port} (active via vpn-port-guard)"
+    else
+      msg "Forwarded port: ${pf_port} (lease detected but not yet applied; controller status ${qbt_status:-unknown})"
+    fi
+  else
+    if [ "$controller_mode" = "required" ]; then
+      msg 'Forwarded port: not currently assigned (strict mode keeps torrents paused)'
+    else
+      msg 'Forwarded port: not currently assigned (running in degraded seeding mode behind the VPN)'
+    fi
+  fi
+
+  msg "Forwarding state: ${forwarding_state}"
+
   if [ -n "$qbt_status" ]; then
     msg "qBittorrent status: ${qbt_status} (vpn-port-guard)"
   fi
@@ -1863,9 +1924,12 @@ arr.vpn.status() {
   local last_epoch last_human
   last_epoch="$(_arr_port_guard_json_value last_update_epoch 2>/dev/null || printf '')"
   if [ -n "$last_epoch" ]; then
-    last_human="$last_epoch"
-    if command -v date >/dev/null 2>&1 && [ "$last_epoch" -gt 0 ] 2>/dev/null; then
+    if command -v arr_epoch_to_local_iso8601 >/dev/null 2>&1 && [ "$last_epoch" -gt 0 ] 2>/dev/null; then
+      last_human="$(arr_epoch_to_local_iso8601 "$last_epoch" 2>/dev/null || printf '%s' "$last_epoch")"
+    elif command -v date >/dev/null 2>&1 && [ "$last_epoch" -gt 0 ] 2>/dev/null; then
       last_human="$(date -d "@${last_epoch}" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf '%s' "$last_epoch")"
+    else
+      last_human="$last_epoch"
     fi
     msg "Controller last update: ${last_human}"
   fi
@@ -1941,7 +2005,18 @@ arr.pf.port() {
     printf '%s\n' "$port"
     return 0
   fi
-  printf 'Forwarded port unavailable\n' >&2
+  local mode
+  mode="$(_arr_port_guard_effective_mode)"
+  local state
+  state="$(_arr_port_guard_forwarding_state 2>/dev/null || printf 'missing')"
+  if [ "$mode" = "required" ]; then
+    printf 'Forwarded port unavailable (strict mode keeps torrents paused)\n' >&2
+  else
+    printf 'Forwarded port unavailable (degraded seeding; torrents remain active behind the VPN)\n' >&2
+  fi
+  if [ -n "$state" ]; then
+    printf 'Forwarding state: %s\n' "$state" >&2
+  fi
   _arr_port_guard_print_json || true
   return 1
 }

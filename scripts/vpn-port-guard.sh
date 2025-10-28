@@ -18,8 +18,9 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 : "${CONTROLLER_STATUS_FILE:=/gluetun_state/port-guard-status.json}"
 : "${CONTROLLER_TRIGGER_FILE:=/gluetun_state/port-guard.trigger}"
 : "${CONTROLLER_TMP_DIR:=/tmp/vpn-port-guard}"
-: "${CONTROLLER_REQUIRE_PORT_FORWARDING:=false}"
-: "${VPN_PORT_GUARD_REQUIRE_FORWARDING:=${CONTROLLER_REQUIRE_PORT_FORWARDING}}"
+: "${CONTROLLER_REQUIRE_PF:=}"
+: "${CONTROLLER_REQUIRE_PORT_FORWARDING:=}"
+: "${VPN_PORT_GUARD_REQUIRE_FORWARDING:=}"
 
 controller_bool() {
   case "${1:-}" in
@@ -32,7 +33,17 @@ controller_bool() {
   esac
 }
 
-CONTROLLER_REQUIRE_STRICT="$(controller_bool "${VPN_PORT_GUARD_REQUIRE_FORWARDING}")"
+controller_mode_raw="${CONTROLLER_REQUIRE_PF}"
+if [[ -z "${controller_mode_raw}" ]]; then
+  controller_mode_raw="${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}"
+fi
+
+CONTROLLER_REQUIRE_STRICT="$(controller_bool "${controller_mode_raw}")"
+if [[ "${CONTROLLER_REQUIRE_STRICT}" == "true" ]]; then
+  CONTROLLER_MODE_STRING="required"
+else
+  CONTROLLER_MODE_STRING="preferred"
+fi
 
 mkdir -p "${CONTROLLER_TMP_DIR}" >/dev/null 2>&1 || true
 mkdir -p "$(dirname "${CONTROLLER_STATUS_FILE}")" >/dev/null 2>&1 || true
@@ -45,9 +56,21 @@ controller_write_state() {
   local vpn_status="$1"
   local port="$2"
   local pf_arg="$3"
-  local qbt_status="$4"
+  local forwarding_state="$4"
+  local qbt_status="$5"
+
   local pf_enabled
   pf_enabled="$(controller_bool "$pf_arg")"
+
+  if [[ -z "${port}" || ! "${port}" =~ ^[0-9]+$ ]]; then
+    port=0
+  fi
+
+  case "${forwarding_state}" in
+    active|missing) ;;
+    *) forwarding_state="missing" ;;
+  esac
+
   local epoch
   epoch="$(date +%s)"
 
@@ -61,6 +84,8 @@ controller_write_state() {
   "vpn_status": "${vpn_status}",
   "forwarded_port": ${port},
   "pf_enabled": ${pf_enabled},
+  "forwarding_state": "${forwarding_state}",
+  "controller_mode": "${CONTROLLER_MODE_STRING}",
   "qbt_status": "${qbt_status}",
   "last_update_epoch": ${epoch}
 }
@@ -69,7 +94,7 @@ JSON
 }
 
 controller_mark_init() {
-  controller_write_state "init" 0 "false" "paused"
+  controller_write_state "init" 0 "false" "missing" "paused"
 }
 
 controller_pause_qbt() {
@@ -121,7 +146,7 @@ controller_check_trigger() {
 }
 
 main() {
-  controller_log "Starting vpn-port-guard (poll=${CONTROLLER_POLL_INTERVAL}s)"
+  controller_log "Starting vpn-port-guard (poll=${CONTROLLER_POLL_INTERVAL}s, mode=${CONTROLLER_MODE_STRING})"
   controller_mark_init
 
   controller_pause_qbt || true
@@ -148,27 +173,34 @@ main() {
       forwarded_port="$port"
     fi
 
+    local forwarding_state="missing"
+    local port_present=false
+    if [[ "$forwarded_port" != 0 ]]; then
+      forwarding_state="active"
+      port_present=true
+    fi
+
     if ! qbt_api_healthcheck; then
       controller_log "qBittorrent API unreachable; pausing until container recovers"
       controller_pause_qbt || true
-      controller_write_state "$status" "$forwarded_port" "false" "error"
+      controller_write_state "$status" "$forwarded_port" "$port_present" "$forwarding_state" "error"
       continue
     fi
 
     if [[ "$status" != "running" ]]; then
       controller_log "VPN not ready (status=${status}); keeping torrents paused"
       controller_pause_qbt || true
-      controller_write_state "$status" "$forwarded_port" "false" "paused"
+      controller_write_state "$status" "$forwarded_port" "false" "missing" "paused"
       continue
     fi
 
     if [[ "$forwarded_port" != 0 ]]; then
       if controller_apply_port "$forwarded_port"; then
         controller_resume_qbt || true
-        controller_write_state "running" "$forwarded_port" "true" "active"
+        controller_write_state "running" "$forwarded_port" "true" "active" "active"
       else
         controller_pause_qbt || true
-        controller_write_state "running" "$forwarded_port" "false" "error"
+        controller_write_state "running" "$forwarded_port" "false" "active" "error"
       fi
       continue
     fi
@@ -176,15 +208,15 @@ main() {
     if [[ "$CONTROLLER_REQUIRE_STRICT" == "true" ]]; then
       controller_log "Forwarded port unavailable; strict mode enabled so torrents remain paused"
       controller_pause_qbt || true
-      controller_write_state "running" 0 "false" "paused"
+      controller_write_state "running" 0 "false" "missing" "paused"
     else
       controller_log "Forwarded port unavailable; torrents running without inbound port"
       controller_resume_qbt || true
-      controller_write_state "running" 0 "false" "active"
+      controller_write_state "running" 0 "false" "missing" "active"
     fi
   done
 }
 
-trap 'controller_log "Shutting down"; controller_pause_qbt || true; controller_write_state "down" 0 "false" "paused"' EXIT
+trap 'controller_log "Shutting down"; controller_pause_qbt || true; controller_write_state "down" 0 "false" "missing" "paused"' EXIT
 
 main "$@"

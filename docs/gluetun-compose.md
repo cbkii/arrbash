@@ -17,7 +17,7 @@ Use these Compose examples to deploy qBittorrent together with Prowlarr, Sonarr,
 - Gluetun records the leased port in `/tmp/gluetun/forwarded_port` and mirrors it over the control server at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`. arrbash bind-mounts `${ARR_DOCKER_DIR}/gluetun/state` into dependent containers so both the NAT-PMP lease file and the controller status JSON live there.
 - Only Gluetun publishes ports to the LAN. qBittorrent and optional helpers share Gluetun’s namespace using `network_mode: "service:gluetun"`, so torrent traffic never bypasses the VPN.
 - The control server binds to `127.0.0.1:${GLUETUN_CONTROL_PORT}`, requires `GLUETUN_API_KEY`, and exposes only basic status/port routes. Never map it to the LAN.
-- `vpn-port-guard` now ships with the stack. It keeps qBittorrent paused until the VPN is healthy, applies the Proton lease via the Web API, and writes `pf_enabled` / `qbt_status` into `port-guard-status.json`. Torrents keep running without a leased port unless you opt into strict mode with `CONTROLLER_REQUIRE_PORT_FORWARDING=true`. See [vpn-port-guard](./vpn-port-guard.md) for lifecycle details.
+- `vpn-port-guard` now ships with the stack. It keeps qBittorrent paused until the VPN is healthy, applies the Proton lease via the Web API, and writes `forwarding_state` / `controller_mode` / `qbt_status` into `port-guard-status.json`. Torrents keep running without a leased port unless you opt into strict mode with `CONTROLLER_REQUIRE_PF=true`. See [vpn-port-guard](./vpn-port-guard.md) for lifecycle details.
 
 ## A) Split-mode ON (`SPLIT_VPN=1`, Arr apps on LAN)
 

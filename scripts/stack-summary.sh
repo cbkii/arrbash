@@ -207,6 +207,8 @@ WARNING
     local vpn_state="unknown"
     local qbt_state="unknown"
     local pf_enabled="false"
+    local forwarding_state="missing"
+    local controller_mode=""
     local last_epoch="0"
 
     if [[ -f "$status_file" ]]; then
@@ -215,12 +217,16 @@ WARNING
         vpn_state="$(jq -r '.vpn_status // "unknown"' "$status_file" 2>/dev/null || printf 'unknown')"
         qbt_state="$(jq -r '.qbt_status // "unknown"' "$status_file" 2>/dev/null || printf 'unknown')"
         pf_enabled="$(jq -r 'if .pf_enabled == true then "true" else "false" end' "$status_file" 2>/dev/null || printf 'false')"
+        forwarding_state="$(jq -r '.forwarding_state // "missing"' "$status_file" 2>/dev/null || printf 'missing')"
+        controller_mode="$(jq -r '.controller_mode // empty' "$status_file" 2>/dev/null || printf '')"
         last_epoch="$(jq -r '.last_update_epoch // 0' "$status_file" 2>/dev/null || printf '0')"
       else
         forwarded_port="$(sed -n 's/.*"forwarded_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$status_file" | head -n1 || printf '0')"
         vpn_state="$(sed -n 's/.*"vpn_status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf 'unknown')"
         qbt_state="$(sed -n 's/.*"qbt_status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf 'unknown')"
         pf_enabled="$(sed -n 's/.*"pf_enabled"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p' "$status_file" | head -n1 || printf 'false')"
+        forwarding_state="$(sed -n 's/.*"forwarding_state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf 'missing')"
+        controller_mode="$(sed -n 's/.*"controller_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf '')"
         last_epoch="$(sed -n 's/.*"last_update_epoch"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$status_file" | head -n1 || printf '0')"
       fi
     fi
@@ -229,13 +235,14 @@ WARNING
       forwarded_port="0"
     fi
 
+    case "$forwarding_state" in
+      active|missing) ;;
+      *) forwarding_state="missing" ;;
+    esac
+
     case "$pf_enabled" in
-      1|true|TRUE|yes|YES|on|ON)
-        pf_enabled="true"
-        ;;
-      *)
-        pf_enabled="false"
-        ;;
+      1|true|TRUE|yes|YES|on|ON) pf_enabled="true" ;;
+      *) pf_enabled="false" ;;
     esac
 
     local last_update=""
@@ -243,38 +250,65 @@ WARNING
       last_update="$(summary_format_epoch "$last_epoch")"
     fi
 
-    local require_pf="${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}"
-    case "$require_pf" in
-      1|true|TRUE|yes|YES|on|ON) require_pf="true" ;;
-      *) require_pf="false" ;;
-    esac
+    if [[ -z "$controller_mode" ]]; then
+      local require_pf_raw="${CONTROLLER_REQUIRE_PF:-${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-}}}"
+      require_pf_raw="${require_pf_raw,,}"
+      case "$require_pf_raw" in
+        1|true|yes|on|required) controller_mode="required" ;;
+        *) controller_mode="preferred" ;;
+      esac
+    fi
+
+    msg "vpn-port-guard mode: ${controller_mode}"
 
     case "$vpn_state" in
       running)
-        if [[ "$pf_enabled" == "true" && "$forwarded_port" != "0" ]]; then
-          msg "✅ Proton port forwarding active: Port ${forwarded_port} (qBittorrent=${qbt_state})"
-          if [[ -n "$last_update" ]]; then
-            msg "   Last update: ${last_update}"
+        if [[ "$forwarding_state" == "active" && "$forwarded_port" != "0" ]]; then
+          if [[ "$pf_enabled" == "true" ]]; then
+            msg "✅ Proton port forwarding active: Port ${forwarded_port} (qBittorrent=${qbt_state})"
+            if [[ -n "$last_update" ]]; then
+              msg "   Last update: ${last_update}"
+            fi
+          else
+            warn "Forwarded port ${forwarded_port} detected but not yet applied; inspect vpn-port-guard logs"
+            if [[ -n "$last_update" ]]; then
+              msg "   Last update: ${last_update}"
+            fi
+            msg "   Forwarding state: ${forwarding_state}"
+            msg "   Forwarded port: ${forwarded_port}"
+            msg "   Controller JSON: ${status_file}"
+            msg "   qBittorrent: ${qbt_state}"
+            msg "   pf_enabled: ${pf_enabled}"
+            msg "   Logs:    docker logs vpn-port-guard --tail 100"
           fi
         else
-          if [[ "$qbt_state" == "paused" ]]; then
-            if [[ "$require_pf" == "true" ]]; then
-              warn "Proton forwarding unavailable; strict mode keeps qBittorrent paused"
-            else
-              warn "qBittorrent paused while forwarding unavailable; inspect vpn-port-guard logs"
-            fi
+          if [[ "$controller_mode" == "required" ]]; then
+            warn "Proton forwarding unavailable; strict mode keeps qBittorrent paused"
+          elif [[ "$qbt_state" == "paused" ]]; then
+            warn "qBittorrent paused while forwarding unavailable; inspect vpn-port-guard logs"
           else
             msg "Proton forwarding unavailable; torrents running without an inbound port (reduced seeding)"
           fi
-          msg "   Inspect: ${status_file}"
+          if [[ -n "$last_update" ]]; then
+            msg "   Last update: ${last_update}"
+          fi
+          msg "   Forwarding state: ${forwarding_state}"
+          msg "   Forwarded port: ${forwarded_port}"
+          msg "   Controller JSON: ${status_file}"
           msg "   qBittorrent: ${qbt_state}"
+          msg "   pf_enabled: ${pf_enabled}"
           msg "   Logs:    docker logs vpn-port-guard --tail 100"
         fi
         ;;
       *)
         warn "VPN reported ${vpn_state}; torrents should remain paused"
-        msg "   Inspect: ${status_file}"
+        if [[ -n "$last_update" ]]; then
+          msg "   Last update: ${last_update}"
+        fi
+        msg "   Forwarded port: ${forwarded_port}"
+        msg "   Controller JSON: ${status_file}"
         msg "   qBittorrent: ${qbt_state}"
+        msg "   pf_enabled: ${pf_enabled}"
         msg "   Logs:    docker logs vpn-port-guard --tail 100"
         ;;
     esac

@@ -1454,7 +1454,7 @@ arr_compose_emit_vpn_port_guard_service() {
   arr_yaml_kv "      " "QBT_USER" "\${QBT_USER}" >>"$dest"
   arr_yaml_kv "      " "QBT_PASS" "\${QBT_PASS}" >>"$dest"
   arr_yaml_kv "      " "CONTROLLER_POLL_INTERVAL" "\${VPN_PORT_GUARD_POLL_SECONDS}" >>"$dest"
-  arr_yaml_kv "      " "CONTROLLER_REQUIRE_PORT_FORWARDING" "\${CONTROLLER_REQUIRE_PORT_FORWARDING}" >>"$dest"
+  arr_yaml_kv "      " "CONTROLLER_REQUIRE_PF" "\${CONTROLLER_REQUIRE_PF}" >>"$dest"
 
   cat <<'YAML' >>"$dest"
     volumes:

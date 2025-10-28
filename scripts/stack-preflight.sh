@@ -37,6 +37,8 @@ verify_vpn_port_guard_prereqs() {
 
   local controller_path="${REPO_ROOT}/scripts/vpn-port-guard.sh"
   local hook_path="${REPO_ROOT}/scripts/vpn-port-guard-hook.sh"
+  local gluetun_api_path="${REPO_ROOT}/scripts/gluetun-api.sh"
+  local qbt_api_path="${REPO_ROOT}/scripts/qbt-api.sh"
 
   if [[ ! -x "$controller_path" ]]; then
     die "Missing executable vpn-port-guard controller at ${controller_path}"
@@ -44,6 +46,14 @@ verify_vpn_port_guard_prereqs() {
 
   if [[ ! -x "$hook_path" ]]; then
     die "Missing executable vpn-port-guard hook at ${hook_path}"
+  fi
+
+  if [[ ! -f "$gluetun_api_path" ]]; then
+    die "Missing Gluetun API helper at ${gluetun_api_path}; rerun ./arr.sh --refresh-aliases"
+  fi
+
+  if [[ ! -f "$qbt_api_path" ]]; then
+    die "Missing qBittorrent API helper at ${qbt_api_path}; rerun ./arr.sh --refresh-aliases"
   fi
 
   local state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
@@ -70,14 +80,32 @@ verify_vpn_port_guard_prereqs() {
     warn "GLUETUN_API_KEY is empty; the installer will auto-generate one if required"
   fi
 
+  if [[ -z "${GLUETUN_CONTROL_PORT:-}" ]]; then
+    warn "GLUETUN_CONTROL_PORT is unset; defaulting to 8000 unless overridden in your env"
+  elif [[ ! "${GLUETUN_CONTROL_PORT}" =~ ^[0-9]+$ ]]; then
+    die "GLUETUN_CONTROL_PORT='${GLUETUN_CONTROL_PORT}' is not numeric; adjust your configuration"
+  fi
+
+  local proton_user="${PROTON_OPENVPN_USER:-${OPENVPN_USER:-}}"
+  local proton_pass="${PROTON_OPENVPN_PASS:-${OPENVPN_PASSWORD:-}}"
+  if [[ -z "$proton_user" ]]; then
+    warn "Proton OpenVPN username not set; update arrconf/userr.conf before launch (must include +pmp suffix)"
+  elif [[ "$proton_user" != *"+pmp" ]]; then
+    warn "Proton OpenVPN username '${proton_user}' is missing the +pmp suffix required for port forwarding"
+  fi
+
+  if [[ -z "$proton_pass" ]]; then
+    warn "Proton OpenVPN password not set; update arrconf/userr.conf before launch"
+  fi
+
   if [[ -z "${QBT_USER:-}" || -z "${QBT_PASS:-}" ]]; then
     warn "QBT_USER/QBT_PASS not set; qBittorrent Web API credentials are required for vpn-port-guard"
   fi
 
-  local require_pf="${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}"
+  local require_pf="${CONTROLLER_REQUIRE_PF:-${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}}"
   case "$require_pf" in
     1|true|TRUE|yes|YES|on|ON)
-      warn "Strict mode enabled (CONTROLLER_REQUIRE_PORT_FORWARDING=true): torrents will pause whenever Proton forwarding is unavailable."
+      warn "Strict mode enabled (CONTROLLER_REQUIRE_PF=true): torrents will pause whenever Proton forwarding is unavailable."
       ;;
   esac
 
@@ -95,6 +123,19 @@ verify_vpn_port_guard_prereqs() {
       warn "Legacy port-forward hook scripts detected in ${legacy_pm_dir}; Gluetun now calls /scripts/vpn-port-guard-hook.sh"
     fi
   fi
+
+  local legacy_env_sources=()
+  if [[ -f "${ARR_ENV_FILE:-}" ]]; then
+    legacy_env_sources+=("${ARR_ENV_FILE}")
+  fi
+  if [[ -f "${ARRCONF_DIR%/}/userr.conf" ]]; then
+    legacy_env_sources+=("${ARRCONF_DIR%/}/userr.conf")
+  fi
+  for legacy_env in "${legacy_env_sources[@]}"; do
+    if grep -q '^PF_' "$legacy_env" 2>/dev/null; then
+      warn "Legacy PF_* variables detected in ${legacy_env}; remove them to avoid conflicting with vpn-port-guard"
+    fi
+  done
 }
 
 # Builds list of host ports the stack expects based on current configuration
