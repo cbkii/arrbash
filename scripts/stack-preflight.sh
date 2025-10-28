@@ -85,6 +85,16 @@ verify_vpn_port_guard_prereqs() {
   if [[ -f "$legacy_watch" ]] && ! grep -q 'deprecated' "$legacy_watch" 2>/dev/null; then
     warn "Legacy vpn-port-watch.sh detected; ensure it remains a stub and does not control qBittorrent"
   fi
+
+  local legacy_pm_dir="${ARR_STACK_DIR%/}/scripts"
+  if [[ -d "$legacy_pm_dir" ]]; then
+    if compgen -G "${legacy_pm_dir}/port-manager*" >/dev/null; then
+      warn "Legacy port-manager assets found in ${legacy_pm_dir}; remove them to avoid conflicting with vpn-port-guard"
+    fi
+    if compgen -G "${legacy_pm_dir}/port-forward*" >/dev/null; then
+      warn "Legacy port-forward hook scripts detected in ${legacy_pm_dir}; Gluetun now calls /scripts/vpn-port-guard-hook.sh"
+    fi
+  fi
 }
 
 # Builds list of host ports the stack expects based on current configuration

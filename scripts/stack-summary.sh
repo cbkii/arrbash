@@ -239,8 +239,8 @@ WARNING
     esac
 
     local last_update=""
-    if [[ "$last_epoch" =~ ^[0-9]+$ && "$last_epoch" != "0" ]] && declare -f arr_epoch_to_iso >/dev/null 2>&1; then
-      last_update="$(arr_epoch_to_iso "$last_epoch" 2>/dev/null || printf '')"
+    if [[ "$last_epoch" =~ ^[0-9]+$ && "$last_epoch" != "0" ]]; then
+      last_update="$(summary_format_epoch "$last_epoch")"
     fi
 
     local require_pf="${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}"
@@ -264,7 +264,7 @@ WARNING
               warn "qBittorrent paused while forwarding unavailable; inspect vpn-port-guard logs"
             fi
           else
-            warn "Proton forwarding unavailable; torrents running without an inbound port (reduced seeding)"
+            msg "Proton forwarding unavailable; torrents running without an inbound port (reduced seeding)"
           fi
           msg "   Inspect: ${status_file}"
           msg "   qBittorrent: ${qbt_state}"

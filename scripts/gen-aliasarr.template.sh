@@ -1019,7 +1019,7 @@ _arr_gluetun_api() {
   host="$(_arr_gluetun_host)"
   url="http://${host}:${port}${endpoint}"
 
-  local -a curl_cmd=(curl -fsS -H "X-Api-Key: ${key}")
+  local -a curl_cmd=(curl -fsS -H "X-API-Key: ${key}")
   if [ "$method" != "GET" ]; then
     curl_cmd+=(-X "$method")
   fi
@@ -1185,7 +1185,7 @@ _arr_service_call() {
     echo "Missing API key for $svc (check ${ARR_DOCKER_DIR}/$svc/config.xml)." >&2
     return 1
   fi
-  local -a curl_cmd=(curl -fsS -X "$method" -H "X-Api-Key: ${key}")
+  local -a curl_cmd=(curl -fsS -X "$method" -H "X-API-Key: ${key}")
   if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
     curl_cmd+=(-H 'Content-Type: application/json')
   fi
@@ -1239,7 +1239,7 @@ _arr_gluetun_http() {
     echo "GLUETUN_API_KEY missing." >&2
     return 1
   fi
-  curl -fsS -X "$method" -H "X-Api-Key: ${key}" "$@" "http://${host}:${port}${endpoint}"
+  curl -fsS -X "$method" -H "X-API-Key: ${key}" "$@" "http://${host}:${port}${endpoint}"
 }
 
 arr.gluetun.help() {
@@ -1886,8 +1886,7 @@ arr.vpn.port.watch() {
 }
 
 arr.vpn.port.sync() {
-  printf 'vpn-port-guard handles port syncing automatically. Use arr.pf.notify for manual wake-ups.
-'
+  printf 'vpn-port-guard handles port syncing automatically. Use arr.pf.notify for manual wake-ups.\n'
   arr.pf.notify
 }
 
@@ -2194,10 +2193,11 @@ arr.vpn.switch() {
     esac
   done
 
-  if [ "$action" = "cycle" ]; then
-    msg 'Cycling Gluetun within the existing SERVER_COUNTRIES set...'
-    return arr.vpn.fastest
-  fi
+    if [ "$action" = "cycle" ]; then
+      msg 'Cycling Gluetun within the existing SERVER_COUNTRIES set...'
+      arr.vpn.fastest
+      return $?
+    fi
 
   local candidates_raw
   candidates_raw="$(_arr_vpn_rotation_candidates 2>/dev/null || printf '')"
@@ -2285,10 +2285,11 @@ arr.vpn.switch() {
   current_lower="$(_arr_lowercase "$current_countries")"
   local target_lower
   target_lower="$(_arr_lowercase "$target")"
-  if [ -n "$current_lower" ] && [ "$current_lower" = "$target_lower" ]; then
-    msg "SERVER_COUNTRIES already set to ${target}; cycling tunnel within the existing region set."
-    return arr.vpn.fastest
-  fi
+    if [ -n "$current_lower" ] && [ "$current_lower" = "$target_lower" ]; then
+      msg "SERVER_COUNTRIES already set to ${target}; cycling tunnel within the existing region set."
+      arr.vpn.fastest
+      return $?
+    fi
 
   msg "Switching allowed ProtonVPN region to: ${target}"
   local env_output
@@ -2616,7 +2617,7 @@ arr.son.refresh() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get SONARR_PORT)"
   [ -n "$port" ] || port=8989
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
 }
 arr.son.rss() {
   local key="$(_arr_api_key sonarr)"
@@ -2624,7 +2625,7 @@ arr.son.rss() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get SONARR_PORT)"
   [ -n "$port" ] || port=8989
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
 }
 
 arr.son.help() {
@@ -2705,7 +2706,7 @@ arr.rad.refresh() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get RADARR_PORT)"
   [ -n "$port" ] || port=7878
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanMovie"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanMovie"}'
 }
 arr.rad.rss() {
   local key="$(_arr_api_key radarr)"
@@ -2713,7 +2714,7 @@ arr.rad.rss() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get RADARR_PORT)"
   [ -n "$port" ] || port=7878
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
 }
 
 arr.rad.help() {
@@ -2789,7 +2790,7 @@ arr.lid.refresh() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get LIDARR_PORT)"
   [ -n "$port" ] || port=8686
-  curl -fsS -X POST "http://${host}:${port}/api/v1/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v1/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
 }
 
 arr.lid.help() {
