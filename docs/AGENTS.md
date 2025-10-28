@@ -123,7 +123,7 @@ Include placeholders for **all** user-settable variables found in `arrconf/userr
 * **Core/paths & identity:** `STACK`, `ARR_STACK_DIR`, `ARRCONF_DIR`, `ARR_DATA_ROOT`, `PUID`, `PGID`, `TIMEZONE`
 * **Media & downloads:** `MEDIA_DIR`, `TV_DIR`, `MOVIES_DIR`, `SUBS_DIR`, `DOWNLOADS_DIR`, `COMPLETED_DIR`
 * **LAN & loopback:** `LAN_IP`, `LOCALHOST_IP`
-* **VPN/Proton/Gluetun & PF tuning:** `SERVER_COUNTRIES`, `PVPN_ROTATE_COUNTRIES`, `GLUETUN_API_KEY`, `GLUETUN_CONTROL_PORT`, `GLUETUN_PF_STRICT`, `PF_*`, `VPN_*`, `SPLIT_VPN`
+* **VPN/Proton/Gluetun & controller tuning:** `SERVER_COUNTRIES`, `PVPN_ROTATE_COUNTRIES`, `GLUETUN_API_KEY`, `GLUETUN_CONTROL_PORT`, `VPN_PORT_GUARD_POLL_SECONDS`, `VPN_*`, `SPLIT_VPN`
 * **Images:** `CONFIGARR_IMAGE`, `FLARR_IMAGE`, `GLUETUN_IMAGE`, `PROWLARR_IMAGE`, `QBITTORRENT_IMAGE`, `RADARR_IMAGE`, `SONARR_IMAGE`
 * **Service ports:**
 
