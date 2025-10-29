@@ -178,45 +178,6 @@ _arr_sanitize_error() {
   printf '%s' "$value"
 }
 
-_arr_clean_ip_payload() {
-  local payload="$1"
-  payload="$(printf '%s' "$payload" | tr -d '\r')"
-  payload="$(_arr_trim "$payload")"
-  printf '%s' "$payload"
-}
-
-_arr_extract_public_ip() {
-  local payload="$1"
-  local value=""
-
-  if [ -z "$payload" ]; then
-    return 0
-  fi
-
-  value="$(_arr_json_get "$payload" public_ip)"
-  if [ -z "$value" ]; then
-    value="$(_arr_json_get "$payload" ip)"
-  fi
-
-  if [ -z "$value" ]; then
-    value="$(printf '%s\n' "$payload" | LC_ALL=C sed -n 's/^"\(.*\)"$/\1/p' | head -n1)"
-    if [ -z "$value" ]; then
-      value="${payload#\"}"
-      value="${value%\"}"
-    elif [ "$value" != "${value#\"}" ] || [ "$value" != "${value%\"}" ]; then
-      value="${value#\"}"
-      value="${value%\"}"
-    fi
-  fi
-
-  if [ -z "$value" ]; then
-    value="$payload"
-  fi
-
-  value="$(_arr_trim "$value")"
-  printf '%s' "$value"
-}
-
 _arr_csv_to_array() {
   local input="$1"
   [ -n "$input" ] || return 0
@@ -266,6 +227,45 @@ _arr_json_get() {
   if [ -n "$value" ]; then
     printf '%s\n' "$value"
   fi
+}
+
+_arr_clean_ip_payload() {
+  local payload="$1"
+  payload="$(printf '%s' "$payload" | tr -d '\r')"
+  payload="$(_arr_trim "$payload")"
+  printf '%s' "$payload"
+}
+
+_arr_extract_public_ip() {
+  local payload="$1"
+  local value=""
+
+  if [ -z "$payload" ]; then
+    return 0
+  fi
+
+  value="$(_arr_json_get "$payload" public_ip)"
+  if [ -z "$value" ]; then
+    value="$(_arr_json_get "$payload" ip)"
+  fi
+
+  if [ -z "$value" ]; then
+    value="$(printf '%s\n' "$payload" | LC_ALL=C sed -n 's/^"\(.*\)"$/\1/p' | head -n1)"
+    if [ -z "$value" ]; then
+      value="${payload#\"}"
+      value="${value%\"}"
+    elif [ "$value" != "${value#\"}" ] || [ "$value" != "${value%\"}" ]; then
+      value="${value#\"}"
+      value="${value%\"}"
+    fi
+  fi
+
+  if [ -z "$value" ]; then
+    value="$payload"
+  fi
+
+  value="$(_arr_trim "$value")"
+  printf '%s' "$value"
 }
 
 _arr_bool() {
@@ -837,148 +837,77 @@ _arr_gluetun_key() {
   fi
 }
 
-_arr_pf_state_file() {
-  local name
-  name="$(_arr_env_get PF_ASYNC_STATE_FILE)"
-  if [ -z "$name" ]; then
-    name="${PF_ASYNC_STATE_FILE:-pf-state.json}"
-  fi
-  printf '%s/%s' "${ARR_DOCKER_DIR}/gluetun" "$name"
+_arr_port_guard_state_dir() {
+  printf '%s/gluetun/state' "${ARR_DOCKER_DIR}"
 }
 
-_arr_pf_log_file() {
-  local name
-  name="$(_arr_env_get PF_ASYNC_LOG_FILE)"
-  if [ -z "$name" ]; then
-    name="${PF_ASYNC_LOG_FILE:-port-forwarding.log}"
-  fi
-  printf '%s/%s' "${ARR_DOCKER_DIR}/gluetun" "$name"
+_arr_port_guard_status_file() {
+  printf '%s/port-guard-status.json' "$(_arr_port_guard_state_dir)"
 }
 
-_arr_pf_status_file_path() {
-  local path
-  path="${PM_STATUS_FILE:-$(_arr_env_get PM_STATUS_FILE 2>/dev/null || echo '')}"
-  if [ -z "$path" ]; then
-    path="/tmp/gluetun/forwarded_port"
-  fi
-  printf '%s' "$path"
+_arr_port_guard_trigger_file() {
+  printf '%s/port-guard.trigger' "$(_arr_port_guard_state_dir)"
 }
 
-_arr_pf_host_status_file() {
-  local status_file
-  status_file="$(_arr_pf_status_file_path)"
-  if command -v gluetun_port_forward_status_host_path >/dev/null 2>&1; then
-    VPN_PORT_FORWARDING_STATUS_FILE="$status_file" gluetun_port_forward_status_host_path
-    return
-  fi
-  printf '%s' "$status_file"
+_arr_port_guard_events_file() {
+  printf '%s/port-guard-events.log' "$(_arr_port_guard_state_dir)"
 }
 
-_arr_pf_valid_port() {
-  case "$1" in
-    ''|0|*[!0-9]*) return 1 ;;
-    *)
-      if [ "$1" -ge 1 ] && [ "$1" -le 65535 ]; then
-        return 0
-      fi
-      return 1
-      ;;
-  esac
-}
-
-_arr_pf_pm_script() {
-  local candidate
-  candidate="${ARR_STACK_DIR}/scripts/vpn-port-watch.sh"
-  if [ -x "$candidate" ]; then
-    printf '%s' "$candidate"
-    return 0
-  fi
-  candidate="${ARR_STACK_DIR}/../scripts/vpn-port-watch.sh"
-  if [ -x "$candidate" ]; then
-    printf '%s' "$candidate"
-    return 0
-  fi
-  warn "vpn-port-watch.sh not found; ensure port-manager helpers are installed"
-  return 1
-}
-
-_arr_pf_run_once() {
-  local override="$1"
-  local dry_run="$2"
-  local script
-  script="$(_arr_pf_pm_script)" || return 1
-  local status_file
-  status_file="$(_arr_pf_status_file_path)"
-
-  local qbt_user="${QBT_USER:-$(_arr_env_get QBT_USER 2>/dev/null || printf '')}"
-  local qbt_pass="${QBT_PASS:-$(_arr_env_get QBT_PASS 2>/dev/null || printf '')}"
-  local qbt_web_port="${QBT_WEB_PORT:-$(_arr_env_get QBT_WEB_PORT 2>/dev/null || printf '')}"
-  local control_port="${GLUETUN_CONTROL_PORT:-$(_arr_env_get GLUETUN_CONTROL_PORT 2>/dev/null || printf '')}"
-  local api_key="${GLUETUN_API_KEY:-$(_arr_env_get GLUETUN_API_KEY 2>/dev/null || printf '')}"
-  local qbt_host="${QBT_HOST:-$(_arr_env_get QBT_HOST 2>/dev/null || printf '')}"
-
-  if [ -z "$qbt_host" ]; then
-    qbt_host="${LAN_IP:-$(_arr_env_get LAN_IP 2>/dev/null || printf '')}"
-  fi
-  if [ -z "$qbt_host" ]; then
-    qbt_host="${LOCALHOST_IP:-$(_arr_env_get LOCALHOST_IP 2>/dev/null || printf '127.0.0.1')}"
-  fi
-
-  if [ -z "$qbt_user" ] || [ -z "$qbt_pass" ]; then
-    warn "qBittorrent credentials not available (QBT_USER/QBT_PASS)"
+_arr_port_guard_print_json() {
+  local file="$(_arr_port_guard_status_file)"
+  if [ ! -f "$file" ]; then
+    printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
     return 1
   fi
-  if [ -z "$qbt_web_port" ]; then
-    qbt_web_port=8080
+  if _arr_has_cmd jq; then
+    jq '.' "$file"
+  else
+    cat "$file"
   fi
-  if [ -z "$control_port" ]; then
-    control_port=8000
-  fi
+}
 
-  local -a env_args=(
-    "PM_RUN_ONCE=1"
-    "PM_STATUS_FILE=${status_file}"
-    "QBT_USER=${qbt_user}"
-    "QBT_PASS=${qbt_pass}"
-    "QBT_WEB_PORT=${qbt_web_port}"
-    "QBT_HOST=${qbt_host}"
-    "GLUETUN_CONTROL_PORT=${control_port}"
-  )
+_arr_port_guard_forwarded_port() {
+  local file="$(_arr_port_guard_status_file)"
+  if [ ! -f "$file" ]; then
+    return 1
+  fi
+  if _arr_has_cmd jq; then
+    jq -r '.forwarded_port' "$file" 2>/dev/null || return 1
+  else
+    awk -F ':' '/"forwarded_port"/ {gsub(/[^0-9]/, "", $2); print $2; exit}' "$file"
+  fi
+}
 
-  if [ -n "${api_key}" ]; then
-    env_args+=("GLUETUN_API_KEY=${api_key}")
+_arr_port_guard_pf_enabled() {
+  local file="$(_arr_port_guard_status_file)"
+  if [ ! -f "$file" ]; then
+    return 1
   fi
-  if [ -n "${PM_LOG_LEVEL:-}" ]; then
-    env_args+=("PM_LOG_LEVEL=${PM_LOG_LEVEL}")
+  if _arr_has_cmd jq; then
+    jq -r '.pf_enabled' "$file" 2>/dev/null || return 1
+  else
+    awk -F ':' '/"pf_enabled"/ {gsub(/[^[:alnum:]]/, "", $2); print $2; exit}' "$file"
   fi
-  if [ -n "$override" ]; then
-    env_args+=("PM_OVERRIDE_PORT=${override}")
-  fi
-  if [ -n "$dry_run" ]; then
-    env_args+=("PM_DRY_RUN=${dry_run}")
-  fi
+}
 
-  if _arr_docker_available && _arr_compose_cmd; then
-    local container_id
-    container_id="$(_arr_container_id_for_service port-manager 0 2>/dev/null || printf '')"
-    if [ -n "$container_id" ]; then
-      if _arr_compose exec port-manager env "${env_args[@]}" /pm-watch.sh; then
-        return 0
-      fi
-      warn "port-manager container exec failed; attempting on-demand run"
-    fi
-
-    local -a run_args=(--rm)
-    local env_var
-    for env_var in "${env_args[@]}"; do
-      run_args+=(-e "$env_var")
-    done
-    if _arr_compose run "${run_args[@]}" port-manager /pm-watch.sh; then
-      return 0
-    fi
+_arr_port_guard_json_value() {
+  local key="$1"
+  local file="$(_arr_port_guard_status_file)"
+  if [ -z "$key" ] || [ ! -f "$file" ]; then
+    return 1
   fi
-
-  env "${env_args[@]}" "$script"
+  if _arr_has_cmd jq; then
+    jq -r --arg key "$key" '.[$key] // empty' "$file" 2>/dev/null || return 1
+  else
+    awk -v key="$key" -F ':' '
+      $0 ~ "\"" key "\"" {
+        sub(/^[^:]*:/, "");
+        gsub(/[",[:space:]]/, "");
+        print;
+        exit;
+      }
+    ' "$file"
+  fi
 }
 
 _arr_vpn_last_error=""
@@ -1090,7 +1019,7 @@ _arr_gluetun_api() {
   host="$(_arr_gluetun_host)"
   url="http://${host}:${port}${endpoint}"
 
-  local -a curl_cmd=(curl -fsS -H "X-Api-Key: ${key}")
+  local -a curl_cmd=(curl -fsS -H "X-API-Key: ${key}")
   if [ "$method" != "GET" ]; then
     curl_cmd+=(-X "$method")
   fi
@@ -1256,7 +1185,7 @@ _arr_service_call() {
     echo "Missing API key for $svc (check ${ARR_DOCKER_DIR}/$svc/config.xml)." >&2
     return 1
   fi
-  local -a curl_cmd=(curl -fsS -X "$method" -H "X-Api-Key: ${key}")
+  local -a curl_cmd=(curl -fsS -X "$method" -H "X-API-Key: ${key}")
   if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
     curl_cmd+=(-H 'Content-Type: application/json')
   fi
@@ -1310,7 +1239,7 @@ _arr_gluetun_http() {
     echo "GLUETUN_API_KEY missing." >&2
     return 1
   fi
-  curl -fsS -X "$method" -H "X-Api-Key: ${key}" "$@" "http://${host}:${port}${endpoint}"
+  curl -fsS -X "$method" -H "X-API-Key: ${key}" "$@" "http://${host}:${port}${endpoint}"
 }
 
 arr.gluetun.help() {
@@ -1618,35 +1547,39 @@ Stack diagnostics:
   arr.diag.env                 Dump derived environment context (without secrets)
 
 ProtonVPN & Gluetun (arr.vpn ...):
-  arr.vpn status               Show the current exit IP and forwarded port
-  arr.vpn switch [COUNTRY]     Rotate Proton servers. Without a country it advances through PVPN_ROTATE_COUNTRIES (a superset of SERVER_COUNTRIES)
-  arr.vpn connect              Start Gluetun and qBittorrent
-  arr.vpn reconnect            Restart the Gluetun container
+  arr.vpn status               Show VPN tunnel + vpn-port-guard summary (PF preferred, strict mode optional)
+  arr.vpn switch [COUNTRY]     Rotate Proton servers. Without a country it advances through PVPN_ROTATE_COUNTRIES
+  arr.vpn connect              Start Gluetun and qBittorrent containers
+  arr.vpn reconnect            Restart the Gluetun tunnel (control API first, compose/docker fallback)
   arr.vpn logs                 Follow Gluetun logs
   arr.vpn servers [LIMIT]      Display Proton's server catalogue (fallbacks to the local JSON cache)
   arr.vpn countries [LIST]     Show or override SERVER_COUNTRIES in ${ARR_ENV_FILE}
   arr.vpn fastest              Query the top 15 fastest Proton endpoints (requires gluetun CLI)
-  arr.vpn.auto.status          Show the auto-reconnect status JSON snapshot
-  arr.vpn.auto.pause           Pause monitoring by creating the override file
-  arr.vpn.auto.resume          Resume monitoring and clear override files/state
-  arr.vpn.auto.kill            Disable auto-reconnect for 24 hours
-  arr.vpn.auto.once            Force a single reconnect attempt (clears one-shot flag after use)
-  arr.vpn port                 Show the forwarded port (OpenVPN only)
-  arr.vpn port.state           Dump the async port-forwarding state JSON
-  arr.vpn port.watch           Tail the async worker log (Ctrl+C to stop)
-  arr.vpn port.sync            Run a one-shot async port acquisition attempt
-  arr.vpn pf                   Dump the forwarded port JSON payload
+  arr.vpn auto.status          Show the auto-reconnect status JSON snapshot
+  arr.vpn auto.pause           Pause monitoring by creating the override file
+  arr.vpn auto.resume          Resume monitoring and clear override files/state
+  arr.vpn auto.kill            Disable auto-reconnect for 24 hours
+  arr.vpn auto.once            Force a single reconnect attempt (clears one-shot flag after use)
+  arr.vpn port                 Shortcut to arr.pf.port (vpn-port-guard forwarded port)
+  arr.vpn port.state           Print the controller status JSON
+  arr.vpn port.watch           Follow the controller status JSON for changes
+  arr.vpn port.sync            Touch the controller trigger (compatibility shim)
+  arr.vpn pf                   Dump the raw Gluetun /v1/openvpn/portforwarded payload
   arr.vpn ip                   Show the current public IP reported by Gluetun
   arr.vpn health               Print the Gluetun container health status
   arr.vpn paths                Display credential/config paths for ProtonVPN assets
   arr.vpn creds                Open ${ARRCONF_DIR}/proton.auth in $EDITOR for quick edits
 
-Port manager helpers (arr.pf ...):
-  arr.pf port                 Print the forwarded port (file first, then control API)
-  arr.pf sync                 Run vpn-port-watch.sh once to refresh qBittorrent
-  arr.pf tail                 Follow the forwarded port file with timestamps
-  arr.pf logs                 Stream port-manager container logs
-  arr.pf test <port>          Dry-run an explicit listen_port update
+vpn-port-guard helpers (arr.pf ...):
+  arr.pf port                 Print the current forwarded port from vpn-port-guard
+  arr.pf status               Pretty-print /gluetun_state/port-guard-status.json
+  arr.pf tail                 Follow the status JSON for changes (Ctrl+C to stop)
+  arr.pf logs                 Stream vpn-port-guard logs (docker or compose)
+  arr.pf notify               Touch the controller trigger to force an immediate poll
+  arr.pf sync                 Compatibility shim; touches the trigger and prints updated guidance
+  arr.pf test                 Compatibility shim; explains that vpn-port-guard owns listen_port updates
+  arrvpn / arrvpn-watch       Convenience wrappers for controller status and watch output
+  arrvpn-events               Tail the controller events log
 
 ARR service surfaces:
   arr.gluetun.help             Documented Gluetun control commands
@@ -1862,12 +1795,13 @@ arr.vpn.status() {
   fi
   msg "Tunnel status: ${tunnel_status}"
 
-  local ip_payload_raw ip_payload ip_value ip_error
+  local ip_payload ip_value ip_error
   ip_value=""
   ip_error=""
-  if ip_payload_raw="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
-    ip_payload="$(_arr_clean_ip_payload "$ip_payload_raw")"
+  if ip_payload="$(_arr_gluetun_api /v1/publicip/ip 2>/dev/null)"; then
+    ip_payload="$(_arr_clean_ip_payload "$ip_payload")"
     ip_value="$(_arr_extract_public_ip "$ip_payload")"
+    ip_value="$(_arr_trim "$ip_value")"
   else
     ip_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
   fi
@@ -1881,141 +1815,80 @@ arr.vpn.status() {
     fi
   fi
 
-  local vpn_type pf_setting provider_key
-  vpn_type="${VPN_TYPE:-$(_arr_env_get VPN_TYPE 2>/dev/null || printf '')}"
-  vpn_type="$(_arr_lowercase "$vpn_type")"
-  if [ -z "$vpn_type" ]; then
-    vpn_type="openvpn"
-  fi
-  pf_setting="${VPN_PORT_FORWARDING:-$(_arr_env_get VPN_PORT_FORWARDING 2>/dev/null || printf '')}"
-  if [ -z "$pf_setting" ]; then
-    pf_setting="on"
-  fi
-  pf_setting="$(_arr_lowercase "$pf_setting")"
-  provider_key="$(_arr_lowercase "$provider")"
-  local pf_enabled=1
-  case "$pf_setting" in
-    ''|0|off|false|disabled|no) pf_enabled=0 ;;
-  esac
-
-  if [ "$vpn_type" != "openvpn" ] || [ "$provider_key" != "protonvpn" ] || [ "$pf_enabled" -ne 1 ]; then
-    msg 'Forwarded port: not available for this configuration'
+  local status_file="$(_arr_port_guard_status_file)"
+  if [ ! -f "$status_file" ]; then
+    msg 'vpn-port-guard: status file not found (controller has not written /gluetun_state/port-guard-status.json yet)'
     return 0
   fi
 
-  local pf_payload pf_port pf_status pf_error
-  if pf_payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null)"; then
-    pf_port="$(_arr_json_get "$pf_payload" port)"
-    pf_status="$(_arr_json_get "$pf_payload" status)"
-    pf_port="$(_arr_trim "${pf_port:-}")"
-    pf_status="$(_arr_trim "${pf_status:-}")"
-    local port_value=""
-    if [ -n "$pf_port" ]; then
-      case "$pf_port" in
-        ''|*[!0-9]*)
-          ;;
-        0)
-          ;;
-        *)
-          port_value="$pf_port"
-          ;;
-      esac
-    fi
-    if [ -n "$port_value" ]; then
-      msg "Forwarded port: ${port_value}"
-    else
-      if [ -n "$pf_status" ]; then
-        msg "Forwarded port: not currently assigned (status: ${pf_status})"
-      else
-        msg 'Forwarded port: not currently assigned'
-      fi
-    fi
+  local controller_vpn_status
+  controller_vpn_status="$(_arr_port_guard_json_value vpn_status 2>/dev/null || printf '')"
+  if [ -n "$controller_vpn_status" ] && [ "$controller_vpn_status" != "$tunnel_status" ]; then
+    msg "Controller sees VPN: ${controller_vpn_status}"
+  fi
+
+  local pf_enabled_raw pf_enabled_flag pf_port
+  pf_enabled_raw="$(_arr_port_guard_pf_enabled 2>/dev/null || printf '')"
+  local pf_enabled_lc="$(printf '%s' "$pf_enabled_raw" | tr '[:upper:]' '[:lower:]')"
+  pf_enabled_flag=0
+  case "$pf_enabled_lc" in
+    1|true|yes|on) pf_enabled_flag=1 ;;
+  esac
+  pf_port="$(_arr_port_guard_forwarded_port 2>/dev/null || printf '0')"
+
+  local require_pf
+  require_pf="${CONTROLLER_REQUIRE_PORT_FORWARDING:-$(_arr_env_get CONTROLLER_REQUIRE_PORT_FORWARDING 2>/dev/null || printf '')}"
+  require_pf="$(printf '%s' "$require_pf" | tr '[:upper:]' '[:lower:]')"
+  local strict_mode=0
+  case "$require_pf" in
+    1|true|yes|on) strict_mode=1 ;;
+  esac
+
+  if [ "$pf_enabled_flag" -eq 1 ] && [ "$pf_port" -ne 0 ] 2>/dev/null; then
+    msg "Forwarded port: ${pf_port} (active via vpn-port-guard)"
   else
-    pf_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
-    if [ -n "$pf_error" ]; then
-      msg "Forwarded port: unavailable (${pf_error})"
+    if [ "$strict_mode" -eq 1 ]; then
+      msg 'Forwarded port: not currently assigned (strict mode enabled; qBittorrent will remain paused)'
     else
-      msg 'Forwarded port: unavailable'
+      msg 'Forwarded port: not currently assigned (pf_enabled=false; torrents continue in degraded seeding mode)'
     fi
+  fi
+
+  local qbt_status
+  qbt_status="$(_arr_port_guard_json_value qbt_status 2>/dev/null || printf '')"
+  if [ -n "$qbt_status" ]; then
+    msg "qBittorrent status: ${qbt_status} (vpn-port-guard)"
+  fi
+
+  local last_epoch last_human
+  last_epoch="$(_arr_port_guard_json_value last_update_epoch 2>/dev/null || printf '')"
+  if [ -n "$last_epoch" ]; then
+    last_human="$last_epoch"
+    if command -v date >/dev/null 2>&1 && [ "$last_epoch" -gt 0 ] 2>/dev/null; then
+      last_human="$(date -d "@${last_epoch}" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf '%s' "$last_epoch")"
+    fi
+    msg "Controller last update: ${last_human}"
   fi
 }
 
 arr.vpn.creds() { "${EDITOR:-nano}" "${ARRCONF_DIR}/proton.auth"; }
 
 arr.vpn.port() {
-  local type="$(_arr_env_get VPN_TYPE)"
-  if [ "${type:-openvpn}" != "openvpn" ]; then
-    warn 'Port forwarding is only available for OpenVPN configurations.'
-    return 1
-  fi
-  local state_file="$(_arr_pf_state_file)"
-  if [ -f "$state_file" ]; then
-    local cached_port cached_status
-    if command -v jq >/dev/null 2>&1; then
-      cached_port="$(jq -r '.port // 0' "$state_file" 2>/dev/null || printf '0')"
-      cached_status="$(jq -r '.status // ""' "$state_file" 2>/dev/null || printf '')"
-    else
-      cached_port="$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$state_file" | head -n1 || printf '0')"
-      cached_status="$(sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$state_file" | head -n1 || printf '')"
-    fi
-    if [ "${cached_port}" != "0" ]; then
-      printf '%s\n' "$cached_port"
-      return 0
-    fi
-    if [ -n "$cached_status" ] && [ "$cached_status" != "pending" ]; then
-      warn "State: ${cached_status} (see ${state_file})"
-    fi
-  fi
-  local payload summary
-  if ! payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null)"; then
-    warn "${_arr_gluetun_last_error:-Unable to query forwarded port.}"
-    return 1
-  fi
-  if command -v gluetun_port_forward_summary >/dev/null 2>&1; then
-    summary="$(gluetun_port_forward_summary "$payload" 2>/dev/null || printf '')"
-    if [ -n "${GLUETUN_PORT_FORWARD_PORT:-}" ] && [ "${GLUETUN_PORT_FORWARD_PORT}" != "0" ]; then
-      printf '%s\n' "$GLUETUN_PORT_FORWARD_PORT"
-      return 0
-    fi
-    if [ -n "$summary" ]; then
-      printf '%s\n' "$summary" >&2
-    else
-      printf '%s\n' "$payload" >&2
-    fi
-    return 1
-  fi
-  printf '%s\n' "$payload"
+  arr.pf.port "$@"
 }
 
 arr.vpn.port.state() {
-  local file="$(_arr_pf_state_file)"
-  if [ ! -f "$file" ]; then
-    warn "State file not found: ${file}"
-    return 1
-  fi
-  cat "$file"
+  arr.pf.status
 }
 
 arr.vpn.port.watch() {
-  local file="$(_arr_pf_log_file)"
-  local dir
-  dir="$(dirname "$file")"
-  mkdir -p "$dir"
-  if [ ! -f "$file" ]; then
-    msg "Creating log placeholder at ${file}"
-    : >"$file"
-  fi
-  tail -n 20 -f "$file"
+  arr.pf.tail
 }
 
 arr.vpn.port.sync() {
-  local key
-  key="$(_arr_gluetun_key)"
-  if [ -z "$key" ]; then
-    warn "GLUETUN_API_KEY not found. Run ./arr.sh --rotate-api-key to refresh it."
-    return 1
-  fi
-  ( cd "$ARR_STACK_DIR" && GLUETUN_API_KEY="$key" PF_ASYNC_ENABLE=1 bash -c '. scripts/vpn-gluetun.sh; async_port_forward_worker --oneshot' )
+  printf 'vpn-port-guard handles port syncing automatically. Use arr.pf.notify for manual wake-ups.
+'
+  arr.pf.notify
 }
 
 arr.vpn.paths() { printf 'Config: %s\nAuth: %s\n' "${ARRCONF_DIR}" "${ARR_DOCKER_DIR}/gluetun"; }
@@ -2063,79 +1936,107 @@ arr.vpn.pf() {
 }
 
 arr.pf.port() {
-  local status_file port
-  status_file="$(_arr_pf_status_file_path)"
-  port="$(VPN_PORT_FORWARDING_STATUS_FILE="$status_file" gluetun_read_forwarded_port_file 2>/dev/null || printf '')"
-  if _arr_pf_valid_port "$port"; then
+  local port
+  port="$(_arr_port_guard_forwarded_port 2>/dev/null || printf '')"
+  if [ -n "$port" ] && [ "$port" -ne 0 ] 2>/dev/null; then
     printf '%s\n' "$port"
     return 0
   fi
-  if command -v fetch_forwarded_port >/dev/null 2>&1; then
-    port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
-    if _arr_pf_valid_port "$port"; then
-      printf '%s\n' "$port"
-      return 0
-    fi
-  fi
-  warn 'Forwarded port not available.'
+  printf 'Forwarded port unavailable\n' >&2
+  _arr_port_guard_print_json || true
   return 1
 }
 
-arr.pf.sync() {
-  _arr_pf_run_once "" 0
+arr.pf.status() {
+  _arr_port_guard_print_json
 }
 
 arr.pf.tail() {
   local file
-  file="$(_arr_pf_host_status_file)"
+  file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
-    warn "Forwarded port file not found yet: ${file}"
+    printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
+    return 1
   fi
-  if ! command -v date >/dev/null 2>&1; then
-    tail -f "$file"
-    return
-  fi
-  tail -n 0 -F "$file" | while IFS= read -r line; do
-    printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$line"
-  done
+  exec tail -Fn0 "$file"
 }
 
 arr.pf.logs() {
-  if ! _arr_docker_available; then
-    warn "Docker command not available in this shell."
-    return 1
-  fi
   local container
-  container="$(_arr_container_id_for_service port-manager 1 2>/dev/null || printf '')"
-  if [ -z "$container" ]; then
-    warn 'port-manager container not found.'
-    return 1
+  container="$(_arr_container_id_for_service vpn-port-guard 0 2>/dev/null || printf '')"
+  if [ -n "$container" ]; then
+    exec docker logs -f "$container"
   fi
-  docker logs -f "$container"
+  _arr_compose logs -f vpn-port-guard
+}
+
+arr.pf.notify() {
+  local trigger
+  trigger="$(_arr_port_guard_trigger_file)"
+  mkdir -p "$(dirname "$trigger")" >/dev/null 2>&1 || true
+  touch "$trigger"
+  printf 'Triggered vpn-port-guard wake-up (%s)\n' "$trigger"
+}
+
+arr.pf.sync() {
+  printf 'vpn-port-guard handles port syncing automatically. Use arr.pf.notify to signal a refresh.\n'
+  arr.pf.notify
 }
 
 arr.pf.test() {
-  if [ $# -ne 1 ]; then
-    printf 'Usage: arr.pf.test <port>\n' >&2
-    return 1
-  fi
-  local port="$1"
-  if ! _arr_pf_valid_port "$port"; then
-    warn "Invalid port: ${port}"
-    return 1
-  fi
-  _arr_pf_run_once "$port" 1
+  printf 'Port-forward dry-runs are now handled by vpn-port-guard; manual tests are deprecated.\n'
+  printf 'Inspect current state with arr.pf.status or touch the trigger with arr.pf.notify.\n'
+  return 0
 }
 
 arr.pf.help() {
   cat <<'EOF'
-Port manager helpers:
-  arr.pf.port        Show the forwarded port (file first, then Gluetun control API)
-  arr.pf.sync        Run a one-shot port sync using vpn-port-watch.sh
-  arr.pf.tail        Follow the forwarded port status file with timestamps
-  arr.pf.logs        Stream docker logs from the port-manager container
-  arr.pf.test <port> Dry-run qBittorrent listen_port update with an explicit port
+vpn-port-guard helpers:
+  arr.pf.port        Show the current forwarded port reported by vpn-port-guard
+  arr.pf.status      Print vpn-port-guard status JSON
+  arr.pf.tail        Follow the vpn-port-guard status file for changes
+  arr.pf.logs        Stream docker logs from the vpn-port-guard service
+  arr.pf.notify      Touch the controller trigger file to force an immediate poll
+  arr.pf.sync        Compatibility shim; touches the trigger and prints updated guidance
+  arr.pf.test        Compatibility shim; prints guidance for the new controller workflow
 EOF
+}
+
+arr.vpn.portguard.status() {
+  arr.pf.status
+}
+
+arr.vpn.portguard.watch() {
+  local file
+  file="$(_arr_port_guard_status_file)"
+  if [ ! -f "$file" ]; then
+    printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
+    return 1
+  fi
+  if _arr_has_cmd watch; then
+    if _arr_has_cmd jq; then
+      watch -n 2 "jq '.' '$file'"
+    else
+      watch -n 2 "cat '$file'"
+    fi
+    return 0
+  fi
+  printf 'watch(1) not available; printing updates every 2s (Ctrl+C to exit)\n'
+  while true; do
+    date '+%Y-%m-%d %H:%M:%S'
+    arr.pf.status || true
+    sleep 2
+  done
+}
+
+arr.vpn.portguard.events() {
+  local log_file
+  log_file="$(_arr_port_guard_events_file)"
+  if [ ! -f "$log_file" ]; then
+    printf 'vpn-port-guard events log not found (%s)\n' "$log_file" >&2
+    return 1
+  fi
+  exec tail -Fn0 "$log_file"
 }
 
 arr.vpn.health() {
@@ -2295,7 +2196,8 @@ arr.vpn.switch() {
 
   if [ "$action" = "cycle" ]; then
     msg 'Cycling Gluetun within the existing SERVER_COUNTRIES set...'
-    return arr.vpn.fastest
+    arr.vpn.fastest
+    return $?
   fi
 
   local candidates_raw
@@ -2386,7 +2288,8 @@ arr.vpn.switch() {
   target_lower="$(_arr_lowercase "$target")"
   if [ -n "$current_lower" ] && [ "$current_lower" = "$target_lower" ]; then
     msg "SERVER_COUNTRIES already set to ${target}; cycling tunnel within the existing region set."
-    return arr.vpn.fastest
+    arr.vpn.fastest
+    return $?
   fi
 
   msg "Switching allowed ProtonVPN region to: ${target}"
@@ -2715,7 +2618,7 @@ arr.son.refresh() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get SONARR_PORT)"
   [ -n "$port" ] || port=8989
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
 }
 arr.son.rss() {
   local key="$(_arr_api_key sonarr)"
@@ -2723,7 +2626,7 @@ arr.son.rss() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get SONARR_PORT)"
   [ -n "$port" ] || port=8989
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
 }
 
 arr.son.help() {
@@ -2804,7 +2707,7 @@ arr.rad.refresh() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get RADARR_PORT)"
   [ -n "$port" ] || port=7878
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanMovie"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanMovie"}'
 }
 arr.rad.rss() {
   local key="$(_arr_api_key radarr)"
@@ -2812,7 +2715,7 @@ arr.rad.rss() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get RADARR_PORT)"
   [ -n "$port" ] || port=7878
-  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v3/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RssSync"}'
 }
 
 arr.rad.help() {
@@ -2888,7 +2791,7 @@ arr.lid.refresh() {
   local host="$(_arr_host)"
   local port="$(_arr_env_get LIDARR_PORT)"
   [ -n "$port" ] || port=8686
-  curl -fsS -X POST "http://${host}:${port}/api/v1/command" -H "X-Api-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
+  curl -fsS -X POST "http://${host}:${port}/api/v1/command" -H "X-API-Key: ${key}" -H 'Content-Type: application/json' -d '{"name":"RescanFolders"}'
 }
 
 arr.lid.help() {
@@ -3156,3 +3059,7 @@ arr.diag.env() {
     esac
   done
 }
+
+alias arrvpn='arr.vpn.portguard.status'
+alias arrvpn-watch='arr.vpn.portguard.watch'
+alias arrvpn-events='arr.vpn.portguard.events'

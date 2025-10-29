@@ -46,6 +46,7 @@ write_gluetun_control_assets() {
 
   ensure_data_dir_mode "$gluetun_root"
   ensure_dir_mode "$hooks_dir" "$DATA_DIR_MODE"
+  ensure_dir_mode "${gluetun_root}/state" "$DATA_DIR_MODE"
 
   local auth_dir="${gluetun_root}/auth"
   local auth_config="${auth_dir}/config.toml"
@@ -104,119 +105,8 @@ EOF
     fi
   fi
 
-  cat >"${hooks_dir}/update-qbt-port.sh" <<'HOOK'
-#!/bin/sh
-set -eu
-
-log() {
-    printf '[%s] update-qbt-port: %s\n' "$(LC_ALL=C date '+%Y-%m-%dT%H:%M:%S')" "$1" >&2
-}
-
-if ! command -v curl >/dev/null 2>&1; then
-    log "curl not available inside Gluetun; skipping port update"
-    exit 0
-fi
-
-PORT_SPEC="${1:-}"
-PORT_VALUE="${PORT_SPEC%%,*}"
-PORT_VALUE="${PORT_VALUE%%:*}"
-
-case "$PORT_VALUE" in
-    ''|*[!0-9]*)
-        log "Ignoring non-numeric port payload: ${PORT_SPEC}"
-        exit 0
-        ;;
-esac
-
-QBITTORRENT_ADDR="${QBITTORRENT_ADDR:-http://${LOCALHOST_IP:-localhost}:${QBT_INT_PORT:-8082}}"
-PAYLOAD=$(printf 'json={"listen_port":%s,"random_port":false}' "$PORT_VALUE")
-
-COOKIE_FILE=""
-cleanup_cookie() {
-    if [ -n "$COOKIE_FILE" ]; then
-        rm -f "$COOKIE_FILE" 2>/dev/null || true
-        COOKIE_FILE=""
-    fi
-}
-trap cleanup_cookie EXIT
-
-attempt_update() {
-    UPDATE_METHOD=""
-
-    if curl -fsS --max-time 8 \
-        --data "$PAYLOAD" \
-        "${QBITTORRENT_ADDR%/}/api/v2/app/setPreferences" >/dev/null 2>&1; then
-        UPDATE_METHOD="direct"
-        return 0
-    fi
-
-    if [ -n "${QBT_USER:-}" ] && [ -n "${QBT_PASS:-}" ]; then
-        local cookie_template="${TMPDIR:-/tmp}/update-qbt-cookie.XXXXXX"
-        if declare -f arr_prepare_mktemp_template >/dev/null 2>&1; then
-            cookie_template="$(arr_prepare_mktemp_template "$cookie_template")"
-        fi
-        COOKIE_FILE="$(mktemp "$cookie_template")" || {
-            log "Failed to create temporary cookie file"
-            return 1
-        }
-        if declare -f arr_resolve_absolute_path >/dev/null 2>&1; then
-            local cookie_resolved
-            if cookie_resolved="$(arr_resolve_absolute_path "$COOKIE_FILE" 2>/dev/null)"; then
-                COOKIE_FILE="$cookie_resolved"
-            fi
-        fi
-        if curl -fsS --max-time 5 -c "$COOKIE_FILE" \
-            --data-urlencode "username=${QBT_USER}" \
-            --data-urlencode "password=${QBT_PASS}" \
-            "${QBITTORRENT_ADDR%/}/api/v2/auth/login" >/dev/null 2>&1; then
-            if curl -fsS --max-time 8 -b "$COOKIE_FILE" \
-                --data "$PAYLOAD" \
-                "${QBITTORRENT_ADDR%/}/api/v2/app/setPreferences" >/dev/null 2>&1; then
-                UPDATE_METHOD="authenticated"
-                cleanup_cookie
-                return 0
-            fi
-            log "Authenticated but failed to apply port update"
-        else
-            log "qBittorrent authentication failed"
-        fi
-        cleanup_cookie
-    else
-        if [ "${ATTEMPT:-0}" = "1" ]; then
-            log "Skipping authenticated update: QBT_USER/QBT_PASS not provided"
-        fi
-    fi
-
-    return 1
-}
-
-MAX_ATTEMPTS=3
-ATTEMPT=0
-UPDATE_METHOD=""
-
-while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
-    ATTEMPT=$((ATTEMPT + 1))
-
-    if attempt_update; then
-        if [ "$UPDATE_METHOD" = "authenticated" ]; then
-            log "Updated qBittorrent listen port to ${PORT_VALUE} after authentication (attempt ${ATTEMPT})"
-        else
-            log "Updated qBittorrent listen port to ${PORT_VALUE} (attempt ${ATTEMPT})"
-        fi
-        exit 0
-    fi
-
-    if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
-        log "Attempt ${ATTEMPT} failed, retrying..."
-        sleep 2
-    fi
-done
-
-log "Failed to update port after ${MAX_ATTEMPTS} attempts"
-exit 1
-HOOK
-
-  ensure_file_mode "${hooks_dir}/update-qbt-port.sh" 700
+  cp "${REPO_ROOT}/scripts/vpn-port-guard-hook.sh" "${hooks_dir}/port-forward-hooks.sh"
+  ensure_file_mode "${hooks_dir}/port-forward-hooks.sh" 700
 }
 
 # Copies the shared Gluetun helper script into the stack workspace
@@ -252,16 +142,24 @@ sync_vpn_auto_reconnect_assets() {
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh" 755
 }
 
-# Installs the VPN port sync helper into the stack scripts directory
-write_vpn_port_watch_script() {
-  step "🛰️ Writing VPN port sync helper"
+# Copies vpn-port-guard controller assets into the stack scripts directory
+sync_vpn_port_guard_assets() {
+  step "🛡️ Syncing vpn-port-guard assets"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
-  cp "${REPO_ROOT}/scripts/vpn-port-watch.sh" "$ARR_STACK_DIR/scripts/vpn-port-watch.sh"
-  ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-port-watch.sh" 755
+  local asset
+  for asset in \
+    vpn-port-guard.sh \
+    gluetun-api.sh \
+    qbt-api.sh \
+    vpn-port-guard-hook.sh
+  do
+    cp "${REPO_ROOT}/scripts/${asset}" "$ARR_STACK_DIR/scripts/${asset}"
+    ensure_file_mode "$ARR_STACK_DIR/scripts/${asset}" 755
+  done
 
-  msg "  VPN port watch helper: ${ARR_STACK_DIR}/scripts/vpn-port-watch.sh"
+  msg "  vpn-port-guard scripts: ${ARR_STACK_DIR}/scripts"
 }
 
 # Installs SABnzbd helper into the stack scripts directory

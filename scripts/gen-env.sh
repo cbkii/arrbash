@@ -213,21 +213,14 @@ filter_conditionals() {
 EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "${EXPOSE_DIRECT_PORTS:-0}")"
 SABNZBD_ENABLED="$(arr_normalize_bool "${SABNZBD_ENABLED:-0}")"
 SABNZBD_USE_VPN="$(arr_normalize_bool "${SABNZBD_USE_VPN:-0}")"
-PF_ASYNC_ENABLE="$(arr_normalize_bool "${PF_ASYNC_ENABLE:-1}")"
-PF_ENABLE_CYCLE="$(arr_normalize_bool "${PF_ENABLE_CYCLE:-1}")"
-GLUETUN_PF_STRICT="$(arr_normalize_bool "${GLUETUN_PF_STRICT:-0}")"
 VPN_AUTO_RECONNECT_ENABLED="$(arr_normalize_bool "${VPN_AUTO_RECONNECT_ENABLED:-0}")"
 QBT_ENFORCE_WEBUI="$(arr_normalize_bool "${QBT_ENFORCE_WEBUI:-1}")"
 ENABLE_CONFIGARR="$(arr_normalize_bool "${ENABLE_CONFIGARR:-1}")"
 SPLIT_VPN="$(arr_normalize_bool "${SPLIT_VPN:-0}")"
-PORT_MANAGER_ENABLE="$(arr_normalize_bool "${PORT_MANAGER_ENABLE:-0}")"
 
-: "${PM_STATUS_FILE:=/tmp/gluetun/forwarded_port}"
-: "${PM_POLL_SECONDS:=5}"
-: "${PM_DRY_RUN:=0}"
-: "${PM_LOG_LEVEL:=info}"
+: "${VPN_PORT_GUARD_POLL_SECONDS:=15}"
 
-export EXPOSE_DIRECT_PORTS SABNZBD_ENABLED PORT_MANAGER_ENABLE
+export EXPOSE_DIRECT_PORTS SABNZBD_ENABLED VPN_PORT_GUARD_POLL_SECONDS
 
 if [[ -z "${SONARR_PORT:-}" ]]; then SONARR_PORT="$SONARR_INT_PORT"; fi
 if [[ -z "${RADARR_PORT:-}" ]]; then RADARR_PORT="$RADARR_INT_PORT"; fi

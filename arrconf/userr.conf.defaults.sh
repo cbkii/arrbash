@@ -109,6 +109,7 @@ fi
 
 ARR_DOCKER_SERVICES_DEFAULT=(
   gluetun
+  vpn-port-guard
   qbittorrent
   sonarr
   radarr
@@ -149,20 +150,8 @@ ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE:-enforce}"
 # Gluetun control server
 GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
 
-# ProtonVPN port forwarding tuning
-PF_MAX_TOTAL_WAIT="${PF_MAX_TOTAL_WAIT:-60}"
-PF_POLL_INTERVAL="${PF_POLL_INTERVAL:-5}"
-PF_CYCLE_AFTER="${PF_CYCLE_AFTER:-30}"
-GLUETUN_PF_STRICT="${GLUETUN_PF_STRICT:-0}"
-PF_ASYNC_ENABLE="${PF_ASYNC_ENABLE:-1}"
-PF_ASYNC_INITIAL_QUICK_WAIT="${PF_ASYNC_INITIAL_QUICK_WAIT:-10}"
-PF_ASYNC_TOTAL_BUDGET="${PF_ASYNC_TOTAL_BUDGET:-240}"
-PF_ASYNC_POLL_INTERVAL="${PF_ASYNC_POLL_INTERVAL:-5}"
-PF_ASYNC_CYCLE_INTERVAL="${PF_ASYNC_CYCLE_INTERVAL:-40}"
-PF_ASYNC_MAX_CYCLES="${PF_ASYNC_MAX_CYCLES:-3}"
-PF_ASYNC_STATE_FILE="${PF_ASYNC_STATE_FILE:-pf-state.json}"
-PF_ASYNC_LOG_FILE="${PF_ASYNC_LOG_FILE:-port-forwarding.log}"
-PF_ENABLE_CYCLE="${PF_ENABLE_CYCLE:-1}"
+VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
+CONTROLLER_REQUIRE_PORT_FORWARDING="${CONTROLLER_REQUIRE_PORT_FORWARDING:-false}"
 
 # VPN auto-reconnect tuning
 VPN_AUTO_RECONNECT_ENABLED="${VPN_AUTO_RECONNECT_ENABLED:-0}"
@@ -217,7 +206,6 @@ ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT:-sabnzbd}"
 
 # Expose application ports directly on the host
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-1}"
-PORT_MANAGER_ENABLE="${PORT_MANAGER_ENABLE:-0}"
 
 # qBittorrent credentials (override after first login)
 QBT_USER="${QBT_USER:-admin}"
@@ -293,7 +281,8 @@ ARR_USERCONF_TEMPLATE_VARS=(
   ENABLE_CONFIGARR
   ARR_PORT_CHECK_MODE
   EXPOSE_DIRECT_PORTS
-  PORT_MANAGER_ENABLE
+  VPN_PORT_GUARD_POLL_SECONDS
+  CONTROLLER_REQUIRE_PORT_FORWARDING
   QBT_DOCKER_MODS
   QBT_AUTH_WHITELIST
   QBT_INT_PORT
@@ -321,19 +310,6 @@ ARR_USERCONF_TEMPLATE_VARS=(
   SABNZBD_CATEGORY
   SABNZBD_TIMEOUT
   ARRBASH_USENET_CLIENT
-  PF_MAX_TOTAL_WAIT
-  PF_POLL_INTERVAL
-  PF_CYCLE_AFTER
-  GLUETUN_PF_STRICT
-  PF_ASYNC_ENABLE
-  PF_ASYNC_INITIAL_QUICK_WAIT
-  PF_ASYNC_TOTAL_BUDGET
-  PF_ASYNC_POLL_INTERVAL
-  PF_ASYNC_CYCLE_INTERVAL
-  PF_ASYNC_MAX_CYCLES
-  PF_ASYNC_STATE_FILE
-  PF_ASYNC_LOG_FILE
-  PF_ENABLE_CYCLE
   VPN_AUTO_RECONNECT_ENABLED
   VPN_SPEED_THRESHOLD_KBPS
   VPN_CHECK_INTERVAL_MINUTES
@@ -563,21 +539,6 @@ BAZARR_PORT="${BAZARR_PORT}"                     # Bazarr WebUI port exposed on 
 FLARR_PORT="${FLARR_PORT}"               # FlareSolverr service port exposed on the LAN (default: ${FLARR_PORT})
 SABNZBD_INT_PORT="${SABNZBD_INT_PORT}"           # Internal SABnzbd WebUI port; match the container PORT env if you change it
 SABNZBD_PORT="${SABNZBD_PORT}"                 # Host port for SAB WebUI when direct (default: ${SABNZBD_PORT})
-
-# --- ProtonVPN port-forward timing (advanced) ---
-PF_MAX_TOTAL_WAIT="${PF_MAX_TOTAL_WAIT}"          # Max seconds to wait for a forwarded port before failing (legacy sync mode)
-PF_POLL_INTERVAL="${PF_POLL_INTERVAL}"            # Seconds between Proton API checks while waiting (legacy sync mode)
-PF_CYCLE_AFTER="${PF_CYCLE_AFTER}"                # Seconds before retrying with a new Proton server (legacy sync mode)
-GLUETUN_PF_STRICT="${GLUETUN_PF_STRICT}"        # 1 treats Proton PF timeouts as hard failures; 0 soft-fails (default: ${GLUETUN_PF_STRICT})
-PF_ASYNC_ENABLE="${PF_ASYNC_ENABLE}"              # 1 to run the async worker automatically after Gluetun starts (default: ${PF_ASYNC_ENABLE})
-PF_ASYNC_INITIAL_QUICK_WAIT="${PF_ASYNC_INITIAL_QUICK_WAIT}"  # Quick polling window before cycling servers (default: ${PF_ASYNC_INITIAL_QUICK_WAIT}s)
-PF_ASYNC_TOTAL_BUDGET="${PF_ASYNC_TOTAL_BUDGET}"  # Total seconds the async worker will spend before timing out (default: ${PF_ASYNC_TOTAL_BUDGET}s)
-PF_ASYNC_POLL_INTERVAL="${PF_ASYNC_POLL_INTERVAL}"      # Seconds between async worker status checks (default: ${PF_ASYNC_POLL_INTERVAL}s)
-PF_ASYNC_CYCLE_INTERVAL="${PF_ASYNC_CYCLE_INTERVAL}"    # Minimum seconds between OpenVPN cycles (default: ${PF_ASYNC_CYCLE_INTERVAL}s)
-PF_ASYNC_MAX_CYCLES="${PF_ASYNC_MAX_CYCLES}"      # Max OpenVPN cycles per async run (default: ${PF_ASYNC_MAX_CYCLES})
-PF_ASYNC_STATE_FILE="${PF_ASYNC_STATE_FILE}"      # Relative name of the async worker state file (default: ${PF_ASYNC_STATE_FILE})
-PF_ASYNC_LOG_FILE="${PF_ASYNC_LOG_FILE}"          # Relative name of the async worker log file (default: ${PF_ASYNC_LOG_FILE})
-PF_ENABLE_CYCLE="${PF_ENABLE_CYCLE}"            # 0 skips OpenVPN cycling while waiting on PF (default: ${PF_ENABLE_CYCLE})
 
 # --- VPN auto-reconnect (optional) ---
 VPN_AUTO_RECONNECT_ENABLED="${VPN_AUTO_RECONNECT_ENABLED}"    # 1 enables the background monitor (default: ${VPN_AUTO_RECONNECT_ENABLED})

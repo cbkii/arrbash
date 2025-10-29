@@ -60,9 +60,6 @@ compose_emit_gluetun_environment() {
   local placeholder_server_countries='${SERVER_COUNTRIES}'
   local placeholder_server_names='${SERVER_NAMES}'
   local placeholder_api_key='${GLUETUN_API_KEY}'
-  local placeholder_qbt_user='${QBT_USER}'
-  local placeholder_qbt_pass='${QBT_PASS}'
-  local placeholder_qbt_addr='http://${LOCALHOST_IP}:${QBT_INT_PORT}'
   local placeholder_firewall_out='${GLUETUN_FIREWALL_OUTBOUND_SUBNETS}'
   local placeholder_firewall_in='${GLUETUN_FIREWALL_INPUT_PORTS}'
   local placeholder_puid='${PUID}'
@@ -83,14 +80,13 @@ compose_emit_gluetun_environment() {
   fi
   arr_yaml_kv "      " "VPN_PORT_FORWARDING" "on" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_PROVIDER" "protonvpn" >>"$dest"
+  arr_yaml_kv "      " "PORT_FORWARD_ONLY" "on" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_STATUS_FILE" "${GLUETUN_RUNTIME_FORWARD_STATUS_FILE}" >>"$dest"
-  arr_yaml_kv "      " "HTTP_CONTROL_SERVER_ADDRESS" ":${placeholder_control_port}" >>"$dest"
+  arr_yaml_kv "      " "HTTP_CONTROL_SERVER_ADDRESS" "127.0.0.1:${placeholder_control_port}" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_AUTH" "apikey" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_APIKEY" "${placeholder_api_key}" >>"$dest"
-  arr_yaml_kv "      " "VPN_PORT_FORWARDING_UP_COMMAND" "/gluetun/hooks/update-qbt-port.sh {{PORTS}}" >>"$dest"
-  arr_yaml_kv "      " "QBT_USER" "${placeholder_qbt_user}" >>"$dest"
-  arr_yaml_kv "      " "QBT_PASS" "${placeholder_qbt_pass}" >>"$dest"
-  arr_yaml_kv "      " "QBITTORRENT_ADDR" "${placeholder_qbt_addr}" >>"$dest"
+  arr_yaml_kv "      " "VPN_PORT_FORWARDING_UP_COMMAND" "/scripts/vpn-port-guard-hook.sh up" >>"$dest"
+  arr_yaml_kv "      " "VPN_PORT_FORWARDING_DOWN_COMMAND" "/scripts/vpn-port-guard-hook.sh down" >>"$dest"
   arr_yaml_kv "      " "HEALTH_TARGET_ADDRESS" "1.1.1.1:443" >>"$dest"
   arr_yaml_kv "      " "HEALTH_VPN_DURATION_INITIAL" "30s" >>"$dest"
   arr_yaml_kv "      " "HEALTH_VPN_DURATION_ADDITION" "10s" >>"$dest"
@@ -1417,6 +1413,8 @@ arr_compose_emit_qbittorrent_service() {
     depends_on:
       gluetun:
         condition: "service_healthy"
+      vpn-port-guard:
+        condition: "service_started"
     healthcheck:
       test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
       interval: "30s"
@@ -1433,40 +1431,51 @@ YAML
   printf '\n' >>"$dest"
 }
 
-arr_compose_emit_port_manager_service() {
+arr_compose_emit_vpn_port_guard_service() {
   local dest="$1"
 
   {
-    printf '  port-manager:\n'
-    printf '    image: "alpine:3.20"\n'
-    printf '    container_name: "port-manager"\n'
+    printf '  vpn-port-guard:\n'
+    printf '    image: "ghcr.io/linuxserver/baseimage-alpine:3.20"\n'
+    printf '    container_name: "vpn-port-guard"\n'
     printf '    profiles:\n'
     printf '      - "ipdirect"\n'
     printf '    network_mode: "service:gluetun"\n'
     printf '    depends_on:\n'
     printf '      gluetun:\n'
     printf '        condition: "service_healthy"\n'
-    printf '      qbittorrent:\n'
-    printf '        condition: "service_started"\n'
     printf '    environment:\n'
   } >>"$dest"
 
-  arr_yaml_kv "      " "PM_STATUS_FILE" "\${PM_STATUS_FILE}" >>"$dest"
-  arr_yaml_kv "      " "PM_POLL_SECONDS" "\${PM_POLL_SECONDS}" >>"$dest"
-  arr_yaml_kv "      " "PM_DRY_RUN" "\${PM_DRY_RUN}" >>"$dest"
-  arr_yaml_kv "      " "PM_LOG_LEVEL" "\${PM_LOG_LEVEL}" >>"$dest"
+  arr_yaml_kv "      " "GLUETUN_CONTROL_URL" "http://127.0.0.1:\${GLUETUN_CONTROL_PORT}" >>"$dest"
+  arr_yaml_kv "      " "GLUETUN_API_KEY" "\${GLUETUN_API_KEY}" >>"$dest"
   arr_yaml_kv "      " "QBT_HOST" "127.0.0.1" >>"$dest"
-  arr_yaml_kv "      " "QBT_WEB_PORT" "\${QBT_WEB_PORT}" >>"$dest"
+  arr_yaml_kv "      " "QBT_PORT" "\${QBT_WEB_PORT}" >>"$dest"
   arr_yaml_kv "      " "QBT_USER" "\${QBT_USER}" >>"$dest"
   arr_yaml_kv "      " "QBT_PASS" "\${QBT_PASS}" >>"$dest"
-  arr_yaml_kv "      " "GLUETUN_CONTROL_PORT" "\${GLUETUN_CONTROL_PORT}" >>"$dest"
-  arr_yaml_kv "      " "GLUETUN_API_KEY" "\${GLUETUN_API_KEY}" >>"$dest"
+  arr_yaml_kv "      " "CONTROLLER_POLL_INTERVAL" "\${VPN_PORT_GUARD_POLL_SECONDS}" >>"$dest"
+  arr_yaml_kv "      " "CONTROLLER_REQUIRE_PORT_FORWARDING" "\${CONTROLLER_REQUIRE_PORT_FORWARDING}" >>"$dest"
 
   cat <<'YAML' >>"$dest"
     volumes:
-      - "gluetun_state:/tmp/gluetun:ro"
-      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts/vpn-port-watch.sh:/pm-watch.sh:ro"
-    command: ["/pm-watch.sh"]
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/gluetun_state"
+      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts:/scripts:ro"
+    command: ["/scripts/vpn-port-guard.sh"]
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >-
+          /bin/bash -c '
+            set -euo pipefail;
+            status_file="/gluetun_state/port-guard-status.json";
+            test -s "$status_file";
+            find "$status_file" -mmin -1 | grep -q .;
+            curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/status" >/dev/null;
+            curl -fsS --connect-timeout 5 --max-time 5 "http://127.0.0.1:${QBT_WEB_PORT}/api/v2/app/version" >/dev/null
+          '
+      interval: "30s"
+      timeout: "10s"
+      retries: "3"
     restart: "unless-stopped"
     logging:
       driver: "json-file"
@@ -1785,7 +1794,9 @@ YAML
   cat <<'YAML' >>"$tmp"
     volumes:
       - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
-      - "gluetun_state:/tmp/gluetun"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/tmp/gluetun"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/gluetun_state"
+      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts:/scripts:ro"
     ports:
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       # split-mode on: publish qBittorrent via Gluetun so Arr apps reach http://gluetun:${QBT_INT_PORT}
@@ -1830,10 +1841,8 @@ YAML
     die "Failed to emit qBittorrent service definition"
   fi
 
-  if [[ "${PORT_MANAGER_ENABLE:-0}" == "1" ]]; then
-    if ! arr_compose_emit_port_manager_service "$tmp"; then
-      die "Failed to emit port-manager service definition"
-    fi
+  if ! arr_compose_emit_vpn_port_guard_service "$tmp"; then
+    die "Failed to emit vpn-port-guard service definition"
   fi
 
   if ! arr_compose_emit_media_service "$tmp" "sonarr" "split"; then
@@ -1929,8 +1938,6 @@ YAML
   cat <<'YAML' >>"$tmp"
 
 volumes:
-  gluetun_state:
-    name: "${COMPOSE_PROJECT_NAME}_gluetun_state"
 YAML
 
   printf '\n' >>"$tmp"
@@ -2012,7 +2019,7 @@ YAML
   cat <<'YAML' >>"$tmp"
     volumes:
       - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
-      - "gluetun_state:/tmp/gluetun"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/tmp/gluetun"
     ports:
       # split-mode off: Gluetun publishes shared service ports for the namespace
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
@@ -2066,10 +2073,8 @@ YAML
     die "Failed to emit qBittorrent service definition"
   fi
 
-  if [[ "${PORT_MANAGER_ENABLE:-0}" == "1" ]]; then
-    if ! arr_compose_emit_port_manager_service "$tmp"; then
-      die "Failed to emit port-manager service definition"
-    fi
+  if ! arr_compose_emit_vpn_port_guard_service "$tmp"; then
+    die "Failed to emit vpn-port-guard service definition"
   fi
 
   if ! arr_compose_emit_media_service "$tmp" "sonarr" "full"; then
@@ -2154,8 +2159,6 @@ YAML
   cat <<'YAML' >>"$tmp"
 
 volumes:
-  gluetun_state:
-    name: "${COMPOSE_PROJECT_NAME}_gluetun_state"
 YAML
 
   printf '\n' >>"$tmp"

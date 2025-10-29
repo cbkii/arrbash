@@ -516,9 +516,6 @@ if [[ -f "$GLUETUN_LIB" ]]; then
   . "$GLUETUN_LIB"
 else
   log_warn "Gluetun helper library missing at $GLUETUN_LIB"
-  fetch_forwarded_port() { printf '0'; }
-  fetch_public_ip() { printf ''; }
-  ensure_proton_port_forwarding_ready() { return 1; }
 fi
 
 log_info "🔍 VPN Diagnostics Starting..."
@@ -536,28 +533,56 @@ if [[ "$GLUETUN_STATUS" != "running" ]]; then
   sleep 30
 fi
 
-log_info "Checking VPN connection..."
-PUBLIC_IP="$(fetch_public_ip)"
-
-if [[ -n "$PUBLIC_IP" ]]; then
-  log_info "✅ VPN Connected: $PUBLIC_IP"
-else
-  log_warn "VPN not connected"
+STATUS_FILE=""
+if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
+  STATUS_FILE="$(gluetun_port_guard_status_file 2>/dev/null || printf '')"
+fi
+if [[ -z "$STATUS_FILE" ]]; then
+  STATUS_FILE="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
 fi
 
-log_info "Checking port forwarding..."
-PF_PORT="$(fetch_forwarded_port 2>/dev/null || printf '0')"
-
-if [[ "$PF_PORT" == "0" ]]; then
-  ensure_proton_port_forwarding_ready || true
-  PF_PORT="${PF_ENSURED_PORT:-$PF_PORT}"
+if [[ -f "$STATUS_FILE" ]]; then
+  log_info "vpn-port-guard status file: $STATUS_FILE"
+else
+  log_warn "vpn-port-guard status file missing at $STATUS_FILE"
 fi
 
-if [[ "$PF_PORT" != "0" ]]; then
-  log_info "✅ Port forwarding active: Port $PF_PORT"
+read_status_field() {
+  local key="$1"
+  local default="$2"
+  if [[ ! -f "$STATUS_FILE" ]]; then
+    printf '%s' "$default"
+    return
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    jq -r --arg key "$key" '.[$key] // "'"$default"'"' "$STATUS_FILE" 2>/dev/null || printf '%s' "$default"
+    return
+  fi
+  awk -v key="$key" -F ':' '
+    $0 ~ "\"" key "\"" {
+      gsub(/^[[:space:]]+/, "", $2);
+      gsub(/[",]/, "", $2);
+      print $2;
+      exit;
+    }
+  ' "$STATUS_FILE" 2>/dev/null | awk 'NR==1 {print; exit}' || printf '%s' "$default"
+}
+
+VPN_STATUS="$(read_status_field vpn_status unknown)"
+FORWARDED_PORT="$(read_status_field forwarded_port 0)"
+QBT_STATUS="$(read_status_field qbt_status unknown)"
+
+log_info "vpn-port-guard: vpn_status=$VPN_STATUS, qbt_status=$QBT_STATUS, port=$FORWARDED_PORT"
+
+if [[ "$VPN_STATUS" != "running" ]]; then
+  log_warn "VPN tunnel not reported as running; torrents will remain paused"
+fi
+
+if [[ "$FORWARDED_PORT" =~ ^[1-9][0-9]*$ ]]; then
+  log_info "✅ Forwarded port active: $FORWARDED_PORT"
 else
-  log_warn "Port forwarding not working"
-  log_warn "Review 'docker logs gluetun --tail 100 | grep update-qbt-port' for details"
+  log_warn "Forwarded port unavailable"
+  log_warn "Check 'docker logs vpn-port-guard --tail 100' for recent controller output"
 fi
 
 log_info "Checking service health..."

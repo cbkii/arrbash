@@ -59,8 +59,8 @@ vpn_auto_epoch_to_iso() {
     printf ''
     return 0
   fi
-  if declare -f arr_epoch_to_iso >/dev/null 2>&1; then
-    arr_epoch_to_iso "$epoch"
+  if declare -f arr_epoch_to_local_iso8601 >/dev/null 2>&1; then
+    arr_epoch_to_local_iso8601 "$epoch"
     return
   fi
   date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf ''
@@ -130,6 +130,11 @@ vpn_auto_cookie_file() {
 }
 
 vpn_auto_pf_state_file() {
+  if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
+    gluetun_port_guard_status_file
+    return
+  fi
+
   local root=""
   if declare -f arr_gluetun_dir >/dev/null 2>&1; then
     root="$(arr_gluetun_dir 2>/dev/null || printf '')"
@@ -143,8 +148,8 @@ vpn_auto_pf_state_file() {
     fi
     root="${docker_root%/}/gluetun"
   fi
-  local name="${PF_ASYNC_STATE_FILE:-pf-state.json}"
-  printf '%s/%s' "${root%/}" "$name"
+
+  printf '%s/state/port-guard-status.json' "${root%/}"
 }
 
 vpn_auto_pf_hook_path() {
@@ -161,7 +166,7 @@ vpn_auto_pf_hook_path() {
     fi
     root="${docker_root%/}/gluetun"
   fi
-  printf '%s/hooks/update-qbt-port.sh' "${root%/}"
+  printf '%s/state/port-guard.trigger' "${root%/}"
 }
 
 vpn_auto_has_jq() {
