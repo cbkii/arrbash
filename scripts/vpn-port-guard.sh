@@ -124,7 +124,7 @@ controller_write_state() {
 
 controller_mark_init() {
   _controller_qbt_state="paused"
-  controller_write_state "init" 0 "unavailable" "paused"
+  controller_write_state "init" 0 "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
 }
 
 controller_pause_qbt() {
@@ -220,28 +220,28 @@ main() {
       if [[ "$forwarded_port" != 0 ]]; then
         forwarding_state="error"
       fi
-      controller_write_state "$status" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)"
+      controller_write_state "$status" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
       continue
     fi
 
     if [[ "$status" != "running" ]]; then
       controller_log "VPN not ready (status=${status}); keeping torrents paused"
       controller_pause_qbt || true
-      controller_write_state "$status" "$forwarded_port" "unavailable" "paused"
+      controller_write_state "$status" "$forwarded_port" "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
       continue
     fi
 
     if [[ "$forwarded_port" != 0 ]]; then
       if controller_apply_port "$forwarded_port"; then
         if controller_resume_qbt; then
-          controller_write_state "running" "$forwarded_port" "active" "active"
+          controller_write_state "running" "$forwarded_port" "active" "active" "${CONTROLLER_REQUIRE_STRICT}"
         else
-          controller_write_state "running" "$forwarded_port" "active" "$(controller_current_qbt_state)"
+          controller_write_state "running" "$forwarded_port" "active" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
         fi
       else
         forwarding_state="error"
         controller_pause_qbt || true
-        controller_write_state "running" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)"
+        controller_write_state "running" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
       fi
       continue
     fi
@@ -249,18 +249,18 @@ main() {
     if [[ "$CONTROLLER_REQUIRE_STRICT" == "true" ]]; then
       controller_log "Forwarded port unavailable; strict mode enabled so torrents remain paused"
       controller_pause_qbt || true
-      controller_write_state "running" 0 "unavailable" "paused"
+      controller_write_state "running" 0 "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
     else
       controller_log "Forwarded port unavailable; torrents running without inbound port"
       if controller_resume_qbt; then
-        controller_write_state "running" 0 "unavailable" "active"
+        controller_write_state "running" 0 "unavailable" "active" "${CONTROLLER_REQUIRE_STRICT}"
       else
-        controller_write_state "running" 0 "unavailable" "$(controller_current_qbt_state)"
+        controller_write_state "running" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
       fi
     fi
   done
 }
 
-trap 'controller_log "Shutting down"; controller_pause_qbt || true; controller_write_state "down" 0 "unavailable" "$(controller_current_qbt_state)"' EXIT
+trap 'controller_log "Shutting down"; controller_pause_qbt || true; controller_write_state "down" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"' EXIT
 
 main "$@"
