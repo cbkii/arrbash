@@ -53,11 +53,11 @@ services:
       QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
       TZ: "${TIMEZONE}"
-      volumes:
-        - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
-        - "gluetun_state:/tmp/gluetun"
-        - "gluetun_state:/gluetun_state"
-        - "${ARR_STACK_DIR}/scripts:/scripts:ro"
+    volumes:
+      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
+      - "gluetun_state:/tmp/gluetun"
+      - "gluetun_state:/gluetun_state"
+      - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     ports:
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"   # split-mode on: publish qBittorrent via Gluetun

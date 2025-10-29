@@ -171,7 +171,10 @@ qbt_set_listen_port() {
   fi
 
   local payload
-  payload=$(jq -cn --argjson port "$port" '{listen_port: $port, random_port: false}' 2>/dev/null || printf '{}')
+  if ! payload="$(jq -cn --argjson port "$port" '{listen_port: $port, random_port: false}' 2>/dev/null)"; then
+    printf 'Failed to generate qBittorrent port update JSON\n' >&2
+    return 1
+  fi
   local url
   url="$(_qbt_api_base_url)/api/v2/app/setPreferences"
 

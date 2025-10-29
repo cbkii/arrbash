@@ -32,11 +32,11 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
 
 1. **Startup ordering**
    1. Gluetun starts, establishes the OpenVPN tunnel, and negotiates a forwarded port.
-   2. `vpn-port-guard` starts after Gluetun is healthy. It immediately pauses
+  2. `vpn-port-guard` starts after Gluetun is healthy. It immediately pauses
       qBittorrent and waits for Gluetun to report `status=running`. Once the VPN
-      tunnel is up the controller resumes qBittorrent even if Proton has not yet
-      granted a forwarded port, marking `forwarding_state="missing"` in the status
-      file until one appears.
+      tunnel is up, the controller resumes qBittorrent even if Proton has not yet
+      granted a forwarded port, marking `forwarding_state="unavailable"` in the
+      status file until one appears.
    3. qBittorrent starts (it depends on Gluetun and `vpn-port-guard`) and only runs
       while the VPN is healthy. Exporting `CONTROLLER_REQUIRE_PF=true`
       enables strict mode, keeping qBittorrent paused whenever Proton forwarding is
@@ -46,14 +46,14 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
      default) and also reacts instantly whenever the Gluetun NAT-PMP hook touches
      `/gluetun_state/port-guard.trigger`.
    * If Gluetun reports `status != running`, qBittorrent is paused and the status
-     file records `forwarding_state="missing"`.
+     file records `forwarding_state="unavailable"`.
    * Once Gluetun reports `status == running` with a valid port, the controller
      applies that port via qBittorrent’s Web API (disabling `random_port`), sets
      `forwarding_state="active"`, and resumes torrents.
    * When Proton has not granted a port (`forwarded_port == 0`) the controller keeps
      qBittorrent running by default (still inside Gluetun’s namespace) but leaves
-     `forwarding_state="missing"` so you know seeding capacity is degraded. Setting
-     `CONTROLLER_REQUIRE_PF=true` switches to strict mode and keeps
+     `forwarding_state="unavailable"` so you know seeding capacity is degraded.
+     Setting `CONTROLLER_REQUIRE_PF=true` switches to pf-strict mode and keeps
      qBittorrent paused whenever no port is available.
    * If qBittorrent’s Web API becomes unreachable (common in long uptimes when the
      Gluetun namespace glitches), the controller pauses torrents, writes
@@ -63,7 +63,9 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
 ## Security model
 
 * Gluetun’s control API is only reachable from within the Docker namespace and requires
-  the API key. It is never published on the LAN.
+  the API key. vpn-port-guard reaches it at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}`
+  **because** the service runs with `network_mode: service:gluetun`. Changing the
+  network mode requires exposing the control API explicitly or vpn-port-guard will fail.
 * qBittorrent’s Web UI remains inside the Gluetun network namespace unless you expose it
   intentionally via a reverse proxy.
 * `vpn-port-guard` is the **only** service allowed to pause/resume torrents or change
@@ -83,8 +85,9 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
 * `arrvpn-events` – tails `/gluetun_state/port-guard-events.log` to observe Gluetun
   hook activity.
 
-If the status JSON shows `forwarded_port: 0` with `forwarding_state="missing"`, ProtonVPN has not
+If the status JSON shows `forwarded_port: 0` with `forwarding_state="unavailable"`, ProtonVPN has not
 granted a port yet or Gluetun lost the lease. Torrents continue downloading and seeding
 peers that can reach you, but connectability is reduced until the lease returns. Enable
 `CONTROLLER_REQUIRE_PF=true` if your tracker demands a fully open port and
-you prefer torrents to stay paused whenever forwarding is absent.
+you prefer torrents to stay paused whenever forwarding is absent. Leave it `false`
+for pf-preferred mode so torrents keep running even while Proton rotates the lease.
