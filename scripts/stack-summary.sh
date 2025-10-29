@@ -252,22 +252,7 @@ WARNING
       last_update="$(summary_format_epoch "$last_epoch")"
     fi
 
-    controller_mode="${controller_mode,,}"
-    if [[ -z "$controller_mode" ]]; then
-      local require_pf_raw="${CONTROLLER_REQUIRE_PF:-${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-}}}"
-      require_pf_raw="${require_pf_raw,,}"
-      case "$require_pf_raw" in
-        1|true|yes|on|required|strict) controller_mode="strict" ;;
-        *) controller_mode="preferred" ;;
-      esac
-    fi
-    if [[ "$controller_mode" != "strict" && "$controller_mode" != "preferred" ]]; then
-      if [[ "$pf_enabled" == "true" ]]; then
-        controller_mode="strict"
-      else
-        controller_mode="preferred"
-      fi
-    fi
+    controller_mode="$(derive_controller_mode "$controller_mode" "$pf_enabled")"
 
     qbt_state="${qbt_state,,}"
     case "$qbt_state" in
