@@ -2100,9 +2100,9 @@ arr.vpn.portguard.watch() {
   fi
   if _arr_has_cmd watch; then
     if _arr_has_cmd jq; then
-      watch -n 2 'jq . '"${file}"
+      watch -n 2 "jq '.' \"${file}\""
     else
-      watch -n 2 'cat '"${file}" 
+      watch -n 2 "cat \"${file}\""
     fi
     return 0
   fi
