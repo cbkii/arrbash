@@ -2051,7 +2051,7 @@ arr.pf.logs() {
   if _arr_compose logs -f vpn-port-guard; then
     return 0
   fi
-  warn "vpn-port-guard logs unavailable"
+  warn "vpn-port-guard logs unavailable (container not found or compose cmd failed)"
   return 1
 }
 
@@ -2100,9 +2100,9 @@ arr.vpn.portguard.watch() {
   fi
   if _arr_has_cmd watch; then
     if _arr_has_cmd jq; then
-      watch -n 2 'jq "." "'"${file}"'"'
+      watch -n 2 'jq . '"${file}"
     else
-      watch -n 2 "cat \"${file}\""
+      watch -n 2 'cat '"${file}" 
     fi
     return 0
   fi
