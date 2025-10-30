@@ -101,6 +101,50 @@ arr_cleanup_temp_path() {
   rm -rf -- "$path" 2>/dev/null || true
 }
 
+# Normalises controller mode strings using optional pf hints/env defaults
+derive_controller_mode() {
+  local controller_mode_raw="${1:-}"
+  local pf_enabled_raw="${2:-}"
+  local require_pf_hint="${3:-}"
+
+  local mode="${controller_mode_raw,,}"
+  local pf_enabled_flag="${pf_enabled_raw,,}"
+
+  local require_pf_source="$require_pf_hint"
+  if [[ -z "$require_pf_source" ]]; then
+    require_pf_source="${CONTROLLER_REQUIRE_PF:-${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-}}}"
+  fi
+  require_pf_source="${require_pf_source,,}"
+
+  if [[ -z "$mode" ]]; then
+    case "$require_pf_source" in
+      1|true|yes|on|required|strict)
+        mode="strict"
+        ;;
+      *)
+        mode="preferred"
+        ;;
+    esac
+  fi
+
+  if [[ "$mode" != "strict" && "$mode" != "preferred" ]]; then
+    case "$pf_enabled_flag" in
+      1|true|yes|on|required|strict)
+        mode="strict"
+        ;;
+      *)
+        mode="preferred"
+        ;;
+    esac
+  fi
+
+  if [[ "$mode" != "strict" && "$mode" != "preferred" ]]; then
+    mode="preferred"
+  fi
+
+  printf '%s\n' "$mode"
+}
+
 # Derives runtime color output preference respecting NO_COLOR/force overrides
 arr_resolve_color_output() {
   local resolved=1

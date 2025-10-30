@@ -42,10 +42,8 @@ write_gluetun_control_assets() {
   msg "Preparing Gluetun control assets for Proton port forwarding"
 
   local gluetun_root="${ARR_DOCKER_DIR}/gluetun"
-  local hooks_dir="${gluetun_root}/hooks"
 
   ensure_data_dir_mode "$gluetun_root"
-  ensure_dir_mode "$hooks_dir" "$DATA_DIR_MODE"
   ensure_dir_mode "${gluetun_root}/state" "$DATA_DIR_MODE"
 
   local auth_dir="${gluetun_root}/auth"
@@ -105,8 +103,7 @@ EOF
     fi
   fi
 
-  cp "${REPO_ROOT}/scripts/vpn-port-guard-hook.sh" "${hooks_dir}/port-forward-hooks.sh"
-  ensure_file_mode "${hooks_dir}/port-forward-hooks.sh" 700
+  ensure_dir_mode "${gluetun_root}/hooks" "$DATA_DIR_MODE"
 }
 
 # Copies the shared Gluetun helper script into the stack workspace

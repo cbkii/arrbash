@@ -56,10 +56,12 @@ verify_vpn_port_guard_prereqs() {
     die "Missing qBittorrent API helper at ${qbt_api_path}; rerun ./arr.sh --refresh-aliases"
   fi
 
-  local state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
   if [[ -z "${ARR_DOCKER_DIR:-}" ]]; then
     die "ARR_DOCKER_DIR is not set; run ./arr.sh configure to establish stack directories"
   fi
+
+  local state_dir
+  state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
 
   if ! mkdir -p "$state_dir" 2>/dev/null; then
     die "Unable to create ${state_dir}; verify filesystem permissions"
@@ -69,7 +71,7 @@ verify_vpn_port_guard_prereqs() {
   if ! touch "$probe" 2>/dev/null; then
     die "Unable to write inside ${state_dir}; adjust permissions for vpn-port-guard state sharing"
   fi
-  rm -f "$probe" 2>/dev/null || true
+  rm -f "$probe" 2>/dev/null
 
   local status_file="${state_dir}/port-guard-status.json"
   if [[ -f "$status_file" && ! -w "$status_file" ]]; then
@@ -110,7 +112,7 @@ verify_vpn_port_guard_prereqs() {
   esac
 
   local legacy_watch="${REPO_ROOT}/scripts/vpn-port-watch.sh"
-  if [[ -f "$legacy_watch" ]] && ! grep -q 'deprecated' "$legacy_watch" 2>/dev/null; then
+  if [[ -f "$legacy_watch" ]] && ! LC_ALL=C grep -q 'deprecated' "$legacy_watch" 2>/dev/null; then
     warn "Legacy vpn-port-watch.sh detected; ensure it remains a stub and does not control qBittorrent"
   fi
 

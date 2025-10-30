@@ -1465,14 +1465,12 @@ arr_compose_emit_vpn_port_guard_service() {
       test:
         - "CMD-SHELL"
         - >-
-          /bin/bash -c '
-            set -euo pipefail;
-            status_file="/gluetun_state/port-guard-status.json";
-            test -s "$status_file";
-            find "$status_file" -mmin -1 | grep -q .;
-            curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/status" >/dev/null;
-            curl -fsS --connect-timeout 5 --max-time 5 "http://127.0.0.1:${QBT_WEB_PORT}/api/v2/app/version" >/dev/null
-          '
+          /bin/bash -c "set -euo pipefail;
+            status_file=\"/gluetun_state/port-guard-status.json\";
+            test -s \"$status_file\";
+            find \"$status_file\" -mmin -1 | grep -q .;
+            curl -fsS --connect-timeout 5 --max-time 5 -H \"X-API-Key: ${GLUETUN_API_KEY}\" \"http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/status\" >/dev/null;
+            curl -fsS --connect-timeout 5 --max-time 5 \"http://127.0.0.1:${QBT_WEB_PORT}/api/v2/app/version\" >/dev/null"
       interval: "30s"
       timeout: "10s"
       retries: "3"
@@ -2020,6 +2018,7 @@ YAML
     volumes:
       - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
       - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/tmp/gluetun"
+      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/gluetun_state"
     ports:
       # split-mode off: Gluetun publishes shared service ports for the namespace
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"

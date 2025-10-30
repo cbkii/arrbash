@@ -885,7 +885,7 @@ _arr_port_guard_forwarding_state() {
     return 1
   fi
   if _arr_has_cmd jq; then
-    jq -r '.forwarding_state // empty' "$file" 2>/dev/null || return 1
+    jq -r '.forwarding_state // "unavailable"' "$file" 2>/dev/null || return 1
   else
     awk -F ':' '/"forwarding_state"/ {gsub(/[^[:alpha:]-]/, "", $2); print $2; exit}' "$file"
   fi
@@ -912,14 +912,15 @@ _arr_port_guard_effective_mode() {
     return 0
   fi
 
-  local raw="${CONTROLLER_REQUIRE_PF:-$(_arr_env_get CONTROLLER_REQUIRE_PF 2>/dev/null || printf '')}"
+  local raw
+  raw="${CONTROLLER_REQUIRE_PF:-$(_arr_env_get CONTROLLER_REQUIRE_PF 2>/dev/null || printf '')}"
   if [ -z "$raw" ]; then
     raw="${CONTROLLER_REQUIRE_PORT_FORWARDING:-$(_arr_env_get CONTROLLER_REQUIRE_PORT_FORWARDING 2>/dev/null || printf '')}"
   fi
   raw="$(_arr_lowercase "$raw")"
   case "$raw" in
-    1|true|yes|on|required)
-      printf 'required'
+    1|true|yes|on|required|strict)
+      printf 'strict'
       ;;
     *)
       printf 'preferred'
@@ -1895,7 +1896,7 @@ arr.vpn.status() {
     if [ "$pf_port" -ne 0 ] 2>/dev/null; then
       forwarding_state="active"
     else
-      forwarding_state="missing"
+      forwarding_state="unavailable"
     fi
   fi
 
@@ -1908,10 +1909,10 @@ arr.vpn.status() {
       msg "Forwarded port: ${pf_port} (lease detected but not yet applied; controller status ${qbt_status:-unknown})"
     fi
   else
-    if [ "$controller_mode" = "required" ]; then
+    if [ "$controller_mode" = "strict" ]; then
       msg 'Forwarded port: not currently assigned (strict mode keeps torrents paused)'
     else
-      msg 'Forwarded port: not currently assigned (running in degraded seeding mode behind the VPN)'
+      msg 'Forwarded port: not currently assigned (preferred mode keeps torrents running with reduced inbound connectivity)'
     fi
   fi
 
@@ -2008,11 +2009,11 @@ arr.pf.port() {
   local mode
   mode="$(_arr_port_guard_effective_mode)"
   local state
-  state="$(_arr_port_guard_forwarding_state 2>/dev/null || printf 'missing')"
-  if [ "$mode" = "required" ]; then
-    printf 'Forwarded port unavailable (strict mode keeps torrents paused)\n' >&2
+  state="$(_arr_port_guard_forwarding_state 2>/dev/null || printf 'unavailable')"
+  if [ "$mode" = "strict" ]; then
+    printf 'Forwarded port unavailable; strict mode keeps qBittorrent paused until Proton grants a port.\n' >&2
   else
-    printf 'Forwarded port unavailable (degraded seeding; torrents remain active behind the VPN)\n' >&2
+    printf 'Forwarded port unavailable; preferred mode keeps torrents running (reduced inbound connectivity).\n' >&2
   fi
   if [ -n "$state" ]; then
     printf 'Forwarding state: %s\n' "$state" >&2
@@ -2039,9 +2040,19 @@ arr.pf.logs() {
   local container
   container="$(_arr_container_id_for_service vpn-port-guard 0 2>/dev/null || printf '')"
   if [ -n "$container" ]; then
-    exec docker logs -f "$container"
+    docker logs -f "$container"
+    local status=$?
+    case "$status" in
+      0|130)
+        return "$status"
+        ;;
+    esac
   fi
-  _arr_compose logs -f vpn-port-guard
+  if _arr_compose logs -f vpn-port-guard; then
+    return 0
+  fi
+  warn "vpn-port-guard logs unavailable (container not found or compose cmd failed)"
+  return 1
 }
 
 arr.pf.notify() {
@@ -2089,9 +2100,9 @@ arr.vpn.portguard.watch() {
   fi
   if _arr_has_cmd watch; then
     if _arr_has_cmd jq; then
-      watch -n 2 "jq '.' '$file'"
+      watch -n 2 "jq '.' \"${file}\""
     else
-      watch -n 2 "cat '$file'"
+      watch -n 2 "cat \"${file}\""
     fi
     return 0
   fi

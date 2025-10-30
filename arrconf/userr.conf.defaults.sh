@@ -107,6 +107,13 @@ if ! declare -f arr_join_by >/dev/null 2>&1; then
   }
 fi
 
+if ! declare -f arr_defaults_fail >/dev/null 2>&1; then
+  arr_defaults_fail() {
+    printf 'arrconf: %s\n' "$*" >&2
+    return 1 2>/dev/null || exit 1
+  }
+fi
+
 ARR_DOCKER_SERVICES_DEFAULT=(
   gluetun
   vpn-port-guard
@@ -151,10 +158,25 @@ ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE:-enforce}"
 GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
 
 VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
+if [[ ! "${VPN_PORT_GUARD_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
+  arr_defaults_fail "VPN_PORT_GUARD_POLL_SECONDS must be a positive integer (got '${VPN_PORT_GUARD_POLL_SECONDS}')"
+fi
+
 if [[ -z "${CONTROLLER_REQUIRE_PF+x}" && -n "${CONTROLLER_REQUIRE_PORT_FORWARDING:-}" ]]; then
   CONTROLLER_REQUIRE_PF="${CONTROLLER_REQUIRE_PORT_FORWARDING}"
 fi
 CONTROLLER_REQUIRE_PF="${CONTROLLER_REQUIRE_PF:-false}"
+case "${CONTROLLER_REQUIRE_PF,,}" in
+  1|true|yes|on|required|strict)
+    CONTROLLER_REQUIRE_PF="true"
+    ;;
+  ''|0|false|no|off|preferred)
+    CONTROLLER_REQUIRE_PF="false"
+    ;;
+  *)
+    arr_defaults_fail "CONTROLLER_REQUIRE_PF must be 'true' or 'false' (got '${CONTROLLER_REQUIRE_PF}')"
+    ;;
+esac
 
 # VPN auto-reconnect tuning
 VPN_AUTO_RECONNECT_ENABLED="${VPN_AUTO_RECONNECT_ENABLED:-0}"
