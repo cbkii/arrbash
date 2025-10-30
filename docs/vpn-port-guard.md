@@ -32,7 +32,7 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
 
 1. **Startup ordering**
    1. Gluetun starts, establishes the OpenVPN tunnel, and negotiates a forwarded port.
-  2. `vpn-port-guard` starts after Gluetun is healthy. It immediately pauses
+    2. `vpn-port-guard` starts after Gluetun is healthy. It immediately pauses
       qBittorrent and waits for Gluetun to report `status=running`. Once the VPN
       tunnel is up, the controller resumes qBittorrent even if Proton has not yet
       granted a forwarded port, marking `forwarding_state="unavailable"` in the
