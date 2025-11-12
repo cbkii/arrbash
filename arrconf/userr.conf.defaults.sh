@@ -535,6 +535,12 @@ SPLIT_VPN="${SPLIT_VPN}"
 ENABLE_CONFIGARR="${ENABLE_CONFIGARR}"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing, fix auto-clears blockers
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS}"                # Keep 1 so WebUIs publish on http://${LAN_IP}:PORT (requires LAN_IP set to your private IPv4)
+# VPN port guard poll cadence (integer seconds) and strictness (true pauses when no port is available)
+VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS}"  # Positive integer seconds between Gluetun API polls (default: ${VPN_PORT_GUARD_POLL_SECONDS})
+CONTROLLER_REQUIRE_PF="${CONTROLLER_REQUIRE_PF}"              # true enforces Proton forwarding, false only prefers it (default: ${CONTROLLER_REQUIRE_PF})
+# Example overrides:
+# VPN_PORT_GUARD_POLL_SECONDS="30"
+# CONTROLLER_REQUIRE_PF="true"
 
 # --- Credentials ---
 QBT_USER="admin"                       # Initial qBittorrent username (change after first login)

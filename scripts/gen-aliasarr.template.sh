@@ -729,6 +729,17 @@ _arr_curl_resolve_flags() {
 
 _arr_has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
+_arr_port_guard_require_jq() {
+  if _arr_has_cmd jq; then
+    return 0
+  fi
+  if [ -z "${_arr_port_guard_missing_jq_warned:-}" ]; then
+    printf 'jq is required for vpn-port-guard helpers; install jq to query status.\n' >&2
+    _arr_port_guard_missing_jq_warned=1
+  fi
+  return 1
+}
+
 _arr_pretty_json() {
   if _arr_has_cmd jq; then
     jq '.'
@@ -871,11 +882,10 @@ _arr_port_guard_forwarded_port() {
   if [ ! -f "$file" ]; then
     return 1
   fi
-  if _arr_has_cmd jq; then
-    jq -r '.forwarded_port' "$file" 2>/dev/null || return 1
-  else
-    awk -F ':' '/"forwarded_port"/ {gsub(/[^0-9]/, "", $2); print $2; exit}' "$file"
+  if ! _arr_port_guard_require_jq; then
+    return 1
   fi
+  jq -r '.forwarded_port' "$file" 2>/dev/null || return 1
 }
 
 _arr_port_guard_forwarding_state() {
@@ -884,11 +894,10 @@ _arr_port_guard_forwarding_state() {
   if [ ! -f "$file" ]; then
     return 1
   fi
-  if _arr_has_cmd jq; then
-    jq -r '.forwarding_state // "unavailable"' "$file" 2>/dev/null || return 1
-  else
-    awk -F ':' '/"forwarding_state"/ {gsub(/[^[:alpha:]-]/, "", $2); print $2; exit}' "$file"
+  if ! _arr_port_guard_require_jq; then
+    return 1
   fi
+  jq -r '.forwarding_state // "unavailable"' "$file" 2>/dev/null || return 1
 }
 
 _arr_port_guard_controller_mode() {
@@ -897,11 +906,10 @@ _arr_port_guard_controller_mode() {
   if [ ! -f "$file" ]; then
     return 1
   fi
-  if _arr_has_cmd jq; then
-    jq -r '.controller_mode // empty' "$file" 2>/dev/null || return 1
-  else
-    awk -F ':' '/"controller_mode"/ {gsub(/[^[:alpha:]-]/, "", $2); print $2; exit}' "$file"
+  if ! _arr_port_guard_require_jq; then
+    return 1
   fi
+  jq -r '.controller_mode // empty' "$file" 2>/dev/null || return 1
 }
 
 _arr_port_guard_effective_mode() {
@@ -933,11 +941,10 @@ _arr_port_guard_pf_enabled() {
   if [ ! -f "$file" ]; then
     return 1
   fi
-  if _arr_has_cmd jq; then
-    jq -r '.pf_enabled' "$file" 2>/dev/null || return 1
-  else
-    awk -F ':' '/"pf_enabled"/ {gsub(/[^[:alnum:]]/, "", $2); print $2; exit}' "$file"
+  if ! _arr_port_guard_require_jq; then
+    return 1
   fi
+  jq -r '.pf_enabled' "$file" 2>/dev/null || return 1
 }
 
 _arr_port_guard_json_value() {
@@ -946,18 +953,10 @@ _arr_port_guard_json_value() {
   if [ -z "$key" ] || [ ! -f "$file" ]; then
     return 1
   fi
-  if _arr_has_cmd jq; then
-    jq -r --arg key "$key" '.[$key] // empty' "$file" 2>/dev/null || return 1
-  else
-    awk -v key="$key" -F ':' '
-      $0 ~ "\"" key "\"" {
-        sub(/^[^:]*:/, "");
-        gsub(/[",[:space:]]/, "");
-        print;
-        exit;
-      }
-    ' "$file"
+  if ! _arr_port_guard_require_jq; then
+    return 1
   fi
+  jq -r --arg key "$key" '.[$key] // empty' "$file" 2>/dev/null || return 1
 }
 
 _arr_vpn_last_error=""
