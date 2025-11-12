@@ -190,5 +190,3 @@ qbt_set_listen_port() {
 qbt_api_cleanup() {
   _qbt_api_cleanup_cookie
 }
-
-trap '_qbt_api_cleanup_cookie' EXIT

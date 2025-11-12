@@ -554,18 +554,15 @@ read_status_field() {
     printf '%s' "$default"
     return
   fi
-  if command -v jq >/dev/null 2>&1; then
-    jq -r --arg key "$key" '.[$key] // "'"$default"'"' "$STATUS_FILE" 2>/dev/null || printf '%s' "$default"
+  if ! command -v jq >/dev/null 2>&1; then
+    if [[ -z "${__aliasarr_jq_warned:-}" ]]; then
+      log_warn "jq is required to parse ${STATUS_FILE}; install jq for vpn-port-guard diagnostics"
+      __aliasarr_jq_warned=1
+    fi
+    printf '%s' "$default"
     return
   fi
-  awk -v key="$key" -F ':' '
-    $0 ~ "\"" key "\"" {
-      gsub(/^[[:space:]]+/, "", $2);
-      gsub(/[",]/, "", $2);
-      print $2;
-      exit;
-    }
-  ' "$STATUS_FILE" 2>/dev/null | awk 'NR==1 {print; exit}' || printf '%s' "$default"
+  jq -r --arg key "$key" '.[$key] // "'"$default"'"' "$STATUS_FILE" 2>/dev/null || printf '%s' "$default"
 }
 
 VPN_STATUS="$(read_status_field vpn_status unknown)"
