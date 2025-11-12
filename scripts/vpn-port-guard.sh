@@ -22,10 +22,16 @@ controller_log() {
 # shellcheck source=qbt-api.sh
 . "${SCRIPT_DIR}/qbt-api.sh"
 
+if ! command -v jq >/dev/null 2>&1; then
+  printf '[vpn-port-guard] jq is required but not installed\n' >&2
+  exit 1
+fi
+
 : "${CONTROLLER_POLL_INTERVAL:=${VPN_PORT_GUARD_POLL_SECONDS:-15}}"
 : "${CONTROLLER_STATUS_FILE:=/gluetun_state/port-guard-status.json}"
 : "${CONTROLLER_TRIGGER_FILE:=/gluetun_state/port-guard.trigger}"
 : "${CONTROLLER_TMP_DIR:=/tmp/vpn-port-guard}"
+: "${CONTROLLER_EVENTS_FILE:=/gluetun_state/port-guard-events.log}"
 : "${CONTROLLER_REQUIRE_PF:=}"
 : "${CONTROLLER_REQUIRE_PORT_FORWARDING:=}"
 : "${VPN_PORT_GUARD_REQUIRE_FORWARDING:=}"
@@ -53,8 +59,48 @@ else
   CONTROLLER_MODE_STRING="preferred"
 fi
 
-mkdir -p "${CONTROLLER_TMP_DIR}" >/dev/null 2>&1 || true
-mkdir -p "$(dirname "${CONTROLLER_STATUS_FILE}")" >/dev/null 2>&1 || true
+controller_ensure_dir() {
+  local dir="$1"
+  if command -v install >/dev/null 2>&1; then
+    install -d -m 0755 -- "$dir" || return 1
+  else
+    mkdir -p -- "$dir" || return 1
+    chmod 0755 -- "$dir" || return 1
+  fi
+  return 0
+}
+
+if ! controller_ensure_dir "${CONTROLLER_TMP_DIR}"; then
+  controller_log "Failed to prepare controller tmp dir ${CONTROLLER_TMP_DIR}"
+  exit 1
+fi
+
+controller_state_dir="$(dirname "${CONTROLLER_STATUS_FILE}")"
+if ! controller_ensure_dir "${controller_state_dir}"; then
+  controller_log "Failed to prepare controller state dir ${controller_state_dir}"
+  exit 1
+fi
+
+controller_events_dir="$(dirname "${CONTROLLER_EVENTS_FILE}")"
+if ! controller_ensure_dir "${controller_events_dir}"; then
+  controller_log "Failed to prepare controller events dir ${controller_events_dir}"
+  exit 1
+fi
+
+controller_log_event() {
+  local message="$1"
+  local timestamp
+  timestamp="$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || printf '0000-00-00T00:00:00Z')"
+  { printf '[%s] %s\n' "${timestamp}" "$message"; } >>"${CONTROLLER_EVENTS_FILE}" 2>/dev/null || true
+}
+
+controller_record_vpn_state() {
+  local state="$1"
+  if [[ "${_controller_vpn_state:-}" != "$state" ]]; then
+    _controller_vpn_state="$state"
+    controller_log_event "vpn:${state}"
+  fi
+}
 
 controller_write_state() {
   local vpn_status="${1:-unknown}"
@@ -85,7 +131,8 @@ controller_write_state() {
   epoch="$(date +%s 2>/dev/null || printf '0')"
 
   local tmp
-  if ! tmp="$(mktemp "${CONTROLLER_TMP_DIR}/state.XXXXXX" 2>/dev/null)"; then
+  local tmp_template="${controller_state_dir}/state.XXXXXX"
+  if ! tmp="$(mktemp "${tmp_template}" 2>/dev/null)"; then
     controller_log "Unable to create temporary state file"
     return 1
   fi
@@ -124,6 +171,7 @@ controller_write_state() {
 
 controller_mark_init() {
   _controller_qbt_state="paused"
+  controller_log_event "controller:init"
   controller_write_state "init" 0 "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
 }
 
@@ -133,6 +181,7 @@ controller_pause_qbt() {
   fi
   if qbt_pause_all; then
     _controller_qbt_state="paused"
+    controller_log_event "qbt:paused"
     return 0
   fi
   _controller_qbt_state="error"
@@ -145,6 +194,7 @@ controller_resume_qbt() {
   fi
   if qbt_resume_all; then
     _controller_qbt_state="active"
+    controller_log_event "qbt:resumed"
     return 0
   fi
   _controller_qbt_state="error"
@@ -169,6 +219,7 @@ controller_apply_port() {
       controller_log "Failed to set qBittorrent listen port"
       return 1
     fi
+    controller_log_event "port:applied ${target_port}"
   fi
   return 0
 }
@@ -226,10 +277,13 @@ main() {
 
     if [[ "$status" != "running" ]]; then
       controller_log "VPN not ready (status=${status}); keeping torrents paused"
+      controller_record_vpn_state "down"
       controller_pause_qbt || true
       controller_write_state "$status" "$forwarded_port" "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
       continue
     fi
+
+    controller_record_vpn_state "up"
 
     if [[ "$forwarded_port" != 0 ]]; then
       if controller_apply_port "$forwarded_port"; then
@@ -261,6 +315,6 @@ main() {
   done
 }
 
-trap 'controller_log "Shutting down"; controller_pause_qbt || true; controller_write_state "down" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"' EXIT
+trap 'controller_log "Shutting down"; controller_log_event "controller:shutdown"; controller_record_vpn_state "down"; controller_pause_qbt || true; controller_write_state "down" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"' EXIT
 
 main "$@"

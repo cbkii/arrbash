@@ -1450,7 +1450,7 @@ arr_compose_emit_vpn_port_guard_service() {
   arr_yaml_kv "      " "GLUETUN_CONTROL_URL" "http://127.0.0.1:\${GLUETUN_CONTROL_PORT}" >>"$dest"
   arr_yaml_kv "      " "GLUETUN_API_KEY" "\${GLUETUN_API_KEY}" >>"$dest"
   arr_yaml_kv "      " "QBT_HOST" "127.0.0.1" >>"$dest"
-  arr_yaml_kv "      " "QBT_PORT" "\${QBT_WEB_PORT}" >>"$dest"
+  arr_yaml_kv "      " "QBT_PORT" "\${QBT_INT_PORT}" >>"$dest"
   arr_yaml_kv "      " "QBT_USER" "\${QBT_USER}" >>"$dest"
   arr_yaml_kv "      " "QBT_PASS" "\${QBT_PASS}" >>"$dest"
   arr_yaml_kv "      " "CONTROLLER_POLL_INTERVAL" "\${VPN_PORT_GUARD_POLL_SECONDS}" >>"$dest"
@@ -1470,7 +1470,7 @@ arr_compose_emit_vpn_port_guard_service() {
             test -s "$status_file";
             find "$status_file" -mmin -1 | grep -q .;
             curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/status" >/dev/null;
-            curl -fsS --connect-timeout 5 --max-time 5 "http://127.0.0.1:${QBT_WEB_PORT}/api/v2/app/version" >/dev/null'
+            curl -fsS --connect-timeout 5 --max-time 5 "http://127.0.0.1:${QBT_INT_PORT}/api/v2/app/version" >/dev/null'
       interval: "30s"
       timeout: "10s"
       retries: "3"

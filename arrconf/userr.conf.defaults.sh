@@ -536,6 +536,13 @@ ENABLE_CONFIGARR="${ENABLE_CONFIGARR}"             # Configarr one-shot sync for
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing, fix auto-clears blockers
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS}"                # Keep 1 so WebUIs publish on http://${LAN_IP}:PORT (requires LAN_IP set to your private IPv4)
 
+# --- VPN port guard ---
+VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS}"   # Poll interval (positive integer seconds, default: ${VPN_PORT_GUARD_POLL_SECONDS})
+CONTROLLER_REQUIRE_PF="${CONTROLLER_REQUIRE_PF}"               # true pauses until Proton forwards a port, false lets torrents run without (default: ${CONTROLLER_REQUIRE_PF})
+# Example overrides:
+# VPN_PORT_GUARD_POLL_SECONDS=10
+# CONTROLLER_REQUIRE_PF=true
+
 # --- Credentials ---
 QBT_USER="admin"                       # Initial qBittorrent username (change after first login)
 QBT_PASS="adminadmin"                  # Initial qBittorrent password (update immediately after install)
