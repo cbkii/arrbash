@@ -195,82 +195,141 @@ WARNING
   fi
 
   if [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
-    local pf_state_file=""
-    local pf_log_file=""
-    if declare -f pf_state_path >/dev/null 2>&1; then
-      pf_state_file="$(pf_state_path)"
-    else
-      pf_state_file="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_STATE_FILE:-pf-state.json}"
+    local status_file=""
+    if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
+      status_file="$(gluetun_port_guard_status_file 2>/dev/null || printf '')"
     fi
-    if declare -f pf_log_path >/dev/null 2>&1; then
-      pf_log_file="$(pf_log_path)"
-    else
-      pf_log_file="${ARR_DOCKER_DIR}/gluetun/${PF_ASYNC_LOG_FILE:-port-forwarding.log}"
+    if [[ -z "$status_file" ]]; then
+      status_file="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
     fi
 
-    local pf_summary_port="0"
-    local pf_status_value=""
-    local pf_status_message=""
-    local pf_attempts="0"
-    local pf_cycles="0"
-    local pf_last_success=""
+    local forwarded_port="0"
+    local vpn_state="unknown"
+    local qbt_state="unknown"
+    local pf_enabled="false"
+    local forwarding_state="unavailable"
+    local controller_mode=""
+    local last_epoch="0"
 
-    if [[ -f "$pf_state_file" ]]; then
+    if [[ -f "$status_file" ]]; then
       if command -v jq >/dev/null 2>&1; then
-        pf_summary_port="$(jq -r '.port // 0' "$pf_state_file" 2>/dev/null || printf '0')"
-        pf_status_value="$(jq -r '.status // ""' "$pf_state_file" 2>/dev/null || printf '')"
-        pf_status_message="$(jq -r '.message // ""' "$pf_state_file" 2>/dev/null || printf '')"
-        pf_attempts="$(jq -r '.attempts // 0' "$pf_state_file" 2>/dev/null || printf '0')"
-        pf_cycles="$(jq -r '.cycles // 0' "$pf_state_file" 2>/dev/null || printf '0')"
-        pf_last_success="$(jq -r '.last_success // ""' "$pf_state_file" 2>/dev/null || printf '')"
+        forwarded_port="$(jq -r '.forwarded_port // 0' "$status_file" 2>/dev/null || printf '0')"
+        vpn_state="$(jq -r '.vpn_status // "unknown"' "$status_file" 2>/dev/null || printf 'unknown')"
+        qbt_state="$(jq -r '.qbt_status // "unknown"' "$status_file" 2>/dev/null || printf 'unknown')"
+        pf_enabled="$(jq -r 'if .pf_enabled == true then "true" else "false" end' "$status_file" 2>/dev/null || printf 'false')"
+        forwarding_state="$(jq -r '.forwarding_state // "unavailable"' "$status_file" 2>/dev/null || printf 'unavailable')"
+        controller_mode="$(jq -r '.controller_mode // empty' "$status_file" 2>/dev/null || printf '')"
+        last_epoch="$(jq -r '.last_update_epoch // 0' "$status_file" 2>/dev/null || printf '0')"
       else
-        pf_summary_port="$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$pf_state_file" | head -n1 || printf '0')"
-        pf_status_value="$(sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$pf_state_file" | head -n1 || printf '')"
-        pf_status_message="$(sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$pf_state_file" | head -n1 || printf '')"
-        pf_attempts="$(sed -n 's/.*"attempts"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$pf_state_file" | head -n1 || printf '0')"
-        pf_cycles="$(sed -n 's/.*"cycles"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$pf_state_file" | head -n1 || printf '0')"
-        pf_last_success="$(sed -n 's/.*"last_success"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$pf_state_file" | head -n1 || printf '')"
+        forwarded_port="$(sed -n 's/.*"forwarded_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$status_file" | head -n1 || printf '0')"
+        vpn_state="$(sed -n 's/.*"vpn_status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf 'unknown')"
+        qbt_state="$(sed -n 's/.*"qbt_status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf 'unknown')"
+        pf_enabled="$(sed -n 's/.*"pf_enabled"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p' "$status_file" | head -n1 || printf 'false')"
+        forwarding_state="$(sed -n 's/.*"forwarding_state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf 'unavailable')"
+        controller_mode="$(sed -n 's/.*"controller_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$status_file" | head -n1 || printf '')"
+        last_epoch="$(sed -n 's/.*"last_update_epoch"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$status_file" | head -n1 || printf '0')"
+      fi
+    fi
+
+    if [[ ! "$forwarded_port" =~ ^[0-9]+$ ]]; then
+      forwarded_port="0"
+    fi
+
+    forwarding_state="${forwarding_state,,}"
+    case "$forwarding_state" in
+      active|unavailable|error) ;;
+      *) forwarding_state="unavailable" ;;
+    esac
+
+    pf_enabled="${pf_enabled,,}"
+    case "$pf_enabled" in
+      1|true|TRUE|yes|YES|on|ON) pf_enabled="true" ;;
+      *) pf_enabled="false" ;;
+    esac
+
+    local last_update=""
+    if [[ "$last_epoch" =~ ^[0-9]+$ && "$last_epoch" != "0" ]]; then
+      last_update="$(summary_format_epoch "$last_epoch")"
+    fi
+
+    controller_mode="$(derive_controller_mode "$controller_mode" "$pf_enabled")"
+
+    qbt_state="${qbt_state,,}"
+    case "$qbt_state" in
+      active|paused|error) ;;
+      *) qbt_state="unknown" ;;
+    esac
+
+    vpn_state="${vpn_state,,}"
+    if [[ -z "$vpn_state" ]]; then
+      vpn_state="unknown"
+    fi
+
+    local vpn_summary=""
+    if [[ "$vpn_state" == "running" ]]; then
+      vpn_summary="running"
+    else
+      vpn_summary="${vpn_state} (controller keeps torrents paused until VPN recovers)"
+    fi
+
+    local forwarding_summary=""
+    if [[ "$forwarding_state" == "active" && "$forwarded_port" != "0" ]]; then
+      forwarding_summary="active (port ${forwarded_port})"
+    elif [[ "$forwarding_state" == "error" ]]; then
+      if [[ "$forwarded_port" != "0" ]]; then
+        forwarding_summary="error applying forwarded port (last known ${forwarded_port}); inspect vpn-port-guard logs"
+      else
+        forwarding_summary="error applying forwarded port; inspect vpn-port-guard logs"
       fi
     else
-      pf_summary_port="${PF_ENSURED_PORT:-0}"
-      pf_status_value="${PF_ENSURE_STATUS_MESSAGE:-pending}"
+      if [[ "$controller_mode" == "strict" ]]; then
+        forwarding_summary="unavailable; strict mode keeps torrents paused until Proton assigns a port"
+      else
+        forwarding_summary="unavailable; preferred mode keeps torrents running without an inbound port"
+      fi
+      if [[ "$forwarded_port" != "0" ]]; then
+        forwarding_summary+=" (last known ${forwarded_port})"
+      fi
     fi
 
-    if [[ ! "$pf_summary_port" =~ ^[0-9]+$ ]]; then
-      pf_summary_port="0"
-    fi
-
-    case "$pf_status_value" in
-      acquired)
-        if [[ "$pf_summary_port" != "0" ]]; then
-          msg "✅ Proton port forwarding active: Port ${pf_summary_port} (attempts=${pf_attempts}, cycles=${pf_cycles})"
-          if [[ -n "$pf_last_success" ]]; then
-            msg "   Last refreshed: ${pf_last_success}"
-          fi
+    local qbt_summary=""
+    case "$qbt_state" in
+      active)
+        qbt_summary="active"
+        if [[ "$controller_mode" == "strict" && "$forwarding_state" != "active" ]]; then
+          qbt_summary+=" (unexpected in strict mode; inspect vpn-port-guard logs)"
         fi
         ;;
-      disabled)
-        msg "  Proton port forwarding disabled in configuration."
+      paused)
+        if [[ "$vpn_state" != "running" ]]; then
+          qbt_summary="paused (waiting for VPN)"
+        elif [[ "$controller_mode" == "strict" && "$forwarding_state" != "active" ]]; then
+          qbt_summary="paused (strict mode awaiting Proton port)"
+        elif [[ "$forwarding_state" == "error" ]]; then
+          qbt_summary="paused (forwarding error)"
+        else
+          qbt_summary="paused"
+        fi
         ;;
-      pending | "")
-        warn "PF not acquired yet${pf_status_message:+ (${pf_status_message})}."
-        msg "   Check state file: ${pf_state_file}"
-        msg "   Review log:   ${pf_log_file}"
-        msg "   Retry with:    arr.vpn.port.sync"
-        ;;
-      timeout | timeout-soft | failed)
-        warn "PF not acquired (${pf_status_value}${pf_status_message:+, ${pf_status_message}})."
-        msg "   Attempts: ${pf_attempts}, cycles: ${pf_cycles}"
-        msg "   Check state file: ${pf_state_file}"
-        msg "   Review log:   ${pf_log_file}"
-        msg "   Retry with:    arr.vpn.port.sync (confirm server supports port forwarding)"
+      error)
+        qbt_summary="error (controller cannot reach qBittorrent API)"
         ;;
       *)
-        warn "ProtonVPN port forwarding status: ${pf_status_value:-unknown}${pf_status_message:+ (${pf_status_message})}."
-        msg "   Check state file: ${pf_state_file}"
-        msg "   Review log:   ${pf_log_file}"
+        qbt_summary="$qbt_state"
         ;;
     esac
+
+    msg "vpn-port-guard:"
+    msg "  • Mode: ${controller_mode} (require forwarded port=${pf_enabled})"
+    msg "  • VPN: ${vpn_summary}"
+    msg "  • Forwarding: ${forwarding_summary}"
+    msg "  • qBittorrent: ${qbt_summary}"
+    if [[ -n "$last_update" ]]; then
+      msg "  • Last update: ${last_update}"
+    fi
+    msg "  • Status JSON: ${status_file}"
+    msg "  • Logs: docker logs vpn-port-guard --tail 100"
+    msg "  • Commands: arr.pf.status | arr.pf.logs"
   fi
 
   local vpn_auto_status_file="${ARR_STACK_DIR%/}/.vpn-auto-reconnect-status.json"

@@ -39,7 +39,6 @@ EXPOSE_DIRECT_PORTS="1"      # default: 1; publish WebUIs on http://${LAN_IP}:PO
 
 # --- Ports (user-facing) ---
 ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (enforce/warn/skip/fix with warn fallback)
-PORT_MANAGER_ENABLE="0"      # default: 0; launch port-manager sidecar to sync Proton forwarded port
 QBT_INT_PORT="8082"      # default: 8082; internal qBittorrent WebUI port
 QBT_PORT="${QBT_INT_PORT}"      # default: ${QBT_INT_PORT} (8082); qBittorrent WebUI LAN port
 QBT_BIND_ADDR="0.0.0.0"      # default: 0.0.0.0; qBittorrent WebUI bind address inside the container
@@ -72,6 +71,10 @@ SERVER_COUNTRIES="Netherlands"      # default: Netherlands; ProtonVPN exit count
 PVPN_ROTATE_COUNTRIES="Singapore,Japan,Spain,Malaysia,Portugal,Romania,Switzerland,Luxembourg,Iceland,Australia"      # default: empty; rotation order for arr.vpn switch
 GLUETUN_API_KEY=""      # default: empty; pre-seed Gluetun API key
 
+# --- VPN port guard (controller) ---
+VPN_PORT_GUARD_POLL_SECONDS="15"      # default: 15; controller loop interval for Gluetun/qBittorrent sync
+CONTROLLER_REQUIRE_PF="false"      # default: false; pause torrents whenever Proton forwarding is absent
+
 # --- VPN auto-reconnect (optional) ---
 VPN_AUTO_RECONNECT_ENABLED="0"      # default: 0; enable background VPN monitor
 VPN_SPEED_THRESHOLD_KBPS="12"      # default: 12; kbps threshold before reconnect
@@ -84,20 +87,6 @@ VPN_MAX_RETRY_MINUTES="20"      # default: 20; retry budget before disabling
 VPN_ROTATION_MAX_PER_DAY="6"      # default: 6; max automatic reconnects per day (0=unlimited)
 VPN_ROTATION_JITTER_SECONDS="0"      # default: 0; random jitter added to reconnect timing
 
-# --- PF timing (advanced; optional, never blocking) ---
-PF_MAX_TOTAL_WAIT="60"      # default: 60; seconds to wait for forwarded port (legacy)
-PF_POLL_INTERVAL="5"      # default: 5; seconds between Proton API checks (legacy)
-PF_CYCLE_AFTER="30"      # default: 30; seconds before cycling Proton servers (legacy)
-GLUETUN_PF_STRICT="0"      # default: 0; treat Proton PF timeouts as hard failures when 1
-PF_ENABLE_CYCLE="1"      # default: 1; allow OpenVPN cycling while waiting on PF
-PF_ASYNC_ENABLE="1"      # default: 1; run async PF worker automatically
-PF_ASYNC_INITIAL_QUICK_WAIT="10"      # default: 10; quick polling window before cycling (seconds)
-PF_ASYNC_TOTAL_BUDGET="240"      # default: 240; async worker timeout budget (seconds)
-PF_ASYNC_POLL_INTERVAL="5"      # default: 5; seconds between async status checks
-PF_ASYNC_CYCLE_INTERVAL="40"      # default: 40; minimum seconds between OpenVPN cycles
-PF_ASYNC_MAX_CYCLES="3"      # default: 3; max OpenVPN cycles per async run
-PF_ASYNC_STATE_FILE="pf-state.json"      # default: pf-state.json; async worker state file
-PF_ASYNC_LOG_FILE="port-forwarding.log"      # default: port-forwarding.log; async worker log file
 
 # --- SABnzbd (Usenet) ---
 SABNZBD_ENABLED="0"      # default: 0; enable SABnzbd container/helper
