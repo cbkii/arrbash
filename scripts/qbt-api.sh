@@ -23,7 +23,7 @@ if ! declare -f die >/dev/null 2>&1; then
 fi
 
 : "${QBT_HOST:=127.0.0.1}"
-: "${QBT_PORT:=8080}"
+: "${QBT_PORT:=${QBT_INT_PORT:-8082}}"
 : "${QBT_USER:=admin}"
 : "${QBT_PASS:=adminadmin}"
 : "${QBT_API_TIMEOUT:=10}"
