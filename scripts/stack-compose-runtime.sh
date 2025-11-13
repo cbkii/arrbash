@@ -1470,19 +1470,19 @@ arr_compose_emit_vpn_port_guard_service() {
         - |-
           set -euo pipefail
           status_file="/gluetun_state/port-guard-status.json"
-          poll_seconds="${CONTROLLER_POLL_INTERVAL:-${VPN_PORT_GUARD_POLL_SECONDS:-60}}"
-          if [[ ! "${poll_seconds}" =~ ^[0-9]+$ ]]; then
+          poll_seconds="$${CONTROLLER_POLL_INTERVAL:-$${VPN_PORT_GUARD_POLL_SECONDS:-60}}"
+          if [[ ! "$${poll_seconds}" =~ ^[0-9]+$ ]]; then
             poll_seconds=60
           fi
           freshness_window=$(( poll_seconds < 60 ? 60 : poll_seconds + 60 ))
-          test -s "${status_file}"
-          if ! mtime="$(stat -c %Y "${status_file}" 2>/dev/null)"; then
+          test -s "$${status_file}"
+          if ! mtime="$(stat -c %Y "$${status_file}" 2>/dev/null)"; then
             printf 'vpn-port-guard status timestamp unavailable\n' >&2
             exit 1
           fi
           now="$(date +%s)"
           if (( now - mtime > freshness_window )); then
-            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( now - mtime )) "${freshness_window}" >&2
+            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( now - mtime )) "$${freshness_window}" >&2
             exit 1
           fi
           curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" \
