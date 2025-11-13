@@ -126,10 +126,7 @@ sync_vpn_auto_reconnect_assets() {
   for helper in \
     vpn-auto-stack.sh \
     vpn-auto-state.sh \
-    vpn-auto-config.sh \
-    vpn-auto-signals.sh \
-    vpn-auto-metrics.sh \
-    vpn-auto-control.sh
+    vpn-auto-config.sh
   do
     cp "${REPO_ROOT}/scripts/${helper}" "$ARR_STACK_DIR/scripts/${helper}"
     ensure_file_mode "$ARR_STACK_DIR/scripts/${helper}" 755

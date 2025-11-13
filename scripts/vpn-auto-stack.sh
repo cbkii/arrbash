@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-# Purpose: Aggregate VPN auto-reconnect helpers spanning state management, configuration, signals, metrics, and control.
+# Purpose: Aggregate VPN auto-reconnect helpers spanning state management, configuration, and Gluetun integration.
 # Inputs: Expects scripts/stack-common.sh to be sourced first and relies on ARR_* variables populated by the stack.
-# Outputs: Exposes vpn_auto_reconnect_process_once and supporting helpers for daemons and installers.
+# Outputs: Exposes vpn_auto_reconnect_process_once and supporting helpers for daemons and installers through sourced modules.
 # Exit codes: None directly; sourced modules may exit/die during their operations.
 
 if [[ -n "${__VPN_AUTO_STACK_LOADED:-}" ]]; then
@@ -15,11 +15,5 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/vpn-auto-state.sh"
 # shellcheck source=scripts/vpn-auto-config.sh
 . "${SCRIPT_DIR}/vpn-auto-config.sh"
-# shellcheck source=scripts/vpn-auto-signals.sh
-. "${SCRIPT_DIR}/vpn-auto-signals.sh"
-# shellcheck source=scripts/vpn-auto-metrics.sh
-. "${SCRIPT_DIR}/vpn-auto-metrics.sh"
 # shellcheck source=scripts/vpn-gluetun.sh
 . "${SCRIPT_DIR}/vpn-gluetun.sh"
-# shellcheck source=scripts/vpn-auto-control.sh
-. "${SCRIPT_DIR}/vpn-auto-control.sh"
