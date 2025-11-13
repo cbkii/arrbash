@@ -84,6 +84,8 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
   manual Gluetun restarts).
 * `arrvpn-events` – tails `/gluetun_state/port-guard-events.log` to observe Gluetun
   hook activity.
+* Legacy helper scripts such as `vpn-port-watch.sh` and `vpn-auto-control.sh` have been
+  removed. Use the status file and aliases above instead of sourcing the old wrappers.
 
 If the status JSON shows `forwarded_port: 0` with `forwarding_state="unavailable"`, ProtonVPN has not
 granted a port yet or Gluetun lost the lease. Torrents continue downloading and seeding

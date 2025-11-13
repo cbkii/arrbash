@@ -15,11 +15,5 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/vpn-auto-state.sh"
 # shellcheck source=scripts/vpn-auto-config.sh
 . "${SCRIPT_DIR}/vpn-auto-config.sh"
-# shellcheck source=scripts/vpn-auto-signals.sh
-. "${SCRIPT_DIR}/vpn-auto-signals.sh"
-# shellcheck source=scripts/vpn-auto-metrics.sh
-. "${SCRIPT_DIR}/vpn-auto-metrics.sh"
 # shellcheck source=scripts/vpn-gluetun.sh
 . "${SCRIPT_DIR}/vpn-gluetun.sh"
-# shellcheck source=scripts/vpn-auto-control.sh
-. "${SCRIPT_DIR}/vpn-auto-control.sh"

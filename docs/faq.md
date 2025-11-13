@@ -13,6 +13,9 @@ Use Proton VPN Plus or Unlimited. Those plans support port forwarding, which qBi
 ## Can I skip the DNS helper?
 The legacy DNS helper has been removed. Manage hostnames through your router or per-device configuration instead. See [Networking](networking.md) for current exposure guidance.
 
+## Where did `vpn-port-watch.sh` and the `vpn-auto-*.sh` helpers go?
+They have been retired. `vpn-port-guard` now publishes Proton VPN status exclusively through `/gluetun_state/port-guard-status.json` and the `arr.pf.*` aliases. Remove any remaining calls to the legacy scripts inside custom hooks or automation so they do not fail with “file not found” errors.
+
 ## Where do I put my Proton credentials?
 Copy `arrconf/proton.auth.example` to `arrconf/proton.auth` and fill in `PROTON_USER` and `PROTON_PASS`. The installer enforces safe permissions automatically.
 

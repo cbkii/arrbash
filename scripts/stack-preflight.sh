@@ -111,11 +111,6 @@ verify_vpn_port_guard_prereqs() {
       ;;
   esac
 
-  local legacy_watch="${REPO_ROOT}/scripts/vpn-port-watch.sh"
-  if [[ -f "$legacy_watch" ]] && ! LC_ALL=C grep -q 'deprecated' "$legacy_watch" 2>/dev/null; then
-    warn "Legacy vpn-port-watch.sh detected; ensure it remains a stub and does not control qBittorrent"
-  fi
-
   local legacy_pm_dir="${ARR_STACK_DIR%/}/scripts"
   if [[ -d "$legacy_pm_dir" ]]; then
     if compgen -G "${legacy_pm_dir}/port-manager*" >/dev/null; then
