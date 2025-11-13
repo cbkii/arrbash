@@ -538,7 +538,15 @@ if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
   STATUS_FILE="$(gluetun_port_guard_status_file 2>/dev/null || printf '')"
 fi
 if [[ -z "$STATUS_FILE" ]]; then
-  STATUS_FILE="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
+  status_docker_root="${ARR_DOCKER_DIR:-}"
+  if [[ -z "$status_docker_root" ]] && declare -f arr_docker_data_root >/dev/null 2>&1; then
+    status_docker_root="$(arr_docker_data_root 2>/dev/null || printf '')"
+  fi
+  if [[ -z "$status_docker_root" ]]; then
+    status_docker_root="${ARR_STACK_DIR%/}/docker"
+  fi
+  STATUS_FILE="${status_docker_root%/}/gluetun/state/port-guard-status.json"
+  unset status_docker_root
 fi
 
 if [[ -f "$STATUS_FILE" ]]; then
@@ -562,12 +570,56 @@ read_status_field() {
     printf '%s' "$default"
     return
   fi
-  jq -r --arg key "$key" '.[$key] // "'"$default"'"' "$STATUS_FILE" 2>/dev/null || printf '%s' "$default"
+
+  local jq_err_file=""
+  jq_err_file="$(mktemp "${TMPDIR:-/tmp}/aliasarr-jq.XXXXXX" 2>/dev/null || printf '')"
+
+  local jq_output=""
+  local jq_status=0
+  local jq_error=""
+  if [[ -n "$jq_err_file" ]]; then
+    jq_output="$(jq -r --arg key "$key" '.[$key] // empty' "$STATUS_FILE" 2>"$jq_err_file")"
+    jq_status=$?
+    if [[ -s "$jq_err_file" ]]; then
+      jq_error="$(<"$jq_err_file")"
+    fi
+    rm -f -- "$jq_err_file" 2>/dev/null || true
+  else
+    jq_output="$(jq -r --arg key "$key" '.[$key] // empty' "$STATUS_FILE" 2>/dev/null)"
+    jq_status=$?
+  fi
+
+  if (( jq_status != 0 )); then
+    if [[ -z "${__aliasarr_jq_parse_warned:-}" ]]; then
+      jq_error=${jq_error//$'\n'/; }
+      if [[ -n "$jq_error" ]]; then
+        log_warn "Failed to parse ${STATUS_FILE} with jq: ${jq_error}"
+      else
+        log_warn "Failed to parse ${STATUS_FILE} with jq"
+      fi
+      __aliasarr_jq_parse_warned=1
+    fi
+    printf '%s' "$default"
+    return
+  fi
+
+  if [[ -z "$jq_output" || "$jq_output" == "null" ]]; then
+    printf '%s' "$default"
+    return
+  fi
+
+  printf '%s' "$jq_output"
 }
 
+# vpn_status reflects the controller's tunnel health summary (matches vpn-auto-state.sh semantics).
 VPN_STATUS="$(read_status_field vpn_status unknown)"
+# forwarded_port carries the active Proton-assigned port, or 0 when unavailable.
 FORWARDED_PORT="$(read_status_field forwarded_port 0)"
+# qbt_status reports the controller's qBittorrent API connectivity status.
 QBT_STATUS="$(read_status_field qbt_status unknown)"
+
+STATUS_SNAPSHOT_TIME="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+log_info "vpn-port-guard status snapshot (UTC): ${STATUS_SNAPSHOT_TIME}"
 
 log_info "vpn-port-guard: vpn_status=$VPN_STATUS, qbt_status=$QBT_STATUS, port=$FORWARDED_PORT"
 
