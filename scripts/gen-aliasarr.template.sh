@@ -1197,6 +1197,32 @@ _arr_qbt_login() {
   "${curl_cmd[@]}" >/dev/null
 }
 
+_arr_qbt_extract_listen_port() {
+  local payload="$1"
+  if [ -z "$payload" ]; then
+    return 1
+  fi
+
+  local port=""
+  if command -v jq >/dev/null 2>&1; then
+    port="$(printf '%s\n' "$payload" | jq -r '.listen_port // empty' 2>/dev/null || printf '')"
+  fi
+
+  if [ -z "$port" ]; then
+    local sed_expr
+    sed_expr=$'s/.*"listen_port"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p'
+    port="$(printf '%s\n' "$payload" | LC_ALL=C sed -n "$sed_expr" | head -n1 2>/dev/null || printf '')"
+  fi
+
+  case "$port" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+  esac
+
+  printf '%s\n' "$port"
+}
+
 _arr_api_key() {
   local svc="$1"
   local file="${ARR_DOCKER_DIR}/${svc}/config.xml"
@@ -2620,9 +2646,11 @@ arr.qbt.torrents.setcategory() {
 arr.qbt.categories() { _arr_qbt_call GET /api/v2/torrents/categories | _arr_pretty_json; }
 
 arr.qbt.port.get() {
-  local json value
+  local json value=""
   json="$(_arr_qbt_call GET /api/v2/app/preferences 2>/dev/null)" || return 1
-  value="$(printf '%s\n' "$json" | sed -n 's/.*"listen_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1)"
+  if [ -n "$json" ]; then
+    value="$(_arr_qbt_extract_listen_port "$json" 2>/dev/null || printf '')"
+  fi
   if [ -n "$value" ]; then
     printf '%s\n' "$value"
   else
