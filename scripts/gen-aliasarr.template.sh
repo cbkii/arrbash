@@ -1211,7 +1211,7 @@ _arr_qbt_extract_listen_port() {
   if [ -z "$port" ]; then
     local sed_expr
     sed_expr=$'s/.*"listen_port"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p'
-    port="$(printf '%s\n' "$payload" | sed -n "$sed_expr" | head -n1 2>/dev/null || printf '')"
+    port="$(printf '%s\n' "$payload" | LC_ALL=C sed -n "$sed_expr" | head -n1 2>/dev/null || printf '')"
   fi
 
   case "$port" in
