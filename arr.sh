@@ -192,17 +192,98 @@ arr_capture_env_overrides() {
         "${_arr_env_var}" "${_arr_env_overrides[${_arr_env_var}]}" "${_arr_env_override_exported[${_arr_env_var}]:-0}")
     done
 
-    exec env -i \
-      PATH="${PATH:-}" \
-      HOME="${HOME:-}" \
-      USER="${USER:-}" \
-      SHELL="${SHELL:-}" \
-      LANG="${LANG:-}" \
-      LC_ALL="${LC_ALL:-}" \
-      TERM="${TERM:-}" \
-      ARR_REEXEC_SANITIZED_ENV=1 \
-      ARR_OVERRIDE_PAYLOAD="${_arr_payload}" \
-      bash "$0" "${_arr_cli_args[@]}"
+      local -a _arr_runtime_sensitive=(
+        DOCKER_HOST
+        DOCKER_CONTEXT
+        SSH_AUTH_SOCK
+        HTTPS_PROXY
+        HTTP_PROXY
+        NO_PROXY
+        ALL_PROXY
+      )
+      local -a _arr_preserve_defaults=(
+        "${_arr_runtime_sensitive[@]}"
+        PATH
+        HOME
+        USER
+        SHELL
+        LANG
+        LC_ALL
+        NO_COLOR
+        TERM
+        COLORTERM
+        XDG_RUNTIME_DIR
+        TMPDIR
+      )
+    local -a _arr_preserve_extra=()
+    if [[ -n "${ARR_ENV_PRESERVE_EXTRA:-}" ]]; then
+      read -r -a _arr_preserve_extra <<<"${ARR_ENV_PRESERVE_EXTRA}"
+      _arr_preserve_defaults+=("${_arr_preserve_extra[@]}")
+    fi
+
+    declare -A _arr_preserve_whitelist=()
+    for _arr_env_var in "${_arr_preserve_defaults[@]}"; do
+      [[ -n "${_arr_env_var}" ]] || continue
+      _arr_preserve_whitelist["${_arr_env_var}"]=1
+    done
+
+    declare -A _arr_env_current=()
+    declare -A _arr_env_original=()
+    local _arr_env_line=""
+    local _arr_name=""
+    local _arr_value=""
+    while IFS= read -r _arr_env_line; do
+      [[ "${_arr_env_line}" == *=* ]] || continue
+      _arr_name="${_arr_env_line%%=*}"
+      _arr_value="${_arr_env_line#*=}"
+      if [[ "${_arr_name}" == BASH_FUNC_* ]]; then
+        continue
+      fi
+      _arr_env_current["${_arr_name}"]="${_arr_value}"
+      _arr_env_original["${_arr_name}"]="${_arr_value}"
+    done < <(env)
+
+    for _arr_env_var in "${_arr_canonical_config_vars[@]}"; do
+      [[ -n "${_arr_env_var}" ]] || continue
+      if [[ -n "${_arr_preserve_whitelist[${_arr_env_var}]:-}" ]]; then
+        continue
+      fi
+      unset "_arr_env_current[${_arr_env_var}]"
+    done
+
+    unset "_arr_env_current[ARR_OVERRIDE_PAYLOAD]"
+    unset "_arr_env_current[ARR_REEXEC_SANITIZED_ENV]"
+
+    local -a _arr_runtime_watch=("${_arr_runtime_sensitive[@]}")
+    for _arr_env_var in "${_arr_runtime_watch[@]}"; do
+      if [[ -n "${_arr_env_original[${_arr_env_var}]+x}" && -z "${_arr_env_current[${_arr_env_var}]+x}" ]]; then
+        local _arr_warning="Discarded ${_arr_env_var} during re-exec; remote Docker may fail"
+        if declare -f warn >/dev/null 2>&1; then
+          warn "${_arr_warning}"
+        else
+          printf '%s\n' "${_arr_warning}" >&2
+        fi
+      fi
+    done
+
+    local -a _arr_exec_env=()
+    for _arr_env_var in "${!_arr_env_current[@]}"; do
+      _arr_exec_env+=("${_arr_env_var}=${_arr_env_current[${_arr_env_var}]}")
+    done
+    _arr_exec_env+=("ARR_REEXEC_SANITIZED_ENV=1")
+    _arr_exec_env+=("ARR_OVERRIDE_PAYLOAD=${_arr_payload}")
+
+    if [[ "${ARR_TRACE:-0}" == "1" ]]; then
+      local _arr_precedence_hint="${ARRCONF_DIR:-${REPO_ROOT}/arrconf}/userr.conf"
+      local _arr_trace_msg="[debug] re-exec with config precedence: CLI flags > environment > ${_arr_precedence_hint} > defaults"
+      if declare -f msg >/dev/null 2>&1; then
+        msg "${_arr_trace_msg}"
+      else
+        printf '%s\n' "${_arr_trace_msg}"
+      fi
+    fi
+
+    exec env -i "${_arr_exec_env[@]}" bash "$0" "${_arr_cli_args[@]}"
   fi
 }
 

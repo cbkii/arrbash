@@ -830,7 +830,9 @@ ensure_dir() {
       if command -v sudo >/dev/null 2>&1; then
         if sudo mkdir -p "$dir" 2>/dev/null || sudo mkdir -p "$dir"; then
           if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-            sudo chown -R "${PUID}:${PGID}" "$dir" 2>/dev/null || true
+            if ! sudo chown -R "${PUID}:${PGID}" "$dir" 2>/dev/null; then
+              warn "Failed to adjust ownership of ${dir} (${PUID}:${PGID})"
+            fi
           fi
           return 0
         fi
@@ -855,23 +857,26 @@ ensure_dir_mode() {
     return 0
   fi
 
-  if chmod "$mode" "$dir" 2>/dev/null; then
-    return 0
-  fi
+  local applied=0
 
-  if [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" ]]; then
-    if [[ $EUID -ne 0 ]]; then
-      if command -v sudo >/dev/null 2>&1; then
-        if sudo chmod "$mode" "$dir" 2>/dev/null; then
-          if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-            sudo chown "${PUID}:${PGID}" "$dir" 2>/dev/null || true
-          fi
-          return 0
+  if chmod "$mode" "$dir" 2>/dev/null; then
+    applied=1
+  elif [[ "${ARR_ALLOW_SUDO_DIRS:-0}" == "1" && $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    if sudo chmod "$mode" "$dir" 2>/dev/null; then
+      applied=1
+      if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
+        if ! sudo chown "${PUID}:${PGID}" "$dir" 2>/dev/null; then
+          warn "Failed to adjust ownership of ${dir} (${PUID}:${PGID})"
         fi
       fi
     fi
   fi
-  warn "Could not apply mode ${mode} to ${dir}"
+
+  if ((applied)); then
+    return 0
+  fi
+
+  warn "Failed to apply permissions to ${dir} (mode ${mode})"
 }
 
 # Fetches numeric permission mode; returns non-zero if target missing
@@ -1163,20 +1168,28 @@ ensure_file_mode() {
     allow_sudo=1
   fi
 
+  local applied=0
+
   if ((allow_sudo == 1)) && [[ $EUID -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
     if sudo chmod "$mode" "$file" 2>/dev/null; then
+      applied=1
       if [[ -n "${PUID:-}" && -n "${PGID:-}" ]]; then
-        sudo chown "${PUID}:${PGID}" "$file" 2>/dev/null || true
+        if ! sudo chown "${PUID}:${PGID}" "$file" 2>/dev/null; then
+          warn "Failed to adjust ownership of ${file} (${PUID}:${PGID})"
+        fi
       fi
-      return 0
     fi
   fi
+
+  if ((applied)); then
+    return 0
+  fi
+
+  warn "Failed to apply permissions to ${file} (mode ${mode})"
 
   if arr_should_force_permission_sudo "$file"; then
     die "Failed to apply mode ${mode} to ${file}"
   fi
-
-  warn "Could not apply mode ${mode} to ${file}"
 }
 
 # Convenience wrapper enforcing secret file permissions consistently
@@ -1208,7 +1221,9 @@ arr_mktemp_file() {
   fi
 
   if [[ -n "$mode" ]]; then
-    chmod "$mode" "$tmp" 2>/dev/null || warn "Could not set mode ${mode} on temporary file ${tmp}"
+    if ! chmod "$mode" "$tmp" 2>/dev/null; then
+      warn "Failed to apply permissions to ${tmp} (mode ${mode})"
+    fi
   fi
 
   : >"$tmp"
@@ -1236,7 +1251,9 @@ arr_mktemp_dir() {
   fi
 
   if [[ -n "$mode" ]]; then
-    chmod "$mode" "$tmp" 2>/dev/null || warn "Could not set mode ${mode} on temporary directory ${tmp}"
+    if ! chmod "$mode" "$tmp" 2>/dev/null; then
+      warn "Failed to apply permissions to ${tmp} (mode ${mode})"
+    fi
   fi
 
   if tmp_resolved="$(arr_resolve_absolute_path "$tmp" 2>/dev/null)"; then
@@ -2536,6 +2553,9 @@ arr_verify_compose_placeholders() {
       continue
     fi
     if [[ ${!_arr_name+x} ]]; then
+      continue
+    fi
+    if [[ "$_arr_name" =~ ^_?HC_[A-Z0-9_]*$ ]]; then
       continue
     fi
     printf -v _arr_display "\${%s}" "$_arr_name"

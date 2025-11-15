@@ -15,6 +15,31 @@ summary_format_epoch() {
   printf '%s' "$formatted"
 }
 
+summary_resolve_lan_binding_host() {
+  local candidate="$1"
+  if [[ -z "$candidate" || "$candidate" == "0.0.0.0" ]]; then
+    printf '127.0.0.1'
+    return 0
+  fi
+
+  if arr_function_exists arr_is_private_ipv4_safe; then
+    if arr_is_private_ipv4_safe "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  elif arr_function_exists is_private_ipv4; then
+    if is_private_ipv4 "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  elif [[ "$candidate" =~ ^((10\.)|(192\.168\.)|(172\.(1[6-9]|2[0-9]|3[0-1])\.)) ]]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+
+  printf '127.0.0.1'
+}
+
 # Presents post-install recap with access URLs, credentials, and PF status
 show_summary() {
 
@@ -84,6 +109,23 @@ show_summary() {
     ip_hint="<LAN_IP>"
   fi
 
+  local qbt_expose_lan=0
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    qbt_expose_lan=1
+  fi
+
+  local qbt_binding_host=""
+  if ((qbt_expose_lan)); then
+    qbt_binding_host="$(summary_resolve_lan_binding_host "${LAN_IP:-}")"
+  fi
+
+  local qbt_webui_line=""
+  if ((qbt_expose_lan)); then
+    qbt_webui_line="WebUI:    http://${qbt_binding_host}:${QBT_PORT}"
+  else
+    qbt_webui_line="WebUI:    not published on LAN (EXPOSE_DIRECT_PORTS=0)"
+  fi
+
   local prowlarr_hint="http://gluetun:${QBT_INT_PORT}"
 
   if [[ "${SPLIT_VPN:-0}" == "1" ]]; then
@@ -99,7 +141,7 @@ show_summary() {
 ================================================
 qBittorrent Access Information:
 ================================================
-WebUI:    http://${ip_hint}:${QBT_PORT}
+${qbt_webui_line}
 Arr URL:  ${prowlarr_hint}
 Username: ${QBT_USER}
 ${qbt_pass_msg}
@@ -156,7 +198,11 @@ QBT_INFO
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     msg "Direct LAN URLs (EXPOSE_DIRECT_PORTS=1):"
-    printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
+    local qbt_direct_host="$ip_hint"
+    if ((qbt_expose_lan)); then
+      qbt_direct_host="$qbt_binding_host"
+    fi
+    printf '  %-11s → http://%s:%s\n' "qBittorrent" "$qbt_direct_host" "$QBT_PORT"
     printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
     printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
     printf '  %-11s → http://%s:%s\n' "Lidarr" "$ip_hint" "$LIDARR_PORT"
