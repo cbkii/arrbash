@@ -104,6 +104,8 @@ prepare_env_context() {
     fi
   fi
 
+  export LAN_IP
+
   local -a lan_requirements=()
   if ((direct_ports_requested == 1)); then
     lan_requirements+=("EXPOSE_DIRECT_PORTS=1")
@@ -132,6 +134,7 @@ prepare_env_context() {
   local sab_enabled
   sab_enabled="$(arr_normalize_bool "$sab_enabled_raw")"
   SABNZBD_ENABLED="$sab_enabled"
+  export SABNZBD_ENABLED
 
   local sab_use_vpn_raw="${SABNZBD_USE_VPN:-0}"
   local sab_use_vpn
@@ -175,6 +178,7 @@ prepare_env_context() {
   fi
 
   SABNZBD_USE_VPN="$sab_use_vpn"
+  export SABNZBD_USE_VPN
 
   local sab_timeout_raw
   arr_resolve_positive_int sab_timeout_raw "${SABNZBD_TIMEOUT:-}" 15 \
@@ -220,6 +224,7 @@ prepare_env_context() {
 
   SABNZBD_HOST="$sab_host_value"
   export ARR_SAB_HOST_AUTO="$sab_host_auto"
+  export SABNZBD_INT_PORT SABNZBD_PORT SABNZBD_HOST
 
   local qbt_webui_default="${QBT_INT_PORT:-8082}"
   local qbt_host_default="$qbt_webui_default"
@@ -265,6 +270,7 @@ prepare_env_context() {
   QBT_PORT="$qbt_host_port"
   export ARR_QBT_INT_PORT_STATUS="$qbt_webui_status"
   export ARR_QBT_HOST_PORT_STATUS="$qbt_host_status"
+  export QBT_INT_PORT QBT_PORT QBT_WEB_PORT
 
   local qbt_bind_addr_value="${QBT_BIND_ADDR:-0.0.0.0}"
   if [[ -z "$qbt_bind_addr_value" ]]; then
@@ -280,6 +286,7 @@ prepare_env_context() {
       ;;
   esac
   QBT_ENFORCE_WEBUI="$qbt_enforce_value"
+  export QBT_ENFORCE_WEBUI
 
   local sab_api_state="empty"
   local sab_api_value="${SABNZBD_API_KEY:-}"
@@ -412,6 +419,7 @@ prepare_env_context() {
     qbt_whitelist_raw+="${qbt_whitelist_raw:+,}${lan_private_subnet}"
   fi
   QBT_AUTH_WHITELIST="$(normalize_csv "$qbt_whitelist_raw")"
+  export QBT_AUTH_WHITELIST
 
   if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
     while IFS= read -r _env_key; do

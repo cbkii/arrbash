@@ -8,6 +8,11 @@ if [[ -n "${__COMPOSE_RUNTIME_LOADED:-}" ]]; then
 fi
 __COMPOSE_RUNTIME_LOADED=1
 
+ARR_COMPOSE_AUTOREPAIR_SNAPSHOT=""
+ARR_COMPOSE_AUTOREPAIR_FAILURE=""
+ARR_COMPOSE_AUTOREPAIR_LAST_CAUSE=""
+__ARR_COMPOSE_WARNED_LAN_IP_FALLBACK=""
+
 # Ensure Gluetun helpers are available for runtime validation
 if ! declare -f gluetun_require_wireguard_natpmp >/dev/null 2>&1; then
   if [[ -z "${REPO_ROOT:-}" ]]; then
@@ -183,6 +188,42 @@ arr_safe_compose_write() {
   return 1
 }
 
+arr_compose_resolve_lan_binding_host() {
+  local __dest_var="$1"
+  local candidate="${2:-${LAN_IP:-}}"
+  local placeholder_host='${LAN_IP}'
+  local fallback_host='127.0.0.1'
+
+  local resolved_host="$placeholder_host"
+
+  if [[ -z "$candidate" || "$candidate" == "0.0.0.0" ]]; then
+    resolved_host="$fallback_host"
+  else
+    local is_private=0
+    if arr_function_exists arr_is_private_ipv4_safe; then
+      if arr_is_private_ipv4_safe "$candidate"; then
+        is_private=1
+      fi
+    elif arr_function_exists is_private_ipv4; then
+      if is_private_ipv4 "$candidate"; then
+        is_private=1
+      fi
+    elif [[ "$candidate" =~ ^((10\.)|(192\.168\.)|(172\.(1[6-9]|2[0-9]|3[0-1])\.)) ]]; then
+      is_private=1
+    fi
+
+    if ((is_private == 0)); then
+      resolved_host="$fallback_host"
+      if [[ -n "$candidate" && -z "${__ARR_COMPOSE_WARNED_LAN_IP_FALLBACK:-}" ]]; then
+        warn "LAN_IP not private; using 127.0.0.1 for port mappings"
+        __ARR_COMPOSE_WARNED_LAN_IP_FALLBACK=1
+      fi
+    fi
+  fi
+
+  printf -v "$__dest_var" '%s' "$resolved_host"
+}
+
 detect_compose_cmd() {
   local compose_cmd=""
 
@@ -347,6 +388,14 @@ arr_compose_save_artifact() {
 
   if cp -f "$staging" "$artifact" 2>/dev/null; then
     arr_compose_log_message "$log_file" "Saved ${label:-snapshot} copy at ${artifact}"
+    case "${label:-}" in
+      snapshot)
+        ARR_COMPOSE_AUTOREPAIR_SNAPSHOT="$artifact"
+        ;;
+      failed)
+        ARR_COMPOSE_AUTOREPAIR_FAILURE="$artifact"
+        ;;
+    esac
     printf '%s\n' "$artifact"
     return 0
   fi
@@ -424,6 +473,114 @@ arr_compose_run_yq_roundtrip() {
   return 0
 }
 
+arr_compose_prune_empty_top_level_volumes() {
+  local staging="$1"
+  local log_file="$2"
+
+  if [[ -z "$staging" || ! -f "$staging" ]]; then
+    return 1
+  fi
+
+  local -a lines=()
+  if ! mapfile -t lines <"$staging"; then
+    return 1
+  fi
+
+  local total="${#lines[@]}"
+  local start=-1
+  local idx=0
+
+  for idx in "${!lines[@]}"; do
+    if [[ "${lines[$idx]}" =~ ^volumes:[[:space:]]*$ ]]; then
+      start=$idx
+      break
+    fi
+  done
+
+  if ((start < 0)); then
+    return 0
+  fi
+
+  local has_entries=0
+  local end=$total
+  for ((idx=start+1; idx<total; idx++)); do
+    local line="${lines[$idx]}"
+    if [[ ! "$line" =~ ^[[:space:]] ]]; then
+      end=$idx
+      break
+    fi
+    if [[ "$line" =~ ^[[:space:]]*$ ]]; then
+      continue
+    fi
+    if [[ "$line" =~ ^[[:space:]]*# ]]; then
+      continue
+    fi
+    has_entries=1
+    break
+  done
+
+  if ((has_entries)); then
+    return 0
+  fi
+
+  local tmp=""
+  if ! tmp="$(arr_mktemp_file "${staging}.novol.XXXXXX")"; then
+    return 1
+  fi
+
+  for ((idx=0; idx<total; idx++)); do
+    if ((idx < start || idx >= end)); then
+      printf '%s\n' "${lines[$idx]}" >>"$tmp"
+    fi
+  done
+
+  if mv "$tmp" "$staging" 2>/dev/null; then
+    arr_unregister_temp_path "$tmp"
+    if [[ -n "$log_file" ]]; then
+      arr_compose_log_message "$log_file" "[autorepair] removed empty top-level volumes mapping"
+    fi
+    printf '%s\n' "removed empty top-level volumes mapping"
+    return 0
+  fi
+
+  arr_cleanup_temp_path "$tmp"
+  return 1
+}
+
+arr_compose_write_failure_diff() {
+  local log_file="$1"
+
+  local snapshot="${ARR_COMPOSE_AUTOREPAIR_SNAPSHOT:-}"
+  local failed="${ARR_COMPOSE_AUTOREPAIR_FAILURE:-}"
+
+  if [[ -z "$snapshot" || -z "$failed" ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "$snapshot" || ! -f "$failed" ]]; then
+    return 0
+  fi
+
+  local log_dir
+  log_dir="$(arr_log_dir)"
+  ensure_dir_mode "$log_dir" "$DATA_DIR_MODE"
+
+  if ! command -v diff >/dev/null 2>&1; then
+    arr_compose_log_message "$log_file" "[autorepair] diff skipped (diff utility unavailable)"
+    return 0
+  fi
+
+  local diff_path="${log_dir}/compose-repair-diff.log"
+  if diff -u "$snapshot" "$failed" >"$diff_path" 2>/dev/null; then
+    ensure_nonsecret_file_mode "$diff_path"
+    arr_compose_log_message "$log_file" "[autorepair] diff available at logs/compose-repair-diff.log"
+    return 0
+  fi
+
+  arr_compose_log_message "$log_file" "[autorepair] failed to write compose diff to ${diff_path}"
+  return 0
+}
+
 arr_compose_validate_with_compose() {
   local staging="$1"
   local log_file="$2"
@@ -433,6 +590,8 @@ arr_compose_validate_with_compose() {
   if [[ -z "$staging" || -z "$log_file" ]]; then
     return 1
   fi
+
+  ARR_COMPOSE_AUTOREPAIR_LAST_CAUSE=""
 
   if [[ -z "$compose_cmd_raw" ]]; then
     arr_compose_log_message "$log_file" "Compose validation skipped (${context:-autorepair}; compose command unavailable)"
@@ -451,6 +610,18 @@ arr_compose_validate_with_compose() {
   compose_output="$("${compose_cmd[@]}" -f "$staging" config --quiet 2>&1)" || compose_status=$?
 
   if ((compose_status != 0)); then
+    local failure_hint=""
+    if [[ "$compose_output" == *"volumes must be a mapping"* ]]; then
+      failure_hint="empty volumes mapping"
+    elif [[ "$compose_output" == *"is not set"* && "$compose_output" == *"\${"* ]]; then
+      failure_hint="unresolved placeholders"
+    fi
+    if [[ -n "$failure_hint" ]]; then
+      ARR_COMPOSE_AUTOREPAIR_LAST_CAUSE="$failure_hint"
+      arr_compose_log_message "$log_file" "[autorepair] detected failure: ${failure_hint}"
+    else
+      ARR_COMPOSE_AUTOREPAIR_LAST_CAUSE="compose validation failed"
+    fi
     arr_compose_log_message "$log_file" "Compose validation failed during ${context:-autorepair}"
     if [[ -n "$compose_output" ]]; then
       printf '%s\n' "$compose_output" >>"$log_file" 2>/dev/null || true
@@ -990,6 +1161,10 @@ arr_compose_autorepair() {
     return 1
   fi
 
+  ARR_COMPOSE_AUTOREPAIR_SNAPSHOT=""
+  ARR_COMPOSE_AUTOREPAIR_FAILURE=""
+  ARR_COMPOSE_AUTOREPAIR_LAST_CAUSE=""
+
   arr_compose_log_message "$log_file" "=== compose autorepair start ==="
 
   local snapshot_path=""
@@ -999,6 +1174,7 @@ arr_compose_autorepair() {
   fi
 
   local -a summary=()
+  local prune_summary=""
   local validation_needed=0
   local yq_summary_added=0
 
@@ -1171,6 +1347,13 @@ arr_compose_autorepair() {
       printf '%s\n' "auto-repair aborted: yq canonicalization failed"
       return 1
     fi
+    if prune_summary="$(arr_compose_prune_empty_top_level_volumes "$staging" "$log_file")"; then
+      if [[ -n "$prune_summary" ]]; then
+        summary+=("$prune_summary")
+      fi
+    else
+      arr_compose_log_message "$log_file" "Failed to prune empty top-level volumes mapping"
+    fi
     if ((ARR_COMPOSE_YQ_CHANGED)) && ((yq_summary_added == 0)); then
       summary+=("normalized YAML with yq")
       yq_summary_added=1
@@ -1237,6 +1420,13 @@ arr_compose_autorepair() {
           fi
           printf '%s\n' "auto-repair aborted: yq canonicalization failed"
           return 1
+        fi
+        if prune_summary="$(arr_compose_prune_empty_top_level_volumes "$staging" "$log_file")"; then
+          if [[ -n "$prune_summary" ]]; then
+            summary+=("$prune_summary")
+          fi
+        else
+          arr_compose_log_message "$log_file" "Failed to prune empty top-level volumes mapping"
         fi
         if ((ARR_COMPOSE_YQ_CHANGED)) && ((yq_summary_added == 0)); then
           summary+=("normalized YAML with yq")
@@ -1328,6 +1518,7 @@ arr_compose_autorepair_and_validate() {
 
   if ((autorepair_status != 0)); then
     warn "Compose auto-repair failed; see ${log_file}"
+    arr_compose_write_failure_diff "$log_file"
     return 1
   fi
 
@@ -1340,6 +1531,7 @@ arr_compose_autorepair_and_validate() {
     if ((${#compose_cmd[@]} > 0)); then
       if ! arr_compose_validate_with_compose "$staging" "$log_file" "$compose_cmd_raw" "final validation"; then
         warn "Docker Compose validation failed; see ${log_file}"
+        arr_compose_write_failure_diff "$log_file"
         return 1
       fi
       summary_lines+=("validated with ${compose_cmd[*]} config --quiet")
@@ -1368,6 +1560,10 @@ arr_compose_autorepair_and_validate() {
   else
     msg "compose auto-repair: no changes required; see ${log_file}"
   fi
+
+  ARR_COMPOSE_AUTOREPAIR_SNAPSHOT=""
+  ARR_COMPOSE_AUTOREPAIR_FAILURE=""
+  ARR_COMPOSE_AUTOREPAIR_LAST_CAUSE=""
 
   return 0
 }
@@ -1469,23 +1665,23 @@ arr_compose_emit_vpn_port_guard_service() {
         - "-ec"
         - |-
           set -euo pipefail
-          status_file="/gluetun_state/port-guard-status.json"
-          poll_seconds="$(printenv CONTROLLER_POLL_INTERVAL 2>/dev/null || true)"
-          if [[ -z "$poll_seconds" ]]; then
-            poll_seconds="$(printenv VPN_PORT_GUARD_POLL_SECONDS 2>/dev/null || true)"
+          HC_STATUS_FILE="/gluetun_state/port-guard-status.json"
+          HC_POLL_SECONDS="$(printenv CONTROLLER_POLL_INTERVAL 2>/dev/null || true)"
+          if [[ -z "$HC_POLL_SECONDS" ]]; then
+            HC_POLL_SECONDS="$(printenv VPN_PORT_GUARD_POLL_SECONDS 2>/dev/null || true)"
           fi
-          if [[ -z "$poll_seconds" || ! "$poll_seconds" =~ ^[0-9]+$ ]]; then
-            poll_seconds=60
+          if [[ -z "$HC_POLL_SECONDS" || ! "$HC_POLL_SECONDS" =~ ^[0-9]+$ ]]; then
+            HC_POLL_SECONDS=60
           fi
-          freshness_window=$(( poll_seconds < 60 ? 60 : poll_seconds + 60 ))
-          test -s "$status_file"
-          if ! mtime="$(stat -c %Y "$status_file" 2>/dev/null)"; then
+          HC_FRESHNESS_WINDOW=$(( HC_POLL_SECONDS < 60 ? 60 : HC_POLL_SECONDS + 60 ))
+          test -s "$$HC_STATUS_FILE"
+          if ! HC_MTIME="$(stat -c %Y "$$HC_STATUS_FILE" 2>/dev/null)"; then
             printf 'vpn-port-guard status timestamp unavailable\n' >&2
             exit 1
           fi
-          now="$(date +%s)"
-          if (( now - mtime > freshness_window )); then
-            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( now - mtime )) "$freshness_window" >&2
+          HC_NOW="$(date +%s)"
+          if (( HC_NOW - HC_MTIME > HC_FRESHNESS_WINDOW )); then
+            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( HC_NOW - HC_MTIME )) "$$HC_FRESHNESS_WINDOW" >&2
             exit 1
           fi
           curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" \
@@ -1729,7 +1925,7 @@ arr_validate_compose_prerequisites() {
 }
 append_sabnzbd_service_body() {
   local target="$1"
-  local include_direct_port="${2:-0}"
+  local sab_expose_lan="${2:-0}"
   local sab_internal_fallback="${SABNZBD_INT_PORT:-8080}"
   local internal_port="${3:-${sab_internal_fallback}}"
 
@@ -1750,6 +1946,22 @@ append_sabnzbd_service_body() {
       - "${ARR_DOCKER_DIR}/sab/incomplete:/incomplete"
       - "${ARR_DOCKER_DIR}/sab/downloads:/downloads"
 YAML
+
+  local sab_host_binding=""
+  if [[ "$sab_expose_lan" == "1" && "${SABNZBD_USE_VPN}" != "1" ]]; then
+    local resolved_host=""
+    arr_compose_resolve_lan_binding_host resolved_host
+    if [[ -n "$resolved_host" ]]; then
+      sab_host_binding="$resolved_host"
+    fi
+  fi
+
+  if [[ -n "$sab_host_binding" ]]; then
+    local sab_port_placeholder='${SABNZBD_PORT}'
+    local sab_internal_placeholder='${SABNZBD_INT_PORT}'
+    printf '    ports:\n' >>"$target"
+    printf '      - "%s:%s:%s"\n' "$sab_host_binding" "$sab_port_placeholder" "$sab_internal_placeholder" >>"$target"
+  fi
 
   printf '%s\n' "    healthcheck:" >>"$target"
   local _health_url
@@ -1779,6 +1991,14 @@ write_compose_split_mode() {
   local tmp
   local sab_internal_port
   arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
+  local qbt_expose_lan=0
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    qbt_expose_lan=1
+  fi
+  local sab_expose_lan=0
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    sab_expose_lan=1
+  fi
 
   if ! arr_validate_compose_prerequisites; then
     die "Compose prerequisites not satisfied"
@@ -1824,9 +2044,18 @@ YAML
       - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     ports:
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-      # split-mode on: publish qBittorrent via Gluetun so Arr apps reach http://gluetun:${QBT_INT_PORT}
-      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
+
+  if ((qbt_expose_lan)); then
+    local qbt_binding_host=""
+    arr_compose_resolve_lan_binding_host qbt_binding_host
+    if [[ -n "$qbt_binding_host" ]]; then
+      local qbt_port_placeholder='${QBT_PORT}'
+      local qbt_internal_placeholder='${QBT_INT_PORT}'
+      printf '      # split-mode on: publish qBittorrent via Gluetun so Arr apps reach http://gluetun:${QBT_INT_PORT}\n' >>"$tmp"
+      printf '      - "%s:%s:%s"\n' "$qbt_binding_host" "$qbt_port_placeholder" "$qbt_internal_placeholder" >>"$tmp"
+    fi
+  fi
 
   cat <<'YAML' >>"$tmp"
     healthcheck:
@@ -1911,13 +2140,13 @@ YAML
       gluetun:
         condition: "service_healthy"
 YAML
-      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port"
+      append_sabnzbd_service_body "$tmp" "$sab_expose_lan" "$sab_internal_port"
     else
       cat <<'YAML' >>"$tmp"
     networks:
       - "arr_net"
 YAML
-      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port"
+      append_sabnzbd_service_body "$tmp" "$sab_expose_lan" "$sab_internal_port"
     fi
   fi
 
@@ -1960,13 +2189,6 @@ networks:
     driver: "bridge"
 YAML
 
-  cat <<'YAML' >>"$tmp"
-
-volumes:
-YAML
-
-  printf '\n' >>"$tmp"
-
   if ! verify_single_level_env_placeholders "$tmp"; then
     arr_cleanup_temp_path "$tmp"
     die "Generated docker-compose.yml contains nested environment placeholders"
@@ -2000,6 +2222,14 @@ write_compose() {
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
+  local qbt_expose_lan=0
+  if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    qbt_expose_lan=1
+  fi
+  local sab_expose_lan=0
+  if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+    sab_expose_lan=1
+  fi
 
   if ! arr_validate_compose_prerequisites; then
     die "Compose prerequisites not satisfied"
@@ -2049,8 +2279,18 @@ YAML
     ports:
       # split-mode off: Gluetun publishes shared service ports for the namespace
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
-      - "${LAN_IP}:${QBT_PORT}:${QBT_INT_PORT}"
 YAML
+
+  if ((qbt_expose_lan)); then
+    local qbt_binding_host=""
+    arr_compose_resolve_lan_binding_host qbt_binding_host
+    if [[ -n "$qbt_binding_host" ]]; then
+      local qbt_port_placeholder='${QBT_PORT}'
+      local qbt_internal_placeholder='${QBT_INT_PORT}'
+      printf '      # publish qBittorrent WebUI on the LAN via Gluetun when direct exposure is enabled\n' >>"$tmp"
+      printf '      - "%s:%s:%s"\n' "$qbt_binding_host" "$qbt_port_placeholder" "$qbt_internal_placeholder" >>"$tmp"
+    fi
+  fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     cat <<'YAML' >>"$tmp"
@@ -2144,9 +2384,9 @@ YAML
       gluetun:
         condition: "service_healthy"
 YAML
-      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port"
+      append_sabnzbd_service_body "$tmp" "$sab_expose_lan" "$sab_internal_port"
     else
-      append_sabnzbd_service_body "$tmp" "0" "$sab_internal_port"
+      append_sabnzbd_service_body "$tmp" "$sab_expose_lan" "$sab_internal_port"
     fi
   fi
 
@@ -2181,13 +2421,6 @@ YAML
         max-file: "2"
 YAML
   fi
-
-  cat <<'YAML' >>"$tmp"
-
-volumes:
-YAML
-
-  printf '\n' >>"$tmp"
 
   if ! verify_single_level_env_placeholders "$tmp"; then
     arr_cleanup_temp_path "$tmp"
