@@ -1474,10 +1474,7 @@ arr_compose_emit_vpn_port_guard_service() {
           if [[ -z "$poll_seconds" ]]; then
             poll_seconds="$(printenv VPN_PORT_GUARD_POLL_SECONDS 2>/dev/null || true)"
           fi
-          if [[ -z "$poll_seconds" ]]; then
-            poll_seconds=60
-          fi
-          if [[ ! "$poll_seconds" =~ ^[0-9]+$ ]]; then
+          if [[ -z "$poll_seconds" || ! "$poll_seconds" =~ ^[0-9]+$ ]]; then
             poll_seconds=60
           fi
           freshness_window=$(( poll_seconds < 60 ? 60 : poll_seconds + 60 ))
