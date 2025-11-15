@@ -1679,14 +1679,14 @@ arr_compose_emit_vpn_port_guard_service() {
             HC_POLL_SECONDS=60
           fi
           HC_FRESHNESS_WINDOW=$(( HC_POLL_SECONDS < 60 ? 60 : HC_POLL_SECONDS + 60 ))
-          test -s "$$HC_STATUS_FILE"
-          if ! HC_MTIME="$(stat -c %Y "$$HC_STATUS_FILE" 2>/dev/null)"; then
+          test -s "$HC_STATUS_FILE"
+          if ! HC_MTIME="$(stat -c %Y "$HC_STATUS_FILE" 2>/dev/null)"; then
             printf 'vpn-port-guard status timestamp unavailable\n' >&2
             exit 1
           fi
           HC_NOW="$(date +%s)"
           if (( HC_NOW - HC_MTIME > HC_FRESHNESS_WINDOW )); then
-            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( HC_NOW - HC_MTIME )) "$$HC_FRESHNESS_WINDOW" >&2
+            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( HC_NOW - HC_MTIME )) "$HC_FRESHNESS_WINDOW" >&2
             exit 1
           fi
           curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" \
