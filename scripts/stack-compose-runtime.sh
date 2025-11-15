@@ -490,8 +490,13 @@ arr_compose_prune_empty_top_level_volumes() {
   local start=-1
   local idx=0
 
+  local line=""
   for idx in "${!lines[@]}"; do
-    if [[ "${lines[$idx]}" =~ ^volumes:[[:space:]]*$ ]]; then
+    line="${lines[$idx]}"
+    if [[ "$line" =~ ^volumes:[[:space:]]*$ ]]; then
+      if [[ -n "${line%%volumes:*}" ]]; then
+        continue
+      fi
       start=$idx
       break
     fi

@@ -192,20 +192,29 @@ arr_capture_env_overrides() {
         "${_arr_env_var}" "${_arr_env_overrides[${_arr_env_var}]}" "${_arr_env_override_exported[${_arr_env_var}]:-0}")
     done
 
-    local -a _arr_preserve_defaults=(
-      DOCKER_HOST
-      DOCKER_CONTEXT
-      SSH_AUTH_SOCK
-      HTTPS_PROXY
-      HTTP_PROXY
-      NO_PROXY
-      ALL_PROXY
-      NO_COLOR
-      TERM
-      COLORTERM
-      XDG_RUNTIME_DIR
-      TMPDIR
-    )
+      local -a _arr_runtime_sensitive=(
+        DOCKER_HOST
+        DOCKER_CONTEXT
+        SSH_AUTH_SOCK
+        HTTPS_PROXY
+        HTTP_PROXY
+        NO_PROXY
+        ALL_PROXY
+      )
+      local -a _arr_preserve_defaults=(
+        "${_arr_runtime_sensitive[@]}"
+        PATH
+        HOME
+        USER
+        SHELL
+        LANG
+        LC_ALL
+        NO_COLOR
+        TERM
+        COLORTERM
+        XDG_RUNTIME_DIR
+        TMPDIR
+      )
     local -a _arr_preserve_extra=()
     if [[ -n "${ARR_ENV_PRESERVE_EXTRA:-}" ]]; then
       read -r -a _arr_preserve_extra <<<"${ARR_ENV_PRESERVE_EXTRA}"
@@ -245,18 +254,15 @@ arr_capture_env_overrides() {
     unset "_arr_env_current[ARR_OVERRIDE_PAYLOAD]"
     unset "_arr_env_current[ARR_REEXEC_SANITIZED_ENV]"
 
-    local -a _arr_runtime_watch=(
-      DOCKER_HOST
-      DOCKER_CONTEXT
-      SSH_AUTH_SOCK
-      HTTPS_PROXY
-      HTTP_PROXY
-      NO_PROXY
-      ALL_PROXY
-    )
+    local -a _arr_runtime_watch=("${_arr_runtime_sensitive[@]}")
     for _arr_env_var in "${_arr_runtime_watch[@]}"; do
       if [[ -n "${_arr_env_original[${_arr_env_var}]+x}" && -z "${_arr_env_current[${_arr_env_var}]+x}" ]]; then
-        warn "Discarded ${_arr_env_var} during re-exec; remote Docker may fail"
+        local _arr_warning="Discarded ${_arr_env_var} during re-exec; remote Docker may fail"
+        if declare -f warn >/dev/null 2>&1; then
+          warn "${_arr_warning}"
+        else
+          printf '%s\n' "${_arr_warning}" >&2
+        fi
       fi
     done
 
@@ -269,7 +275,12 @@ arr_capture_env_overrides() {
 
     if [[ "${ARR_TRACE:-0}" == "1" ]]; then
       local _arr_precedence_hint="${ARRCONF_DIR:-${REPO_ROOT}/arrconf}/userr.conf"
-      msg "[debug] re-exec with config precedence: CLI flags > environment > ${_arr_precedence_hint} > defaults"
+      local _arr_trace_msg="[debug] re-exec with config precedence: CLI flags > environment > ${_arr_precedence_hint} > defaults"
+      if declare -f msg >/dev/null 2>&1; then
+        msg "${_arr_trace_msg}"
+      else
+        printf '%s\n' "${_arr_trace_msg}"
+      fi
     fi
 
     exec env -i "${_arr_exec_env[@]}" bash "$0" "${_arr_cli_args[@]}"
