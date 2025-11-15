@@ -1406,10 +1406,10 @@ arr_compose_emit_qbittorrent_service() {
 
   cat <<'YAML' >>"$dest"
     volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/qbittorrent:/config"
+      - "${ARR_DOCKER_DIR}/qbittorrent:/config"
       - "${DOWNLOADS_DIR}:/downloads"
       - "${COMPLETED_DIR}:/completed"
-      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
+      - "${ARR_STACK_DIR}/scripts/qbt-helper.sh:/custom-cont-init.d/00-qbt-webui:ro"
     depends_on:
       gluetun:
         condition: "service_healthy"
@@ -1459,8 +1459,8 @@ arr_compose_emit_vpn_port_guard_service() {
 
   cat <<'YAML' >>"$dest"
     volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/gluetun_state"
-      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts:/scripts:ro"
+      - "${ARR_DOCKER_DIR}/gluetun/state:/gluetun_state"
+      - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     command: ["/scripts/vpn-port-guard.sh"]
     healthcheck:
       test:
@@ -1470,19 +1470,22 @@ arr_compose_emit_vpn_port_guard_service() {
         - |-
           set -euo pipefail
           status_file="/gluetun_state/port-guard-status.json"
-          poll_seconds="$${CONTROLLER_POLL_INTERVAL:-$${VPN_PORT_GUARD_POLL_SECONDS:-60}}"
-          if [[ ! "$${poll_seconds}" =~ ^[0-9]+$ ]]; then
+          poll_seconds="$(printenv CONTROLLER_POLL_INTERVAL 2>/dev/null || true)"
+          if [[ -z "$poll_seconds" ]]; then
+            poll_seconds="$(printenv VPN_PORT_GUARD_POLL_SECONDS 2>/dev/null || true)"
+          fi
+          if [[ -z "$poll_seconds" || ! "$poll_seconds" =~ ^[0-9]+$ ]]; then
             poll_seconds=60
           fi
           freshness_window=$(( poll_seconds < 60 ? 60 : poll_seconds + 60 ))
-          test -s "$${status_file}"
-          if ! mtime="$(stat -c %Y "$${status_file}" 2>/dev/null)"; then
+          test -s "$status_file"
+          if ! mtime="$(stat -c %Y "$status_file" 2>/dev/null)"; then
             printf 'vpn-port-guard status timestamp unavailable\n' >&2
             exit 1
           fi
           now="$(date +%s)"
           if (( now - mtime > freshness_window )); then
-            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( now - mtime )) "$${freshness_window}" >&2
+            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( now - mtime )) "$freshness_window" >&2
             exit 1
           fi
           curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" \
@@ -1520,7 +1523,7 @@ arr_compose_emit_media_service() {
       container='sonarr'
       port_mapping="\${SONARR_PORT}:\${SONARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sonarr:/config"
+        "\${ARR_DOCKER_DIR}/sonarr:/config"
         "\${DOWNLOADS_DIR}:/downloads"
         "\${COMPLETED_DIR}:/completed"
         "\${TV_DIR}:/tv"
@@ -1531,7 +1534,7 @@ arr_compose_emit_media_service() {
       container='radarr'
       port_mapping="\${RADARR_PORT}:\${RADARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/radarr:/config"
+        "\${ARR_DOCKER_DIR}/radarr:/config"
         "\${DOWNLOADS_DIR}:/downloads"
         "\${COMPLETED_DIR}:/completed"
         "\${MOVIES_DIR}:/movies"
@@ -1542,7 +1545,7 @@ arr_compose_emit_media_service() {
       container='lidarr'
       port_mapping="\${LIDARR_PORT}:\${LIDARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/lidarr:/config"
+        "\${ARR_DOCKER_DIR}/lidarr:/config"
         "\${DOWNLOADS_DIR}:/downloads"
         "\${COMPLETED_DIR}:/completed"
         "\${MUSIC_DIR}:/music"
@@ -1553,7 +1556,7 @@ arr_compose_emit_media_service() {
       container='prowlarr'
       port_mapping="\${PROWLARR_PORT}:\${PROWLARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/prowlarr:/config"
+        "\${ARR_DOCKER_DIR}/prowlarr:/config"
       )
       ;;
     bazarr)
@@ -1561,7 +1564,7 @@ arr_compose_emit_media_service() {
       container='bazarr'
       port_mapping="\${BAZARR_PORT}:\${BAZARR_INT_PORT}"
       volumes=(
-        "\${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/bazarr:/config"
+        "\${ARR_DOCKER_DIR}/bazarr:/config"
         "\${TV_DIR}:/tv"
         "\${MOVIES_DIR}:/movies"
       )
@@ -1700,6 +1703,12 @@ arr_validate_compose_prerequisites() {
   if [[ -z "${PGID:-}" ]]; then
     errors+=("PGID not set")
   fi
+  if [[ -z "${ARR_DOCKER_DIR:-}" ]]; then
+    errors+=("ARR_DOCKER_DIR not set")
+  fi
+  if [[ -z "${ARR_STACK_DIR:-}" ]]; then
+    errors+=("ARR_STACK_DIR not set")
+  fi
 
   if [[ "${SPLIT_VPN:-0}" == "1" || "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     if [[ -z "${LAN_IP:-}" || "$LAN_IP" == "0.0.0.0" ]]; then
@@ -1737,9 +1746,9 @@ append_sabnzbd_service_body() {
       PGID: "${PGID}"
       TZ: "${TIMEZONE}"
     volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sab/config:/config"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sab/incomplete:/incomplete"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/sab/downloads:/downloads"
+      - "${ARR_DOCKER_DIR}/sab/config:/config"
+      - "${ARR_DOCKER_DIR}/sab/incomplete:/incomplete"
+      - "${ARR_DOCKER_DIR}/sab/downloads:/downloads"
 YAML
 
   printf '%s\n' "    healthcheck:" >>"$target"
@@ -1809,10 +1818,10 @@ YAML
 
   cat <<'YAML' >>"$tmp"
     volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/tmp/gluetun"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/gluetun_state"
-      - "${ARR_STACK_DIR:?ARR_STACK_DIR not set}/scripts:/scripts:ro"
+      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
+      - "${ARR_DOCKER_DIR}/gluetun/state:/tmp/gluetun"
+      - "${ARR_DOCKER_DIR}/gluetun/state:/gluetun_state"
+      - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     ports:
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
       # split-mode on: publish qBittorrent via Gluetun so Arr apps reach http://gluetun:${QBT_INT_PORT}
@@ -1927,9 +1936,9 @@ YAML
       radarr:
         condition: "service_started"
     volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/config.yml:/app/config.yml:ro"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/secrets.yml:/app/secrets.yml:ro"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/cfs:/app/cfs:ro"
+      - "${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro"
     working_dir: "/app"
     entrypoint: ["/bin/sh","-lc","node dist/index.js || exit 1"]
     environment:
@@ -2034,9 +2043,9 @@ YAML
 
   cat <<'YAML' >>"$tmp"
     volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun:/gluetun"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/tmp/gluetun"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/gluetun/state:/gluetun_state"
+      - "${ARR_DOCKER_DIR}/gluetun:/gluetun"
+      - "${ARR_DOCKER_DIR}/gluetun/state:/tmp/gluetun"
+      - "${ARR_DOCKER_DIR}/gluetun/state:/gluetun_state"
     ports:
       # split-mode off: Gluetun publishes shared service ports for the namespace
       - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
@@ -2157,9 +2166,9 @@ YAML
       radarr:
         condition: "service_started"
     volumes:
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/config.yml:/app/config.yml:ro"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/secrets.yml:/app/secrets.yml:ro"
-      - "${ARR_DOCKER_DIR:?ARR_DOCKER_DIR not set}/configarr/cfs:/app/cfs:ro"
+      - "${ARR_DOCKER_DIR}/configarr/config.yml:/app/config.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/secrets.yml:/app/secrets.yml:ro"
+      - "${ARR_DOCKER_DIR}/configarr/cfs:/app/cfs:ro"
     working_dir: "/app"
     entrypoint: ["/bin/sh","-lc","node dist/index.js || exit 1"]
     environment:
