@@ -255,7 +255,7 @@ arr_capture_env_overrides() {
       ALL_PROXY
     )
     for _arr_env_var in "${_arr_runtime_watch[@]}"; do
-      if [[ -n "${_arr_original[${_arr_env_var}]+x}" && -z "${_arr_env_current[${_arr_env_var}]+x}" ]]; then
+      if [[ -n "${_arr_env_original[${_arr_env_var}]+x}" && -z "${_arr_env_current[${_arr_env_var}]+x}" ]]; then
         warn "Discarded ${_arr_env_var} during re-exec; remote Docker may fail"
       fi
     done
