@@ -1926,11 +1926,19 @@ arr_function_exists() {
 }
 
 arr_normalize_bool() {
-  case "${1:-}" in
-    1|true|TRUE|yes|YES|on|ON)
+  local raw="${1:-}"
+  local lower
+  lower="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+
+  case "$lower" in
+    1|true|yes|on|enable|enabled)
       printf '1\n'
       ;;
+    0|false|no|off|disable|disabled|'')
+      printf '0\n'
+      ;;
     *)
+      warn "normalize_bool: treating '${raw}' as 0"
       printf '0\n'
       ;;
   esac
