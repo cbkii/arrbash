@@ -1359,19 +1359,28 @@ arr.restart.stack() {
     printf 'arr: docker compose down failed; attempting restart anyway.\n' >&2
   fi
 
+  local split="${SPLIT_VPN:-$(_arr_env_get SPLIT_VPN)}"
+  local gluetun_healthy=1
+
   if _arr_service_defined gluetun; then
     printf '==> Starting gluetun (VPN)\n'
     if ! _arr_compose up -d gluetun >/dev/null 2>&1; then
-      printf 'arr: failed to start gluetun; aborting restart.\n' >&2
-      return 1
-    fi
-
-    if ! _arr_wait_for_container_health gluetun 150 5; then
-      printf 'arr: gluetun did not become ready; aborting restart.\n' >&2
-      return 1
+      printf 'arr: failed to start gluetun; continuing without VPN for split mode.\n' >&2
+      gluetun_healthy=0
+    elif ! _arr_wait_for_container_health gluetun 150 5; then
+      if _arr_bool "$split"; then
+        printf 'arr: gluetun not healthy; proceeding to start non-VPN services (split mode).\n' >&2
+        gluetun_healthy=0
+      else
+        printf 'arr: gluetun did not become ready; aborting restart.\n' >&2
+        return 1
+      fi
+    else
+      gluetun_healthy=1
     fi
   else
     printf 'arr: gluetun service not defined in compose configuration; skipping VPN warm-up.\n' >&2
+    gluetun_healthy=0
   fi
 
   local -a desired=()
@@ -1384,6 +1393,10 @@ arr.restart.stack() {
 
   local svc
   for svc in "${desired[@]}"; do
+    if _arr_bool "$split" && [ "$svc" = "qbittorrent" ] && [ $gluetun_healthy -ne 1 ]; then
+      printf '==> Skipping qbittorrent: Gluetun not healthy (required in split mode)\n'
+      continue
+    fi
     printf '==> Starting %s\n' "$svc"
     if ! _arr_compose up -d "$svc" >/dev/null 2>&1; then
       printf 'arr: failed to start %s; check docker compose logs.\n' "$svc" >&2

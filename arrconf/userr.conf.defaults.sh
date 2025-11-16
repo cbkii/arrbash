@@ -128,7 +128,11 @@ ARR_DOCKER_SERVICES_DEFAULT=(
   configarr
 )
 
-if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 || ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
+# Ensure ARR_DOCKER_SERVICES is declared before length checks to avoid 'unbound variable' with set -u
+if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1; then
+  ARR_DOCKER_SERVICES=()
+fi
+if ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
   ARR_DOCKER_SERVICES=("${ARR_DOCKER_SERVICES_DEFAULT[@]}")
 fi
 

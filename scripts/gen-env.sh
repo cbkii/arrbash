@@ -268,6 +268,8 @@ fi
 if [[ -z "${COMPOSE_PROFILES:-}" ]] && declare -f arr_derive_compose_profiles_csv >/dev/null 2>&1; then
   COMPOSE_PROFILES="$(arr_derive_compose_profiles_csv)"
 fi
+: "${COMPOSE_PROFILES:=ipdirect}"
+export COMPOSE_PROFILES
 : "${VPN_SERVICE_PROVIDER:=${VPN_SERVICE_PROVIDER:-protonvpn}}"
 : "${VPN_TYPE:=${VPN_TYPE:-openvpn}}"
 : "${WG_FALLBACK_TIMEOUT_SECONDS:=120}"

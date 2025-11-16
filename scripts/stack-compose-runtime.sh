@@ -1717,6 +1717,7 @@ arr_compose_emit_media_service() {
   local port_mapping=""
   local -a volumes=()
   local lan_placeholder="\${LAN_IP}"
+  local host_binding=""
 
   case "$service" in
     sonarr)
@@ -1788,20 +1789,29 @@ arr_compose_emit_media_service() {
     networks:
       - "arr_net"
 YAML
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+      arr_compose_resolve_lan_binding_host host_binding
+      if [[ -n "$host_binding" ]]; then
+        printf '    ports:\n' >>"$dest"
+        printf '      - "%s:%s"\n' "$host_binding" "$port_mapping" >>"$dest"
+      fi
+    fi
   else
     cat <<'YAML' >>"$dest"
     network_mode: "service:gluetun"
 YAML
   fi
 
-  cat <<'YAML' >>"$dest"
-    # split-mode on/off: wait for Gluetun and qBittorrent before Arr apps boot
+  if [[ "$mode" != "split" ]]; then
+    cat <<'YAML' >>"$dest"
+    # full-tunnel mode: wait for Gluetun and qBittorrent before Arr apps boot
     depends_on:
       gluetun:
         condition: "service_healthy"
       qbittorrent:
         condition: "service_started"
 YAML
+  fi
 
   cat <<'YAML' >>"$dest"
     environment:
@@ -1852,6 +1862,8 @@ arr_compose_emit_flaresolverr_service() {
   local mode="$2"
   local flarr_image="\${FLARR_IMAGE}"
   local lan_placeholder="\${LAN_IP}"
+  local port_mapping="\${FLARR_PORT}:\${FLARR_INT_PORT}"
+  local host_binding=""
 
   {
     printf '  flaresolverr:\n'
@@ -1866,6 +1878,13 @@ arr_compose_emit_flaresolverr_service() {
     networks:
       - "arr_net"
 YAML
+    if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
+      arr_compose_resolve_lan_binding_host host_binding
+      if [[ -n "$host_binding" ]]; then
+        printf '    ports:\n' >>"$dest"
+        printf '      - "%s:%s"\n' "$host_binding" "$port_mapping" >>"$dest"
+      fi
+    fi
   else
     cat <<'YAML' >>"$dest"
     network_mode: "service:gluetun"
