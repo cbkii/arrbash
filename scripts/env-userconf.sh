@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2250
 
 # Return a canonical representation of a path while tolerating missing targets.
 # Prefers realpath -e, falls back to readlink -f, and echoes the raw input when
@@ -139,7 +140,8 @@ arr_resolve_userconf_paths() {
   local source="default"
   local override=""
 
-  if [[ -n "${candidate}" ]]; then
+    # shellcheck disable=SC2128  # candidate is intentionally scalar
+    if [[ -n "${candidate}" ]]; then
     source="explicit"
   else
     if override="$(arr_find_userconf_override 2>/dev/null || true)" && [[ -n "${override}" ]]; then

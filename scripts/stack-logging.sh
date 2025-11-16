@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2250
 # Opt-in structured xtrace to file with basic secret-masking.
 # Usage:
 #   export ARR_TRACE=1                       # or pass --trace to arr.sh (see patch)
@@ -19,7 +20,7 @@ fi
 arr_trace_start() {
   local base_log="${LOG_FILE:-}" trace_file=""
 
-  if [[ -z "$base_log" ]]; then
+  if [[ -z "${base_log}" ]]; then
     local log_dir timestamp stack_name
     if declare -f arr_log_dir >/dev/null 2>&1; then
       log_dir="$(arr_log_dir)"
@@ -34,28 +35,28 @@ arr_trace_start() {
     fi
 
     if declare -f ensure_dir_mode >/dev/null 2>&1; then
-      ensure_dir_mode "$log_dir" "${DATA_DIR_MODE:-700}"
+        ensure_dir_mode "${log_dir}" "${DATA_DIR_MODE:-700}"
     else
       mkdir -p "$log_dir"
     fi
 
     timestamp="${ARR_LOG_TIMESTAMP:-}"
-    if [[ -z "$timestamp" ]]; then
-      timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
-      export ARR_LOG_TIMESTAMP="$timestamp"
+        if [[ -z "${timestamp}" ]]; then
+          timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
+        export ARR_LOG_TIMESTAMP="${timestamp}"
     fi
 
     stack_name="${STACK:-arr}"
     base_log="${log_dir}/${stack_name}-${timestamp}.log"
   fi
 
-  if [[ "$base_log" == *.log ]]; then
+    if [[ "${base_log}" == *.log ]]; then
     trace_file="${base_log%.log}-trace.log"
   else
     trace_file="${base_log}-trace.log"
   fi
 
-  export ARR_TRACE_FILE="${ARR_TRACE_FILE:-$trace_file}"
+    export ARR_TRACE_FILE="${ARR_TRACE_FILE:-${trace_file}}"
 
   local base_mask='([Pp]assword|[Tt]oken|[Ss]ecret|[Aa]pi[_-]?[Kk]ey|[Aa]ccess[_-]?[Tt]oken|[Aa]uth|[Ss]ession|[Jj]wt)=[^[:space:]]+|Authorization:[[:space:]]*Basic[[:space:]]+[A-Za-z0-9+/=]+|Authorization:[[:space:]]*Bearer[[:space:]]+[-A-Za-z0-9._~+/]+=*|Cookie:[[:space:]]*[^;[:space:]]+'
   local mask="${base_mask}"
@@ -69,7 +70,7 @@ arr_trace_start() {
     fi
   fi
 
-  if [[ -n "$mask" ]]; then
+  if [[ -n "${mask}" ]]; then
     if ! printf '' | sed -E "s/${mask}//" >/dev/null; then
       local final_status=$?
       warn "Disabling trace masking due to invalid combined expression (sed status ${final_status})."
@@ -78,14 +79,14 @@ arr_trace_start() {
   fi
 
   exec {__arr_trace_fd}> >(
-    if [[ -n "$mask" ]]; then
-      sed -u -E "s/${mask}/[REDACTED]/g" >>"$ARR_TRACE_FILE"
+    if [[ -n "${mask}" ]]; then
+      sed -u -E "s/${mask}/[REDACTED]/g" >>"${ARR_TRACE_FILE}"
     else
-      cat >>"$ARR_TRACE_FILE"
+      cat >>"${ARR_TRACE_FILE}"
     fi
   )
 
-  export BASH_XTRACEFD=$__arr_trace_fd
+  export BASH_XTRACEFD=${__arr_trace_fd}
 
   if [[ "${BASH_VERSINFO[0]:-0}" -ge 5 ]]; then
     export PS4='+ [${EPOCHREALTIME}] [${BASH_SOURCE##*/}:${LINENO}] ${FUNCNAME[0]:-main}() '

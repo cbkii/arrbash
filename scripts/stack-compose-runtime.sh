@@ -3,6 +3,7 @@
 # Inputs: Uses ARR_STACK_DIR, ARR_ENV_FILE, DOCKER_COMPOSE_CMD, compose template variables, and runtime env toggles.
 # Outputs: Writes docker-compose.yml files, logs validation summaries, and emits diagnostics to logs/compose-repair.log.
 # Exit codes: Functions return non-zero when compose validation or file writes fail.
+# shellcheck disable=SC2016,SC2034,SC2128,SC2129,SC2178
 if [[ -n "${__COMPOSE_RUNTIME_LOADED:-}" ]]; then
   return 0
 fi

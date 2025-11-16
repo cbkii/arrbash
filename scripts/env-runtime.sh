@@ -3,6 +3,7 @@
 # Inputs: Consumes numerous ARR_* variables, SPLIT_VPN, ARR_ENV_FILE, LAN_IP, ARR_USERCONF_PATH.
 # Outputs: Normalizes environment variables in-place and prompts for direct port exposure when needed.
 # Exit codes: Functions return non-zero when validations fail (e.g., LAN_IP invalid) or user aborts prompts.
+# shellcheck disable=SC2034
 if [[ -n "${__CONFIG_ENV_LOADED:-}" ]]; then
   return 0
 fi

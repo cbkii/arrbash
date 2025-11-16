@@ -2,6 +2,7 @@
 # shellcheck shell=bash
 # Lightweight Gluetun helper library used by stack scripts.
 # Provides helpers for control API access plus Proton/OpenVPN and WireGuard checks.
+# shellcheck disable=SC2250
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
@@ -25,29 +26,28 @@ fi
 gluetun_version_requires_auth_config() {
   local image="${GLUETUN_IMAGE:-}"
 
-  if [[ -z "$image" ]]; then
+  if [[ -z "${image}" ]]; then
     return 1
   fi
 
   local tag="${image##*:}"
-  local normalized="${tag#v}"
+  local normalized
+  normalized="${tag#v}"
   normalized="${normalized%%[^0-9.]*}"
 
   local major="" minor=""
-  if [[ -n "$normalized" ]]; then
-    IFS='.' read -r major minor _ <<EOF
-${normalized}
-EOF
+  if [[ -n "${normalized}" ]]; then
+    IFS='.' read -r major minor _ <<<"${normalized}"
   fi
 
-  if [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]]; then
+  if [[ "${major}" =~ ^[0-9]+$ && "${minor}" =~ ^[0-9]+$ ]]; then
     if (( major > 3 || (major == 3 && minor >= 40) )); then
       return 0
     fi
     return 1
   fi
 
-  if [[ "$tag" == "latest" || "$tag" == "edge" || "$tag" == "testing" || "$image" == "qmcgaw/gluetun" ]]; then
+  if [[ "${tag}" == "latest" || "${tag}" == "edge" || "${tag}" == "testing" || "${image}" == "qmcgaw/gluetun" ]]; then
     return 0
   fi
 
@@ -102,6 +102,7 @@ gluetun_wireguard_natpmp_enabled() {
   return 1
 }
 
+# shellcheck disable=SC2120
 gluetun_require_wireguard_natpmp() {
   local config_path="${1:-}"
   if [[ -z "$config_path" ]]; then

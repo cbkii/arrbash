@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016
 # qBittorrent Helper - Manage authentication and access defaults
 # Audit: quoted env parsing sentinels while preserving portability for bash/zsh callers.
 

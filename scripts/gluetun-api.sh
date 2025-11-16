@@ -2,6 +2,7 @@
 # shellcheck shell=bash
 # Library: Helpers for interacting with the Gluetun control API.
 # Provides minimal wrappers to check tunnel status and ProtonVPN forwarded ports.
+# shellcheck disable=SC1091,SC2250
 
 if [[ -n "${_ARR_GLUETUN_API_SOURCED:-}" ]]; then
   return 0

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2250
 
 : "${STACK:=arr}"
 : "${STACK_UPPER:=${STACK^^}}"
@@ -336,8 +337,8 @@ arr_read_fields() {
     __status=$?
   fi
   IFS="$__oldifs"
-  # shellcheck disable=SC2248  # __status is a numeric return code
-  return $__status
+    # shellcheck disable=SC2248  # __status is a numeric return code
+    return "${__status}"
 }
 
 # Ensures port is numeric and within 1-65535
@@ -839,11 +840,11 @@ ensure_dir() {
       fi
     elif [[ $EUID -eq 0 ]]; then
       # shellcheck disable=SC2248  # rc is an integer exit code from mkdir
-      return $rc
+        return "$rc"
     fi
   fi
   # shellcheck disable=SC2248  # rc is an integer exit code from mkdir
-  return $rc
+    return "$rc"
 }
 
 # Applies mode to directory with sudo fallback, warning when permissions drift
@@ -1655,7 +1656,8 @@ verify_tempfile_permission_guards() {
     local line=""
     local snippet=""
 
-    while IFS=: read -r rel_path line _; do
+      # shellcheck disable=SC2030,SC2031  # _ is intentionally a throwaway field
+      while IFS=: read -r rel_path line _; do
       [[ -f "$rel_path" ]] || continue
       snippet="$(sed -n "$((line + 1)),$((line + 8))p" "$rel_path")"
       if [[ "$snippet" != *ensure_*_file_mode* ]]; then
@@ -1866,7 +1868,8 @@ trim_string() {
 
 # Normalizes an environment variable name by uppercasing and collapsing
 # separators so variants like "arr-docker__dir" map to "ARR_DOCKER_DIR".
-arr_compose_normalize_env_name() {
+  # shellcheck disable=SC2031  # subshell manipulation of _ is acceptable here
+  arr_compose_normalize_env_name() {
   local name="${1-}"
   name="${name^^}"
   name="${name//[^A-Z0-9_]/_}"
@@ -2020,8 +2023,9 @@ arr_derive_gluetun_firewall_outbound_subnets() {
   printf '%s\n' "${candidates[@]}" | LC_ALL=C sort -u | paste -sd, -
 }
 
-arr_derive_gluetun_firewall_input_ports() {
-  local split_mode="${SPLIT_VPN:-0}"
+  arr_derive_gluetun_firewall_input_ports() {
+    # shellcheck disable=SC2034  # split_mode reserved for future branching
+    local split_mode="${SPLIT_VPN:-0}"
   local expose_direct="${EXPOSE_DIRECT_PORTS:-0}"
   local -a ports=()
   local port=""
@@ -2311,7 +2315,7 @@ arr_evaluate_nested_placeholder() {
 
 arr_replace_nested_placeholders_in_line() {
   local line="$1"
-  local working="$line"
+    local working="${line}"
   local replaced=0
   local placeholder=""
   local resolved=""
@@ -2319,7 +2323,7 @@ arr_replace_nested_placeholders_in_line() {
   local iterations=0
   local i=0
 
-  while [[ "$working" == *"\${"* ]]; do
+    while [[ "${working}" == *"\${"* ]]; do
     ((iterations++))
     if ((iterations > max_iterations)); then
       warn "  Reached maximum nested placeholder resolution iterations; stopping"
@@ -2334,14 +2338,14 @@ arr_replace_nested_placeholders_in_line() {
     # The remainder starts with '${', so we start with a brace_count of 1
     # and scan from the 3rd character.
     brace_count=1
-    for ((i = 2; i < ${#remainder}; i++)); do
-      local ch="${remainder:i:1}"
-      if [[ "$ch" == "{" ]]; then
-        ((brace_count++))
-      elif [[ "$ch" == "}" ]]; then
-        ((brace_count--))
-        if ((brace_count == 0)); then
-          placeholder="${remainder:0:i+1}"
+      for ((i = 2; i < ${#remainder}; i++)); do
+        local ch="${remainder:i:1}"
+        if [[ "${ch}" == "{" ]]; then
+          ((brace_count++))
+        elif [[ "${ch}" == "}" ]]; then
+          ((brace_count--))
+          if ((brace_count == 0)); then
+            placeholder="${remainder:0:i+1}"
           found=1
           break
         fi
@@ -2353,12 +2357,12 @@ arr_replace_nested_placeholders_in_line() {
       break
     fi
 
-    if ! resolved="$(arr_evaluate_nested_placeholder "$placeholder")"; then
+    if ! resolved="$(arr_evaluate_nested_placeholder "${placeholder}")"; then
       warn "  Unable to resolve nested placeholder ${placeholder} automatically"
       break
     fi
     # Prevent infinite loop when no progress can be made
-    if [[ "$resolved" == "$placeholder" ]]; then
+    if [[ "${resolved}" == "${placeholder}" ]]; then
       warn "  Nested placeholder ${placeholder} did not resolve to a different value; stopping to avoid infinite loop"
       break
     fi
@@ -2368,7 +2372,7 @@ arr_replace_nested_placeholders_in_line() {
     replaced=1
   done
 
-  printf '%s' "$working"
+    printf '%s' "${working}"
 
   if ((replaced == 0)); then
     return 1
@@ -2379,7 +2383,7 @@ arr_hardcode_nested_placeholders() {
   local file="$1"
   local nested_blob="$2"
 
-  if [[ -z "$file" || -z "$nested_blob" ]]; then
+    if [[ -z "${file}" || -z "${nested_blob}" ]]; then
     return 1
   fi
 
@@ -2391,13 +2395,13 @@ arr_hardcode_nested_placeholders() {
   local line_no=""
   local content=""
 
-  while IFS=$'\t' read -r line_no content; do
-    [[ -z "$line_no" ]] && continue
-    if [[ -z "${targets[$line_no]+x}" ]]; then
-      ordered_lines+=("$line_no")
-    fi
-    targets[$line_no]="$content"
-  done <<<"$nested_blob"
+    while IFS=$'\t' read -r line_no content; do
+      [[ -z "${line_no}" ]] && continue
+      if [[ -z "${targets[${line_no}]+x}" ]]; then
+        ordered_lines+=("${line_no}")
+      fi
+      targets[${line_no}]="${content}"
+    done <<<"${nested_blob}"
 
   local current_line=0
   local line=""
@@ -2432,7 +2436,7 @@ arr_hardcode_nested_placeholders() {
   local summary=""
   summary="$(printf 'L%s ' "${ordered_lines[@]}")"
   summary="${summary%% }"
-  if [[ -n "$summary" ]]; then
+    if [[ -n "${summary}" ]]; then
     msg "Hardcoded nested placeholders on lines: ${summary}"
   fi
 
@@ -2442,16 +2446,16 @@ arr_hardcode_nested_placeholders() {
 verify_single_level_env_placeholders() {
   local file="$1"
 
-  if [[ -z "$file" || ! -f "$file" ]]; then
+    if [[ -z "${file}" || ! -f "${file}" ]]; then
     die "verify_single_level_env_placeholders requires an existing file"
   fi
 
   local nested=""
-  if ! nested="$(arr_scan_nested_placeholders "$file")"; then
+    if ! nested="$(arr_scan_nested_placeholders "${file}")"; then
     die "Failed to inspect ${file} for nested placeholders"
   fi
 
-  if [[ -z "$nested" ]]; then
+    if [[ -z "${nested}" ]]; then
     return 0
   fi
 
@@ -2462,7 +2466,7 @@ verify_single_level_env_placeholders() {
   local content=""
   while IFS=$'\t' read -r line_no content; do
     warn "    L${line_no}: ${content}"
-  done <<<"$nested"
+    done <<<"${nested}"
 
   local auto_fix=0
   if [[ "${ASSUME_YES:-0}" == "1" ]]; then
@@ -2490,14 +2494,14 @@ verify_single_level_env_placeholders() {
     return 1
   fi
 
-  if ! arr_hardcode_nested_placeholders "$file" "$nested"; then
+    if ! arr_hardcode_nested_placeholders "${file}" "${nested}"; then
     warn "Nested placeholders could not be hardcoded automatically."
     return 1
   fi
 
   local post_fix=""
-  post_fix="$(arr_scan_nested_placeholders "$file")"
-  if [[ -n "$post_fix" ]]; then
+    post_fix="$(arr_scan_nested_placeholders "${file}")"
+    if [[ -n "${post_fix}" ]]; then
     warn "Nested placeholders persist after attempted hardcoding; manual intervention required."
     return 1
   fi
@@ -2509,7 +2513,7 @@ verify_single_level_env_placeholders() {
 arr_verify_compose_placeholders() {
   local compose_file="$1"
   local env_file="$2"
-  if [[ -z "$compose_file" || ! -f "$compose_file" ]]; then
+    if [[ -z "${compose_file}" || ! -f "${compose_file}" ]]; then
     die "arr_verify_compose_placeholders requires an existing compose file"
   fi
   declare -A _arr_known_env=()
@@ -2590,27 +2594,28 @@ portable_sed() {
   tmp="$(arr_mktemp_file "${file}.XXXXXX.tmp")" || die "Failed to create temp file for sed"
 
   local perms=""
-  if [ -e "$file" ]; then
-    perms="$(arr_run_sensitive_command stat -c '%a' "$file" || true)"
+  if [ -e "${file}" ]; then
+    perms="$(arr_run_sensitive_command stat -c '%a' "${file}" || true)"
     perms="${perms//$'\n'/}"
   fi
 
-  if arr_run_sensitive_command sh -c 'sed -e "$1" "$2" >"$3"' sh "$expr" "$file" "$tmp"; then
-    if [ -f "$file" ] && cmp -s "$file" "$tmp" 2>/dev/null; then
-      arr_cleanup_temp_path "$tmp"
+  # shellcheck disable=SC2016  # expressions intentionally remain literal for sh -c evaluation
+  if arr_run_sensitive_command sh -c 'sed -e "$1" "$2" >"$3"' sh "${expr}" "${file}" "${tmp}"; then
+    if [ -f "${file}" ] && cmp -s "${file}" "${tmp}" 2>/dev/null; then
+      arr_cleanup_temp_path "${tmp}"
       return 0
     fi
 
-    if arr_run_sensitive_command mv -f "$tmp" "$file"; then
-      arr_unregister_temp_path "$tmp"
+    if arr_run_sensitive_command mv -f "${tmp}" "${file}"; then
+      arr_unregister_temp_path "${tmp}"
     else
-      arr_cleanup_temp_path "$tmp"
+      arr_cleanup_temp_path "${tmp}"
       die "Failed to update ${file}"
     fi
 
-    [[ -n "$perms" ]] && ensure_file_mode "$file" "$perms"
+    [[ -n "${perms}" ]] && ensure_file_mode "${file}" "${perms}"
   else
-    arr_cleanup_temp_path "$tmp"
+    arr_cleanup_temp_path "${tmp}"
     die "sed operation failed on ${file}"
   fi
 }
@@ -2665,39 +2670,39 @@ get_env_kv() {
   local key="${1:-}"
   local file="${2:-}"
 
-  if [[ -z "$key" || -z "$file" || ! -f "$file" ]]; then
+    if [[ -z "${key}" || -z "${file}" || ! -f "${file}" ]]; then
     return 1
   fi
 
   local line
-  line="$(arr_run_sensitive_command grep -m1 "^${key}=" "$file" || true)"
-  if [[ -z "$line" ]]; then
+    line="$(arr_run_sensitive_command grep -m1 "^${key}=" "${file}" || true)"
+    if [[ -z "${line}" ]]; then
     return 1
   fi
 
   local value
-  value="${line#*=}"
-  value="$(unescape_env_value_from_compose "$value")"
-  printf '%s\n' "$value"
+    value="${line#*=}"
+    value="$(unescape_env_value_from_compose "${value}")"
+    printf '%s\n' "${value}"
 }
 
 # Persists installer-discovered env vars back into .env without introducing duplicates
 persist_env_var() {
-  local key="$1"
-  local value="$2"
+    local key="$1"
+    local value="$2"
 
-  if [ -z "$key" ]; then
-    return
-  fi
+    if [ -z "${key}" ]; then
+      return
+    fi
 
-  if [[ "$value" == *$'\n'* ]]; then
-    die "Environment value for ${key} contains newline characters"
-  fi
+    if [[ "${value}" == *$'\n'* ]]; then
+      die "Environment value for ${key} contains newline characters"
+    fi
 
-  if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-    warn "Skipping invalid environment variable name: ${key}"
-    return
-  fi
+    if [[ ! "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      warn "Skipping invalid environment variable name: ${key}"
+      return
+    fi
 
   if [[ ! -f "${ARR_ENV_FILE}" ]]; then
     return
@@ -2706,15 +2711,15 @@ persist_env_var() {
   local line
   line="${key}=${value}"
 
-  if arr_run_sensitive_command grep -q "^${key}=" "${ARR_ENV_FILE}"; then
-    local escaped
-    escaped="$(escape_sed_replacement "$line" '|')"
-    portable_sed "s|^${key}=.*$|${escaped}|" "${ARR_ENV_FILE}"
-  else
-    arr_sensitive_append_line "${ARR_ENV_FILE}" "$line"
-  fi
+    if arr_run_sensitive_command grep -q "^${key}=" "${ARR_ENV_FILE}"; then
+      local escaped
+      escaped="$(escape_sed_replacement "${line}" '|')"
+      portable_sed "s|^${key}=.*$|${escaped}|" "${ARR_ENV_FILE}"
+    else
+      arr_sensitive_append_line "${ARR_ENV_FILE}" "${line}"
+    fi
 
-  ensure_file_mode "${ARR_ENV_FILE}" "$SECRET_FILE_MODE"
+    ensure_file_mode "${ARR_ENV_FILE}" "${SECRET_FILE_MODE}"
 }
 
 # Masks secrets for logs while leaving limited prefix/suffix context visible
@@ -2723,10 +2728,10 @@ obfuscate_sensitive() {
   local visible_prefix="${2:-2}"
   local visible_suffix="${3:-${visible_prefix}}"
 
-  if [ -z "$value" ]; then
-    printf '(not set)'
-    return
-  fi
+    if [ -z "${value}" ]; then
+      printf '(not set)'
+      return
+    fi
 
   if ((visible_prefix < 0)); then
     visible_prefix=0
@@ -2737,7 +2742,7 @@ obfuscate_sensitive() {
 
   local length=${#value}
   if ((length <= visible_prefix + visible_suffix)); then
-    printf '%*s' "$length" '' | tr ' ' '*'
+    printf '%*s' "${length}" '' | tr ' ' '*'
     return
   fi
 

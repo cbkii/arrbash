@@ -3,6 +3,7 @@
 # This file is sourced *before* ${ARRCONF_DIR}/userr.conf.
 # Keep assignments idempotent and avoid relying on side effects so overrides
 # behave predictably when the user configuration runs afterwards.
+# shellcheck disable=SC2250
 # Override these in ${ARRCONF_DIR}/userr.conf (git-ignored; defaults to ${ARR_DATA_ROOT}/${STACK}configs/userr.conf where ARR_DATA_ROOT defaults to ~/srv).
 
 # Base paths
@@ -108,11 +109,11 @@ if ! declare -f arr_join_by >/dev/null 2>&1; then
 fi
 
 if ! declare -f arr_defaults_fail >/dev/null 2>&1; then
-  arr_defaults_fail() {
-    printf 'arrconf: %s\n' "$*" >&2
-    return 1 2>/dev/null || exit 1
-  }
-fi
+    arr_defaults_fail() {
+      printf 'arrconf: %s\n' "$*" >&2
+      return 1
+    }
+  fi
 
 ARR_DOCKER_SERVICES_DEFAULT=(
   gluetun
@@ -129,10 +130,7 @@ ARR_DOCKER_SERVICES_DEFAULT=(
 )
 
 # Ensure ARR_DOCKER_SERVICES is declared before length checks to avoid 'unbound variable' with set -u
-if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1; then
-  ARR_DOCKER_SERVICES=()
-fi
-if ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
+if [[ ! ${ARR_DOCKER_SERVICES+x} || ((${#ARR_DOCKER_SERVICES[@]} == 0)) ]]; then
   ARR_DOCKER_SERVICES=("${ARR_DOCKER_SERVICES_DEFAULT[@]}")
 fi
 
