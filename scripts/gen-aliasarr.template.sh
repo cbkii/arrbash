@@ -1365,8 +1365,13 @@ arr.restart.stack() {
   if _arr_service_defined gluetun; then
     printf '==> Starting gluetun (VPN)\n'
     if ! _arr_compose up -d gluetun >/dev/null 2>&1; then
-      printf 'arr: failed to start gluetun; continuing without VPN for split mode.\n' >&2
-      gluetun_healthy=0
+      if _arr_bool "$split"; then
+        printf 'arr: failed to start gluetun; continuing without VPN for split mode.\n' >&2
+        gluetun_healthy=0
+      else
+        printf 'arr: failed to start gluetun; aborting restart.\n' >&2
+        return 1
+      fi
     elif ! _arr_wait_for_container_health gluetun 150 5; then
       if _arr_bool "$split"; then
         printf 'arr: gluetun not healthy; proceeding to start non-VPN services (split mode).\n' >&2
