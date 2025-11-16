@@ -1672,21 +1672,21 @@ arr_compose_emit_vpn_port_guard_service() {
           set -euo pipefail
           HC_STATUS_FILE="/gluetun_state/port-guard-status.json"
           HC_POLL_SECONDS="$(printenv CONTROLLER_POLL_INTERVAL 2>/dev/null || true)"
-          if [[ -z "$HC_POLL_SECONDS" ]]; then
+          if [[ -z "$$HC_POLL_SECONDS" ]]; then
             HC_POLL_SECONDS="$(printenv VPN_PORT_GUARD_POLL_SECONDS 2>/dev/null || true)"
           fi
-          if [[ -z "$HC_POLL_SECONDS" || ! "$HC_POLL_SECONDS" =~ ^[0-9]+$ ]]; then
+          if [[ -z "$$HC_POLL_SECONDS" || ! "$$HC_POLL_SECONDS" =~ ^[0-9]+$ ]]; then
             HC_POLL_SECONDS=60
           fi
           HC_FRESHNESS_WINDOW=$(( HC_POLL_SECONDS < 60 ? 60 : HC_POLL_SECONDS + 60 ))
-          test -s "$HC_STATUS_FILE"
-          if ! HC_MTIME="$(stat -c %Y "$HC_STATUS_FILE" 2>/dev/null)"; then
+          test -s "$$HC_STATUS_FILE"
+          if ! HC_MTIME="$(stat -c %Y "$$HC_STATUS_FILE" 2>/dev/null)"; then
             printf 'vpn-port-guard status timestamp unavailable\n' >&2
             exit 1
           fi
           HC_NOW="$(date +%s)"
           if (( HC_NOW - HC_MTIME > HC_FRESHNESS_WINDOW )); then
-            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( HC_NOW - HC_MTIME )) "$HC_FRESHNESS_WINDOW" >&2
+            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( HC_NOW - HC_MTIME )) "$$HC_FRESHNESS_WINDOW" >&2
             exit 1
           fi
           curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" \
