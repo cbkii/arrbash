@@ -283,13 +283,13 @@ WARNING
 
     forwarding_state="${forwarding_state,,}"
     case "$forwarding_state" in
-      active|unavailable|error) ;;
+      active | unavailable | error) ;;
       *) forwarding_state="unavailable" ;;
     esac
 
     pf_enabled="${pf_enabled,,}"
     case "$pf_enabled" in
-      1|true|TRUE|yes|YES|on|ON) pf_enabled="true" ;;
+      1 | true | TRUE | yes | YES | on | ON) pf_enabled="true" ;;
       *) pf_enabled="false" ;;
     esac
 
@@ -302,7 +302,7 @@ WARNING
 
     qbt_state="${qbt_state,,}"
     case "$qbt_state" in
-      active|paused|error) ;;
+      active | paused | error) ;;
       *) qbt_state="unknown" ;;
     esac
 

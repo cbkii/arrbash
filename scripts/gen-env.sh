@@ -38,8 +38,8 @@ if ! type -t is_private_ipv4 >/dev/null 2>&1; then
     local ip="${1:-}"
     validate_ipv4 "$ip" || return 1
     case "$ip" in
-      10.*|127.*|192.168.*|169.254.*) return 0 ;;
-      172.1[6-9].*|172.2[0-9].*|172.3[0-1].*) return 0 ;;
+      10.* | 127.* | 192.168.* | 169.254.*) return 0 ;;
+      172.1[6-9].* | 172.2[0-9].* | 172.3[0-1].*) return 0 ;;
       *) return 1 ;;
     esac
   }
@@ -75,7 +75,10 @@ if ! type -t normalize_csv >/dev/null 2>&1; then
       cleaned+=("$trimmed")
     done
     if ((${#cleaned[@]})); then
-      (IFS=','; printf '%s\n' "${cleaned[*]}")
+      (
+        IFS=','
+        printf '%s\n' "${cleaned[*]}"
+      )
     else
       printf '%s\n' ""
     fi

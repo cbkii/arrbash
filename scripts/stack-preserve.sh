@@ -134,10 +134,10 @@ hydrate_qbt_webui_port_from_config() {
 
   local configured_port=""
   configured_port="$(arr_read_sensitive_file "$candidate" \
-  | grep -E '^WebUI(\\\\|\\\\\\\\)Port=' \
-  | tail -n1 \
-  | cut -d= -f2 \
-  | tr -d '[:space:]' || printf '')"
+    | grep -E '^WebUI(\\\\|\\\\\\\\)Port=' \
+    | tail -n1 \
+    | cut -d= -f2 \
+    | tr -d '[:space:]' || printf '')"
 
   if [[ -n "$configured_port" && "$configured_port" =~ ^[0-9]+$ ]]; then
     ARR_QBT_INT_PORT_CONFIG="$configured_port"

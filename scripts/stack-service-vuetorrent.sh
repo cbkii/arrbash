@@ -231,4 +231,3 @@ install_vuetorrent() {
     VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT}."
   fi
 }
-

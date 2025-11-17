@@ -29,7 +29,7 @@ compose_prepare_gluetun_runtime() {
   GLUETUN_RUNTIME_VPN_TYPE="${VPN_TYPE:-openvpn}"
   GLUETUN_RUNTIME_VPN_TYPE="$(printf '%s' "${GLUETUN_RUNTIME_VPN_TYPE}" | tr '[:upper:]' '[:lower:]')"
   case "${GLUETUN_RUNTIME_VPN_TYPE}" in
-    wireguard|openvpn) ;;
+    wireguard | openvpn) ;;
     *) GLUETUN_RUNTIME_VPN_TYPE="openvpn" ;;
   esac
 
@@ -509,7 +509,7 @@ arr_compose_prune_empty_top_level_volumes() {
 
   local has_entries=0
   local end=$total
-  for ((idx=start+1; idx<total; idx++)); do
+  for ((idx = start + 1; idx < total; idx++)); do
     local line="${lines[$idx]}"
     if [[ ! "$line" =~ ^[[:space:]] ]]; then
       end=$idx
@@ -534,7 +534,7 @@ arr_compose_prune_empty_top_level_volumes() {
     return 1
   fi
 
-  for ((idx=0; idx<total; idx++)); do
+  for ((idx = 0; idx < total; idx++)); do
     if ((idx < start || idx >= end)); then
       printf '%s\n' "${lines[$idx]}" >>"$tmp"
     fi
@@ -749,7 +749,7 @@ arr_compose_attempt_yaml_fixes() {
         continue
       fi
       case "$value_token" in
-        '|'|'|-'|'|+'|'>'|'>-'|'>+')
+        '|' | '|-' | '|+' | '>' | '>-' | '>+')
           arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: sequence value is a block scalar indicator (${value})"
           continue
           ;;
@@ -773,7 +773,7 @@ arr_compose_attempt_yaml_fixes() {
         continue
       fi
       case "$value_token" in
-        '|'|'|-'|'|+'|'>'|'>-'|'>+')
+        '|' | '|-' | '|+' | '>' | '>-' | '>+')
           arr_compose_log_message "$log_file" "Skipping colon repair for line ${line_no}: mapping value is a block scalar indicator (${value})"
           continue
           ;;
@@ -978,7 +978,6 @@ arr_compose_capture_matches() {
   return 0
 }
 
-
 arr_compose_autofix_env_names() {
   local compose_file="$1"
   local env_file="$2"
@@ -1156,7 +1155,6 @@ arr_compose_autofix_env_names() {
 
   return 0
 }
-
 
 arr_compose_autorepair() {
   local staging="$1"

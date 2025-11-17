@@ -56,7 +56,6 @@ arr_prompt_direct_port_exposure() {
   esac
 }
 
-
 prepare_env_context() {
   step "📝 Preparing environment values"
 
@@ -71,7 +70,7 @@ prepare_env_context() {
   local split_vpn
   split_vpn="$(arr_normalize_bool "$split_vpn_raw")"
   case "$split_vpn_raw" in
-    ''|0|1|true|TRUE|false|FALSE|yes|YES|no|NO|on|ON|off|OFF) ;;
+    '' | 0 | 1 | true | TRUE | false | FALSE | yes | YES | no | NO | on | ON | off | OFF) ;;
     *)
       warn "Invalid SPLIT_VPN=${split_vpn_raw}; defaulting to 0 (full tunnel)."
       split_vpn=0
@@ -141,11 +140,11 @@ prepare_env_context() {
   local sab_use_vpn
   sab_use_vpn="$(arr_normalize_bool "$sab_use_vpn_raw")"
   case "$sab_use_vpn_raw" in
-    ''|0|1|true|TRUE|false|FALSE|yes|YES|no|NO|on|ON|off|OFF) ;;
+    '' | 0 | 1 | true | TRUE | false | FALSE | yes | YES | no | NO | on | ON | off | OFF) ;;
     *)
       warn "Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
       sab_use_vpn=0
-    ;;
+      ;;
   esac
 
   local gluetun_available=0

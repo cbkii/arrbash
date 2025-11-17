@@ -42,7 +42,7 @@ write_aliases_file() {
   env_file_escaped=${env_file_escaped//|/\|}
 
   local docker_dir
-  docker_dir="${ARR_DOCKER_DIR:-}" 
+  docker_dir="${ARR_DOCKER_DIR:-}"
   [[ -n "$docker_dir" ]] || docker_dir="$(arr_docker_data_root)"
   docker_dir_escaped=${docker_dir//\\/\\\\}
   docker_dir_escaped=${docker_dir_escaped//&/\&}
@@ -378,20 +378,20 @@ update_alias_rc_block() {
   local idx=0
   local total=${#rc_lines[@]}
 
-  while (( idx < total )); do
+  while ((idx < total)); do
     local line="${rc_lines[idx]}"
     if [[ "${line}" == "${header}" ]]; then
       ((idx++))
-      if (( idx < total )) && [[ "${rc_lines[idx]}" == "alias ${STACK}="* ]]; then
+      if ((idx < total)) && [[ "${rc_lines[idx]}" == "alias ${STACK}="* ]]; then
         ((idx++))
       fi
-      if (( idx < total )) && [[ "${rc_lines[idx]}" == "alias ${STACK}-logs="* ]]; then
+      if ((idx < total)) && [[ "${rc_lines[idx]}" == "alias ${STACK}-logs="* ]]; then
         ((idx++))
       fi
-      if (( idx < total )) && [[ "${rc_lines[idx]}" == *".aliasarr"* ]]; then
+      if ((idx < total)) && [[ "${rc_lines[idx]}" == *".aliasarr"* ]]; then
         ((idx++))
       fi
-      if (( idx < total )) && [[ -z "${rc_lines[idx]}" ]]; then
+      if ((idx < total)) && [[ -z "${rc_lines[idx]}" ]]; then
         ((idx++))
       fi
       continue
@@ -400,11 +400,11 @@ update_alias_rc_block() {
     ((idx++))
   done
 
-  while (( ${#filtered_lines[@]} > 0 )) && [[ -z "${filtered_lines[-1]}" ]]; do
+  while ((${#filtered_lines[@]} > 0)) && [[ -z "${filtered_lines[-1]}" ]]; do
     unset 'filtered_lines[-1]'
   done
 
-  if (( ${#filtered_lines[@]} > 0 )); then
+  if ((${#filtered_lines[@]} > 0)); then
     filtered_lines+=("")
   fi
 

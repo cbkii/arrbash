@@ -100,7 +100,7 @@ qbt_webui_ensure_conf() {
   fi
 }
 
-qbt_webui_strip_crlf() { 
+qbt_webui_strip_crlf() {
   local conf="$1"
   if [[ -s "$conf" ]] && LC_ALL=C arr_run_sensitive_command grep -q $'\r' "$conf"; then
     local sanitized=""

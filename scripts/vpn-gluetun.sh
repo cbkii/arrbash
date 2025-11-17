@@ -41,7 +41,7 @@ gluetun_version_requires_auth_config() {
   fi
 
   if [[ "${major}" =~ ^[0-9]+$ && "${minor}" =~ ^[0-9]+$ ]]; then
-    if (( major > 3 || (major == 3 && minor >= 40) )); then
+    if ((major > 3 || (major == 3 && minor >= 40))); then
       return 0
     fi
     return 1

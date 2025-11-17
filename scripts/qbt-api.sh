@@ -71,12 +71,12 @@ _qbt_api_ensure_cookie() {
   url="$(_qbt_api_base_url)/api/v2/auth/login"
 
   if ! curl -fsS \
-      --connect-timeout "${QBT_API_TIMEOUT}" \
-      --max-time "${QBT_API_TIMEOUT}" \
-      -c "${_qbt_api_cookie_file}" \
-      --data-urlencode "username=${QBT_USER}" \
-      --data-urlencode "password=${QBT_PASS}" \
-      "${url}" >/dev/null; then
+    --connect-timeout "${QBT_API_TIMEOUT}" \
+    --max-time "${QBT_API_TIMEOUT}" \
+    -c "${_qbt_api_cookie_file}" \
+    --data-urlencode "username=${QBT_USER}" \
+    --data-urlencode "password=${QBT_PASS}" \
+    "${url}" >/dev/null; then
     _qbt_api_cleanup_cookie
     return 1
   fi

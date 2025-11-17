@@ -35,28 +35,28 @@ arr_trace_start() {
     fi
 
     if declare -f ensure_dir_mode >/dev/null 2>&1; then
-        ensure_dir_mode "${log_dir}" "${DATA_DIR_MODE:-700}"
+      ensure_dir_mode "${log_dir}" "${DATA_DIR_MODE:-700}"
     else
       mkdir -p "$log_dir"
     fi
 
     timestamp="${ARR_LOG_TIMESTAMP:-}"
-        if [[ -z "${timestamp}" ]]; then
-          timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
-        export ARR_LOG_TIMESTAMP="${timestamp}"
+    if [[ -z "${timestamp}" ]]; then
+      timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
+      export ARR_LOG_TIMESTAMP="${timestamp}"
     fi
 
     stack_name="${STACK:-arr}"
     base_log="${log_dir}/${stack_name}-${timestamp}.log"
   fi
 
-    if [[ "${base_log}" == *.log ]]; then
+  if [[ "${base_log}" == *.log ]]; then
     trace_file="${base_log%.log}-trace.log"
   else
     trace_file="${base_log}-trace.log"
   fi
 
-    export ARR_TRACE_FILE="${ARR_TRACE_FILE:-${trace_file}}"
+  export ARR_TRACE_FILE="${ARR_TRACE_FILE:-${trace_file}}"
 
   local base_mask='([Pp]assword|[Tt]oken|[Ss]ecret|[Aa]pi[_-]?[Kk]ey|[Aa]ccess[_-]?[Tt]oken|[Aa]uth|[Ss]ession|[Jj]wt)=[^[:space:]]+|Authorization:[[:space:]]*Basic[[:space:]]+[A-Za-z0-9+/=]+|Authorization:[[:space:]]*Bearer[[:space:]]+[-A-Za-z0-9._~+/]+=*|Cookie:[[:space:]]*[^;[:space:]]+'
   local mask="${base_mask}"

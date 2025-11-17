@@ -129,10 +129,10 @@ if ! declare -f arr_defaults_fail >/dev/null 2>&1; then
       CONTROLLER_REQUIRE_PF)
         raw_value="${raw_value,,}"
         case "$raw_value" in
-          1|true|yes|on|required|strict)
+          1 | true | yes | on | required | strict)
             normalized="true"
             ;;
-          ''|0|false|no|off|preferred)
+          '' | 0 | false | no | off | preferred)
             normalized="false"
             ;;
         esac
@@ -204,10 +204,10 @@ if [[ -z "${CONTROLLER_REQUIRE_PF+x}" && -n "${CONTROLLER_REQUIRE_PORT_FORWARDIN
 fi
 CONTROLLER_REQUIRE_PF="${CONTROLLER_REQUIRE_PF:-false}"
 case "${CONTROLLER_REQUIRE_PF,,}" in
-  1|true|yes|on|required|strict)
+  1 | true | yes | on | required | strict)
     CONTROLLER_REQUIRE_PF="true"
     ;;
-  ''|0|false|no|off|preferred)
+  '' | 0 | false | no | off | preferred)
     CONTROLLER_REQUIRE_PF="false"
     ;;
   *)

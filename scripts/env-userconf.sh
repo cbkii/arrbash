@@ -33,11 +33,14 @@ arr_expand_path_tokens() {
   local iteration=0
   local max_iterations=64
 
-  [[ -n "${expanded}" ]] || { printf '%s\n' "${expanded}"; return 0; }
+  [[ -n "${expanded}" ]] || {
+    printf '%s\n' "${expanded}"
+    return 0
+  }
 
   while [[ "${expanded}" =~ __([A-Z0-9_]+)__ ]]; do
     ((++iteration))
-    if (( iteration > max_iterations )); then
+    if ((iteration > max_iterations)); then
       break
     fi
 
@@ -140,8 +143,8 @@ arr_resolve_userconf_paths() {
   local source="default"
   local override=""
 
-    # shellcheck disable=SC2128  # candidate is intentionally scalar
-    if [[ -n "${candidate}" ]]; then
+  # shellcheck disable=SC2128  # candidate is intentionally scalar
+  if [[ -n "${candidate}" ]]; then
     source="explicit"
   else
     if override="$(arr_find_userconf_override 2>/dev/null || true)" && [[ -n "${override}" ]]; then

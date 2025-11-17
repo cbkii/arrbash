@@ -107,7 +107,7 @@ verify_vpn_port_guard_prereqs() {
 
   local require_pf="${CONTROLLER_REQUIRE_PF:-${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}}"
   case "$require_pf" in
-    1|true|TRUE|yes|YES|on|ON)
+    1 | true | TRUE | yes | YES | on | ON)
       warn "Strict mode enabled (CONTROLLER_REQUIRE_PF=true): torrents will pause whenever Proton forwarding is unavailable."
       ;;
   esac

@@ -161,7 +161,7 @@ arr_capture_env_overrides() {
       _arr_value="${!_arr_env_var}"
 
       if arr_is_alias_placeholder "${_arr_env_var}" "${_arr_value}"; then
-        if (( _arr_is_readonly )); then
+        if ((_arr_is_readonly)); then
           _arr_need_reexec=1
         else
           unset -v "${_arr_env_var}" 2>/dev/null || :
@@ -171,11 +171,11 @@ arr_capture_env_overrides() {
 
       _arr_env_overrides["${_arr_env_var}"]="${_arr_value}"
       _arr_env_override_order+=("${_arr_env_var}")
-      if (( _arr_is_exported )); then
+      if ((_arr_is_exported)); then
         _arr_env_override_exported["${_arr_env_var}"]=1
       fi
 
-      if (( _arr_is_readonly )); then
+      if ((_arr_is_readonly)); then
         _arr_need_reexec=1
       else
         unset -v "${_arr_env_var}" 2>/dev/null || :
@@ -183,7 +183,7 @@ arr_capture_env_overrides() {
     fi
   done
 
-  if (( _arr_need_reexec )) && [[ -z "${ARR_REEXEC_SANITIZED_ENV:-}" ]]; then
+  if ((_arr_need_reexec)) && [[ -z "${ARR_REEXEC_SANITIZED_ENV:-}" ]]; then
     local _arr_payload=""
 
     for _arr_env_var in "${_arr_env_override_order[@]}"; do
@@ -192,29 +192,29 @@ arr_capture_env_overrides() {
         "${_arr_env_var}" "${_arr_env_overrides[${_arr_env_var}]}" "${_arr_env_override_exported[${_arr_env_var}]:-0}")
     done
 
-      local -a _arr_runtime_sensitive=(
-        DOCKER_HOST
-        DOCKER_CONTEXT
-        SSH_AUTH_SOCK
-        HTTPS_PROXY
-        HTTP_PROXY
-        NO_PROXY
-        ALL_PROXY
-      )
-      local -a _arr_preserve_defaults=(
-        "${_arr_runtime_sensitive[@]}"
-        PATH
-        HOME
-        USER
-        SHELL
-        LANG
-        LC_ALL
-        NO_COLOR
-        TERM
-        COLORTERM
-        XDG_RUNTIME_DIR
-        TMPDIR
-      )
+    local -a _arr_runtime_sensitive=(
+      DOCKER_HOST
+      DOCKER_CONTEXT
+      SSH_AUTH_SOCK
+      HTTPS_PROXY
+      HTTP_PROXY
+      NO_PROXY
+      ALL_PROXY
+    )
+    local -a _arr_preserve_defaults=(
+      "${_arr_runtime_sensitive[@]}"
+      PATH
+      HOME
+      USER
+      SHELL
+      LANG
+      LC_ALL
+      NO_COLOR
+      TERM
+      COLORTERM
+      XDG_RUNTIME_DIR
+      TMPDIR
+    )
     local -a _arr_preserve_extra=()
     if [[ -n "${ARR_ENV_PRESERVE_EXTRA:-}" ]]; then
       read -r -a _arr_preserve_extra <<<"${ARR_ENV_PRESERVE_EXTRA}"
@@ -321,8 +321,8 @@ arr_restore_canonical_defaults() {
 
     _arr_reapply="$({
       ARR_RESET_TARGETS="${_arr_targets_payload}" \
-      _ARR_DEFAULTS_FILE="${_arr_defaults_file}" \
-      "${BASH:-bash}" -Eeuo pipefail - <<'EOS'
+        _ARR_DEFAULTS_FILE="${_arr_defaults_file}" \
+        "${BASH:-bash}" -Eeuo pipefail - <<'EOS'
 set -Eeuo pipefail
 if [[ -z "${_ARR_DEFAULTS_FILE}" || ! -f "${_ARR_DEFAULTS_FILE}" ]]; then
   exit 0

@@ -15,7 +15,10 @@ service_runtime_compose() {
   fi
 
   if [[ -n "${ARR_STACK_DIR:-}" ]]; then
-    ( cd "$ARR_STACK_DIR" || return 1; "${DOCKER_COMPOSE_CMD[@]}" "$@" )
+    (
+      cd "$ARR_STACK_DIR" || return 1
+      "${DOCKER_COMPOSE_CMD[@]}" "$@"
+    )
   else
     "${DOCKER_COMPOSE_CMD[@]}" "$@"
   fi

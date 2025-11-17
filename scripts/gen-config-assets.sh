@@ -25,11 +25,11 @@ _configarr_sanitize_score() {
     warn "Configarr: ${label}=${display} is not an integer; using ${default_value}"
     value="$default_value"
   else
-    if [[ -n "$min_value" ]] && (( value < min_value )); then
+    if [[ -n "$min_value" ]] && ((value < min_value)); then
       warn "Configarr: ${label}=${value} below minimum ${min_value}; clamping"
       value="$min_value"
     fi
-    if [[ -n "$max_value" ]] && (( value > max_value )); then
+    if [[ -n "$max_value" ]] && ((value > max_value)); then
       warn "Configarr: ${label}=${value} above maximum ${max_value}; clamping"
       value="$max_value"
     fi
@@ -126,8 +126,7 @@ sync_vpn_auto_reconnect_assets() {
   for helper in \
     vpn-auto-stack.sh \
     vpn-auto-state.sh \
-    vpn-auto-config.sh
-  do
+    vpn-auto-config.sh; do
     cp "${REPO_ROOT}/scripts/${helper}" "$ARR_STACK_DIR/scripts/${helper}"
     ensure_file_mode "$ARR_STACK_DIR/scripts/${helper}" 755
   done
@@ -147,8 +146,7 @@ sync_vpn_port_guard_assets() {
     vpn-port-guard.sh \
     gluetun-api.sh \
     qbt-api.sh \
-    vpn-port-guard-hook.sh
-  do
+    vpn-port-guard-hook.sh; do
     cp "${REPO_ROOT}/scripts/${asset}" "$ARR_STACK_DIR/scripts/${asset}"
     ensure_file_mode "$ARR_STACK_DIR/scripts/${asset}" 755
   done
@@ -433,8 +431,8 @@ write_configarr_assets() {
   local search_dir
   for search_dir in "${_configarr_cf_search[@]}"; do
     [[ -d "$search_dir" ]] || continue
-    if compgen -G "${search_dir%/}/common*.yml" >/dev/null 2>&1 || \
-      compgen -G "${search_dir%/}/common*.yaml" >/dev/null 2>&1; then
+    if compgen -G "${search_dir%/}/common*.yml" >/dev/null 2>&1 \
+      || compgen -G "${search_dir%/}/common*.yaml" >/dev/null 2>&1; then
       common_cf_exists=1
       break
     fi
@@ -449,16 +447,15 @@ write_configarr_assets() {
 
   local policy_eval_output=""
 
-
   if policy_eval_output="$(
     ARR_VIDEO_MIN_RES="${ARR_VIDEO_MIN_RES:-}" \
-    ARR_VIDEO_MAX_RES="${ARR_VIDEO_MAX_RES:-}" \
-    ARR_EP_MAX_GB="${ARR_EP_MAX_GB:-}" \
-    ARR_EP_MIN_MB="${ARR_EP_MIN_MB:-}" \
-    ARR_TV_RUNTIME_MIN="${ARR_TV_RUNTIME_MIN:-}" \
-    ARR_SEASON_MAX_GB="${ARR_SEASON_MAX_GB:-}" \
-    ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS:-}" \
-    awk '
+      ARR_VIDEO_MAX_RES="${ARR_VIDEO_MAX_RES:-}" \
+      ARR_EP_MAX_GB="${ARR_EP_MAX_GB:-}" \
+      ARR_EP_MIN_MB="${ARR_EP_MIN_MB:-}" \
+      ARR_TV_RUNTIME_MIN="${ARR_TV_RUNTIME_MIN:-}" \
+      ARR_SEASON_MAX_GB="${ARR_SEASON_MAX_GB:-}" \
+      ARR_MBMIN_DECIMALS="${ARR_MBMIN_DECIMALS:-}" \
+      awk '
       function abs_val(x) { return x < 0 ? -x : x }
       function trim(s) {
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)

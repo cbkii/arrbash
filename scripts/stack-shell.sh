@@ -33,7 +33,7 @@ arr_shell_is_linux() {
   fi
 
   case "${uname_s}" in
-    Linux|LINUX)
+    Linux | LINUX)
       return 0
       ;;
     *)
@@ -56,13 +56,13 @@ arr_shell_resolve_rc_path() {
   case "${kind}" in
     zsh)
       rc="${HOME}/.zshrc"
-      if (( prefer_existing )) && [[ ! -r "${rc}" ]]; then
+      if ((prefer_existing)) && [[ ! -r "${rc}" ]]; then
         rc=""
       fi
       ;;
     bash)
       rc="${HOME}/.bashrc"
-      if (( prefer_existing )) && [[ ! -r "${rc}" ]]; then
+      if ((prefer_existing)) && [[ ! -r "${rc}" ]]; then
         if [[ -r "${HOME}/.bash_profile" ]]; then
           rc="${HOME}/.bash_profile"
         elif [[ -r "${HOME}/.profile" ]]; then
@@ -77,7 +77,7 @@ arr_shell_resolve_rc_path() {
         rc="${HOME}/.profile"
       elif [[ -r "${HOME}/.bash_profile" ]]; then
         rc="${HOME}/.bash_profile"
-      elif (( prefer_existing == 0 )); then
+      elif ((prefer_existing == 0)); then
         rc="${HOME}/.profile"
       fi
       ;;
@@ -118,7 +118,7 @@ arr_mark_shell_reload_pending() {
 
 arr_shell_print_manual_steps() {
   local -a steps=("$@")
-  (( ${#steps[@]} )) || return 0
+  ((${#steps[@]})) || return 0
 
   warn "Could not automatically reload your shell configuration"
   msg "ℹ️ Run these commands to refresh your session:"
@@ -145,7 +145,7 @@ arr_shell_safe_source() {
       set +e
       ;;
   esac
-  if (( export_all )); then
+  if ((export_all)); then
     had_allexport=1
     set -a
   fi
@@ -154,13 +154,13 @@ arr_shell_safe_source() {
   . "${file}"
   local status=$?
 
-  if (( had_allexport )); then
+  if ((had_allexport)); then
     set +a
   fi
-  if (( had_nounset )); then
+  if ((had_nounset)); then
     set -u
   fi
-  if (( had_errexit )); then
+  if ((had_errexit)); then
     set -e
   fi
 
@@ -184,13 +184,12 @@ reload_shell_rc() {
       --schedule)
         schedule_only=1
         ;;
-      *)
-        ;;
+      *) ;;
     esac
     shift || true
   done
 
-  if (( schedule_only )); then
+  if ((schedule_only)); then
     arr_mark_shell_reload_pending
     ARR_SHELL_LAST_STATUS="scheduled"
     return 0
@@ -198,7 +197,7 @@ reload_shell_rc() {
 
   ARR_SHELL_LAST_STATUS=""
 
-  if (( require_pending )) && (( ARR_SHELL_RELOAD_PENDING == 0 )); then
+  if ((require_pending)) && ((ARR_SHELL_RELOAD_PENDING == 0)); then
     ARR_SHELL_LAST_STATUS="skipped"
     return 0
   fi
@@ -254,7 +253,7 @@ reload_shell_rc() {
 
   ARR_SHELL_RELOAD_PENDING=0
 
-  if (( clear_env )); then
+  if ((clear_env)); then
     arr_shell_clear_env "ARR_SHELL_RELOAD_PENDING" "ARR_SHELL_LAST_STATUS"
   fi
 
@@ -288,25 +287,25 @@ reload_shell_rc() {
     fi
   fi
 
-  if (( success )) && [[ -n "${env_file}" && -r "${env_file}" ]]; then
+  if ((success)) && [[ -n "${env_file}" && -r "${env_file}" ]]; then
     if ! arr_shell_safe_source "${env_file}" 1; then
       success=0
     fi
   fi
 
-  if (( success )) && [[ -n "${alias_path}" && -r "${alias_path}" ]]; then
+  if ((success)) && [[ -n "${alias_path}" && -r "${alias_path}" ]]; then
     if ! arr_shell_safe_source "${alias_path}"; then
       success=0
     fi
   fi
 
-  if (( success )) && [[ -n "${rc_source_path}" && -r "${rc_source_path}" ]]; then
+  if ((success)) && [[ -n "${rc_source_path}" && -r "${rc_source_path}" ]]; then
     if ! arr_shell_safe_source "${rc_source_path}"; then
       success=0
     fi
   fi
 
-  if (( success )); then
+  if ((success)); then
     ARR_SHELL_LAST_STATUS="auto"
     return 0
   fi

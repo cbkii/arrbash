@@ -54,7 +54,7 @@ if [[ ! -f "$CONFIG_HELPER" ]]; then
 fi
 
 if [[ -n "$CONFIG_HELPER" ]]; then
-# shellcheck source=scripts/env-config.sh
+  # shellcheck source=scripts/env-config.sh
   . "$CONFIG_HELPER"
 fi
 

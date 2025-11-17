@@ -115,7 +115,7 @@ gluetun_wait_until_ready() {
 
     local now
     now="$(date +%s)"
-    if (( now - start >= timeout )); then
+    if ((now - start >= timeout)); then
       return 1
     fi
     sleep 3

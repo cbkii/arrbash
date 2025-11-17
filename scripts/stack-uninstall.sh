@@ -36,7 +36,7 @@ fi
 
 for arg in "$@"; do
   case "$arg" in
-    --help|-h)
+    --help | -h)
       usage
       exit 0
       ;;
@@ -63,7 +63,7 @@ while (($#)); do
       STACK_DIR_OVERRIDE="$2"
       shift 2
       ;;
-    --help|-h)
+    --help | -h)
       usage
       exit 0
       ;;
@@ -237,7 +237,7 @@ LAN_IP="${LAN_IP:-}"
 is_protected_removal_path() {
   local path="$1"
   case "$path" in
-    ''|/|/bin|/boot|/etc|/home|/lib|/lib64|/opt|/root|/sbin|/usr|/usr/local|/var)
+    '' | / | /bin | /boot | /etc | /home | /lib | /lib64 | /opt | /root | /sbin | /usr | /usr/local | /var)
       return 0
       ;;
   esac
@@ -580,7 +580,7 @@ prompt_confirmation() {
   fi
 
   case "${response,,}" in
-    y|yes)
+    y | yes)
       return 0
       ;;
     *)
@@ -593,8 +593,7 @@ if [[ "$ASSUME_YES" != "1" ]]; then
   prompt_confirmation "${STACK_LABEL} Proceed with removing the ARR stack and related assets? [y/N]:"
   confirmation_status=$?
   case "$confirmation_status" in
-    0)
-      ;;
+    0) ;;
     1)
       msg "Uninstall aborted."
       exit 0

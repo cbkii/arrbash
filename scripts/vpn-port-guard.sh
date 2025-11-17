@@ -39,7 +39,7 @@ fi
 
 controller_bool() {
   case "${1:-}" in
-    1|true|TRUE|yes|YES|on|ON)
+    1 | true | TRUE | yes | YES | on | ON)
       printf 'true'
       ;;
     *)
@@ -116,12 +116,12 @@ controller_write_state() {
   fi
 
   case "${forwarding_state}" in
-    active|unavailable|error) ;;
+    active | unavailable | error) ;;
     *) forwarding_state="unavailable" ;;
   esac
 
   case "${qbt_status}" in
-    active|paused|error) ;;
+    active | paused | error) ;;
     *) qbt_status="error" ;;
   esac
 
@@ -141,14 +141,14 @@ controller_write_state() {
   trap 'rm -f "${tmp}"' RETURN
 
   if ! jq -n \
-      --arg vpn_status "${vpn_status}" \
-      --arg forwarding_state "${forwarding_state}" \
-      --arg controller_mode "${CONTROLLER_MODE_STRING}" \
-      --arg qbt_status "${qbt_status}" \
-      --argjson forwarded_port "${port}" \
-      --argjson pf_enabled "${pf_enabled}" \
-      --argjson last_update_epoch "${epoch}" \
-      '{
+    --arg vpn_status "${vpn_status}" \
+    --arg forwarding_state "${forwarding_state}" \
+    --arg controller_mode "${CONTROLLER_MODE_STRING}" \
+    --arg qbt_status "${qbt_status}" \
+    --argjson forwarded_port "${port}" \
+    --argjson pf_enabled "${pf_enabled}" \
+    --argjson last_update_epoch "${epoch}" \
+    '{
         vpn_status: $vpn_status,
         forwarded_port: $forwarded_port,
         pf_enabled: $pf_enabled,
@@ -242,7 +242,7 @@ main() {
 
   local sleep_next=0
   while true; do
-    if (( sleep_next > 0 )); then
+    if ((sleep_next > 0)); then
       sleep "${sleep_next}"
     fi
     sleep_next="${CONTROLLER_POLL_INTERVAL}"

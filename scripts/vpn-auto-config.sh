@@ -37,7 +37,7 @@ vpn_auto_reconnect_is_enabled() {
 vpn_auto_reconnect_check_interval_seconds() {
   local minutes="${VPN_CHECK_INTERVAL_MINUTES:-20}"
   case "$minutes" in
-    ''|*[!0-9]*) minutes=20 ;;
+    '' | *[!0-9]*) minutes=20 ;;
   esac
   if ((minutes <= 0)); then
     minutes=20
@@ -48,7 +48,7 @@ vpn_auto_reconnect_check_interval_seconds() {
 vpn_auto_reconnect_cooldown_seconds() {
   local minutes="${VPN_COOLDOWN_MINUTES:-15}"
   case "$minutes" in
-    ''|*[!0-9]*) minutes=15 ;;
+    '' | *[!0-9]*) minutes=15 ;;
   esac
   if ((minutes <= 0)); then
     minutes=15
@@ -59,7 +59,7 @@ vpn_auto_reconnect_cooldown_seconds() {
 vpn_auto_reconnect_retry_delay_seconds() {
   local seconds="${VPN_RETRY_DELAY_SECONDS:-120}"
   case "$seconds" in
-    ''|*[!0-9]*) seconds=120 ;;
+    '' | *[!0-9]*) seconds=120 ;;
   esac
   if ((seconds <= 0)); then
     seconds=120
@@ -70,7 +70,7 @@ vpn_auto_reconnect_retry_delay_seconds() {
 vpn_auto_wireguard_fallback_timeout_seconds() {
   local seconds="${WG_FALLBACK_TIMEOUT_SECONDS:-120}"
   case "$seconds" in
-    ''|*[!0-9]*) seconds=120 ;;
+    '' | *[!0-9]*) seconds=120 ;;
   esac
   if ((seconds <= 0)); then
     seconds=120
@@ -81,7 +81,7 @@ vpn_auto_wireguard_fallback_timeout_seconds() {
 vpn_auto_reconnect_pf_grace_seconds() {
   local seconds="${VPN_PORT_GRACE_SECONDS:-300}"
   case "$seconds" in
-    ''|*[!0-9]*) seconds=300 ;;
+    '' | *[!0-9]*) seconds=300 ;;
   esac
   if ((seconds <= 0)); then
     seconds=300
@@ -104,7 +104,7 @@ vpn_auto_pf_required() {
     *) return 1 ;;
   esac
   case "$pf" in
-    ''|off|false|0|disabled) return 1 ;;
+    '' | off | false | 0 | disabled) return 1 ;;
   esac
   return 0
 }
@@ -136,7 +136,7 @@ vpn_auto_compose_available() {
 vpn_auto_retry_budget_seconds() {
   local minutes="${VPN_MAX_RETRY_MINUTES:-20}"
   case "$minutes" in
-    ''|*[!0-9]*) minutes=20 ;;
+    '' | *[!0-9]*) minutes=20 ;;
   esac
   if ((minutes <= 0)); then
     minutes=20

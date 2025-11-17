@@ -166,8 +166,8 @@ validate_compose_or_die() {
       local end=$((line + 5))
       ((start < 1)) && start=1
       msg "  Error context from docker-compose.yml:"
-      nl -ba "$file" | LC_ALL=C sed -n "${start},${end}p" |
-        while IFS= read -r context_line; do
+      nl -ba "$file" | LC_ALL=C sed -n "${start},${end}p" \
+        | while IFS= read -r context_line; do
           [[ -z "$context_line" ]] && continue
           msg "    ${context_line}"
         done
@@ -355,4 +355,3 @@ validate_images() {
 
   return 0
 }
-
