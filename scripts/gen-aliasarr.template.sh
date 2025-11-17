@@ -1,4 +1,4 @@
-# shellcheck disable=SC1090,SC2154
+# shellcheck disable=SC1090,SC2119,SC2120,SC2154,SC2155
 # Alias sanity summary:
 # - arr.vpn.* helpers rely on Gluetun's control API via scripts/vpn-gluetun.sh.
 # - Template no longer references legacy .arraliases, proxy, or internal CA helpers.
@@ -105,9 +105,9 @@ _arr_alias_template_guard() {
   return 0
 }
 
-if ! _arr_alias_template_guard; then
-  return 1 2>/dev/null || exit 1
-fi
+  if ! _arr_alias_template_guard; then
+    return 1
+  fi
 
 export ARR_STACK_DIR ARR_ENV_FILE ARR_DOCKER_DIR ARRCONF_DIR
 

@@ -3,6 +3,7 @@
 # This file is sourced *before* ${ARRCONF_DIR}/userr.conf.
 # Keep assignments idempotent and avoid relying on side effects so overrides
 # behave predictably when the user configuration runs afterwards.
+# shellcheck disable=SC2250
 # Override these in ${ARRCONF_DIR}/userr.conf (git-ignored; defaults to ${ARR_DATA_ROOT}/${STACK}configs/userr.conf where ARR_DATA_ROOT defaults to ~/srv).
 
 # Base paths
@@ -109,8 +110,43 @@ fi
 
 if ! declare -f arr_defaults_fail >/dev/null 2>&1; then
   arr_defaults_fail() {
-    printf 'arrconf: %s\n' "$*" >&2
-    return 1 2>/dev/null || exit 1
+    local var_name="$1"
+    local message="$2"
+    local normalized=""
+    local raw_value
+
+    raw_value="${!var_name-}"
+    raw_value="$(arr_trim_whitespace "${raw_value}")"
+
+    case "$var_name" in
+      VPN_PORT_GUARD_POLL_SECONDS)
+        if [[ "$raw_value" =~ ^[1-9][0-9]*$ ]]; then
+          normalized="$raw_value"
+        else
+          normalized="15"
+        fi
+        ;;
+      CONTROLLER_REQUIRE_PF)
+        raw_value="${raw_value,,}"
+        case "$raw_value" in
+          1|true|yes|on|required|strict)
+            normalized="true"
+            ;;
+          ''|0|false|no|off|preferred)
+            normalized="false"
+            ;;
+        esac
+        ;;
+    esac
+
+    if [[ -z "$normalized" ]]; then
+      printf 'arrconf: %s\n' "$message" >&2
+      exit 1
+    fi
+
+    printf 'arrconf: %s; defaulting to %s\n' "$message" "$normalized" >&2
+    printf -v "$var_name" '%s' "$normalized"
+    export "${var_name?}"
   }
 fi
 
@@ -129,10 +165,7 @@ ARR_DOCKER_SERVICES_DEFAULT=(
 )
 
 # Ensure ARR_DOCKER_SERVICES is declared before length checks to avoid 'unbound variable' with set -u
-if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1; then
-  ARR_DOCKER_SERVICES=()
-fi
-if ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
+if [[ ! ${ARR_DOCKER_SERVICES+x} || ((${#ARR_DOCKER_SERVICES[@]} == 0)) ]]; then
   ARR_DOCKER_SERVICES=("${ARR_DOCKER_SERVICES_DEFAULT[@]}")
 fi
 
@@ -163,7 +196,7 @@ GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
 
 VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
 if [[ ! "${VPN_PORT_GUARD_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
-  arr_defaults_fail "VPN_PORT_GUARD_POLL_SECONDS must be a positive integer (got '${VPN_PORT_GUARD_POLL_SECONDS}')"
+  arr_defaults_fail "VPN_PORT_GUARD_POLL_SECONDS" "VPN_PORT_GUARD_POLL_SECONDS must be a positive integer (got '${VPN_PORT_GUARD_POLL_SECONDS}')"
 fi
 
 if [[ -z "${CONTROLLER_REQUIRE_PF+x}" && -n "${CONTROLLER_REQUIRE_PORT_FORWARDING:-}" ]]; then
@@ -178,7 +211,7 @@ case "${CONTROLLER_REQUIRE_PF,,}" in
     CONTROLLER_REQUIRE_PF="false"
     ;;
   *)
-    arr_defaults_fail "CONTROLLER_REQUIRE_PF must be 'true' or 'false' (got '${CONTROLLER_REQUIRE_PF}')"
+    arr_defaults_fail "CONTROLLER_REQUIRE_PF" "CONTROLLER_REQUIRE_PF must be 'true' or 'false' (got '${CONTROLLER_REQUIRE_PF}')"
     ;;
 esac
 

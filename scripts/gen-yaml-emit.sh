@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
+# shellcheck disable=SC2250
 
 if [[ -z "${ARR_YAML_EMIT_LIB_SOURCED:-}" ]]; then
   ARR_YAML_EMIT_LIB_SOURCED=1

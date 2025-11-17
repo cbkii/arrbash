@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1091
 # vpn-port-guard controller
 # Watches Gluetun's control API and keeps qBittorrent aligned with ProtonVPN forwarding.
 

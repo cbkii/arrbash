@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"

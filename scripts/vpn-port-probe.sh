@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2250
 
 : "${ARR_PORT_PROBE_TOOL:=}"
 
@@ -146,53 +147,53 @@ __arr_port_probe_collect() {
     return 2
   fi
 
-  case "$ARR_PORT_PROBE_TOOL" in
+    case "${ARR_PORT_PROBE_TOOL}" in
     ss)
       if ! __arr_port_probe_collect_ss; then
         rc=1
       fi
       ;;
     lsof)
-      while IFS='|' read -r proto local_addr pid process; do
-        [[ -z "$local_addr" ]] && continue
-        local addr="${local_addr%%[[:space:]]*}"
-        addr="${addr%%->*}"
-        local host="${addr%:*}"
-        local port="${addr##*:}"
-        [[ "$port" =~ ^[0-9]+$ ]] || continue
-        host="${host#[}"
-        host="${host%]}"
-        local normalized
-        normalized="$(normalize_bind_address "$host")"
-        local identity
-        identity="$(_arr_port_identity "$normalized")"
-        __arr_port_probe_record "$proto" "$port" "$identity" "$normalized" "$pid" "$process"
+        while IFS='|' read -r proto local_addr pid process; do
+          [[ -z "${local_addr}" ]] && continue
+          local addr="${local_addr%%[[:space:]]*}"
+          addr="${addr%%->*}"
+          local host="${addr%:*}"
+          local port="${addr##*:}"
+          [[ "${port}" =~ ^[0-9]+$ ]] || continue
+          host="${host#[}"
+          host="${host%]}"
+          local normalized
+          normalized="$(normalize_bind_address "${host}")"
+          local identity
+          identity="$(_arr_port_identity "${normalized}")"
+          __arr_port_probe_record "${proto}" "${port}" "${identity}" "${normalized}" "${pid}" "${process}"
       done < <(__arr_port_probe_collect_lsof)
       ;;
     netstat)
-      while IFS='|' read -r proto local_addr pid process; do
-        [[ -z "$local_addr" ]] && continue
-        proto="${proto,,}"
-        if [[ "$proto" != "tcp" && "$proto" != "udp" ]]; then
-          continue
-        fi
-        local host="${local_addr%:*}"
-        local port="${local_addr##*:}"
-        [[ "$port" =~ ^[0-9]+$ ]] || continue
-        local normalized
-        normalized="$(normalize_bind_address "$host")"
-        local identity
-        identity="$(_arr_port_identity "$normalized")"
-        process="${process##*/}"
-        pid="${pid%%/*}"
-        __arr_port_probe_record "$proto" "$port" "$identity" "$normalized" "$pid" "$process"
-      done < <(__arr_port_probe_collect_netstat)
-      ;;
-  esac
+        while IFS='|' read -r proto local_addr pid process; do
+          [[ -z "${local_addr}" ]] && continue
+          proto="${proto,,}"
+          if [[ "${proto}" != "tcp" && "${proto}" != "udp" ]]; then
+            continue
+          fi
+          local host="${local_addr%:*}"
+          local port="${local_addr##*:}"
+          [[ "${port}" =~ ^[0-9]+$ ]] || continue
+          local normalized
+          normalized="$(normalize_bind_address "${host}")"
+          local identity
+          identity="$(_arr_port_identity "${normalized}")"
+          process="${process##*/}"
+          pid="${pid%%/*}"
+          __arr_port_probe_record "${proto}" "${port}" "${identity}" "${normalized}" "${pid}" "${process}"
+        done < <(__arr_port_probe_collect_netstat)
+        ;;
+    esac
 
-  if ((rc != 0)); then
-    return "$rc"
-  fi
+    if ((rc != 0)); then
+      return "${rc}"
+    fi
 
   __ARR_PORT_PROBE_CACHE_READY=1
   return 0
@@ -214,42 +215,42 @@ __arr_port_probe_refresh_self() {
   if declare -f arr_effective_project_name >/dev/null 2>&1; then
     project="$(arr_effective_project_name 2>/dev/null || true)"
   fi
-  if [[ -z "$project" && -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
-    project="${COMPOSE_PROJECT_NAME}"
-  fi
-  if [[ -z "$project" ]]; then
-    project="${STACK:-arr}"
-  fi
+    if [[ -z "${project}" && -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
+      project="${COMPOSE_PROJECT_NAME}"
+    fi
+    if [[ -z "${project}" ]]; then
+      project="${STACK:-arr}"
+    fi
 
   while IFS='|' read -r cid service ports; do
-    [[ -z "$service" ]] && continue
-    [[ -z "$ports" ]] && continue
-    IFS=',' read -ra entries <<<"$ports"
+    [[ -z "${service}" ]] && continue
+    [[ -z "${ports}" ]] && continue
+    IFS=',' read -ra entries <<<"${ports}"
     local entry host_part target proto host port identity key
     for entry in "${entries[@]}"; do
-      entry="$(printf '%s' "$entry" | xargs 2>/dev/null || printf '%s' "$entry")"
-      [[ "$entry" == *"->"* ]] || continue
+      entry="$(printf '%s' "${entry}" | xargs 2>/dev/null || printf '%s' "${entry}")"
+      [[ "${entry}" == *"->"* ]] || continue
       host_part="${entry%%->*}"
       target="${entry##*->}"
       proto="${target##*/}"
       proto="${proto,,}"
-      if [[ "$proto" != "tcp" && "$proto" != "udp" ]]; then
+      if [[ "${proto}" != "tcp" && "${proto}" != "udp" ]]; then
         continue
       fi
-      if [[ "$host_part" == *":"* ]]; then
+      if [[ "${host_part}" == *":"* ]]; then
         host="${host_part%:*}"
         port="${host_part##*:}"
       else
         host="*"
-        port="$host_part"
+        port="${host_part}"
       fi
-      [[ "$port" =~ ^[0-9]+$ ]] || continue
+      [[ "${port}" =~ ^[0-9]+$ ]] || continue
       host="${host#[}"
       host="${host%]}"
-      host="$(normalize_bind_address "$host")"
-      identity="$(_arr_port_identity "$host")"
+      host="$(normalize_bind_address "${host}")"
+      identity="$(_arr_port_identity "${host}")"
       key="${proto}|${port}|${identity}"
-      __ARR_PORT_PROBE_SELF[$key]="${cid}|${service}"
+        __ARR_PORT_PROBE_SELF[${key}]="${cid}|${service}"
     done
   done < <(docker ps --filter "label=com.docker.compose.project=${project}" --format '{{.ID}}|{{.Label "com.docker.compose.service"}}|{{.Ports}}' 2>/dev/null || true)
 }
@@ -262,7 +263,7 @@ __arr_port_probe_is_self() {
   __arr_port_probe_refresh_self || true
 
   local key="${proto}|${port}|${identity}"
-  [[ -n "${__ARR_PORT_PROBE_SELF[$key]:-}" ]]
+    [[ -n "${__ARR_PORT_PROBE_SELF[${key}]:-}" ]]
 }
 
 arr_port_probe_conflicts() {
@@ -272,13 +273,13 @@ arr_port_probe_conflicts() {
   local desired="${4:-*}"
   local rc=0
 
-  if [[ -n "$details_name" ]]; then
-    printf -v "$details_name" '%s' ""
-  fi
+    if [[ -n "${details_name}" ]]; then
+      printf -v "${details_name}" '%s' ""
+    fi
 
-  if [[ -z "$proto" || -z "$port" || ! "$port" =~ ^[0-9]+$ ]]; then
-    return 1
-  fi
+    if [[ -z "${proto}" || -z "${port}" || ! "${port}" =~ ^[0-9]+$ ]]; then
+      return 1
+    fi
 
   if ! __arr_port_probe_collect; then
     rc=$?
@@ -289,47 +290,47 @@ arr_port_probe_conflicts() {
   fi
 
   local key="${proto}|${port}"
-  local entries_raw="${__ARR_PORT_PROBE_LISTENERS[$key]:-}"
-  if [[ -z "$entries_raw" ]]; then
-    return 1
-  fi
+    local entries_raw="${__ARR_PORT_PROBE_LISTENERS[${key}]:-}"
+    if [[ -z "${entries_raw}" ]]; then
+      return 1
+    fi
 
   local desired_norm
-  desired_norm="$(normalize_bind_address "$desired")"
+    desired_norm="$(normalize_bind_address "${desired}")"
 
   local -a matches=()
-  while IFS=$'\t' read -r identity host pid process; do
-    [[ -z "$host" ]] && continue
-    if ! address_conflicts "$desired_norm" "$host"; then
-      continue
-    fi
-    if __arr_port_probe_is_self "$proto" "$port" "$identity"; then
-      continue
-    fi
-    local detail="${proto^^} ${host}:${port}"
-    if [[ -n "$process" || -n "$pid" ]]; then
-      detail+=" ("
-      if [[ -n "$process" ]]; then
-        detail+="$process"
+    while IFS=$'\t' read -r identity host pid process; do
+      [[ -z "${host}" ]] && continue
+      if ! address_conflicts "${desired_norm}" "${host}"; then
+        continue
       fi
-      if [[ -n "$pid" ]]; then
-        if [[ -n "$process" ]]; then
-          detail+=" pid ${pid}"
-        else
-          detail+="pid ${pid}"
+      if __arr_port_probe_is_self "${proto}" "${port}" "${identity}"; then
+        continue
+      fi
+      local detail="${proto^^} ${host}:${port}"
+      if [[ -n "${process}" || -n "${pid}" ]]; then
+        detail+=" ("
+        if [[ -n "${process}" ]]; then
+          detail+="${process}"
         fi
+        if [[ -n "${pid}" ]]; then
+          if [[ -n "${process}" ]]; then
+            detail+=" pid ${pid}"
+          else
+            detail+="pid ${pid}"
+          fi
+        fi
+        detail+=")"
       fi
-      detail+=")"
-    fi
-    matches+=("$detail")
-  done <<<"$entries_raw"
+      matches+=("${detail}")
+    done <<<"${entries_raw}"
 
   if ((${#matches[@]} == 0)); then
     return 1
   fi
 
-  if [[ -n "$details_name" ]]; then
-    printf -v "$details_name" '%s' "$(printf '%s\n' "${matches[@]}")"
+    if [[ -n "${details_name}" ]]; then
+      printf -v "${details_name}" '%s' "$(printf '%s\n' "${matches[@]}")"
   fi
 
   return 0
@@ -340,7 +341,7 @@ port_bound_any() {
   local port="$2"
   local _unused=""
 
-  if arr_port_probe_conflicts "$proto" "$port" _unused; then
+  if arr_port_probe_conflicts "${proto}" "${port}" _unused; then
     return 0
   fi
 

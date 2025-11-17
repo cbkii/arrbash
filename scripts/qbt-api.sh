@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # Library: Helper functions for interacting with qBittorrent's Web API.
+# shellcheck disable=SC1091
 
 if [[ -n "${_ARR_QBT_API_SOURCED:-}" ]]; then
   return 0
