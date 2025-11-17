@@ -109,11 +109,46 @@ if ! declare -f arr_join_by >/dev/null 2>&1; then
 fi
 
 if ! declare -f arr_defaults_fail >/dev/null 2>&1; then
-    arr_defaults_fail() {
-      printf 'arrconf: %s\n' "$*" >&2
-      return 1
-    }
-  fi
+  arr_defaults_fail() {
+    local var_name="$1"
+    local message="$2"
+    local normalized=""
+    local raw_value
+
+    raw_value="${!var_name-}"
+    raw_value="$(arr_trim_whitespace "${raw_value}")"
+
+    case "$var_name" in
+      VPN_PORT_GUARD_POLL_SECONDS)
+        if [[ "$raw_value" =~ ^[1-9][0-9]*$ ]]; then
+          normalized="$raw_value"
+        else
+          normalized="15"
+        fi
+        ;;
+      CONTROLLER_REQUIRE_PF)
+        raw_value="${raw_value,,}"
+        case "$raw_value" in
+          1|true|yes|on|required|strict)
+            normalized="true"
+            ;;
+          ''|0|false|no|off|preferred)
+            normalized="false"
+            ;;
+        esac
+        ;;
+    esac
+
+    if [[ -z "$normalized" ]]; then
+      printf 'arrconf: %s\n' "$message" >&2
+      exit 1
+    fi
+
+    printf 'arrconf: %s; defaulting to %s\n' "$message" "$normalized" >&2
+    printf -v "$var_name" '%s' "$normalized"
+    export "${var_name?}"
+  }
+fi
 
 ARR_DOCKER_SERVICES_DEFAULT=(
   gluetun
@@ -161,7 +196,7 @@ GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
 
 VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
 if [[ ! "${VPN_PORT_GUARD_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
-  arr_defaults_fail "VPN_PORT_GUARD_POLL_SECONDS must be a positive integer (got '${VPN_PORT_GUARD_POLL_SECONDS}')"
+  arr_defaults_fail "VPN_PORT_GUARD_POLL_SECONDS" "VPN_PORT_GUARD_POLL_SECONDS must be a positive integer (got '${VPN_PORT_GUARD_POLL_SECONDS}')"
 fi
 
 if [[ -z "${CONTROLLER_REQUIRE_PF+x}" && -n "${CONTROLLER_REQUIRE_PORT_FORWARDING:-}" ]]; then
@@ -176,7 +211,7 @@ case "${CONTROLLER_REQUIRE_PF,,}" in
     CONTROLLER_REQUIRE_PF="false"
     ;;
   *)
-    arr_defaults_fail "CONTROLLER_REQUIRE_PF must be 'true' or 'false' (got '${CONTROLLER_REQUIRE_PF}')"
+    arr_defaults_fail "CONTROLLER_REQUIRE_PF" "CONTROLLER_REQUIRE_PF must be 'true' or 'false' (got '${CONTROLLER_REQUIRE_PF}')"
     ;;
 esac
 
