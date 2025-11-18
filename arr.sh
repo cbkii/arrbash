@@ -802,19 +802,43 @@ main() {
 
   init_logging
 
+  ARR_ORCHESTRATED_RUN=1
+  export ARR_ORCHESTRATED_RUN
+
   # Pre-hydrate preserved configuration so preflight checks reflect the
   # ports and credentials we intend to reuse during this run.
   hydrate_qbt_host_port_from_env_file
   hydrate_qbt_webui_port_from_config
   hydrate_sab_api_key_from_config
 
+  step "🚀 Preflight checks"
   preflight
   arr_capture_stack_runtime_state || true
+
+  step "🔍 Checking Gluetun control prerequisites"
   check_network_requirements
+
+  step "📂 Creating directories"
   mkdirs
+
+  step "🔄 Applying one-time migrations"
   run_one_time_migrations
+
+  step "🧹 Safely stopping existing services"
   safe_cleanup
+
+  step "🔐 Generating API key"
   generate_api_key
+  local api_key_rotated="${ARR_GLUETUN_API_KEY_ROTATED:-0}"
+  if [[ "${FORCE_ROTATE_API_KEY:-0}" == "1" ]]; then
+    api_key_rotated=1
+  fi
+  if [[ "${api_key_rotated}" == "1" ]]; then
+    ARR_GLUETUN_FORCE_RECREATE=1
+    export ARR_GLUETUN_FORCE_RECREATE
+  fi
+  
+  step "📝 Preparing environment values"
   prepare_env_context
   local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
   local template_path="${REPO_ROOT}/.env.template"
@@ -826,26 +850,54 @@ main() {
   fi
   check_immutable_integrity "pre-compose"
 
+  step "🐳 Writing docker-compose.yml"
   write_compose
+
+  step "🧪 Validating generated files"
   validate_generated_paths
+
+  step "🧩 Preflighting compose interpolation"
   preflight_compose_interpolation
+
+  step "🛡️ Validating compose configuration"
   validate_compose_or_die
+
+  step "🛠️ Preparing Gluetun control assets"
   write_gluetun_control_assets
+
+  step "📚 Syncing Gluetun helper library"
   sync_gluetun_library
+
+  step "🛡️ Syncing vpn-port-guard assets"
   sync_vpn_port_guard_assets
+
+  step "📡 Syncing VPN auto-reconnect helpers"
   sync_vpn_auto_reconnect_assets
+
+  step "🧰 Writing qBittorrent helper script"
   write_qbt_helper_script
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
+    step "🧰 Writing SABnzbd helper script"
     write_sab_helper_script
   fi
+
+  step "🧩 Writing qBittorrent config"
   write_qbt_config
   if ! write_aliases_file; then
-    warn "Helper aliases file could not be generated"
+    warn "  Helper aliases file could not be generated"
   fi
+
+  step "🧾 Preparing Configarr assets"
   write_configarr_assets
+
+  step "🔒 Verifying file permissions"
   verify_permissions
+
+  step "🔗 Installing helper aliases"
   install_aliases
   check_immutable_integrity "pre-start"
+
+  step "🚀 Starting services"
   start_stack
 
   check_immutable_integrity "post-start"

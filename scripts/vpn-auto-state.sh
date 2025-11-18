@@ -136,7 +136,9 @@ vpn_auto_pf_state_file() {
   fi
 
   local root=""
-  if declare -f arr_gluetun_dir >/dev/null 2>&1; then
+  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
+    root="$(arr_gluetun_state_dir 2>/dev/null || printf '')"
+  elif declare -f arr_gluetun_dir >/dev/null 2>&1; then
     root="$(arr_gluetun_dir 2>/dev/null || printf '')"
   else
     local docker_root="${ARR_DOCKER_DIR:-}"
@@ -149,12 +151,14 @@ vpn_auto_pf_state_file() {
     root="${docker_root%/}/gluetun"
   fi
 
-  printf '%s/state/port-guard-status.json' "${root%/}"
+  printf '%s/port-guard-status.json' "${root%/}"
 }
 
 vpn_auto_pf_hook_path() {
   local root=""
-  if declare -f arr_gluetun_dir >/dev/null 2>&1; then
+  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
+    root="$(arr_gluetun_state_dir 2>/dev/null || printf '')"
+  elif declare -f arr_gluetun_dir >/dev/null 2>&1; then
     root="$(arr_gluetun_dir 2>/dev/null || printf '')"
   else
     local docker_root="${ARR_DOCKER_DIR:-}"
@@ -166,7 +170,7 @@ vpn_auto_pf_hook_path() {
     fi
     root="${docker_root%/}/gluetun"
   fi
-  printf '%s/state/port-guard.trigger' "${root%/}"
+  printf '%s/port-guard.trigger' "${root%/}"
 }
 
 vpn_auto_has_jq() {

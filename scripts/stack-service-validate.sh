@@ -270,7 +270,6 @@ check_image_exists() {
 
 # Ensures all service images exist using declared tags without silent downgrades
 validate_images() {
-  step "🔍 Validating Docker images..."
 
   if ! command -v docker >/dev/null 2>&1; then
     warn "  Docker CLI unavailable; skipping image validation (sandbox)."

@@ -204,7 +204,7 @@ step() {
   if msg_color_supported; then
     printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BLUE}${BOLD}" "$*" "$RESET"
   else
-    printf '[STEP] %s\n' "$*"
+    printf '[STEP] ⁂ ⟫ %s\n' "$*"
   fi
 }
 
@@ -618,6 +618,11 @@ arr_qbt_migrate_legacy_conf() {
 # Resolves the Gluetun data directory under the dockarr root
 arr_gluetun_dir() {
   printf '%s/gluetun' "$(arr_docker_data_root)"
+}
+
+# Resolves the shared Gluetun state directory used by vpn-port-guard and helpers
+arr_gluetun_state_dir() {
+  printf '%s/state' "$(arr_gluetun_dir)"
 }
 
 # Resolves the VPN auto-reconnect working directory under Gluetun assets

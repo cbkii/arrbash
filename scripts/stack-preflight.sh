@@ -6,7 +6,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
 # Verifies required tooling (docker/compose/curl/jq) and records versions for logs
 install_missing() {
-  msg "🔧 Checking dependencies"
+  msg "  🔧 Checking dependencies"
 
   require_dependencies docker
 
@@ -62,7 +62,11 @@ verify_vpn_port_guard_prereqs() {
   fi
 
   local state_dir
-  state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
+  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
+    state_dir="$(arr_gluetun_state_dir)"
+  else
+    state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
+  fi
 
   if ! mkdir -p "$state_dir" 2>/dev/null; then
     die "Unable to create ${state_dir}; verify filesystem permissions"
@@ -80,11 +84,11 @@ verify_vpn_port_guard_prereqs() {
   fi
 
   if [[ -z "${GLUETUN_API_KEY:-}" ]]; then
-    warn "GLUETUN_API_KEY is empty; the installer will auto-generate one if required"
+    warn "  GLUETUN_API_KEY is empty; the installer will auto-generate one if required"
   fi
 
   if [[ -z "${GLUETUN_CONTROL_PORT:-}" ]]; then
-    warn "GLUETUN_CONTROL_PORT is unset; defaulting to 8000 unless overridden in your env"
+    warn "  GLUETUN_CONTROL_PORT is unset; defaulting to 8000 unless overridden in your env"
   elif [[ ! "${GLUETUN_CONTROL_PORT}" =~ ^[0-9]+$ ]]; then
     die "GLUETUN_CONTROL_PORT='${GLUETUN_CONTROL_PORT}' is not numeric; adjust your configuration"
   fi
@@ -92,33 +96,33 @@ verify_vpn_port_guard_prereqs() {
   local proton_user="${PROTON_OPENVPN_USER:-${OPENVPN_USER:-}}"
   local proton_pass="${PROTON_OPENVPN_PASS:-${OPENVPN_PASSWORD:-}}"
   if [[ -z "$proton_user" ]]; then
-    warn "Proton OpenVPN username not set; update arrconf/userr.conf before launch (must include +pmp suffix)"
+    warn "  Proton OpenVPN username not set; update arrconf/userr.conf before launch (must include +pmp suffix)"
   elif [[ "$proton_user" != *"+pmp" ]]; then
-    warn "Proton OpenVPN username '${proton_user}' is missing the +pmp suffix required for port forwarding"
+    warn "  Proton OpenVPN username '${proton_user}' is missing the +pmp suffix required for port forwarding"
   fi
 
   if [[ -z "$proton_pass" ]]; then
-    warn "Proton OpenVPN password not set; update arrconf/userr.conf before launch"
+    warn "  Proton OpenVPN password not set; update arrconf/userr.conf before launch"
   fi
 
   if [[ -z "${QBT_USER:-}" || -z "${QBT_PASS:-}" ]]; then
-    warn "QBT_USER/QBT_PASS not set; qBittorrent Web API credentials are required for vpn-port-guard"
+    warn "  QBT_USER/QBT_PASS not set; qBittorrent Web API credentials are required for vpn-port-guard"
   fi
 
   local require_pf="${CONTROLLER_REQUIRE_PF:-${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}}"
   case "$require_pf" in
     1 | true | TRUE | yes | YES | on | ON)
-      warn "Strict mode enabled (CONTROLLER_REQUIRE_PF=true): torrents will pause whenever Proton forwarding is unavailable."
+      warn "  Strict mode enabled (CONTROLLER_REQUIRE_PF=true): torrents will pause whenever Proton forwarding is unavailable."
       ;;
   esac
 
   local legacy_pm_dir="${ARR_STACK_DIR%/}/scripts"
   if [[ -d "$legacy_pm_dir" ]]; then
     if compgen -G "${legacy_pm_dir}/port-manager*" >/dev/null; then
-      warn "Legacy port-manager assets found in ${legacy_pm_dir}; remove them to avoid conflicting with vpn-port-guard"
+      warn "  Legacy port-manager assets found in ${legacy_pm_dir}; remove them to avoid conflicting with vpn-port-guard"
     fi
     if compgen -G "${legacy_pm_dir}/port-forward*" >/dev/null; then
-      warn "Legacy port-forward hook scripts detected in ${legacy_pm_dir}; Gluetun now calls /scripts/vpn-port-guard-hook.sh"
+      warn "  Legacy port-forward hook scripts detected in ${legacy_pm_dir}; Gluetun now calls /scripts/vpn-port-guard-hook.sh"
     fi
   fi
 
@@ -644,8 +648,6 @@ simple_port_check() {
 # Validates that local DNS prerequisites are satisfied and upstream resolvers respond
 # Runs installer preflight: locks, dependency validation, prompts, and previews
 preflight() {
-  step "🚀 Preflight checks"
-
   acquire_lock
 
   msg "  Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
@@ -690,7 +692,7 @@ preflight() {
   fi
 
   if [[ -n "${GLUETUN_IMAGE:-}" ]] && gluetun_version_requires_auth_config 2>/dev/null && [[ -z "${GLUETUN_API_KEY:-}" ]]; then
-    warn "Gluetun 3.40+ requires an API key. It will be auto-generated during setup."
+    warn "  Gluetun 3.40+ requires an API key. It will be auto-generated during setup."
   fi
 
   simple_port_check
@@ -699,7 +701,7 @@ preflight() {
     local existing_unescaped=""
     existing_unescaped="$(get_env_kv "OPENVPN_USER" "${ARR_ENV_FILE}" || true)"
     if [[ -n "$existing_unescaped" && "$existing_unescaped" != *"+pmp" ]]; then
-      warn "OPENVPN_USER in ${ARR_ENV_FILE} is '${existing_unescaped}' and will be updated to include '+pmp'."
+      warn "  OPENVPN_USER in ${ARR_ENV_FILE} is '${existing_unescaped}' and will be updated to include '+pmp'."
     fi
   fi
 
@@ -708,7 +710,7 @@ preflight() {
   if [[ "${ASSUME_YES}" != "1" ]]; then
     local response=""
 
-    warn "Continue with ProtonVPN OpenVPN setup? [y/N]: "
+    warn "  Continue with ProtonVPN OpenVPN setup? [y/N]: "
     if ! IFS= read -r response; then
       response=""
     fi

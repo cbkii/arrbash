@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 COMMON_LIB="${REPO_ROOT}/scripts/stack-common.sh"
 NETWORK_LIB="${REPO_ROOT}/scripts/stack-network.sh"
+SECRETS_LIB="${REPO_ROOT}/scripts/stack-secrets.sh"
 if [[ -f "$COMMON_LIB" ]]; then
   # shellcheck source=scripts/stack-common.sh
   . "$COMMON_LIB"
@@ -13,6 +14,10 @@ fi
 if [[ -f "$NETWORK_LIB" ]]; then
   # shellcheck source=scripts/stack-network.sh
   . "$NETWORK_LIB"
+fi
+if [[ -f "$SECRETS_LIB" ]]; then
+  # shellcheck source=scripts/stack-secrets.sh
+  . "$SECRETS_LIB"
 fi
 
 if ! type -t validate_ipv4 >/dev/null 2>&1; then
@@ -300,6 +305,20 @@ if [[ -z "${OPENVPN_PASSWORD:-}" ]] && declare -f arr_derive_openvpn_password >/
 fi
 : "${OPENVPN_USER_ENFORCED:=${OPENVPN_USER:+1}}"
 
+if [[ ! -v GLUETUN_API_KEY || -z "${GLUETUN_API_KEY}" || "${FORCE_ROTATE_API_KEY:-0}" == "1" ]]; then
+  if declare -f generate_api_key >/dev/null 2>&1; then
+    generate_api_key
+  else
+    printf 'error: GLUETUN_API_KEY generation helper missing; ensure scripts/stack-secrets.sh is available.\n' >&2
+    exit 1
+  fi
+fi
+
+if [[ -z "${GLUETUN_API_KEY:-}" ]]; then
+  printf 'error: GLUETUN_API_KEY generation failed; cannot emit .env.\n' >&2
+  exit 1
+fi
+
 OUT_PATH="${OUT_ARG}"
 if [[ -z "$OUT_PATH" ]]; then
   OUT_PATH="${ARR_ENV_FILE}"
@@ -355,5 +374,18 @@ else
   fi
   arr_cleanup_temp_path "$filter_tmp"
   chmod 600 "$OUT_PATH" 2>/dev/null || true
+  persisted_api_key=""
+  if persisted_api_key="$(grep -E '^GLUETUN_API_KEY=' "$OUT_PATH" 2>/dev/null | head -n1 | cut -d= -f2- || true)"; then
+    :
+  else
+    persisted_api_key=""
+  fi
+  if [[ -z "$persisted_api_key" ]]; then
+    printf 'error: could not persist GLUETUN_API_KEY to %s\n' "$OUT_PATH" >&2
+    printf '  - Re-run: ./arr.sh --rotate-api-key --yes\n' >&2
+    printf '  - Ensure write permissions to %s (try: chown/chmod)\n' "$OUT_PATH" >&2
+    printf '  - Debug tip: echo "$GLUETUN_API_KEY" before envsubst to confirm generation\n' >&2
+    exit 1
+  fi
   printf 'Generated %s from %s using %s\n' "$OUT_PATH" "$TEMPLATE_PATH" "${CONF_PATH:-<none>}"
 fi

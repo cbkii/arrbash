@@ -28,6 +28,19 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
   merely touches `/gluetun_state/port-guard.trigger`, prompting the controller to run an
   immediate sync pass without touching qBittorrent itself.
 
+## Status file and shared mount
+
+* The authoritative status JSON is written to `/gluetun_state/port-guard-status.json`
+  inside the controller container and to `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`
+  on the host. The bind mount keeps the file stable across container restarts.
+* A skeleton JSON is created as soon as the controller starts so aliases never chase a
+  missing file while waiting for Proton to hand out a port.
+* Writes are atomic (`mktemp` + `mv`) to prevent partial reads; the previous JSON remains
+  visible until the new one is complete.
+* Quick host-side checks:
+  * `ls -l ${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`
+  * `jq '.' ${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`
+
 ## Runtime lifecycle
 
 1. **Startup ordering**
@@ -84,6 +97,13 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
   manual Gluetun restarts).
 * `arrvpn-events` – tails `/gluetun_state/port-guard-events.log` to observe Gluetun
   hook activity.
+* Status file missing? Check these root causes:
+  * `docker inspect vpn-port-guard --format '{{.State.Status}}'` should show `running`.
+    If not, `./arr.sh --yes` will rebuild and restart the stack.
+  * Confirm the host path `${ARR_DOCKER_DIR}/gluetun/state` exists and is writable; the
+    controller will log permission errors if it cannot create the JSON.
+  * Verify the bind mount targets `/gluetun_state` inside both Gluetun and
+    `vpn-port-guard`. A mismatch leaves helpers looking in the wrong place.
 * Legacy helper scripts such as `vpn-port-watch.sh` and `vpn-auto-control.sh` have been
   removed. Use the status file and aliases above instead of sourcing the old wrappers.
 

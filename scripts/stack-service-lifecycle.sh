@@ -60,7 +60,6 @@ arr_effective_project_name() {
 
 # Stops existing stack containers and removes stale temp artifacts without nuking volumes
 safe_cleanup() {
-  step "🧹 Safely stopping existing services..."
 
   if [[ -f "${ARR_STACK_DIR}/docker-compose.yml" ]]; then
     compose stop 2>/dev/null || true
@@ -326,7 +325,7 @@ arr_wait_for_gluetun_ready() {
     return 1
   fi
 
-  msg "Waiting for Gluetun readiness (container, health, tunnel, connectivity)..."
+  msg "  Waiting for Gluetun readiness (container, health, tunnel, connectivity)..."
 
   local elapsed=0
   local last_state=""
@@ -533,7 +532,7 @@ stop_existing_vpn_auto_reconnect_workers() {
   done
   candidate_pids=("${!seen_pids[@]}")
 
-  msg "Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
+  msg "  Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
 
   for pid in "${candidate_pids[@]}"; do
     if kill "$pid" 2>/dev/null; then
@@ -614,7 +613,12 @@ show_service_status() {
     printf '  %-15s: %s\n' "$service" "$status"
   done
 
-  local port_guard_status="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
+  local port_guard_status
+  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
+    port_guard_status="$(arr_gluetun_state_dir)/port-guard-status.json"
+  else
+    port_guard_status="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
+  fi
   if [[ -f "$port_guard_status" ]]; then
     local vpn_status=""
     local forwarded_port="0"
@@ -634,14 +638,13 @@ show_service_status() {
     pf_enabled="$(jq -r '.pf_enabled // empty' "$port_guard_status" 2>/dev/null || printf '')"
     if [[ -n "$vpn_status" ]]; then
       controller_mode="$(derive_controller_mode "$controller_mode" "$pf_enabled")"
-      msg "vpn-port-guard: vpn_status=${vpn_status}, forwarding_state=${forwarding_state}, forwarded_port=${forwarded_port:-0}, controller_mode=${controller_mode}, qbt_status=${qbt_state}"
+      msg "  vpn-port-guard: vpn_status=${vpn_status}, forwarding_state=${forwarding_state}, forwarded_port=${forwarded_port:-0}, controller_mode=${controller_mode}, qbt_status=${qbt_state}"
     fi
   fi
 }
 
 # Orchestrates service startup: cleanup, validation, image pulls, health waits, summaries
 start_stack() {
-  step "Starting service stack"
 
   cd "${ARR_STACK_DIR}" || die "Failed to change to ${ARR_STACK_DIR}"
 
@@ -655,9 +658,14 @@ start_stack() {
 
   install_vuetorrent
 
-  msg "Starting Gluetun VPN container..."
+  msg "  Starting Gluetun VPN container..."
   local compose_output_gluetun=""
-  if ! compose_up_detached_capture compose_output_gluetun gluetun; then
+  local -a gluetun_up_args=()
+  if [[ "${ARR_GLUETUN_FORCE_RECREATE:-0}" == "1" ]]; then
+    msg "Gluetun API key rotated; recreating container to apply new credentials"
+    gluetun_up_args+=(--force-recreate)
+  fi
+  if ! compose_up_detached_capture compose_output_gluetun "${gluetun_up_args[@]}" gluetun; then
     warn "Failed to start Gluetun via docker compose"
     if [[ -n "$compose_output_gluetun" ]]; then
       printf '%s\n' "$compose_output_gluetun" | sed 's/^/    /'
@@ -666,8 +674,9 @@ start_stack() {
     arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING"
     return 1
   fi
-  msg "Gluetun container started"
+  msg "  Gluetun container started"
 
+  step "🔍 Validating Gluetun readiness"
   if ! arr_wait_for_gluetun_ready gluetun 150 5; then
     local failure_reason
     failure_reason="${ARR_GLUETUN_FAILURE_REASON:-Gluetun did not become ready}"
@@ -689,7 +698,7 @@ start_stack() {
   local -a failed_services=()
 
   for service in "${services[@]}"; do
-    msg "Starting $service..."
+    msg "  Starting $service..."
 
     if [[ "$service" == "qbittorrent" ]]; then
       ensure_qbt_webui_config_ready
@@ -701,7 +710,7 @@ start_stack() {
         qb_started=1
       fi
     else
-      warn "Failed to start $service"
+      warn "  Failed to start $service"
       if [[ -n "$compose_output_service" ]]; then
         printf '%s\n' "$compose_output_service" | sed 's/^/    /'
       fi
@@ -725,7 +734,7 @@ start_stack() {
   done
 
   if ((${#created_services[@]} > 0)); then
-    msg "Force-starting services that were stuck in 'created' state..."
+    msg "  Force-starting services that were stuck in 'created' state..."
     for service in "${created_services[@]}"; do
       docker start "$(service_container_name "$service")" 2>/dev/null || true
     done
@@ -736,15 +745,15 @@ start_stack() {
   fi
 
   if ((${#failed_services[@]} > 0)); then
-    warn "The following services failed to start: ${failed_services[*]}"
+    warn "  The following services failed to start: ${failed_services[*]}"
   fi
 
   service_health_sabnzbd
 
   if ! arr_schedule_delayed_api_sync; then
-    warn "arr_schedule_delayed_api_sync failed; API sync may be delayed or incomplete."
+    warn "  arr_schedule_delayed_api_sync failed; API sync may be delayed or incomplete."
   fi
 
-  msg "Services started - they may take a minute to be fully ready"
+  msg "  Services started - they may take a minute to be fully ready"
   show_service_status
 }

@@ -111,14 +111,13 @@ ip_assigned() {
 
 # Warns about missing Gluetun prerequisites before stack launch
 check_network_requirements() {
-  msg "🔍 Checking Gluetun control prerequisites"
 
   if ! have_command curl; then
-    warn "curl not installed; install it so the stack can query the Gluetun control API"
+    warn "  curl not installed; install it so the stack can query the Gluetun control API"
   fi
 
   if ! have_command jq; then
-    warn "jq not installed; helper scripts rely on it when parsing Gluetun responses"
+    warn "  jq not installed; helper scripts rely on it when parsing Gluetun responses"
   fi
 
   msg "  Skipping legacy NAT-PMP probe; Gluetun readiness is now verified via /v1/openvpn/status once the container starts"

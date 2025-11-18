@@ -1,7 +1,6 @@
 # shellcheck shell=bash
 # Renders helper alias bundle and injects optional VPN/configarr helpers if templates permit
 write_aliases_file() {
-  step "🛠️ Generating helper aliases file"
 
   local template_file="${REPO_ROOT}/scripts/gen-aliasarr.template.sh"
   if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
@@ -508,6 +507,12 @@ load_env_file() {
 
 if [[ -f "$ARR_ENV_FILE" ]]; then
   load_env_file "$ARR_ENV_FILE"
+fi
+
+if [[ -z "${GLUETUN_API_KEY:-}" ]]; then
+  log_warn "GLUETUN_API_KEY is empty in ${ARR_ENV_FILE}; control API calls will fail."
+  log_warn "Run: ./arr.sh --rotate-api-key --yes; then source ${ARR_STACK_DIR}/.aliasarr"
+  log_warn "Checked env file at: ${ARR_ENV_FILE} (stack dir: ${ARR_STACK_DIR})"
 fi
 
 GLUETUN_LIB="${ARR_STACK_DIR}/scripts/vpn-gluetun.sh"

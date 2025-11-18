@@ -153,6 +153,14 @@ gluetun_wait_for_forwarding() {
 # path within the host filesystem.
 gluetun_port_guard_status_file() {
   local root
+  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
+    root="$(arr_gluetun_state_dir 2>/dev/null || printf '')"
+    if [[ -n "$root" ]]; then
+      printf '%s/port-guard-status.json' "${root%/}"
+      return
+    fi
+  fi
+
   root="$(gluetun_data_root)"
   printf '%s/state/port-guard-status.json' "${root%/}"
 }
