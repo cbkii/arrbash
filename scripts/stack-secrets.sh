@@ -53,8 +53,6 @@ safe_random_alnum() {
 
 # Ensures GLUETUN_API_KEY exists, rotating auth config when forced or missing
 generate_api_key() {
-  step "🔐 Generating API key"
-
   if [[ -f "$ARR_ENV_FILE" ]] && [[ "$FORCE_ROTATE_API_KEY" != "1" ]]; then
     local existing
     existing="$(get_env_kv "GLUETUN_API_KEY" "$ARR_ENV_FILE" || true)"
@@ -78,12 +76,12 @@ generate_api_key() {
     local auth_config="${ARR_DOCKER_DIR}/gluetun/auth/config.toml"
     if [[ -e "$auth_config" ]]; then
       if rm -f "$auth_config"; then
-        msg "Removed existing auth config for key rotation"
+        msg "  Removed existing auth config for key rotation"
       else
-        warn "Failed to remove ${auth_config}; check permissions before restarting"
+        warn "  Failed to remove ${auth_config}; check permissions before restarting"
       fi
     else
-      msg "No existing auth config detected; skipping removal"
+      msg "  No existing auth config detected; skipping removal"
     fi
   fi
 }
