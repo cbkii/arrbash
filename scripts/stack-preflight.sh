@@ -62,7 +62,11 @@ verify_vpn_port_guard_prereqs() {
   fi
 
   local state_dir
-  state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
+  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
+    state_dir="$(arr_gluetun_state_dir)"
+  else
+    state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
+  fi
 
   if ! mkdir -p "$state_dir" 2>/dev/null; then
     die "Unable to create ${state_dir}; verify filesystem permissions"
