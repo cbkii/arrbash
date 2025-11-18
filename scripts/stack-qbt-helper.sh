@@ -380,9 +380,11 @@ export ARR_STACK_DIR
 . "${STACK_DIR}/scripts/stack-common.sh"
 
 if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
+  set +u
   # shellcheck disable=SC1091
   # shellcheck source=arrconf/userr.conf.defaults.sh
   . "${STACK_DIR}/arrconf/userr.conf.defaults.sh"
+  set -u
 fi
 
 ENV_FILE="$(arr_env_file)"

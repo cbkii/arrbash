@@ -12,17 +12,21 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 . "${REPO_ROOT}/scripts/env-userconf.sh"
 
 if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
+  set +u
   # shellcheck disable=SC1091
   # shellcheck source=arrconf/userr.conf.defaults.sh
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+  set -u
 fi
 
 arr_resolve_userconf_paths ARR_USERCONF_PATH ARR_USERCONF_OVERRIDE_PATH
 
 if [[ -f "${ARR_USERCONF_PATH}" ]]; then
+  set +u
   # shellcheck disable=SC1091
   # shellcheck source=/dev/null
   . "${ARR_USERCONF_PATH}"
+  set -u
 fi
 
 doctor_ok() {

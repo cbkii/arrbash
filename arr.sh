@@ -355,8 +355,10 @@ if [[ -f "${_arr_defaults_file}" ]]; then
     REPO_ROOT="${REPO_ROOT}" "${BASH:-bash}" -Eeuo pipefail - <<'EOS'
 set -Eeuo pipefail
 if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
+  set +u
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
+  set -u
   if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
     arr_collect_all_expected_env_keys
   fi
@@ -485,8 +487,10 @@ arr_expand_alias_placeholders_in_env() {
 }
 
 if [[ -f "${_arr_defaults_file}" ]]; then
+  set +u
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
   . "${_arr_defaults_file}"
+  set -u
 fi
 
 if ((${#_arr_env_override_order[@]})); then

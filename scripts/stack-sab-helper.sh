@@ -37,9 +37,11 @@ fi
 . "$COMMON_HELPER"
 
 if [[ -f "${STACK_DIR}/arrconf/userr.conf.defaults.sh" ]]; then
+  set +u
   # shellcheck disable=SC1091
   # shellcheck source=arrconf/userr.conf.defaults.sh
   . "${STACK_DIR}/arrconf/userr.conf.defaults.sh"
+  set -u
 fi
 
 CONFIG_HELPER="${STACK_DIR}/scripts/env-config.sh"
