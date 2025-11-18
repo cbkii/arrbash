@@ -829,7 +829,15 @@ main() {
 
   step "🔐 Generating API key"
   generate_api_key
-
+  local api_key_rotated="${ARR_GLUETUN_API_KEY_ROTATED:-0}"
+  if [[ "${FORCE_ROTATE_API_KEY:-0}" == "1" ]]; then
+    api_key_rotated=1
+  fi
+  if [[ "${api_key_rotated}" == "1" ]]; then
+    ARR_GLUETUN_FORCE_RECREATE=1
+    export ARR_GLUETUN_FORCE_RECREATE
+  fi
+  
   step "📝 Preparing environment values"
   prepare_env_context
   local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"

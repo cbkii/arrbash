@@ -613,7 +613,12 @@ show_service_status() {
     printf '  %-15s: %s\n' "$service" "$status"
   done
 
-  local port_guard_status="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
+  local port_guard_status
+  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
+    port_guard_status="$(arr_gluetun_state_dir)/port-guard-status.json"
+  else
+    port_guard_status="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
+  fi
   if [[ -f "$port_guard_status" ]]; then
     local vpn_status=""
     local forwarded_port="0"
@@ -655,8 +660,13 @@ start_stack() {
 
   msg "  Starting Gluetun VPN container..."
   local compose_output_gluetun=""
-  if ! compose_up_detached_capture compose_output_gluetun gluetun; then
-    warn "  Failed to start Gluetun via docker compose"
+  local -a gluetun_up_args=()
+  if [[ "${ARR_GLUETUN_FORCE_RECREATE:-0}" == "1" ]]; then
+    msg "Gluetun API key rotated; recreating container to apply new credentials"
+    gluetun_up_args+=(--force-recreate)
+  fi
+  if ! compose_up_detached_capture compose_output_gluetun "${gluetun_up_args[@]}" gluetun; then
+    warn "Failed to start Gluetun via docker compose"
     if [[ -n "$compose_output_gluetun" ]]; then
       printf '%s\n' "$compose_output_gluetun" | sed 's/^/    /'
     fi

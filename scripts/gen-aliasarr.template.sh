@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # shellcheck disable=SC1090,SC2119,SC2120,SC2154,SC2155
 # Alias sanity summary:
 # - arr.vpn.* helpers rely on Gluetun's control API via scripts/vpn-gluetun.sh.
@@ -855,7 +856,19 @@ _arr_gluetun_key() {
 }
 
 _arr_port_guard_state_dir() {
-  printf '%s/gluetun/state' "${ARR_DOCKER_DIR}"
+  local root
+  root="${ARR_DOCKER_DIR:-$(_arr_env_get ARR_DOCKER_DIR 2>/dev/null || printf '')}"
+  if [ -n "$root" ]; then
+    printf '%s/gluetun/state' "$root"
+    return
+  fi
+
+  if [ -d /gluetun_state ]; then
+    printf '/gluetun_state'
+    return
+  fi
+
+  printf '/gluetun/state'
 }
 
 _arr_port_guard_status_file() {
@@ -870,10 +883,50 @@ _arr_port_guard_events_file() {
   printf '%s/port-guard-events.log' "$(_arr_port_guard_state_dir)"
 }
 
+_arr_port_guard_status_hint() {
+  local file
+  file="${1:-$(_arr_port_guard_status_file)}"
+  local dir
+  dir="$(dirname "$file")"
+
+  if [ ! -d "$dir" ]; then
+    local state_root
+    state_root="${ARR_DOCKER_DIR:-$(_arr_env_get ARR_DOCKER_DIR 2>/dev/null || printf '')}"
+    if [ -n "$state_root" ]; then
+      warn "vpn-port-guard state directory missing (${dir}); ensure ${state_root}/gluetun/state is bind-mounted."
+    else
+      warn "vpn-port-guard state directory missing (${dir}); verify gluetun/state is mounted into the controller."
+    fi
+    return
+  fi
+
+  if [ ! -w "$dir" ]; then
+    warn "vpn-port-guard cannot write ${dir}; adjust permissions to match PUID/PGID."
+  fi
+
+  if ! _arr_docker_available; then
+    warn "vpn-port-guard status unavailable: docker command not available to inspect containers."
+    return
+  fi
+
+  local pg_id pg_state
+  if pg_id="$(_arr_container_id_for_service vpn-port-guard 1 2>/dev/null || printf '')"; then
+    pg_state="$(docker inspect "$pg_id" --format '{{.State.Status}}' 2>/dev/null | tr -d '\r' || printf '')"
+    if [ -z "$pg_state" ]; then
+      warn "vpn-port-guard container present but state unknown; run arr.pf.logs for details."
+    elif [ "$pg_state" != "running" ]; then
+      warn "vpn-port-guard container state: ${pg_state}; start or recreate the stack."
+    fi
+  else
+    warn "vpn-port-guard container not found; rerun ./arr.sh --yes to regenerate and start the stack."
+  fi
+}
+
 _arr_port_guard_print_json() {
   local file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
     printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
+    _arr_port_guard_status_hint "$file"
     return 1
   fi
   if _arr_has_cmd jq; then
@@ -886,6 +939,17 @@ _arr_port_guard_print_json() {
 _arr_port_guard_forwarded_port() {
   local file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
+    if payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"; then
+      if _arr_port_guard_require_jq; then
+        local port
+        port="$(printf '%s' "$payload" | jq -r '.port // .data.port // empty' 2>/dev/null || printf '')"
+        if [ -n "$port" ] && printf '%s' "$port" | grep -Eq '^[0-9]+$'; then
+          printf '%s' "$port"
+          return 0
+        fi
+      fi
+    fi
+    _arr_port_guard_status_hint "$file"
     return 1
   fi
   if ! _arr_port_guard_require_jq; then
@@ -898,6 +962,7 @@ _arr_port_guard_forwarding_state() {
   local file
   file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
+    _arr_port_guard_status_hint "$file"
     return 1
   fi
   if ! _arr_port_guard_require_jq; then
@@ -1928,6 +1993,7 @@ arr.vpn.status() {
   local status_file="$(_arr_port_guard_status_file)"
   if [ ! -f "$status_file" ]; then
     msg 'vpn-port-guard: status file not found (controller has not written /gluetun_state/port-guard-status.json yet)'
+    _arr_port_guard_status_hint "$status_file"
     return 0
   fi
 
@@ -2091,6 +2157,7 @@ arr.pf.tail() {
   file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
     printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
+    _arr_port_guard_status_hint "$file"
     return 1
   fi
   exec tail -Fn0 "$file"
@@ -2156,6 +2223,7 @@ arr.vpn.portguard.watch() {
   file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
     printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
+    _arr_port_guard_status_hint "$file"
     return 1
   fi
   if _arr_has_cmd watch; then
