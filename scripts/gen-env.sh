@@ -151,11 +151,15 @@ fi
 
 if [[ -f "$DEFAULTS_PATH" ]]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh
+  set +u
   . "$DEFAULTS_PATH"
+  set -u
 fi
 if [[ -f "$CONF_PATH" ]]; then
   # shellcheck source=/dev/null
+  set +u
   . "$CONF_PATH"
+  set -u
 fi
 
 if command -v arr_set_docker_services_list >/dev/null 2>&1; then

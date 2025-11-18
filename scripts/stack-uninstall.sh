@@ -84,7 +84,9 @@ fi
 DEFAULTS_PATH="${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
 if [[ -f "$DEFAULTS_PATH" ]]; then
   # shellcheck source=arrconf/userr.conf.defaults.sh
+  set +u
   . "$DEFAULTS_PATH"
+  set -u
 fi
 
 REPO_CANON="$(arr_canonical_path "${REPO_ROOT}")"
@@ -131,9 +133,11 @@ source_user_conf() {
   prev_trap="$(trap -p ERR 2>/dev/null || true)"
   trap - ERR
   set +e
+  set +u
   # shellcheck disable=SC1090
   . "$conf_path" 2>"$errlog"
   local status=$?
+  set -u
   set -e
   if [[ -n "$prev_trap" ]]; then
     eval "$prev_trap"
