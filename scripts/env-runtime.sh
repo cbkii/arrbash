@@ -117,11 +117,11 @@ prepare_env_context() {
       requirement_msg="${lan_requirements[0]} and ${lan_requirements[1]}"
     fi
     if [[ -z "${LAN_IP:-}" || "$LAN_IP" == "0.0.0.0" ]]; then
-    die "  ${requirement_msg} requires LAN_IP to be set to your host's private IPv4 address in ${userconf_path}."
-  fi
-  if ! is_private_ipv4 "$LAN_IP"; then
-    die "  LAN_IP='${LAN_IP}' must be a private IPv4 address when ${requirement_msg} is enabled. Update ${userconf_path}."
-  fi
+      die "  ${requirement_msg} requires LAN_IP to be set to your host's private IPv4 address in ${userconf_path}."
+    fi
+    if ! is_private_ipv4 "$LAN_IP"; then
+      die "  LAN_IP='${LAN_IP}' must be a private IPv4 address when ${requirement_msg} is enabled. Update ${userconf_path}."
+    fi
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then

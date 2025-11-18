@@ -837,7 +837,7 @@ main() {
     ARR_GLUETUN_FORCE_RECREATE=1
     export ARR_GLUETUN_FORCE_RECREATE
   fi
-  
+
   step "📝 Preparing environment values"
   prepare_env_context
   local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
