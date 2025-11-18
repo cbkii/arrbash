@@ -657,7 +657,12 @@ start_stack() {
 
   msg "Starting Gluetun VPN container..."
   local compose_output_gluetun=""
-  if ! compose_up_detached_capture compose_output_gluetun gluetun; then
+  local -a gluetun_up_args=()
+  if [[ "${ARR_GLUETUN_FORCE_RECREATE:-0}" == "1" ]]; then
+    msg "Gluetun API key rotated; recreating container to apply new credentials"
+    gluetun_up_args+=(--force-recreate)
+  fi
+  if ! compose_up_detached_capture compose_output_gluetun "${gluetun_up_args[@]}" gluetun; then
     warn "Failed to start Gluetun via docker compose"
     if [[ -n "$compose_output_gluetun" ]]; then
       printf '%s\n' "$compose_output_gluetun" | sed 's/^/    /'

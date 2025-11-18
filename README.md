@@ -54,7 +54,11 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
   - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`, `MUSIC_DIR`: defaults sit under `${ARR_DATA_ROOT}`, but point each one at your actual storage.
   - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent. Leave `0` for full VPN mode.
   - `ENABLE_CONFIGARR`, `SABNZBD_ENABLED`: toggle optional services. See [Optional services and containers](./docs/configuration.md#optional-services-and-containers) for tips.
-- Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arr.sh --rotate-api-key`.
+- Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arr.sh --rotate-api-key --yes`—the installer regenerates `.env`, recreates Gluetun with the new `HTTP_CONTROL_SERVER_APIKEY`, and refreshes helper aliases so `arr.vpn.*` commands pick up the key immediately. Verify with:
+  ```bash
+  grep '^GLUETUN_API_KEY=' .env
+  curl -fsS -H "X-API-Key: $GLUETUN_API_KEY" "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/healthz"
+  ```
 - Show available flags at any time:
   ```bash
   ./arr.sh --help

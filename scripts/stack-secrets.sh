@@ -61,6 +61,8 @@ generate_api_key() {
     if [[ -n "$existing" ]]; then
       GLUETUN_API_KEY="$existing"
       export GLUETUN_API_KEY
+      ARR_GLUETUN_API_KEY_ROTATED="${ARR_GLUETUN_API_KEY_ROTATED:-0}"
+      export ARR_GLUETUN_API_KEY_ROTATED
       msg "Using existing API key"
       return
     fi
@@ -68,6 +70,8 @@ generate_api_key() {
 
   GLUETUN_API_KEY="$(safe_random_alnum 64)"
   export GLUETUN_API_KEY
+  ARR_GLUETUN_API_KEY_ROTATED=1
+  export ARR_GLUETUN_API_KEY_ROTATED
   msg "Generated new API key"
 
   if declare -f gluetun_version_requires_auth_config >/dev/null 2>&1 && gluetun_version_requires_auth_config 2>/dev/null; then
