@@ -332,7 +332,9 @@ while IFS= read -r _var; do
   unset "${_var}"
 done <<<"${ARR_RESET_TARGETS}"
 # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+set +u
 . "${_ARR_DEFAULTS_FILE}"
+set -u
 while IFS= read -r _var; do
   [[ -n "${_var}" ]] || continue
   if [[ -v "${_var}" ]]; then
@@ -357,6 +359,7 @@ set -Eeuo pipefail
 if [[ -f "${REPO_ROOT}/arrconf/userr.conf.defaults.sh" ]]; then
   set +u
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+  set +u
   . "${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
   set -u
   if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
@@ -489,6 +492,7 @@ arr_expand_alias_placeholders_in_env() {
 if [[ -f "${_arr_defaults_file}" ]]; then
   set +u
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
+  set +u
   . "${_arr_defaults_file}"
   set -u
 fi
@@ -529,11 +533,11 @@ if [[ -f "${_canon_userconf}" ]]; then
   # Save current ERR trap (if any), then disable while sourcing user config
   _prev_err_trap="$(trap -p ERR 2>/dev/null || true)"
   trap - ERR
-  set +e
+  set +eu
   # shellcheck source=/dev/null
   . "${_canon_userconf}" 2>"${_arr_userr_conf_errlog}"
   _arr_userr_conf_status=$?
-  set -e
+  set -eu
   # Restore previous ERR trap exactly as it was
   if [[ -n "${_prev_err_trap}" ]]; then
     eval "${_prev_err_trap}"
