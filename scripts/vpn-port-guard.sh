@@ -37,6 +37,8 @@ fi
 : "${CONTROLLER_REQUIRE_PORT_FORWARDING:=}"
 : "${VPN_PORT_GUARD_REQUIRE_FORWARDING:=}"
 
+_controller_last_port=0
+
 controller_bool() {
   case "${1:-}" in
     1 | true | TRUE | yes | YES | on | ON)
@@ -109,14 +111,17 @@ controller_write_state() {
   local forwarding_state="${3:-unavailable}"
   local qbt_status="${4:-unknown}"
   local pf_arg="${5:-${CONTROLLER_REQUIRE_STRICT}}"
+  local last_error="${6:-}"
 
   local port="0"
   if [[ -n "${port_raw}" && "${port_raw}" =~ ^[0-9]+$ ]]; then
     port="${port_raw}"
   fi
 
+  local last_port="0"
+
   case "${forwarding_state}" in
-    active | unavailable | error) ;;
+    active | unavailable | error | initializing | unreachable) ;;
     *) forwarding_state="unavailable" ;;
   esac
 
@@ -130,6 +135,17 @@ controller_write_state() {
 
   local epoch
   epoch="$(date +%s 2>/dev/null || printf '0')"
+
+  if [[ "${_controller_last_port:-0}" =~ ^[0-9]+$ ]] && [[ "${_controller_last_port:-0}" -gt 0 ]]; then
+    last_port="${_controller_last_port}"
+  else
+    last_port="0"
+  fi
+
+  if [[ "$port" -gt 0 ]]; then
+    _controller_last_port="$port"
+    last_port="$port"
+  fi
 
   local tmp
   local tmp_template="${controller_state_dir}/state.XXXXXX"
@@ -148,6 +164,8 @@ controller_write_state() {
     --argjson forwarded_port "${port}" \
     --argjson pf_enabled "${pf_enabled}" \
     --argjson last_update_epoch "${epoch}" \
+    --argjson last_port "${last_port}" \
+    --arg last_error "${last_error}" \
     '{
         vpn_status: $vpn_status,
         forwarded_port: $forwarded_port,
@@ -155,7 +173,9 @@ controller_write_state() {
         forwarding_state: $forwarding_state,
         controller_mode: $controller_mode,
         qbt_status: $qbt_status,
-        last_update_epoch: $last_update_epoch
+        last_update_epoch: $last_update_epoch,
+        last_port: $last_port,
+        last_error: $last_error
       }' >"${tmp}"; then
     controller_log "Failed to render controller status JSON"
     return 1
@@ -173,7 +193,7 @@ controller_write_state() {
 controller_mark_init() {
   _controller_qbt_state="paused"
   controller_log_event "controller:init"
-  controller_write_state "init" 0 "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
+  controller_write_state "init" 0 "initializing" "paused" "${CONTROLLER_REQUIRE_STRICT}" "initializing"
 }
 
 controller_pause_qbt() {
@@ -235,6 +255,7 @@ controller_check_trigger() {
 
 main() {
   controller_log "Starting vpn-port-guard (poll=${CONTROLLER_POLL_INTERVAL}s, mode=${CONTROLLER_MODE_STRING})"
+  controller_log "🛡  Port Guard: initializing status file at ${CONTROLLER_STATUS_FILE}"
   controller_mark_init
 
   controller_pause_qbt || true
@@ -251,10 +272,14 @@ main() {
       sleep_next=0
     fi
 
-    local status
-    status="$(gluetun_api_status 2>/dev/null || printf 'unknown')"
-    local port
-    port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
+    local status status_rc
+    status_rc=0
+    status="$(gluetun_api_status 2>/dev/null || printf 'unknown')" || status_rc=$?
+    local port port_rc
+    port_rc=0
+    port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')" || port_rc=$?
+
+    local last_error=""
 
     local forwarded_port="0"
     if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
@@ -266,13 +291,28 @@ main() {
       forwarding_state="active"
     fi
 
+    if ((status_rc != 0)); then
+      controller_log "Gluetun control API unreachable; keeping torrents paused"
+      controller_record_vpn_state "down"
+      controller_pause_qbt || true
+      controller_write_state "unknown" 0 "unreachable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "gluetun control API unreachable"
+      continue
+    fi
+
+    if ((port_rc != 0)) && [[ -z "${last_error}" ]]; then
+      last_error="unable to read forwarded port payload"
+    fi
+
     if ! qbt_api_healthcheck; then
       controller_log "qBittorrent API unreachable; pausing until container recovers"
       controller_pause_qbt || true
       if [[ "$forwarded_port" != 0 ]]; then
         forwarding_state="error"
       fi
-      controller_write_state "$status" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
+      if [[ -z "$last_error" ]]; then
+        last_error="qBittorrent API unreachable"
+      fi
+      controller_write_state "$status" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
       continue
     fi
 
@@ -280,7 +320,7 @@ main() {
       controller_log "VPN not ready (status=${status}); keeping torrents paused"
       controller_record_vpn_state "down"
       controller_pause_qbt || true
-      controller_write_state "$status" "$forwarded_port" "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
+      controller_write_state "$status" "$forwarded_port" "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
       continue
     fi
 
@@ -289,14 +329,14 @@ main() {
     if [[ "$forwarded_port" != 0 ]]; then
       if controller_apply_port "$forwarded_port"; then
         if controller_resume_qbt; then
-          controller_write_state "running" "$forwarded_port" "active" "active" "${CONTROLLER_REQUIRE_STRICT}"
+          controller_write_state "running" "$forwarded_port" "active" "active" "${CONTROLLER_REQUIRE_STRICT}" ""
         else
-          controller_write_state "running" "$forwarded_port" "active" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
+          controller_write_state "running" "$forwarded_port" "active" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
         fi
       else
         forwarding_state="error"
         controller_pause_qbt || true
-        controller_write_state "running" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
+        controller_write_state "running" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "failed to set qBittorrent listen port"
       fi
       continue
     fi
@@ -304,13 +344,13 @@ main() {
     if [[ "$CONTROLLER_REQUIRE_STRICT" == "true" ]]; then
       controller_log "Forwarded port unavailable; strict mode enabled so torrents remain paused"
       controller_pause_qbt || true
-      controller_write_state "running" 0 "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}"
+      controller_write_state "running" 0 "unavailable" "paused" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
     else
       controller_log "Forwarded port unavailable; torrents running without inbound port"
       if controller_resume_qbt; then
-        controller_write_state "running" 0 "unavailable" "active" "${CONTROLLER_REQUIRE_STRICT}"
+        controller_write_state "running" 0 "unavailable" "active" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
       else
-        controller_write_state "running" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"
+        controller_write_state "running" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
       fi
     fi
   done

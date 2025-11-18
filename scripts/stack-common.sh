@@ -620,6 +620,11 @@ arr_gluetun_dir() {
   printf '%s/gluetun' "$(arr_docker_data_root)"
 }
 
+# Resolves the shared Gluetun state directory used by vpn-port-guard and helpers
+arr_gluetun_state_dir() {
+  printf '%s/state' "$(arr_gluetun_dir)"
+}
+
 # Resolves the VPN auto-reconnect working directory under Gluetun assets
 arr_gluetun_auto_reconnect_dir() {
   printf '%s/auto-reconnect' "$(arr_gluetun_dir)"
