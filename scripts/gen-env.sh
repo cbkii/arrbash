@@ -152,12 +152,14 @@ fi
 if [[ -f "$DEFAULTS_PATH" ]]; then
   set +u
   # shellcheck source=arrconf/userr.conf.defaults.sh
+  set +u
   . "$DEFAULTS_PATH"
   set -u
 fi
 if [[ -f "$CONF_PATH" ]]; then
   set +u
   # shellcheck source=/dev/null
+  set +u
   . "$CONF_PATH"
   set -u
 fi
