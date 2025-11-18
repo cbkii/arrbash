@@ -510,6 +510,12 @@ if [[ -f "$ARR_ENV_FILE" ]]; then
   load_env_file "$ARR_ENV_FILE"
 fi
 
+if [[ -z "${GLUETUN_API_KEY:-}" ]]; then
+  log_warn "GLUETUN_API_KEY is empty in ${ARR_ENV_FILE}; control API calls will fail."
+  log_warn "Run: ./arr.sh --rotate-api-key --yes; then source ${ARR_STACK_DIR}/.aliasarr"
+  log_warn "Checked env file at: ${ARR_ENV_FILE} (stack dir: ${ARR_STACK_DIR})"
+fi
+
 GLUETUN_LIB="${ARR_STACK_DIR}/scripts/vpn-gluetun.sh"
 if [[ -f "$GLUETUN_LIB" ]]; then
   # shellcheck source=/dev/null
