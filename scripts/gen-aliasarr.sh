@@ -1,7 +1,6 @@
 # shellcheck shell=bash
 # Renders helper alias bundle and injects optional VPN/configarr helpers if templates permit
 write_aliases_file() {
-  step "🛠️ Generating helper aliases file"
 
   local template_file="${REPO_ROOT}/scripts/gen-aliasarr.template.sh"
   if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then

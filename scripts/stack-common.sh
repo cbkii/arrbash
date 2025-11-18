@@ -204,7 +204,7 @@ step() {
   if msg_color_supported; then
     printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BLUE}${BOLD}" "$*" "$RESET"
   else
-    printf '[STEP] %s\n' "$*"
+    printf '[STEP] ⁂ ⟫ %s\n' "$*"
   fi
 }
 

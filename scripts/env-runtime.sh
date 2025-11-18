@@ -23,7 +23,7 @@ arr_prompt_direct_port_exposure() {
     fi
   fi
 
-  msg "EXPOSE_DIRECT_PORTS=1 will publish the following LAN URLs:"
+  msg "  EXPOSE_DIRECT_PORTS=1 will publish the following LAN URLs:"
   printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
   printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
   printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
@@ -33,11 +33,11 @@ arr_prompt_direct_port_exposure() {
   printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
 
   if [[ "${ASSUME_YES:-0}" == "1" ]]; then
-    msg "ASSUME_YES=1; continuing without additional confirmation."
+    msg "  ASSUME_YES=1; continuing without additional confirmation."
     return 0
   fi
 
-  printf 'Expose these ports on the LAN? [y/N]: '
+  printf '  Expose these ports on the LAN? [y/N]: '
   local response=""
   if ! read -r response; then
     warn "Could not read confirmation response; disabling EXPOSE_DIRECT_PORTS for safety."
@@ -47,18 +47,16 @@ arr_prompt_direct_port_exposure() {
 
   case "${response,,}" in
     y | yes)
-      msg "Continuing with EXPOSE_DIRECT_PORTS=1."
+      msg "  Continuing with EXPOSE_DIRECT_PORTS=1."
       ;;
     *)
-      warn "Disabling EXPOSE_DIRECT_PORTS for this run; rerun with --yes to skip the prompt."
+      warn "  Disabling EXPOSE_DIRECT_PORTS for this run; rerun with --yes to skip the prompt."
       EXPOSE_DIRECT_PORTS=0
       ;;
   esac
 }
 
 prepare_env_context() {
-  step "📝 Preparing environment values"
-
   hydrate_user_credentials_from_env_file
   hydrate_sab_api_key_from_config
   hydrate_qbt_host_port_from_env_file
@@ -72,7 +70,7 @@ prepare_env_context() {
   case "$split_vpn_raw" in
     '' | 0 | 1 | true | TRUE | false | FALSE | yes | YES | no | NO | on | ON | off | OFF) ;;
     *)
-      warn "Invalid SPLIT_VPN=${split_vpn_raw}; defaulting to 0 (full tunnel)."
+      warn "  Invalid SPLIT_VPN=${split_vpn_raw}; defaulting to 0 (full tunnel)."
       split_vpn=0
       ;;
   esac
@@ -89,18 +87,18 @@ prepare_env_context() {
   local user_supplied_lan_ip="${LAN_IP:-}"
   if [[ -n "$user_supplied_lan_ip" ]]; then
     if ! validate_ipv4 "$user_supplied_lan_ip"; then
-      die "Invalid LAN_IP provided (${user_supplied_lan_ip}). Fix ${userconf_path} or unset to auto-detect."
+      die "  Invalid LAN_IP provided (${user_supplied_lan_ip}). Fix ${userconf_path} or unset to auto-detect."
     fi
     LAN_IP="$user_supplied_lan_ip"
-    msg "Using configured LAN_IP: $LAN_IP"
+    msg "  Using configured LAN_IP: $LAN_IP"
   else
     if detected_ip="$(detect_lan_ip 2>/dev/null)"; then
       LAN_IP="$detected_ip"
-      msg "Auto-detected LAN_IP: $LAN_IP"
+      msg "  Auto-detected LAN_IP: $LAN_IP"
     else
       LAN_IP="0.0.0.0"
-      warn "LAN_IP could not be detected automatically; set it in ${userconf_path} so services bind to the correct interface."
-      warn "Determine the address with: hostname -I | awk \"{print \\\$1}\""
+      warn "  LAN_IP could not be detected automatically; set it in ${userconf_path} so services bind to the correct interface."
+      warn "  Determine the address with: hostname -I | awk \"{print \\\$1}\""
     fi
   fi
 
@@ -119,11 +117,11 @@ prepare_env_context() {
       requirement_msg="${lan_requirements[0]} and ${lan_requirements[1]}"
     fi
     if [[ -z "${LAN_IP:-}" || "$LAN_IP" == "0.0.0.0" ]]; then
-      die "${requirement_msg} requires LAN_IP to be set to your host's private IPv4 address in ${userconf_path}."
-    fi
-    if ! is_private_ipv4 "$LAN_IP"; then
-      die "LAN_IP='${LAN_IP}' must be a private IPv4 address when ${requirement_msg} is enabled. Update ${userconf_path}."
-    fi
+    die "  ${requirement_msg} requires LAN_IP to be set to your host's private IPv4 address in ${userconf_path}."
+  fi
+  if ! is_private_ipv4 "$LAN_IP"; then
+    die "  LAN_IP='${LAN_IP}' must be a private IPv4 address when ${requirement_msg} is enabled. Update ${userconf_path}."
+  fi
   fi
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
@@ -142,7 +140,7 @@ prepare_env_context() {
   case "$sab_use_vpn_raw" in
     '' | 0 | 1 | true | TRUE | false | FALSE | yes | YES | no | NO | on | ON | off | OFF) ;;
     *)
-      warn "Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
+      warn "  Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
       sab_use_vpn=0
       ;;
   esac
@@ -173,7 +171,7 @@ prepare_env_context() {
   fi
 
   if ((sab_enabled)) && ((sab_use_vpn == 1)) && ((gluetun_available == 0)); then
-    warn "SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
+    warn "  SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
     sab_use_vpn=0
   fi
 
@@ -182,17 +180,17 @@ prepare_env_context() {
 
   local sab_timeout_raw
   arr_resolve_positive_int sab_timeout_raw "${SABNZBD_TIMEOUT:-}" 15 \
-    "Invalid SABNZBD_TIMEOUT=${SABNZBD_TIMEOUT:-}; defaulting to 15 seconds."
+    "  Invalid SABNZBD_TIMEOUT=${SABNZBD_TIMEOUT:-}; defaulting to 15 seconds."
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
   local sab_internal_port_raw
   arr_resolve_port sab_internal_port_raw "${SABNZBD_INT_PORT:-}" 8080 \
-    "Invalid SABNZBD_INT_PORT=${SABNZBD_INT_PORT:-}; defaulting to 8080."
+    "  Invalid SABNZBD_INT_PORT=${SABNZBD_INT_PORT:-}; defaulting to 8080."
   SABNZBD_INT_PORT="$sab_internal_port_raw"
 
   local sab_port_raw
   arr_resolve_port sab_port_raw "${SABNZBD_PORT:-}" "$SABNZBD_INT_PORT" \
-    "Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to ${SABNZBD_INT_PORT}."
+    "  Invalid SABNZBD_PORT=${SABNZBD_PORT:-}; defaulting to ${SABNZBD_INT_PORT}."
   SABNZBD_PORT="$sab_port_raw"
 
   local sab_host_default="${LOCALHOST_IP:-localhost}"

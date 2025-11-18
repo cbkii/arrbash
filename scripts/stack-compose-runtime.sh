@@ -2008,7 +2008,6 @@ YAML
 
 # Generates docker-compose.yml tuned for split VPN (qBittorrent-only tunnel)
 write_compose_split_mode() {
-  step "🐳 Writing docker-compose.yml"
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
@@ -2240,8 +2239,6 @@ write_compose() {
     write_compose_split_mode
     return
   fi
-
-  step "🐳 Writing docker-compose.yml"
 
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp

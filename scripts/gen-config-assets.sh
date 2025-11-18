@@ -39,7 +39,7 @@ _configarr_sanitize_score() {
 }
 
 write_gluetun_control_assets() {
-  msg "Preparing Gluetun control assets for Proton port forwarding"
+  msg "  Preparing Gluetun control assets for Proton port forwarding"
 
   local gluetun_root="${ARR_DOCKER_DIR}/gluetun"
 
@@ -108,7 +108,6 @@ EOF
 
 # Copies the shared Gluetun helper script into the stack workspace
 sync_gluetun_library() {
-  step "📚 Syncing Gluetun helper library"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -118,7 +117,6 @@ sync_gluetun_library() {
 
 # Syncs VPN auto-reconnect scripts with executable permissions into the stack
 sync_vpn_auto_reconnect_assets() {
-  step "📡 Syncing VPN auto-reconnect helpers"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -137,7 +135,6 @@ sync_vpn_auto_reconnect_assets() {
 
 # Copies vpn-port-guard controller assets into the stack scripts directory
 sync_vpn_port_guard_assets() {
-  step "🛡️ Syncing vpn-port-guard assets"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -156,7 +153,6 @@ sync_vpn_port_guard_assets() {
 
 # Installs SABnzbd helper into the stack scripts directory
 write_sab_helper_script() {
-  step "🧰 Writing SABnzbd helper script"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -168,7 +164,6 @@ write_sab_helper_script() {
 
 # Installs qBittorrent helper shim into the stack scripts directory
 write_qbt_helper_script() {
-  step "🧰 Writing qBittorrent helper script"
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
@@ -182,7 +177,6 @@ write_qbt_helper_script() {
 
 # Reconciles qBittorrent configuration defaults while preserving user customizations
 write_qbt_config() {
-  step "🧩 Writing qBittorrent config"
   local docker_root
   docker_root="$(arr_docker_data_root)"
 
@@ -360,7 +354,7 @@ ensure_qbt_webui_config_ready() {
 }
 
 ensure_qbt_config() {
-  msg "Ensuring qBittorrent configuration is applied"
+  msg "  Ensuring qBittorrent configuration is applied"
 
   # Sleep to allow qBittorrent to restart safely; configurable via QBT_CONFIG_SLEEP (default: 5 seconds)
   sleep "${QBT_CONFIG_SLEEP:-5}"
@@ -384,11 +378,9 @@ ensure_qbt_config() {
 # Materializes Configarr config/secrets with sanitized policy values when enabled
 write_configarr_assets() {
   if [[ "${ENABLE_CONFIGARR:-0}" != "1" ]]; then
-    msg "🧾 Skipping Configarr assets (ENABLE_CONFIGARR=0)"
+    msg "  🧾 Skipping Configarr assets (ENABLE_CONFIGARR=0)"
     return 0
   fi
-
-  step "🧾 Preparing Configarr assets"
 
   local configarr_root="${ARR_DOCKER_DIR}/configarr"
   local runtime_cfs="${configarr_root}/cfs"

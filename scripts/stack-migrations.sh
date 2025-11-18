@@ -5,8 +5,6 @@ run_one_time_migrations() {
   if [[ ! -f "$gluetun_340_marker" ]]; then
     local auth_config="${ARR_DOCKER_DIR}/gluetun/auth/config.toml"
     if gluetun_version_requires_auth_config 2>/dev/null; then
-      step "🔄 Upgrading to Gluetun 3.40+ auth model"
-
       if [[ -f "$auth_config" ]]; then
         local auth_backup=""
         auth_backup="${auth_config}.bak.$(arr_now_epoch)"
@@ -36,10 +34,10 @@ run_one_time_migrations() {
         env_backup_path="${ARR_ENV_FILE}.bak.$(arr_now_epoch)"
         if cp "${ARR_ENV_FILE}" "$env_backup_path" 2>/dev/null; then
           chmod 600 "$env_backup_path" 2>/dev/null || true
-          warn "Backed up existing .env to ${env_backup_path} before applying migrations"
+          warn "  Backed up existing .env to ${env_backup_path} before applying migrations"
           env_backup_created=1
         else
-          warn "Unable to create backup of ${ARR_ENV_FILE} before migrations"
+          warn "  Unable to create backup of ${ARR_ENV_FILE} before migrations"
         fi
       fi
     }
@@ -51,7 +49,7 @@ run_one_time_migrations() {
       if [[ "$fixed_value" != "$existing_unescaped" ]]; then
         ensure_env_backup
         persist_env_var "OPENVPN_USER" "$fixed_value"
-        warn "OPENVPN_USER was missing '+pmp'; updated automatically in ${ARR_ENV_FILE}"
+        warn "  OPENVPN_USER was missing '+pmp'; updated automatically in ${ARR_ENV_FILE}"
       fi
     fi
 
@@ -73,7 +71,7 @@ run_one_time_migrations() {
           if chmod "$DATA_DIR_MODE" "$dir" 2>/dev/null; then
             ((collab_migrations++))
           else
-            warn "Could not migrate ${dir} to collaborative mode ${DATA_DIR_MODE}"
+            warn "  Could not migrate ${dir} to collaborative mode ${DATA_DIR_MODE}"
             collab_failures=1
           fi
         fi
