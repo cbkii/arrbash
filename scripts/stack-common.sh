@@ -19,6 +19,25 @@
 
 declare -a ARR_TEMP_PATHS=()
 
+arr_require_services_array() {
+  if ! declare -p ARR_DOCKER_SERVICES 2>/dev/null | grep -q 'declare \-a'; then
+    local _scalar="${ARR_DOCKER_SERVICES-}"
+    unset -v ARR_DOCKER_SERVICES 2>/dev/null || true
+    declare -g -a ARR_DOCKER_SERVICES=()
+    if [[ -n "${_scalar:-}" ]]; then
+      read -r -a ARR_DOCKER_SERVICES <<< "$_scalar"
+    fi
+  fi
+
+  if ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
+    if declare -p ARR_DOCKER_SERVICES_DEFAULT >/dev/null 2>&1 && ((${#ARR_DOCKER_SERVICES_DEFAULT[@]} > 0)); then
+      ARR_DOCKER_SERVICES=("${ARR_DOCKER_SERVICES_DEFAULT[@]}")
+    else
+      ARR_DOCKER_SERVICES=(gluetun vpn-port-guard qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr sabnzbd configarr)
+    fi
+  fi
+}
+
 arr_cleanup_temp_assets() {
   local path=""
 
