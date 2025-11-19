@@ -8,6 +8,9 @@ if [[ "${ARR_DISABLE_UMASK:-0}" != "1" ]]; then
   umask 027
 fi
 
+# Protect against inherited environment poisoning this run
+unset -v ARR_DOCKER_SERVICES 2>/dev/null || true
+
 # Reports failing location before exiting to speed triage of installer faults
 arr_err_trap() {
   local rc=$?

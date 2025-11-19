@@ -164,19 +164,16 @@ arr_setup_defaults() {
   COLLAB_PERMISSION_WARNINGS=""
   COLLAB_CREATED_MEDIA_DIRS=""
   : "$COLLAB_PERMISSION_WARNINGS" "$COLLAB_CREATED_MEDIA_DIRS"
-  set +ue
-  if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 || ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
-    if declare -p ARR_DOCKER_SERVICES_DEFAULT >/dev/null 2>&1 && ((${#ARR_DOCKER_SERVICES_DEFAULT[@]} > 0)); then
-      ARR_DOCKER_SERVICES=("${ARR_DOCKER_SERVICES_DEFAULT[@]}")
-    else
-      ARR_DOCKER_SERVICES=(gluetun qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr sabnzbd configarr)
-    fi
+
+  if declare -f arr_require_services_array >/dev/null 2>&1; then
+    arr_require_services_array
   fi
+
   : "${ARR_DOCKER_SERVICES[*]}"
   if command -v arr_set_docker_services_list >/dev/null 2>&1; then
     arr_set_docker_services_list
   fi
-  set -ue
+
   : "${QBT_INT_PORT:=8082}"
   : "${QBT_BIND_ADDR:=0.0.0.0}"
   : "${QBT_ENFORCE_WEBUI:=1}"

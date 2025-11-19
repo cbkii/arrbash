@@ -42,7 +42,11 @@ mkdirs() {
     die "ARR_DOCKER_DIR is required for directory setup"
   fi
 
-  if ! declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 || ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
+  if declare -f arr_require_services_array >/dev/null 2>&1; then
+    arr_require_services_array
+  fi
+
+  if ((${#ARR_DOCKER_SERVICES[@]} == 0)); then
     die "ARR_DOCKER_SERVICES must be defined before mkdirs runs"
   fi
 
