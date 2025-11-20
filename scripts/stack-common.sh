@@ -573,6 +573,59 @@ arr_docker_data_root() {
   printf '%s' "${resolved%/}"
 }
 
+# Emits candidate Gluetun auth config paths using the current config precedence
+# (CLI/environment overrides, userr.conf, then defaults) and the persisted .env
+# snapshot. Consumers can iterate over the list to locate existing configs or
+# to display meaningful diagnostics.
+arr_gluetun_auth_config_candidates() {
+  local -a candidates=()
+  local env_docker_dir=""
+  local fallback=""
+  declare -A seen=()
+
+  if [[ -n "${ARR_DOCKER_DIR:-}" ]]; then
+    candidates+=("${ARR_DOCKER_DIR%/}/gluetun/auth/config.toml")
+  fi
+
+  if [[ -n "${ARR_ENV_FILE:-}" && -f "${ARR_ENV_FILE}" ]]; then
+    if env_docker_dir="$(get_env_kv "ARR_DOCKER_DIR" "${ARR_ENV_FILE}" 2>/dev/null || true)" \
+      && [[ -n "$env_docker_dir" ]]; then
+      candidates+=("${env_docker_dir%/}/gluetun/auth/config.toml")
+    fi
+  fi
+
+  fallback="$(arr_docker_data_root 2>/dev/null)"
+  if [[ -n "$fallback" ]]; then
+    candidates+=("${fallback%/}/gluetun/auth/config.toml")
+  fi
+
+  local auth_candidate=""
+  for auth_candidate in "${candidates[@]}"; do
+    [[ -n "$auth_candidate" ]] || continue
+    if [[ -n "${seen[$auth_candidate]:-}" ]]; then
+      continue
+    fi
+    seen["$auth_candidate"]=1
+    printf '%s\n' "$auth_candidate"
+  done
+}
+
+# Returns the first existing auth config path detected via
+# arr_gluetun_auth_config_candidates. Emits nothing when no config exists.
+arr_find_existing_gluetun_auth_config() {
+  local auth_candidate=""
+
+  while IFS= read -r auth_candidate; do
+    [[ -n "$auth_candidate" ]] || continue
+    if [[ -f "$auth_candidate" ]]; then
+      printf '%s\n' "$auth_candidate"
+      return 0
+    fi
+  done < <(arr_gluetun_auth_config_candidates)
+
+  return 1
+}
+
 # Resolves qBittorrent configuration directories and paths
 arr_qbt_config_root() {
   local root="${1:-$(arr_docker_data_root)}"

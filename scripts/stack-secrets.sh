@@ -73,15 +73,37 @@ generate_api_key() {
   msg "Generated new API key"
 
   if declare -f gluetun_version_requires_auth_config >/dev/null 2>&1 && gluetun_version_requires_auth_config 2>/dev/null; then
-    local auth_config="${ARR_DOCKER_DIR}/gluetun/auth/config.toml"
-    if [[ -e "$auth_config" ]]; then
-      if rm -f "$auth_config"; then
-        msg "  Removed existing auth config for key rotation"
-      else
-        warn "  Failed to remove ${auth_config}; check permissions before restarting"
+    local -a auth_candidates=()
+    local auth_config=""
+    local removed=0
+    mapfile -t auth_candidates < <(arr_gluetun_auth_config_candidates)
+
+    for auth_config in "${auth_candidates[@]}"; do
+      [[ -n "$auth_config" ]] || continue
+      if [[ -e "$auth_config" ]]; then
+        if rm -f "$auth_config"; then
+          msg "  Removed existing auth config at ${auth_config} for key rotation"
+        else
+          warn "  Failed to remove ${auth_config}; check permissions before restarting"
+        fi
+        removed=1
+        break
       fi
-    else
-      msg "  No existing auth config detected; skipping removal"
+    done
+
+    if ((removed == 0)); then
+      local search_hint=""
+      local joined=""
+      local delim=""
+      for auth_config in "${auth_candidates[@]}"; do
+        [[ -n "$auth_config" ]] || continue
+        joined+="${delim}${auth_config}"
+        delim=", "
+      done
+      if [[ -n "$joined" ]]; then
+        search_hint=" (checked: ${joined})"
+      fi
+      msg "  No existing auth config detected${search_hint}; skipping removal"
     fi
   fi
 }
