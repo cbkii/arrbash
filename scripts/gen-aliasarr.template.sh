@@ -1439,7 +1439,7 @@ arr.gluetun.diagnose() {
   printf 'Configured control host: %s\n' "$host"
   printf 'Configured control port: %s\n' "$port"
 
-  base="http://127.0.0.1:${port}"
+  base="http://${host}:${port}"
 
   local health status_output
   if ! health="$(curl -fsS -H "X-API-Key: ${key}" "${base}/healthz" 2>&1)"; then
