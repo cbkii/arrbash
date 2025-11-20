@@ -1442,14 +1442,14 @@ arr.gluetun.diagnose() {
   base="http://${host}:${port}"
 
   local health status_output
-  if ! health="$(curl -fsS -H "X-API-Key: ${key}" "${base}/healthz" 2>&1)"; then
+  if ! health="$(curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${key}" "${base}/healthz" 2>&1)"; then
     printf '/healthz request failed: %s\n' "$(_arr_sanitize_error "$health")" >&2
     rc=1
   else
     printf '/healthz: %s\n' "$health"
   fi
 
-  if ! status_output="$(curl -fsS -H "X-API-Key: ${key}" "${base}/v1/openvpn/status" 2>&1)"; then
+  if ! status_output="$(curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${key}" "${base}/v1/openvpn/status" 2>&1)"; then
     printf '/v1/openvpn/status request failed: %s\n' "$(_arr_sanitize_error "$status_output")" >&2
     rc=1
   else
@@ -1460,7 +1460,7 @@ arr.gluetun.diagnose() {
     local cid log_excerpt
     cid="$(_arr_container_id_for_service gluetun 1 2>/dev/null || printf '')"
     if [ -n "$cid" ]; then
-      log_excerpt="$(docker logs --tail 200 "$cid" 2>/dev/null | grep -E 'ERROR .*port.*forward' | tail -n 5)"
+      log_excerpt="$(docker logs --tail 200 "$cid" 2>/dev/null | grep -Ei 'error .*port.*forward' | tail -n 5 || true)"
       if [ -n "$log_excerpt" ]; then
         printf 'Recent Gluetun port-forwarding errors:\n%s\n' "$log_excerpt"
       fi
