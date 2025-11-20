@@ -57,7 +57,7 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
 - Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arr.sh --rotate-api-key --yes`—the installer regenerates `.env`, recreates Gluetun with the new `HTTP_CONTROL_SERVER_APIKEY`, and refreshes helper aliases so `arr.vpn.*` commands pick up the key immediately. Verify with:
   ```bash
   grep '^GLUETUN_API_KEY=' .env
-  curl -fsS -H "X-API-Key: $GLUETUN_API_KEY" "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/healthz"
+  curl -fsS -H "X-API-Key: ${GLUETUN_API_KEY}" "http://localhost:${GLUETUN_CONTROL_PORT}/healthz"
   ```
 - Show available flags at any time:
   ```bash
@@ -69,7 +69,7 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
 - Proton’s WireGuard NAT-PMP workflow is not part of this release. Stick with Proton’s OpenVPN credentials (with `+pmp`) to guarantee a forwardable port.
 - Gluetun writes the active forwarded port to `/tmp/gluetun/forwarded_port` and mirrors it through the control API at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`.
 - Only the Gluetun container publishes ports to your LAN. qBittorrent and the *Arr apps run in Gluetun’s network namespace so torrent traffic never leaks directly.
-- The control server binds to `127.0.0.1`, requires the `GLUETUN_API_KEY`, and exposes only the minimal routes arrbash needs. Do **not** map it to the LAN.
+- The control server binds to `:${GLUETUN_CONTROL_PORT}` (all interfaces inside the container), requires the `GLUETUN_API_KEY`, and exposes only the minimal routes arrbash needs. Keep the published port behind trusted network boundaries.
 - `vpn-port-guard` now runs alongside Gluetun by default. It keeps qBittorrent paused until the VPN is healthy, applies the Proton-forwarded port when available, and publishes `forwarding_state`, `controller_mode`, and `qbt_status` in `/gluetun_state/port-guard-status.json` (host path `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`). By default torrents continue running behind the VPN even if Proton has not granted a port yet (reduced connectability); set `CONTROLLER_REQUIRE_PF=true` if you prefer strict “pause unless forwarded” behaviour. The status file is seeded at startup and written atomically so helpers never see a missing or partial JSON. The forwarded port is dynamic—expect it to rotate as ProtonVPN renews the NAT-PMP lease.
 
 To remove the stack and clean up generated assets later, run:

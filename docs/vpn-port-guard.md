@@ -17,7 +17,7 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
   * `PORT_FORWARD_ONLY=on`
   * `VPN_PORT_FORWARDING_PROVIDER=protonvpn`
   * `VPN_PORT_FORWARDING_STATUS_FILE=/tmp/gluetun/forwarded_port`
-  * HTTP control server bound to `127.0.0.1:${GLUETUN_CONTROL_PORT}` with
+  * HTTP control server bound to `:${GLUETUN_CONTROL_PORT}` with
     `HTTP_CONTROL_SERVER_AUTH=apikey` and `HTTP_CONTROL_SERVER_APIKEY` set.
 * The shared bind mount `${ARR_DOCKER_DIR}/gluetun/state` is mounted inside Gluetun
   at `/tmp/gluetun` and inside `vpn-port-guard` at `/gluetun_state`. Gluetun writes the
@@ -75,8 +75,8 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
 
 ## Security model
 
-* Gluetun’s control API is only reachable from within the Docker namespace and requires
-  the API key. vpn-port-guard reaches it at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}`
+* Gluetun’s control API listens on all container interfaces but still requires the API
+  key. vpn-port-guard reaches it at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}`
   **because** the service runs with `network_mode: service:gluetun`. Changing the
   network mode requires exposing the control API explicitly or vpn-port-guard will fail.
 * qBittorrent’s Web UI remains inside the Gluetun network namespace unless you expose it

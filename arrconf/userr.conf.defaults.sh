@@ -233,6 +233,18 @@ VPN_ROTATION_JITTER_SECONDS="${VPN_ROTATION_JITTER_SECONDS:-0}"
 
 # Service ports
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
+GLUETUN_CONTROL_BIND="${GLUETUN_CONTROL_BIND:-all}"
+case "${GLUETUN_CONTROL_BIND,,}" in
+  all | any | 0.0.0.0 | '')
+    GLUETUN_CONTROL_BIND="all"
+    ;;
+  loopback | localhost | 127.0.0.1)
+    GLUETUN_CONTROL_BIND="loopback"
+    ;;
+  *)
+    arr_defaults_fail "GLUETUN_CONTROL_BIND" "GLUETUN_CONTROL_BIND must be 'all' or 'loopback' (got '${GLUETUN_CONTROL_BIND}')"
+    ;;
+esac
 GLUETUN_CONNECTIVITY_PROBE_URLS="${GLUETUN_CONNECTIVITY_PROBE_URLS:-https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace}"
 
 QBT_INT_PORT="${QBT_INT_PORT:-8082}"
@@ -571,6 +583,7 @@ SERVER_COUNTRIES="${SERVER_COUNTRIES}"              # ProtonVPN exit country lis
 # SERVER_NAMES=""                          # Optionally pin Proton server hostnames (comma-separated) when Gluetun should stick to a specific server
 PVPN_ROTATE_COUNTRIES="${PVPN_ROTATE_COUNTRIES}"  # Optional rotation order for arr.vpn switch (default: empty/disabled)
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT}"            # Host port that exposes the Gluetun control API (default: ${GLUETUN_CONTROL_PORT})
+GLUETUN_CONTROL_BIND="${GLUETUN_CONTROL_BIND}"          # all binds 0.0.0.0 inside the container; set loopback to restrict to 127.0.0.1
 # SPLIT_VPN=1 → Only qbittorrent behind VPN; other services run outside it.
 SPLIT_VPN="${SPLIT_VPN}"
 ENABLE_CONFIGARR="${ENABLE_CONFIGARR}"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)

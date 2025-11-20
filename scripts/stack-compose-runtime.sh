@@ -57,6 +57,19 @@ compose_prepare_gluetun_runtime() {
   if [[ ! "${GLUETUN_RUNTIME_CONTROL_PORT}" =~ ^[0-9]+$ ]]; then
     GLUETUN_RUNTIME_CONTROL_PORT="8000"
   fi
+  GLUETUN_RUNTIME_CONTROL_BIND="${GLUETUN_CONTROL_BIND:-all}"
+  case "${GLUETUN_RUNTIME_CONTROL_BIND,,}" in
+    all | any | 0.0.0.0 | '')
+      GLUETUN_RUNTIME_CONTROL_BIND="all"
+      ;;
+    loopback | localhost | 127.0.0.1)
+      GLUETUN_RUNTIME_CONTROL_BIND="loopback"
+      ;;
+    *)
+      warn "GLUETUN_CONTROL_BIND must be 'all' or 'loopback' (got '${GLUETUN_CONTROL_BIND}'); defaulting to all interfaces."
+      GLUETUN_RUNTIME_CONTROL_BIND="all"
+      ;;
+  esac
   GLUETUN_RUNTIME_FORWARD_STATUS_FILE="/tmp/gluetun/forwarded_port"
 }
 
@@ -72,6 +85,11 @@ compose_emit_gluetun_environment() {
   local placeholder_pgid='${PGID}'
   local placeholder_tz='${TIMEZONE}'
   local placeholder_control_port='${GLUETUN_CONTROL_PORT}'
+  local control_address
+  control_address=":${placeholder_control_port}"
+  if [[ "${GLUETUN_RUNTIME_CONTROL_BIND}" == "loopback" ]]; then
+    control_address="127.0.0.1:${placeholder_control_port}"
+  fi
   printf '    environment:\n' >>"$dest"
   arr_yaml_kv "      " "VPN_SERVICE_PROVIDER" "protonvpn" >>"$dest"
   arr_yaml_kv "      " "VPN_TYPE" "${GLUETUN_RUNTIME_VPN_TYPE}" >>"$dest"
@@ -88,7 +106,7 @@ compose_emit_gluetun_environment() {
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_PROVIDER" "protonvpn" >>"$dest"
   arr_yaml_kv "      " "PORT_FORWARD_ONLY" "on" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_STATUS_FILE" "${GLUETUN_RUNTIME_FORWARD_STATUS_FILE}" >>"$dest"
-  arr_yaml_kv "      " "HTTP_CONTROL_SERVER_ADDRESS" "127.0.0.1:${placeholder_control_port}" >>"$dest"
+  arr_yaml_kv "      " "HTTP_CONTROL_SERVER_ADDRESS" "${control_address}" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_AUTH" "apikey" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_APIKEY" "${placeholder_api_key}" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_UP_COMMAND" "/scripts/vpn-port-guard-hook.sh up" >>"$dest"
@@ -2065,7 +2083,7 @@ YAML
       - "${ARR_DOCKER_DIR}/gluetun/state:/gluetun_state"
       - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     ports:
-      - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
+      - ":${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
 YAML
 
   if ((qbt_expose_lan)); then
@@ -2298,7 +2316,7 @@ YAML
       - "${ARR_DOCKER_DIR}/gluetun/state:/gluetun_state"
     ports:
       # split-mode off: Gluetun publishes shared service ports for the namespace
-      - "127.0.0.1:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
+      - ":${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
 YAML
 
   if ((qbt_expose_lan)); then

@@ -15,7 +15,7 @@ Keep the deployment private to your LAN and rotate credentials regularly.
 - Rotate the Gluetun API key periodically with `./arr.sh --rotate-api-key --yes`. The installer now persists a fresh key into `.env`, recreates Gluetun so the control server consumes it, and refreshes helper aliases. Verify the result with:
   ```bash
   grep '^GLUETUN_API_KEY=' .env
-  curl -fsS -H "X-API-Key: $GLUETUN_API_KEY" "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/healthz"
+  curl -fsS -H "X-API-Key: ${GLUETUN_API_KEY}" "http://localhost:${GLUETUN_CONTROL_PORT}/healthz"
   ```
 
 ## Network exposure
