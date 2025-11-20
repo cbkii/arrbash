@@ -1408,6 +1408,7 @@ Gluetun helpers:
   arr.gluetun.status.set '{}'  Update OpenVPN status payload (PUT /v1/openvpn/status)
   arr.gluetun.portfwd        Inspect forwarded port (GET /v1/openvpn/portforwarded)
   arr.gluetun.health         Check Gluetun control health (GET /healthz)
+  arr.gluetun.diagnose       Verify control API health, status, and recent port-forward errors
 EOF
 }
 
@@ -1419,6 +1420,55 @@ arr.gluetun.status.set() {
 }
 arr.gluetun.portfwd() { _arr_gluetun_http GET /v1/openvpn/portforwarded | _arr_pretty_guess; }
 arr.gluetun.health() { _arr_gluetun_http GET /healthz | _arr_pretty_guess; }
+arr.gluetun.diagnose() {
+  local port host key base rc=0
+  port="$(_arr_gluetun_port)"
+  host="$(_arr_gluetun_host)"
+  key="$(_arr_gluetun_key)"
+
+  if ! _arr_has_cmd curl; then
+    printf 'curl is required to probe the Gluetun control API.\n' >&2
+    return 1
+  fi
+
+  if [ -z "$key" ]; then
+    printf 'GLUETUN_API_KEY missing; run ./arr.sh --rotate-api-key to generate one.\n' >&2
+    return 1
+  fi
+
+  printf 'Configured control host: %s\n' "$host"
+  printf 'Configured control port: %s\n' "$port"
+
+  base="http://127.0.0.1:${port}"
+
+  local health status_output
+  if ! health="$(curl -fsS -H "X-API-Key: ${key}" "${base}/healthz" 2>&1)"; then
+    printf '/healthz request failed: %s\n' "$(_arr_sanitize_error "$health")" >&2
+    rc=1
+  else
+    printf '/healthz: %s\n' "$health"
+  fi
+
+  if ! status_output="$(curl -fsS -H "X-API-Key: ${key}" "${base}/v1/openvpn/status" 2>&1)"; then
+    printf '/v1/openvpn/status request failed: %s\n' "$(_arr_sanitize_error "$status_output")" >&2
+    rc=1
+  else
+    printf '/v1/openvpn/status: %s\n' "$status_output"
+  fi
+
+  if _arr_docker_available; then
+    local cid log_excerpt
+    cid="$(_arr_container_id_for_service gluetun 1 2>/dev/null || printf '')"
+    if [ -n "$cid" ]; then
+      log_excerpt="$(docker logs --tail 200 "$cid" 2>/dev/null | grep -E 'ERROR .*port.*forward' | tail -n 5)"
+      if [ -n "$log_excerpt" ]; then
+        printf 'Recent Gluetun port-forwarding errors:\n%s\n' "$log_excerpt"
+      fi
+    fi
+  fi
+
+  return $rc
+}
 
 arr.compose() { _arr_compose "$@"; }
 
