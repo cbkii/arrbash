@@ -6,9 +6,19 @@ hooks disabled so qBittorrent comes up reliably on day one with no controllers
 in the way. Enable forwarding only if you need inbound peers and are happy to
 accept the extra moving parts.
 
+
+## Architecture
+
+The vpn-port-guard system consists of two simple components:
+
+1. **Controller (`vpn-port-guard.sh`)**: A polling loop that checks Gluetun for 
+   the forwarded port and updates qBittorrent when it changes.
+2. **Event Logger (`vpn-port-guard-hook.sh`)**: Called by Gluetun when port 
+   changes occur, logs events for monitoring but does not trigger the controller.
+
 ## What it does when enabled
 
-- Polls Gluetun every `${POLL_INTERVAL:-10}` seconds using
+- Polls Gluetun every `${CONTROLLER_POLL_INTERVAL:-10}` seconds using
   `http://${GLUETUN_API_HOST:-127.0.0.1}:${GLUETUN_CONTROL_PORT:-8000}/v1/openvpn/portforwarded`.
 - Falls back to the Proton NAT-PMP file `${FORWARDED_PORT_FILE:-/tmp/gluetun/forwarded_port}`
   only when the control API is unreachable.
@@ -20,8 +30,8 @@ accept the extra moving parts.
 - Writes one atomic JSON to `${STATUS_FILE:-${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}`
   on every poll.
 
-There is no state machine or trigger file—just **observe → apply → record** on a
-fixed interval.
+The design is simple: **poll → check → apply → record** on a fixed interval.
+The controller polls independently of Gluetun's hook events.
 
 ## Enabling Proton port forwarding (optional)
 
@@ -43,19 +53,28 @@ fixed interval.
 
 ## Environment variables
 
+The controller accepts environment variables from Docker Compose or can use defaults:
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `GLUETUN_CONTROL_URL` | _(derived from host+port)_ | Full Gluetun control URL (e.g., `http://127.0.0.1:8000`). Parsed to set host and port if provided. |
 | `GLUETUN_CONTROL_PORT` | `8000` | Gluetun control server port |
 | `GLUETUN_API_HOST` | `127.0.0.1` | Hostname used to reach the control API |
 | `GLUETUN_API_KEY` | _(empty)_ | Optional API key header (`X-API-Key`) |
 | `FORWARDED_PORT_FILE` | `/tmp/gluetun/forwarded_port` | Fallback file when the control API is unreachable |
+| `QBT_HOST` | _(used with QBT_PORT)_ | qBittorrent hostname (alternative to QBT_API_BASE) |
+| `QBT_PORT` | _(used with QBT_HOST)_ | qBittorrent port (alternative to QBT_API_BASE) |
 | `QBT_API_BASE` | `http://127.0.0.1:8080` | Base URL for qBittorrent Web API |
 | `QBT_USER` | `admin` | qBittorrent username |
 | `QBT_PASS` | `adminadmin` | qBittorrent password |
 | `COOKIE_JAR` | `/tmp/vpn-port-guard-qbt.cookie` | Where the controller stores qBittorrent auth cookies |
 | `STATUS_FILE` | `${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json` | Atomic status JSON output |
-| `POLL_INTERVAL` | `10` | Seconds between polls |
+| `CONTROLLER_POLL_INTERVAL` | `10` | Seconds between polls (also accepts legacy `POLL_INTERVAL`) |
 | `CONTROLLER_REQUIRE_PF` | `false` | When `true`, pause torrents whenever no forwarded port is available |
+| `VPN_PORT_GUARD_DEBUG` | `false` | When `true`, enable detailed debug logging |
+
+**Note**: The Compose configuration passes `GLUETUN_CONTROL_URL`, `QBT_HOST`, and `QBT_PORT`, 
+which the controller automatically converts to the legacy format for backward compatibility.
 
 The generated Compose leaves `VPN_PORT_FORWARDING` off and the hook commands empty, so `vpn-port-guard` stays dormant until you explicitly opt in via `${ARRCONF_DIR}/userr.conf`.
 
@@ -92,3 +111,14 @@ cat ${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json
 - Strict mode pauses torrents. If `pf_enabled` is `true` and `forwarding_state`
   is `unavailable`, expect `/api/v2/torrents/pause` calls until a port appears.
 - Logs: `docker logs vpn-port-guard` to watch loop activity.
+- **Enable debug logging** for detailed diagnostics:
+  ```bash
+  # Add to userr.conf or docker-compose.yml environment:
+  VPN_PORT_GUARD_DEBUG=true
+  ```
+  Then restart the container:
+  ```bash
+  docker compose restart vpn-port-guard
+  docker logs -f vpn-port-guard  # Watch debug output
+  ```
+  Debug mode shows poll cycles, API responses, and state transitions.

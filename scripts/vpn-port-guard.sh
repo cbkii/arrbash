@@ -16,6 +16,12 @@ log() {
   printf '[vpn-port-guard] %s\n' "$*"
 }
 
+log_debug() {
+  if bool_true "${VPN_PORT_GUARD_DEBUG}"; then
+    printf '[vpn-port-guard] DEBUG: %s\n' "$*"
+  fi
+}
+
 bool_true() {
   case "${1:-}" in
     1 | true | TRUE | yes | YES | on | ON) return 0 ;;
@@ -23,18 +29,34 @@ bool_true() {
   esac
 }
 
-# Environment defaults
+# Environment defaults with backward compatibility
+# Parse GLUETUN_CONTROL_URL if provided, otherwise use individual components
+if [[ -n "${GLUETUN_CONTROL_URL:-}" ]]; then
+  # Extract host and port from URL (e.g., http://127.0.0.1:8000)
+  GLUETUN_API_HOST="${GLUETUN_API_HOST:-$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://([^:/]+).*|\1|')}"
+  GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://[^:]+:([0-9]+).*|\1|')}"
+fi
 : "${GLUETUN_CONTROL_PORT:=8000}"
 : "${GLUETUN_API_HOST:=127.0.0.1}"
 : "${GLUETUN_API_KEY:=}"
 : "${FORWARDED_PORT_FILE:=/tmp/gluetun/forwarded_port}"
+
+# Build QBT_API_BASE from components if not already set
+if [[ -n "${QBT_HOST:-}" && -n "${QBT_PORT:-}" ]]; then
+  : "${QBT_API_BASE:=http://${QBT_HOST}:${QBT_PORT}}"
+fi
 : "${QBT_API_BASE:=http://127.0.0.1:8080}"
 : "${QBT_USER:=admin}"
 : "${QBT_PASS:=adminadmin}"
 : "${COOKIE_JAR:=/tmp/vpn-port-guard-qbt.cookie}"
 : "${STATUS_FILE:=${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}"
-: "${POLL_INTERVAL:=10}"
+
+# Support both CONTROLLER_POLL_INTERVAL and legacy POLL_INTERVAL
+: "${POLL_INTERVAL:=${CONTROLLER_POLL_INTERVAL:-10}}"
 : "${CONTROLLER_REQUIRE_PF:=false}"
+
+# Optional debug logging
+: "${VPN_PORT_GUARD_DEBUG:=false}"
 
 STATUS_DIR="$(dirname "${STATUS_FILE}")"
 mkdir -p -- "${STATUS_DIR}" || {
@@ -243,8 +265,21 @@ resume_qbt() {
 }
 
 initialise() {
+  log_debug "Initializing with:"
+  log_debug "  Gluetun API: http://${GLUETUN_API_HOST}:${GLUETUN_CONTROL_PORT}"
+  log_debug "  qBittorrent API: ${QBT_API_BASE}"
+  log_debug "  Poll interval: ${POLL_INTERVAL}s"
+  log_debug "  Require port forwarding: ${CONTROLLER_REQUIRE_PF}"
+  log_debug "  Status file: ${STATUS_FILE}"
+  log_debug "  Forwarded port file: ${FORWARDED_PORT_FILE}"
+  
   write_status "init" 0 "$CONTROLLER_REQUIRE_PF" "unknown" "initializing" || true
-  qbt_login || true
+  
+  if qbt_login; then
+    log_debug "Initial qBittorrent login successful"
+  else
+    log "Warning: Initial qBittorrent login failed, will retry on first poll"
+  fi
 }
 
 main_loop() {
@@ -254,13 +289,20 @@ main_loop() {
     last_error=""
     local vpn_status="down"
     local port
+    
+    log_debug "Starting poll cycle"
     port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
+    log_debug "Fetched port: ${port}"
+    
     if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
       vpn_status="running"
+      log_debug "VPN status: running (port ${port})"
     elif [[ -s "$FORWARDED_PORT_FILE" ]]; then
       vpn_status="running"
+      log_debug "VPN status: running (port file exists but no valid port)"
     else
       vpn_status="down"
+      log_debug "VPN status: down"
     fi
 
     if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
@@ -268,22 +310,32 @@ main_loop() {
         log "Applying forwarded port ${port} to qBittorrent"
         if ! apply_qbt_port "$port"; then
           last_error="failed to set qBittorrent listen port"
+          log_debug "Error: ${last_error}"
+        else
+          log_debug "Successfully applied port ${port}"
         fi
+      else
+        log_debug "Port unchanged (${port}), skipping update"
       fi
       if bool_true "$CONTROLLER_REQUIRE_PF"; then
+        log_debug "Strict mode: ensuring torrents resumed"
         resume_qbt || last_error="failed to resume torrents"
       else
         _qbt_state="active"
       fi
     else
+      log_debug "No valid forwarded port available"
       if bool_true "$CONTROLLER_REQUIRE_PF"; then
+        log "Strict mode: pausing torrents (no forwarded port)"
         if ! pause_qbt; then
           last_error="failed to pause torrents"
+          log_debug "Error: ${last_error}"
         fi
       fi
     fi
 
     write_status "$vpn_status" "${port:-0}" "$CONTROLLER_REQUIRE_PF" "${_qbt_state:-unknown}" "${last_error}" || true
+    log_debug "Poll cycle complete"
   done
 }
 

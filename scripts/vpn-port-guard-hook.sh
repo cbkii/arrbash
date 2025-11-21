@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Gluetun port forwarding hook shim. Signals vpn-port-guard when Proton updates the port.
-# This script MUST NOT talk to qBittorrent directly.
+# Gluetun port forwarding event logger
+#
+# This hook is called by Gluetun when the forwarded port changes.
+# It only logs events for monitoring and troubleshooting.
+# The vpn-port-guard controller polls independently and does not read these events.
+#
+# IMPORTANT: This script MUST NOT modify qBittorrent or other services directly.
 
 set -euo pipefail
 
 event="${1:-unknown}"
-trigger_path="${CONTROLLER_TRIGGER_FILE:-/gluetun_state/port-guard.trigger}"
 events_log="${CONTROLLER_EVENTS_FILE:-/gluetun_state/port-guard-events.log}"
 
-mkdir -p "$(dirname "${trigger_path}")" >/dev/null 2>&1 || true
+# Create log directory if it doesn't exist
+mkdir -p "$(dirname "${events_log}")" >/dev/null 2>&1 || true
 
-if touch "${trigger_path}" 2>/dev/null; then
-  :
-else
-  exit 0
-fi
-
+# Log the event with timestamp
 {
-  printf '[%s] vpn-port-guard hook signalled (%s)\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$event"
+  printf '[%s] Gluetun port forwarding event: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$event"
 } >>"${events_log}" 2>/dev/null || true
