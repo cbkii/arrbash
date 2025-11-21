@@ -28,6 +28,8 @@ fi
 : "${QBT_USER:=admin}"
 : "${QBT_PASS:=adminadmin}"
 : "${QBT_API_TIMEOUT:=10}"
+: "${QBT_API_RETRY_COUNT:=3}"
+: "${QBT_API_RETRY_DELAY:=2}"
 
 _qbt_api_requires() {
   if ! command -v curl >/dev/null 2>&1; then
@@ -70,23 +72,38 @@ _qbt_api_ensure_cookie() {
   local url
   url="$(_qbt_api_base_url)/api/v2/auth/login"
 
-  if ! curl -fsS \
-    --connect-timeout "${QBT_API_TIMEOUT}" \
-    --max-time "${QBT_API_TIMEOUT}" \
-    -c "${_qbt_api_cookie_file}" \
-    --data-urlencode "username=${QBT_USER}" \
-    --data-urlencode "password=${QBT_PASS}" \
-    "${url}" >/dev/null; then
-    _qbt_api_cleanup_cookie
-    return 1
-  fi
+  local attempt=1
+  local max_attempts="${QBT_API_RETRY_COUNT}"
+  local retry_delay="${QBT_API_RETRY_DELAY}"
 
-  if ! grep -q "SID" "${_qbt_api_cookie_file}" 2>/dev/null; then
-    _qbt_api_cleanup_cookie
-    return 1
-  fi
+  while ((attempt <= max_attempts)); do
+    if curl -fsS \
+      --connect-timeout "${QBT_API_TIMEOUT}" \
+      --max-time "${QBT_API_TIMEOUT}" \
+      -c "${_qbt_api_cookie_file}" \
+      --data-urlencode "username=${QBT_USER}" \
+      --data-urlencode "password=${QBT_PASS}" \
+      "${url}" >/dev/null 2>/dev/null; then
+      
+      if grep -q "SID" "${_qbt_api_cookie_file}" 2>/dev/null; then
+        return 0
+      fi
+    fi
 
-  return 0
+    if ((attempt < max_attempts)); then
+      if declare -f warn >/dev/null 2>&1; then
+        warn "[RETRY] qBittorrent authentication failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
+      fi
+      sleep "${retry_delay}"
+    fi
+    ((attempt++))
+  done
+
+  if declare -f warn >/dev/null 2>&1; then
+    warn "[ERROR] qBittorrent authentication failed after ${max_attempts} attempts"
+  fi
+  _qbt_api_cleanup_cookie
+  return 1
 }
 
 qbt_api_login() {
@@ -102,11 +119,42 @@ _qbt_api_curl_json() {
   local url
   url="$(_qbt_api_base_url)${path}"
 
-  curl -fsS \
-    --connect-timeout "${QBT_API_TIMEOUT}" \
-    --max-time "${QBT_API_TIMEOUT}" \
-    -b "${_qbt_api_cookie_file}" \
-    "${url}"
+  local response
+  local http_code
+  local attempt=1
+  local max_attempts=2
+
+  while ((attempt <= max_attempts)); do
+    response=$(curl -fsS -w "\n%{http_code}" \
+      --connect-timeout "${QBT_API_TIMEOUT}" \
+      --max-time "${QBT_API_TIMEOUT}" \
+      -b "${_qbt_api_cookie_file}" \
+      "${url}" 2>/dev/null)
+    
+    http_code=$(printf '%s' "$response" | tail -n1)
+    response=$(printf '%s' "$response" | sed '$d')
+
+    if [[ "$http_code" == "200" || "$http_code" == "2"* ]]; then
+      printf '%s' "$response"
+      return 0
+    fi
+
+    # Session expired or auth error - try to re-authenticate
+    if [[ "$http_code" == "401" || "$http_code" == "403" ]] && ((attempt < max_attempts)); then
+      if declare -f warn >/dev/null 2>&1; then
+        warn "[INFO] qBittorrent session expired, re-authenticating..."
+      fi
+      _qbt_api_cleanup_cookie
+      if ! _qbt_api_ensure_cookie; then
+        return 1
+      fi
+    else
+      break
+    fi
+    ((attempt++))
+  done
+
+  return 1
 }
 
 qbt_api_healthcheck() {

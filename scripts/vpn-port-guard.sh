@@ -12,6 +12,17 @@ if [[ -f "${REPO_ROOT}/scripts/stack-common.sh" ]]; then
   . "${REPO_ROOT}/scripts/stack-common.sh"
 fi
 
+# Use consolidated API libraries
+if [[ -f "${REPO_ROOT}/scripts/gluetun-api.sh" ]]; then
+  # shellcheck source=scripts/gluetun-api.sh
+  . "${REPO_ROOT}/scripts/gluetun-api.sh"
+fi
+
+if [[ -f "${REPO_ROOT}/scripts/qbt-api.sh" ]]; then
+  # shellcheck source=scripts/qbt-api.sh
+  . "${REPO_ROOT}/scripts/qbt-api.sh"
+fi
+
 log() {
   printf '[vpn-port-guard] %s\n' "$*"
 }
@@ -29,40 +40,10 @@ bool_true() {
   esac
 }
 
-# Environment defaults with backward compatibility
-# Parse GLUETUN_CONTROL_URL if provided, otherwise use individual components
-if [[ -n "${GLUETUN_CONTROL_URL:-}" ]]; then
-  # Validate URL format before extraction
-  if [[ ! "${GLUETUN_CONTROL_URL}" =~ ^https?:// ]]; then
-    log "Warning: GLUETUN_CONTROL_URL does not start with http:// or https://, using as-is: ${GLUETUN_CONTROL_URL}"
-  fi
-  
-  # Extract host and port from URL (e.g., http://127.0.0.1:8000)
-  if [[ -z "${GLUETUN_API_HOST:-}" ]]; then
-    GLUETUN_API_HOST="$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://([^:/]+).*|\1|')"
-  fi
-  if [[ -z "${GLUETUN_CONTROL_PORT:-}" ]]; then
-    # Extract port only if URL contains :port pattern, otherwise leave unset to use default
-    _extracted_port="$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -nE 's|^https?://[^:]+:([0-9]+).*|\1|p')"
-    if [[ -n "$_extracted_port" ]]; then
-      GLUETUN_CONTROL_PORT="$_extracted_port"
-    fi
-    unset _extracted_port
-  fi
-fi
-: "${GLUETUN_CONTROL_PORT:=8000}"
-: "${GLUETUN_API_HOST:=127.0.0.1}"
-: "${GLUETUN_API_KEY:=}"
+# Environment defaults - now using consolidated API libraries
+# Note: GLUETUN_CONTROL_URL, GLUETUN_API_KEY set by gluetun-api.sh
+# Note: QBT_HOST, QBT_PORT, QBT_USER, QBT_PASS set by qbt-api.sh
 : "${FORWARDED_PORT_FILE:=/tmp/gluetun/forwarded_port}"
-
-# Build QBT_API_BASE from components if not already set
-if [[ -n "${QBT_HOST:-}" && -n "${QBT_PORT:-}" ]]; then
-  : "${QBT_API_BASE:=http://${QBT_HOST}:${QBT_PORT}}"
-fi
-: "${QBT_API_BASE:=http://127.0.0.1:8080}"
-: "${QBT_USER:=admin}"
-: "${QBT_PASS:=adminadmin}"
-: "${COOKIE_JAR:=/tmp/vpn-port-guard-qbt.cookie}"
 : "${STATUS_FILE:=${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}"
 
 # Support both CONTROLLER_POLL_INTERVAL (new) and legacy POLL_INTERVAL
@@ -187,27 +168,18 @@ parse_port_payload() {
 }
 
 fetch_forwarded_port() {
-  local api_url="http://${GLUETUN_API_HOST}:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded"
-  local tmp http_code port
-  tmp="$(mktemp "${STATUS_DIR}/gluetun-port.XXXXXX" 2>/dev/null || printf '')"
-  if [[ -n "$tmp" ]]; then
-    local curl_args=(--silent --show-error --fail --connect-timeout 5 --max-time 10 -w '%{http_code}' -o "$tmp")
-    if [[ -n "${GLUETUN_API_KEY}" ]]; then
-      curl_args+=(-H "X-API-Key: ${GLUETUN_API_KEY}")
-    fi
-    http_code="$(curl "${curl_args[@]}" "$api_url" 2>/dev/null || printf '')"
-    if [[ "$http_code" == "200" ]]; then
-      port="$(parse_port_payload "$tmp")"
-      rm -f -- "$tmp"
+  # Use consolidated gluetun_api_forwarded_port from gluetun-api.sh
+  local port
+  if declare -f gluetun_api_forwarded_port >/dev/null 2>&1; then
+    port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
+    if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
       log_debug "Fetched port from Gluetun API: ${port}"
       printf '%s' "$port"
       return 0
-    else
-      log_debug "Gluetun API returned HTTP ${http_code:-'connection failed'}, trying fallback"
     fi
-    rm -f -- "$tmp"
   fi
 
+  # Fallback to file-based method
   log_debug "Attempting to read forwarded port from file: ${FORWARDED_PORT_FILE}"
   if [[ -f "$FORWARDED_PORT_FILE" ]]; then
     port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" | tr -d '\n')"
@@ -223,19 +195,33 @@ fetch_forwarded_port() {
 }
 
 qbt_login() {
+  # Use consolidated qbt_api_login from qbt-api.sh
+  if declare -f qbt_api_login >/dev/null 2>&1; then
+    log_debug "Attempting qBittorrent login using consolidated API"
+    if qbt_api_login 2>/dev/null; then
+      log_debug "qBittorrent login successful"
+      return 0
+    fi
+    log_debug "qBittorrent login failed"
+    return 1
+  fi
+  
+  # Fallback to legacy method if API not available
+  log_debug "Using legacy qBittorrent login method"
   local code
-  log_debug "Attempting qBittorrent login to ${QBT_API_BASE}"
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" \
+  local qbt_url="http://${QBT_HOST:-127.0.0.1}:${QBT_PORT:-8082}"
+  local cookie_jar="${TMPDIR:-/tmp}/vpn-port-guard-qbt.cookie"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -c "$cookie_jar" \
     --connect-timeout 5 --max-time 10 \
     --data-urlencode "username=${QBT_USER}" \
     --data-urlencode "password=${QBT_PASS}" \
-    "${QBT_API_BASE}/api/v2/auth/login" 2>/dev/null || printf '')"
-  if [[ "$code" == "200" ]] && grep -q 'SID' "$COOKIE_JAR" 2>/dev/null; then
+    "${qbt_url}/api/v2/auth/login" 2>/dev/null || printf '')"
+  if [[ "$code" == "200" ]] && grep -q 'SID' "$cookie_jar" 2>/dev/null; then
     log_debug "qBittorrent login successful"
     return 0
   fi
   log_debug "qBittorrent login failed with HTTP ${code:-'connection error'}"
-  rm -f -- "$COOKIE_JAR" 2>/dev/null || true
+  rm -f -- "$cookie_jar" 2>/dev/null || true
   return 1
 }
 

@@ -27,6 +27,8 @@ fi
 : "${GLUETUN_CONTROL_URL:=http://127.0.0.1:8000}"
 : "${GLUETUN_API_KEY:=}"
 : "${GLUETUN_API_TIMEOUT:=8}"
+: "${GLUETUN_API_RETRY_COUNT:=3}"
+: "${GLUETUN_API_RETRY_DELAY:=2}"
 
 _gluetun_api_requires() {
   if ! command -v curl >/dev/null 2>&1; then
@@ -48,7 +50,28 @@ _gluetun_api_request() {
     args+=(-H "X-API-Key: ${GLUETUN_API_KEY}")
   fi
 
-  "${args[@]}"
+  local attempt=1
+  local max_attempts="${GLUETUN_API_RETRY_COUNT}"
+  local retry_delay="${GLUETUN_API_RETRY_DELAY}"
+
+  while ((attempt <= max_attempts)); do
+    if "${args[@]}" 2>/dev/null; then
+      return 0
+    fi
+    
+    if ((attempt < max_attempts)); then
+      if declare -f warn >/dev/null 2>&1; then
+        warn "[RETRY] Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
+      fi
+      sleep "${retry_delay}"
+    fi
+    ((attempt++))
+  done
+
+  if declare -f warn >/dev/null 2>&1; then
+    warn "[ERROR] Gluetun API request to ${path} failed after ${max_attempts} attempts"
+  fi
+  return 1
 }
 
 _gluetun_api_get_json() {
