@@ -32,7 +32,7 @@ fi
 # Log the event (non-fatal)
 {
   printf '[%s] vpn-port-guard hook signalled (event=%s)\n' \
-    "$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')" \
+    "$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || TZ=UTC date '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'UNKNOWN')" \
     "$event"
 } >>"${events_log}" 2>/dev/null || true
 

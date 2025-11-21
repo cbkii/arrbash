@@ -179,15 +179,15 @@ controller_write_state() {
     controller_log "ERROR: Failed to render controller status JSON: ${json_content}"
     return 1
   fi
+  
+  # Validate the JSON content before writing to file
+  if ! printf '%s' "${json_content}" | jq empty 2>/dev/null; then
+    controller_log "ERROR: Generated invalid JSON, not updating status file"
+    return 1
+  fi
 
   if ! printf '%s\n' "${json_content}" >"${tmp}"; then
     controller_log "ERROR: Failed to write controller status to temp file"
-    return 1
-  fi
-  
-  # Validate the JSON before moving it
-  if ! jq empty "${tmp}" 2>/dev/null; then
-    controller_log "ERROR: Generated invalid JSON, not updating status file"
     return 1
   fi
 
@@ -264,13 +264,13 @@ controller_apply_port() {
 }
 
 controller_check_trigger() {
-  # Check for trigger file and safely remove it
-  # Returns 0 if trigger was present, 1 otherwise
+  # Check for trigger file and remove it
+  # Note: While not fully atomic, this is acceptable for trigger signaling
+  # where multiple processes seeing the same trigger is benign
   if [[ ! -f "${CONTROLLER_TRIGGER_FILE}" ]]; then
     return 1
   fi
   
-  # Use a lock-free atomic removal to handle races
   if rm -f "${CONTROLLER_TRIGGER_FILE}" 2>/dev/null; then
     controller_log "Trigger file detected, forcing immediate poll"
     return 0

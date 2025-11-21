@@ -108,12 +108,13 @@ _qbt_api_curl_json() {
   local url
   url="$(_qbt_api_base_url)${path}"
 
+  # Try the request, keeping stderr separate from stdout
   local response
   if response=$(curl -fsS \
     --connect-timeout "${QBT_API_TIMEOUT}" \
     --max-time "${QBT_API_TIMEOUT}" \
     -b "${_qbt_api_cookie_file}" \
-    "${url}" 2>&1); then
+    "${url}" 2>/dev/null); then
     printf '%s' "$response"
     return 0
   fi
@@ -126,7 +127,7 @@ _qbt_api_curl_json() {
         --connect-timeout "${QBT_API_TIMEOUT}" \
         --max-time "${QBT_API_TIMEOUT}" \
         -b "${_qbt_api_cookie_file}" \
-        "${url}"
+        "${url}" 2>/dev/null
       return $?
     fi
   fi
