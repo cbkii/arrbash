@@ -5,24 +5,6 @@ component allowed to control qBittorrent during runtime. The controller lives in
 `vpn-port-guard` container and runs `scripts/vpn-port-guard.sh`, depending exclusively
 on Gluetun’s HTTP control API and qBittorrent’s Web API.
 
-
-## Recent improvements
-
-The controller has been enhanced with improved reliability and observability:
-
-* **Automatic retry logic** – Both Gluetun and qBittorrent API calls retry up to 3 times
-  with configurable delays, handling temporary network issues gracefully.
-* **Session recovery** – Automatic re-authentication for qBittorrent when sessions expire,
-  eliminating manual intervention for long-running containers.
-* **Startup diagnostics** – Validates prerequisites (curl, jq) and tests API connectivity
-  at startup with detailed logging.
-* **Better error messages** – Actionable logs with ✓/⚠/ERROR prefixes and specific troubleshooting
-  guidance for common issues.
-* **Graceful shutdown** – Proper signal handling (INT, TERM, EXIT) ensures torrents are
-  paused and state is written cleanly during container restarts.
-* **Health check script** – Validates controller health for Docker/Kubernetes monitoring.
-* **Robust trigger handling** – Improved race condition handling for Gluetun hook triggers.
-* **Input validation** – Port range checking (1024-65535) and JSON validation before writes.
 ## ProtonVPN + Gluetun requirements
 
 * You need a ProtonVPN plan that supports port forwarding.
@@ -103,99 +85,27 @@ The controller has been enhanced with improved reliability and observability:
   qBittorrent’s listening port at runtime. All other arrbash scripts have been reduced to
   read-only consumers of `port-guard-status.json`.
 
-## Health check
-
-The controller includes a health check script (`scripts/vpn-port-guard-healthcheck.sh`) that can be
-used for container monitoring. The script validates:
-
-* Status file exists and is readable
-* Status file contains valid JSON
-* Status file has been updated within the last 60 seconds (4x the default poll interval)
-
-To use in a Docker Compose file:
-
-```yaml
-vpn-port-guard:
-  healthcheck:
-    test: ["/bin/bash", "/scripts/vpn-port-guard-healthcheck.sh"]
-    interval: 30s
-    timeout: 10s
-    retries: 3
-    start_period: 30s
-```
-
-## Configuration
-
-`vpn-port-guard` supports the following environment variables:
-
-* `CONTROLLER_REQUIRE_PF` (default: `false`) – When `true`, enables strict mode where torrents
-  are paused unless a forwarded port is available. Set to `false` for preferred mode where
-  torrents continue running even without port forwarding (reduced connectability).
-* `CONTROLLER_POLL_INTERVAL` (default: `15`) – Seconds between Gluetun API polls.
-* `GLUETUN_API_RETRY_COUNT` (default: `3`) – Number of retry attempts for Gluetun API calls.
-* `GLUETUN_API_RETRY_DELAY` (default: `2`) – Seconds to wait between Gluetun API retries.
-* `QBT_API_RETRY_COUNT` (default: `3`) – Number of retry attempts for qBittorrent API calls.
-* `QBT_API_RETRY_DELAY` (default: `2`) – Seconds to wait between qBittorrent API retries.
-
-**Note**: The following legacy variables are also supported for backward compatibility but 
-`CONTROLLER_REQUIRE_PF` is recommended:
-* `CONTROLLER_REQUIRE_PORT_FORWARDING`
-* `VPN_PORT_GUARD_REQUIRE_FORWARDING`
-
 ## Troubleshooting
-
-### Quick diagnostics
 
 * `arr.pf.status` / `arrvpn` – print the JSON status exported by `vpn-port-guard`
   (including `forwarding_state`, `controller_mode`, and `qbt_status`).
 * `arr.pf.port` – shows the currently forwarded port (or reports it unavailable).
 * `arr.pf.tail` / `arrvpn-watch` – follow the status file to watch lease changes in
   real time (falls back to a manual loop if `watch(1)` is missing).
-* `arr.pf.logs` – streams controller logs for deeper inspection. Look for startup diagnostics
-  that validate Gluetun and qBittorrent connectivity.
+* `arr.pf.logs` – streams controller logs for deeper inspection.
 * `arr.pf.notify` – touches the trigger file to force an immediate poll (useful after
   manual Gluetun restarts).
 * `arrvpn-events` – tails `/gluetun_state/port-guard-events.log` to observe Gluetun
   hook activity.
-
-### Common issues
-
-**Status file missing or stale**
+* Status file missing? Check these root causes:
   * `docker inspect vpn-port-guard --format '{{.State.Status}}'` should show `running`.
     If not, `./arr.sh --yes` will rebuild and restart the stack.
-  * Check startup diagnostics in `arr.pf.logs` for missing dependencies (curl, jq).
   * Confirm the host path `${ARR_DOCKER_DIR}/gluetun/state` exists and is writable; the
     controller will log permission errors if it cannot create the JSON.
   * Verify the bind mount targets `/gluetun_state` inside both Gluetun and
     `vpn-port-guard`. A mismatch leaves helpers looking in the wrong place.
-
-**Gluetun API unreachable**
-  * The controller includes automatic retry logic (3 attempts by default) with exponential backoff.
-  * Check `arr.pf.logs` for consecutive failure counts. After 5+ consecutive failures, verify:
-    * Gluetun container is running: `docker ps | grep gluetun`
-    * Gluetun control server is enabled: `GLUETUN_CONTROL_PORT` should be set
-    * API key is correct: `GLUETUN_API_KEY` matches Gluetun's `HTTP_CONTROL_SERVER_APIKEY`
-  * Test manually: `curl -H "X-API-Key: $GLUETUN_API_KEY" http://127.0.0.1:8000/v1/openvpn/status`
-
-**qBittorrent API unreachable or session expired**
-  * The controller automatically re-authenticates on session expiry.
-  * If problems persist, check:
-    * qBittorrent credentials match: `QBT_USER` and `QBT_PASS` environment variables
-    * qBittorrent Web UI is enabled in settings
-    * Network connectivity: `docker exec vpn-port-guard curl -I http://127.0.0.1:8082`
-  * Watch for "re-authentication successful" in logs after temporary failures.
-
-**Port not being applied to qBittorrent**
-  * Check `arr.pf.logs` for detailed error messages including:
-    * Invalid port range errors (valid: 1024-65535)
-    * Authentication failures
-    * API timeout errors
-  * Verify the forwarded port in Gluetun: `arr.vpn.pf`
-  * Check qBittorrent listen port: log into Web UI → Settings → Connection
-
-**Legacy scripts removed**
-  * Scripts like `vpn-port-watch.sh` and `vpn-auto-control.sh` have been removed.
-  * Use the status file and aliases above instead of sourcing the old wrappers.
+* Legacy helper scripts such as `vpn-port-watch.sh` and `vpn-auto-control.sh` have been
+  removed. Use the status file and aliases above instead of sourcing the old wrappers.
 
 If the status JSON shows `forwarded_port: 0` with `forwarding_state="unavailable"`, ProtonVPN has not
 granted a port yet or Gluetun lost the lease. Torrents continue downloading and seeding
