@@ -1,7 +1,7 @@
 # vpn-port-guard controller
 
 `vpn-port-guard` keeps qBittorrent aligned with Gluetun’s forwarded port **when
-you opt into Proton port forwarding**. The default stack leaves forwarding and
+you opt in to Proton port forwarding**. The default stack leaves forwarding and
 hooks disabled so qBittorrent comes up reliably on day one with no controllers
 in the way. Enable forwarding only if you need inbound peers and are happy to
 accept the extra moving parts.
@@ -39,6 +39,7 @@ The controller polls independently of Gluetun's hook events.
 - Use ProtonVPN **OpenVPN** credentials; arrbash still appends `+pmp` just
   before launch. Keep the stored username without the suffix.
 - Opt in via `${ARRCONF_DIR}/userr.conf` and rerun `./arr.sh`:
+
   ```bash
   VPN_PORT_FORWARDING=on
   PORT_FORWARD_ONLY=off
@@ -86,7 +87,8 @@ The controller writes one JSON document at `${STATUS_FILE}` (default
 
 Fields (superset kept for backwards compatibility):
 
-- `vpn_status`: `running`, `down`, or `unknown`
+- `vpn_status`: `running` (port assigned), `down` (no port yet), or `unknown`
+  (first poll)
 - `forwarded_port`: integer, `0` when unavailable
 - `pf_enabled`: boolean (`true` when `CONTROLLER_REQUIRE_PF=true`)
 - `forwarding_state`: `active` when `forwarded_port>0`, otherwise `unavailable`
@@ -94,6 +96,10 @@ Fields (superset kept for backwards compatibility):
 - `qbt_status`: `active`, `paused`, `error`, or `unknown`
 - `last_error`: string, empty when none
 - `last_update` / `last_update_epoch`: epoch timestamp
+
+`vpn_status="down"` simply means no forwarded port has been assigned yet. For the
+actual forwarding condition, also consult `forwarding_state` (`active` vs
+`unavailable`).
 
 Quick checks from the host:
 

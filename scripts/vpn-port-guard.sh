@@ -87,7 +87,7 @@ _last_forwarded_port=0
 json_escape() {
   local raw="$1"
   raw=${raw//\\/\\\\}
-  raw=${raw//"/\\"}
+  raw=${raw//"/\\\"}
   raw=${raw//$'\n'/\\n}
   printf '%s' "$raw"
 }
@@ -177,7 +177,7 @@ parse_port_payload() {
   if command -v jq >/dev/null 2>&1; then
     port="$(jq -r '.port // .data.port // 0' "$payload_file" 2>/dev/null || printf '0')"
   else
-    port="$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p' "$payload_file" | head -n1 | tr -d '\n')"
+    port="$(sed -nE 's/.*"port"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$payload_file" | head -n1 | tr -d '\n')"
   fi
   if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
     printf '%s' "$port"
@@ -312,7 +312,6 @@ initialise() {
 main_loop() {
   local last_error
   while true; do
-    sleep "${POLL_INTERVAL}"
     last_error=""
     local vpn_status="down"
     local port
@@ -348,7 +347,7 @@ main_loop() {
         log_debug "Strict mode: ensuring torrents resumed"
         resume_qbt || last_error="failed to resume torrents"
       else
-        _qbt_state="active"
+        resume_qbt || true  # best effort even in preferred mode
       fi
     else
       log_debug "No valid forwarded port available"
@@ -363,6 +362,7 @@ main_loop() {
 
     write_status "$vpn_status" "${port:-0}" "$CONTROLLER_REQUIRE_PF" "${_qbt_state:-unknown}" "${last_error}" || true
     log_debug "Poll cycle complete"
+    sleep "${POLL_INTERVAL}"
   done
 }
 
