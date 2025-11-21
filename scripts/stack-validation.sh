@@ -1,6 +1,11 @@
 # shellcheck shell=bash
 # Input validation helpers for ports, JSON content, and configuration values
 # shellcheck disable=SC2250
+#
+# NOTE: This library is designed to work standalone without requiring stack-common.sh
+# It checks for the new error handling functions (arr_error, arr_warn, etc.) but falls
+# back to the legacy warn() function and manual prefixes if not available. This ensures
+# compatibility in scripts that haven't sourced stack-common.sh yet.
 
 if [[ -n "${_ARR_VALIDATION_SOURCED:-}" ]]; then
   return 0

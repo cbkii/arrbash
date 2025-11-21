@@ -41,8 +41,9 @@ bool_true() {
 }
 
 # Environment defaults - now using consolidated API libraries
-# Note: GLUETUN_CONTROL_URL, GLUETUN_API_KEY set by gluetun-api.sh
-# Note: QBT_HOST, QBT_PORT, QBT_USER, QBT_PASS set by qbt-api.sh
+# Note: gluetun-api.sh provides defaults for GLUETUN_CONTROL_URL, GLUETUN_API_KEY, etc.
+# Note: qbt-api.sh provides defaults for QBT_HOST, QBT_PORT, QBT_USER, QBT_PASS, etc.
+# Actual values must still be set via environment variables or configuration files
 : "${FORWARDED_PORT_FILE:=/tmp/gluetun/forwarded_port}"
 : "${STATUS_FILE:=${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}"
 
