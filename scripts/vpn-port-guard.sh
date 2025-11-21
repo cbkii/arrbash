@@ -181,7 +181,7 @@ controller_write_state() {
   fi
   
   # Validate the JSON content before writing to file
-  if ! printf '%s' "${json_content}" | jq empty 2>/dev/null; then
+  if ! jq empty <<< "${json_content}" 2>/dev/null; then
     controller_log "ERROR: Generated invalid JSON, not updating status file"
     return 1
   fi
@@ -296,10 +296,15 @@ controller_startup_diagnostics() {
     return 1
   fi
   
-  # Validate configuration
+  # Validate configuration (note: we modify the variable here for the lifetime of the controller)
   if [[ -n "${CONTROLLER_POLL_INTERVAL}" ]] && ! [[ "${CONTROLLER_POLL_INTERVAL}" =~ ^[0-9]+$ ]]; then
     controller_log "WARNING: Invalid CONTROLLER_POLL_INTERVAL '${CONTROLLER_POLL_INTERVAL}', using default 15"
     CONTROLLER_POLL_INTERVAL=15
+  fi
+  
+  if [[ "${CONTROLLER_POLL_INTERVAL}" -lt 5 ]]; then
+    controller_log "WARNING: CONTROLLER_POLL_INTERVAL too low (${CONTROLLER_POLL_INTERVAL}s), using minimum 5s"
+    CONTROLLER_POLL_INTERVAL=5
   fi
   
   # Check Gluetun connectivity (non-fatal, will retry in main loop)
