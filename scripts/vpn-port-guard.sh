@@ -46,9 +46,8 @@ bool_true() {
 : "${FORWARDED_PORT_FILE:=/tmp/gluetun/forwarded_port}"
 : "${STATUS_FILE:=${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}"
 
-# Support both CONTROLLER_POLL_INTERVAL (new) and legacy POLL_INTERVAL
-: "${CONTROLLER_POLL_INTERVAL:=${POLL_INTERVAL:-10}}"
-: "${POLL_INTERVAL:=${CONTROLLER_POLL_INTERVAL}}"
+# Controller polling configuration
+: "${CONTROLLER_POLL_INTERVAL:=10}"
 : "${CONTROLLER_REQUIRE_PF:=false}"
 
 # Optional debug logging
@@ -59,8 +58,6 @@ mkdir -p -- "${STATUS_DIR}" || {
   log "Unable to create status directory ${STATUS_DIR}"
   exit 1
 }
-COOKIE_DIR="$(dirname "${COOKIE_JAR}")"
-mkdir -p -- "${COOKIE_DIR}" || true
 
 _qbt_state="unknown"
 _last_forwarded_port=0
@@ -196,58 +193,29 @@ fetch_forwarded_port() {
 
 qbt_login() {
   # Use consolidated qbt_api_login from qbt-api.sh
-  if declare -f qbt_api_login >/dev/null 2>&1; then
-    log_debug "Attempting qBittorrent login using consolidated API"
-    if qbt_api_login 2>/dev/null; then
-      log_debug "qBittorrent login successful"
-      return 0
-    fi
-    log_debug "qBittorrent login failed"
-    return 1
-  fi
-  
-  # Fallback to legacy method if API not available
-  log_debug "Using legacy qBittorrent login method"
-  local code
-  local qbt_url="http://${QBT_HOST:-127.0.0.1}:${QBT_PORT:-8082}"
-  local cookie_jar="${TMPDIR:-/tmp}/vpn-port-guard-qbt.cookie"
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -c "$cookie_jar" \
-    --connect-timeout 5 --max-time 10 \
-    --data-urlencode "username=${QBT_USER}" \
-    --data-urlencode "password=${QBT_PASS}" \
-    "${qbt_url}/api/v2/auth/login" 2>/dev/null || printf '')"
-  if [[ "$code" == "200" ]] && grep -q 'SID' "$cookie_jar" 2>/dev/null; then
+  log_debug "Attempting qBittorrent login using consolidated API"
+  if qbt_api_login 2>/dev/null; then
     log_debug "qBittorrent login successful"
     return 0
   fi
-  log_debug "qBittorrent login failed with HTTP ${code:-'connection error'}"
-  rm -f -- "$cookie_jar" 2>/dev/null || true
+  log_debug "qBittorrent login failed"
   return 1
-}
-
-qbt_post() {
-  local path="$1"; shift
-  local code
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" --connect-timeout 5 --max-time 10 "$@" "${QBT_API_BASE}${path}" 2>/dev/null || printf '')"
-  if [[ "$code" == "401" ]]; then
-    if qbt_login; then
-      code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" --connect-timeout 5 --max-time 10 "$@" "${QBT_API_BASE}${path}" 2>/dev/null || printf '')"
-    fi
-  fi
-  [[ "$code" == "200" ]]
 }
 
 apply_qbt_port() {
   local port="$1"
-  local payload
-  payload="$(printf '{"listen_port":%s,"random_port":false}' "$port")"
   log_debug "Updating qBittorrent listen port to ${port}"
-  if qbt_post "/api/v2/app/setPreferences" --data-urlencode "json=${payload}"; then
-    _qbt_state="active"
-    _last_forwarded_port="$port"
-    log_debug "qBittorrent listen port updated successfully"
-    return 0
+  
+  # Use consolidated qbt_set_listen_port from qbt-api.sh
+  if declare -f qbt_set_listen_port >/dev/null 2>&1; then
+    if qbt_set_listen_port "$port" 2>/dev/null; then
+      _qbt_state="active"
+      _last_forwarded_port="$port"
+      log_debug "qBittorrent listen port updated successfully"
+      return 0
+    fi
   fi
+  
   _qbt_state="error"
   log_debug "Failed to update qBittorrent listen port"
   return 1
@@ -257,10 +225,15 @@ pause_qbt() {
   if [[ "${_qbt_state}" == "paused" ]]; then
     return 0
   fi
-  if qbt_post "/api/v2/torrents/pause" --data "hashes=all"; then
-    _qbt_state="paused"
-    return 0
+  
+  # Use consolidated qbt_pause_all from qbt-api.sh
+  if declare -f qbt_pause_all >/dev/null 2>&1; then
+    if qbt_pause_all 2>/dev/null; then
+      _qbt_state="paused"
+      return 0
+    fi
   fi
+  
   _qbt_state="error"
   return 1
 }
@@ -269,19 +242,24 @@ resume_qbt() {
   if [[ "${_qbt_state}" == "active" ]]; then
     return 0
   fi
-  if qbt_post "/api/v2/torrents/resume" --data "hashes=all"; then
-    _qbt_state="active"
-    return 0
+  
+  # Use consolidated qbt_resume_all from qbt-api.sh
+  if declare -f qbt_resume_all >/dev/null 2>&1; then
+    if qbt_resume_all 2>/dev/null; then
+      _qbt_state="active"
+      return 0
+    fi
   fi
+  
   _qbt_state="error"
   return 1
 }
 
 initialise() {
   log_debug "Initializing with:"
-  log_debug "  Gluetun API: http://${GLUETUN_API_HOST}:${GLUETUN_CONTROL_PORT}"
-  log_debug "  qBittorrent API: ${QBT_API_BASE}"
-  log_debug "  Poll interval: ${POLL_INTERVAL}s"
+  log_debug "  Gluetun API: ${GLUETUN_CONTROL_URL:-http://127.0.0.1:8000}"
+  log_debug "  qBittorrent API: http://${QBT_HOST:-127.0.0.1}:${QBT_PORT:-8082}"
+  log_debug "  Poll interval: ${CONTROLLER_POLL_INTERVAL}s"
   log_debug "  Require port forwarding: ${CONTROLLER_REQUIRE_PF}"
   log_debug "  Status file: ${STATUS_FILE}"
   log_debug "  Forwarded port file: ${FORWARDED_PORT_FILE}"
