@@ -119,22 +119,7 @@ gluetun_require_wireguard_natpmp() {
 }
 
 # --- Control API wrappers ----------------------------------------------------
-
-_gluetun_control_curl() {
-  if ! command -v curl >/dev/null 2>&1; then
-    die "curl is required to query the Gluetun control API"
-  fi
-
-  local path="$1"
-  local url="${GLUETUN_CONTROL_URL%/}${path}"
-  shift || true
-  local -a args=("curl" "-fsS" "--connect-timeout" "${GLUETUN_CONTROL_TIMEOUT}" "--max-time" "${GLUETUN_CONTROL_TIMEOUT}")
-  if [[ -n "${GLUETUN_API_KEY}" ]]; then
-    args+=(-H "X-API-Key: ${GLUETUN_API_KEY}")
-  fi
-  args+=("${url}" "$@")
-  "${args[@]}"
-}
+# Note: These functions delegate to gluetun-api.sh for consolidated API access
 
 gluetun_control_status() {
   gluetun_api_status "$@"

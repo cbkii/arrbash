@@ -12,6 +12,17 @@ if [[ -f "${REPO_ROOT}/scripts/stack-common.sh" ]]; then
   . "${REPO_ROOT}/scripts/stack-common.sh"
 fi
 
+# Use consolidated API libraries
+if [[ -f "${REPO_ROOT}/scripts/gluetun-api.sh" ]]; then
+  # shellcheck source=scripts/gluetun-api.sh
+  . "${REPO_ROOT}/scripts/gluetun-api.sh"
+fi
+
+if [[ -f "${REPO_ROOT}/scripts/qbt-api.sh" ]]; then
+  # shellcheck source=scripts/qbt-api.sh
+  . "${REPO_ROOT}/scripts/qbt-api.sh"
+fi
+
 log() {
   printf '[vpn-port-guard] %s\n' "$*"
 }
@@ -29,45 +40,15 @@ bool_true() {
   esac
 }
 
-# Environment defaults with backward compatibility
-# Parse GLUETUN_CONTROL_URL if provided, otherwise use individual components
-if [[ -n "${GLUETUN_CONTROL_URL:-}" ]]; then
-  # Validate URL format before extraction
-  if [[ ! "${GLUETUN_CONTROL_URL}" =~ ^https?:// ]]; then
-    log "Warning: GLUETUN_CONTROL_URL does not start with http:// or https://, using as-is: ${GLUETUN_CONTROL_URL}"
-  fi
-  
-  # Extract host and port from URL (e.g., http://127.0.0.1:8000)
-  if [[ -z "${GLUETUN_API_HOST:-}" ]]; then
-    GLUETUN_API_HOST="$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://([^:/]+).*|\1|')"
-  fi
-  if [[ -z "${GLUETUN_CONTROL_PORT:-}" ]]; then
-    # Extract port only if URL contains :port pattern, otherwise leave unset to use default
-    _extracted_port="$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -nE 's|^https?://[^:]+:([0-9]+).*|\1|p')"
-    if [[ -n "$_extracted_port" ]]; then
-      GLUETUN_CONTROL_PORT="$_extracted_port"
-    fi
-    unset _extracted_port
-  fi
-fi
-: "${GLUETUN_CONTROL_PORT:=8000}"
-: "${GLUETUN_API_HOST:=127.0.0.1}"
-: "${GLUETUN_API_KEY:=}"
+# Environment defaults - now using consolidated API libraries
+# Note: gluetun-api.sh provides defaults for GLUETUN_CONTROL_URL, GLUETUN_API_KEY, etc.
+# Note: qbt-api.sh provides defaults for QBT_HOST, QBT_PORT, QBT_USER, QBT_PASS, etc.
+# Actual values must still be set via environment variables or configuration files
 : "${FORWARDED_PORT_FILE:=/tmp/gluetun/forwarded_port}"
-
-# Build QBT_API_BASE from components if not already set
-if [[ -n "${QBT_HOST:-}" && -n "${QBT_PORT:-}" ]]; then
-  : "${QBT_API_BASE:=http://${QBT_HOST}:${QBT_PORT}}"
-fi
-: "${QBT_API_BASE:=http://127.0.0.1:8080}"
-: "${QBT_USER:=admin}"
-: "${QBT_PASS:=adminadmin}"
-: "${COOKIE_JAR:=/tmp/vpn-port-guard-qbt.cookie}"
 : "${STATUS_FILE:=${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}"
 
-# Support both CONTROLLER_POLL_INTERVAL (new) and legacy POLL_INTERVAL
-: "${CONTROLLER_POLL_INTERVAL:=${POLL_INTERVAL:-10}}"
-: "${POLL_INTERVAL:=${CONTROLLER_POLL_INTERVAL}}"
+# Controller polling configuration
+: "${CONTROLLER_POLL_INTERVAL:=10}"
 : "${CONTROLLER_REQUIRE_PF:=false}"
 
 # Optional debug logging
@@ -78,8 +59,6 @@ mkdir -p -- "${STATUS_DIR}" || {
   log "Unable to create status directory ${STATUS_DIR}"
   exit 1
 }
-COOKIE_DIR="$(dirname "${COOKIE_JAR}")"
-mkdir -p -- "${COOKIE_DIR}" || true
 
 _qbt_state="unknown"
 _last_forwarded_port=0
@@ -187,27 +166,18 @@ parse_port_payload() {
 }
 
 fetch_forwarded_port() {
-  local api_url="http://${GLUETUN_API_HOST}:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded"
-  local tmp http_code port
-  tmp="$(mktemp "${STATUS_DIR}/gluetun-port.XXXXXX" 2>/dev/null || printf '')"
-  if [[ -n "$tmp" ]]; then
-    local curl_args=(--silent --show-error --fail --connect-timeout 5 --max-time 10 -w '%{http_code}' -o "$tmp")
-    if [[ -n "${GLUETUN_API_KEY}" ]]; then
-      curl_args+=(-H "X-API-Key: ${GLUETUN_API_KEY}")
-    fi
-    http_code="$(curl "${curl_args[@]}" "$api_url" 2>/dev/null || printf '')"
-    if [[ "$http_code" == "200" ]]; then
-      port="$(parse_port_payload "$tmp")"
-      rm -f -- "$tmp"
+  # Use consolidated gluetun_api_forwarded_port from gluetun-api.sh
+  local port
+  if declare -f gluetun_api_forwarded_port >/dev/null 2>&1; then
+    port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
+    if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
       log_debug "Fetched port from Gluetun API: ${port}"
       printf '%s' "$port"
       return 0
-    else
-      log_debug "Gluetun API returned HTTP ${http_code:-'connection failed'}, trying fallback"
     fi
-    rm -f -- "$tmp"
   fi
 
+  # Fallback to file-based method
   log_debug "Attempting to read forwarded port from file: ${FORWARDED_PORT_FILE}"
   if [[ -f "$FORWARDED_PORT_FILE" ]]; then
     port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" | tr -d '\n')"
@@ -223,45 +193,30 @@ fetch_forwarded_port() {
 }
 
 qbt_login() {
-  local code
-  log_debug "Attempting qBittorrent login to ${QBT_API_BASE}"
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" \
-    --connect-timeout 5 --max-time 10 \
-    --data-urlencode "username=${QBT_USER}" \
-    --data-urlencode "password=${QBT_PASS}" \
-    "${QBT_API_BASE}/api/v2/auth/login" 2>/dev/null || printf '')"
-  if [[ "$code" == "200" ]] && grep -q 'SID' "$COOKIE_JAR" 2>/dev/null; then
+  # Use consolidated qbt_api_login from qbt-api.sh
+  log_debug "Attempting qBittorrent login using consolidated API"
+  if qbt_api_login 2>/dev/null; then
     log_debug "qBittorrent login successful"
     return 0
   fi
-  log_debug "qBittorrent login failed with HTTP ${code:-'connection error'}"
-  rm -f -- "$COOKIE_JAR" 2>/dev/null || true
+  log_debug "qBittorrent login failed"
   return 1
-}
-
-qbt_post() {
-  local path="$1"; shift
-  local code
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" --connect-timeout 5 --max-time 10 "$@" "${QBT_API_BASE}${path}" 2>/dev/null || printf '')"
-  if [[ "$code" == "401" ]]; then
-    if qbt_login; then
-      code="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" --connect-timeout 5 --max-time 10 "$@" "${QBT_API_BASE}${path}" 2>/dev/null || printf '')"
-    fi
-  fi
-  [[ "$code" == "200" ]]
 }
 
 apply_qbt_port() {
   local port="$1"
-  local payload
-  payload="$(printf '{"listen_port":%s,"random_port":false}' "$port")"
   log_debug "Updating qBittorrent listen port to ${port}"
-  if qbt_post "/api/v2/app/setPreferences" --data-urlencode "json=${payload}"; then
-    _qbt_state="active"
-    _last_forwarded_port="$port"
-    log_debug "qBittorrent listen port updated successfully"
-    return 0
+  
+  # Use consolidated qbt_set_listen_port from qbt-api.sh
+  if declare -f qbt_set_listen_port >/dev/null 2>&1; then
+    if qbt_set_listen_port "$port" 2>/dev/null; then
+      _qbt_state="active"
+      _last_forwarded_port="$port"
+      log_debug "qBittorrent listen port updated successfully"
+      return 0
+    fi
   fi
+  
   _qbt_state="error"
   log_debug "Failed to update qBittorrent listen port"
   return 1
@@ -271,10 +226,15 @@ pause_qbt() {
   if [[ "${_qbt_state}" == "paused" ]]; then
     return 0
   fi
-  if qbt_post "/api/v2/torrents/pause" --data "hashes=all"; then
-    _qbt_state="paused"
-    return 0
+  
+  # Use consolidated qbt_pause_all from qbt-api.sh
+  if declare -f qbt_pause_all >/dev/null 2>&1; then
+    if qbt_pause_all 2>/dev/null; then
+      _qbt_state="paused"
+      return 0
+    fi
   fi
+  
   _qbt_state="error"
   return 1
 }
@@ -283,19 +243,24 @@ resume_qbt() {
   if [[ "${_qbt_state}" == "active" ]]; then
     return 0
   fi
-  if qbt_post "/api/v2/torrents/resume" --data "hashes=all"; then
-    _qbt_state="active"
-    return 0
+  
+  # Use consolidated qbt_resume_all from qbt-api.sh
+  if declare -f qbt_resume_all >/dev/null 2>&1; then
+    if qbt_resume_all 2>/dev/null; then
+      _qbt_state="active"
+      return 0
+    fi
   fi
+  
   _qbt_state="error"
   return 1
 }
 
 initialise() {
   log_debug "Initializing with:"
-  log_debug "  Gluetun API: http://${GLUETUN_API_HOST}:${GLUETUN_CONTROL_PORT}"
-  log_debug "  qBittorrent API: ${QBT_API_BASE}"
-  log_debug "  Poll interval: ${POLL_INTERVAL}s"
+  log_debug "  Gluetun API: ${GLUETUN_CONTROL_URL:-http://127.0.0.1:8000}"
+  log_debug "  qBittorrent API: http://${QBT_HOST:-127.0.0.1}:${QBT_PORT:-8082}"
+  log_debug "  Poll interval: ${CONTROLLER_POLL_INTERVAL}s"
   log_debug "  Require port forwarding: ${CONTROLLER_REQUIRE_PF}"
   log_debug "  Status file: ${STATUS_FILE}"
   log_debug "  Forwarded port file: ${FORWARDED_PORT_FILE}"
@@ -362,10 +327,10 @@ main_loop() {
 
     write_status "$vpn_status" "${port:-0}" "$CONTROLLER_REQUIRE_PF" "${_qbt_state:-unknown}" "${last_error}" || true
     log_debug "Poll cycle complete"
-    sleep "${POLL_INTERVAL}"
+    sleep "${CONTROLLER_POLL_INTERVAL}"
   done
 }
 
-log "Starting vpn-port-guard (poll=${POLL_INTERVAL}s, require_pf=${CONTROLLER_REQUIRE_PF})"
+log "Starting vpn-port-guard (poll=${CONTROLLER_POLL_INTERVAL}s, require_pf=${CONTROLLER_REQUIRE_PF})"
 initialise
 main_loop
