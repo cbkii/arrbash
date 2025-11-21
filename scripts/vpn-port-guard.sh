@@ -326,10 +326,10 @@ main_loop() {
 
     write_status "$vpn_status" "${port:-0}" "$CONTROLLER_REQUIRE_PF" "${_qbt_state:-unknown}" "${last_error}" || true
     log_debug "Poll cycle complete"
-    sleep "${POLL_INTERVAL}"
+    sleep "${CONTROLLER_POLL_INTERVAL}"
   done
 }
 
-log "Starting vpn-port-guard (poll=${POLL_INTERVAL}s, require_pf=${CONTROLLER_REQUIRE_PF})"
+log "Starting vpn-port-guard (poll=${CONTROLLER_POLL_INTERVAL}s, require_pf=${CONTROLLER_REQUIRE_PF})"
 initialise
 main_loop
