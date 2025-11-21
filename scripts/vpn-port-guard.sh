@@ -32,6 +32,11 @@ bool_true() {
 # Environment defaults with backward compatibility
 # Parse GLUETUN_CONTROL_URL if provided, otherwise use individual components
 if [[ -n "${GLUETUN_CONTROL_URL:-}" ]]; then
+  # Validate URL format before extraction
+  if [[ ! "${GLUETUN_CONTROL_URL}" =~ ^https?:// ]]; then
+    log "Warning: GLUETUN_CONTROL_URL does not start with http:// or https://, using as-is: ${GLUETUN_CONTROL_URL}"
+  fi
+  
   # Extract host and port from URL (e.g., http://127.0.0.1:8000)
   if [[ -z "${GLUETUN_API_HOST:-}" ]]; then
     GLUETUN_API_HOST="$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://([^:/]+).*|\1|')"

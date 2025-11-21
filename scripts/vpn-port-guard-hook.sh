@@ -15,7 +15,9 @@ events_log="${CONTROLLER_EVENTS_FILE:-/gluetun_state/port-guard-events.log}"
 # Create log directory if it doesn't exist
 mkdir -p "$(dirname "${events_log}")" >/dev/null 2>&1 || true
 
-# Log the event with timestamp
+# Log the event with timestamp (portable format)
 {
-  printf '[%s] Gluetun port forwarding event: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$event"
+  # Use ISO 8601 format with fallback for systems without %z support
+  timestamp="$(date '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S')"
+  printf '[%s] Gluetun port forwarding event: %s\n' "$timestamp" "$event"
 } >>"${events_log}" 2>/dev/null || true
