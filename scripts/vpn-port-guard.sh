@@ -184,33 +184,42 @@ fetch_forwarded_port() {
     if [[ "$http_code" == "200" ]]; then
       port="$(parse_port_payload "$tmp")"
       rm -f -- "$tmp"
+      log_debug "Fetched port from Gluetun API: ${port}"
       printf '%s' "$port"
       return 0
+    else
+      log_debug "Gluetun API returned HTTP ${http_code:-'connection failed'}, trying fallback"
     fi
     rm -f -- "$tmp"
   fi
 
+  log_debug "Attempting to read forwarded port from file: ${FORWARDED_PORT_FILE}"
   if [[ -f "$FORWARDED_PORT_FILE" ]]; then
     port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" | tr -d '\n')"
     if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
+      log_debug "Read port from file: ${port}"
       printf '%s' "$port"
       return 0
     fi
   fi
+  log_debug "No valid forwarded port available from API or file"
   printf '0'
   return 1
 }
 
 qbt_login() {
   local code
+  log_debug "Attempting qBittorrent login to ${QBT_API_BASE}"
   code="$(curl -sS -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" \
     --connect-timeout 5 --max-time 10 \
     --data-urlencode "username=${QBT_USER}" \
     --data-urlencode "password=${QBT_PASS}" \
     "${QBT_API_BASE}/api/v2/auth/login" 2>/dev/null || printf '')"
   if [[ "$code" == "200" ]] && grep -q 'SID' "$COOKIE_JAR" 2>/dev/null; then
+    log_debug "qBittorrent login successful"
     return 0
   fi
+  log_debug "qBittorrent login failed with HTTP ${code:-'connection error'}"
   rm -f -- "$COOKIE_JAR" 2>/dev/null || true
   return 1
 }
@@ -231,12 +240,15 @@ apply_qbt_port() {
   local port="$1"
   local payload
   payload="$(printf '{"listen_port":%s,"random_port":false}' "$port")"
+  log_debug "Updating qBittorrent listen port to ${port}"
   if qbt_post "/api/v2/app/setPreferences" --data-urlencode "json=${payload}"; then
     _qbt_state="active"
     _last_forwarded_port="$port"
+    log_debug "qBittorrent listen port updated successfully"
     return 0
   fi
   _qbt_state="error"
+  log_debug "Failed to update qBittorrent listen port"
   return 1
 }
 

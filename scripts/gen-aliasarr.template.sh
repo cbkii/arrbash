@@ -1805,9 +1805,9 @@ vpn-port-guard helpers (arr.pf ...):
   arr.pf status               Pretty-print /gluetun_state/port-guard-status.json
   arr.pf tail                 Follow the status JSON for changes (Ctrl+C to stop)
   arr.pf logs                 Stream vpn-port-guard logs (docker or compose)
-  arr.pf notify               Touch the controller trigger to force an immediate poll
-  arr.pf sync                 Compatibility shim; touches the trigger and prints updated guidance
-  arr.pf test                 Compatibility shim; explains that vpn-port-guard owns listen_port updates
+  arr.pf notify               (Legacy) Touch trigger file for compatibility (controller polls independently)
+  arr.pf sync                 (Legacy) Show that controller handles syncing automatically
+  arr.pf test                 (Legacy) Explains that vpn-port-guard owns listen_port updates
   arrvpn / arrvpn-watch       Convenience wrappers for controller status and watch output
   arrvpn-events               Tail the controller events log
 
@@ -2132,8 +2132,9 @@ arr.vpn.port.watch() {
 }
 
 arr.vpn.port.sync() {
-  printf 'vpn-port-guard handles port syncing automatically. Use arr.pf.notify for manual wake-ups.\n'
-  arr.pf.notify
+  printf 'vpn-port-guard handles port syncing automatically on a fixed poll interval.\n'
+  printf 'The controller does not respond to manual triggers.\n'
+  printf 'Use arr.pf.status to check current state or arr.pf.logs to watch activity.\n'
 }
 
 arr.vpn.paths() { printf 'Config: %s\nAuth: %s\n' "${ARRCONF_DIR}" "${ARR_DOCKER_DIR}/gluetun"; }
@@ -2242,17 +2243,20 @@ arr.pf.notify() {
   trigger="$(_arr_port_guard_trigger_file)"
   mkdir -p "$(dirname "$trigger")" >/dev/null 2>&1 || true
   touch "$trigger"
-  printf 'Triggered vpn-port-guard wake-up (%s)\n' "$trigger"
+  printf 'Note: vpn-port-guard polls independently and does not react to this trigger.\n'
+  printf 'Trigger file created for compatibility: %s\n' "$trigger"
+  printf 'The controller will update on its next poll cycle (check arr.pf.status).\n'
 }
 
 arr.pf.sync() {
-  printf 'vpn-port-guard handles port syncing automatically. Use arr.pf.notify to signal a refresh.\n'
-  arr.pf.notify
+  printf 'vpn-port-guard handles port syncing automatically on a fixed poll interval.\n'
+  printf 'The controller does not respond to manual triggers.\n'
+  printf 'Use arr.pf.status to check current state or arr.pf.logs to watch activity.\n'
 }
 
 arr.pf.test() {
   printf 'Port-forward dry-runs are now handled by vpn-port-guard; manual tests are deprecated.\n'
-  printf 'Inspect current state with arr.pf.status or touch the trigger with arr.pf.notify.\n'
+  printf 'Inspect current state with arr.pf.status or check arr.pf.logs for activity.\n'
   return 0
 }
 
@@ -2263,8 +2267,8 @@ vpn-port-guard helpers:
   arr.pf.status      Print vpn-port-guard status JSON
   arr.pf.tail        Follow the vpn-port-guard status file for changes
   arr.pf.logs        Stream docker logs from the vpn-port-guard service
-  arr.pf.notify      Touch the controller trigger file to force an immediate poll
-  arr.pf.sync        Compatibility shim; touches the trigger and prints updated guidance
+  arr.pf.notify      (Legacy) Touch trigger file for compatibility (controller polls independently)
+  arr.pf.sync        (Legacy) Show that controller handles syncing automatically
   arr.pf.test        Compatibility shim; prints guidance for the new controller workflow
 EOF
 }

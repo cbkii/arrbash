@@ -54,7 +54,7 @@ Tips:
   arr.pf.status      # pretty-print vpn-port-guard status JSON (aliases: arrvpn)
   arr.pf.tail        # follow the status file in real time (aliases: arrvpn-watch)
   arr.pf.logs        # stream vpn-port-guard container logs
-  arr.pf.notify      # touch the trigger file to force an immediate poll
+  arr.pf.notify      # (legacy) touch trigger file for compatibility (controller polls independently)
   arrvpn-events      # tail Gluetun hook events emitted for port changes
   ```
 - Rotate the Gluetun API key anytime with:
