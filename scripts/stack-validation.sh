@@ -15,8 +15,8 @@ arr_validate_port() {
   local var_name="${2:-PORT}"
   
   if [[ -z "$port" ]]; then
-    if declare -f warn >/dev/null 2>&1; then
-      warn "[ERROR] ${var_name}: Port value is empty or not set"
+    if declare -f arr_error >/dev/null 2>&1; then
+      arr_error "${var_name}: Port value is empty or not set"
     else
       printf '[ERROR] %s: Port value is empty or not set\n' "$var_name" >&2
     fi
@@ -24,9 +24,9 @@ arr_validate_port() {
   fi
   
   if ! [[ "$port" =~ ^[0-9]+$ ]]; then
-    if declare -f warn >/dev/null 2>&1; then
-      warn "[ERROR] ${var_name}: Port must be a positive integer, got: ${port}"
-      warn "[ACTION] Please set ${var_name} to a valid port number (1-65535)"
+    if declare -f arr_error >/dev/null 2>&1; then
+      arr_error "${var_name}: Port must be a positive integer, got: ${port}"
+      arr_action "Please set ${var_name} to a valid port number (1-65535)"
     else
       printf '[ERROR] %s: Port must be a positive integer, got: %s\n' "$var_name" "$port" >&2
       printf '[ACTION] Please set %s to a valid port number (1-65535)\n' "$var_name" >&2
@@ -35,9 +35,9 @@ arr_validate_port() {
   fi
   
   if ((port < 1 || port > 65535)); then
-    if declare -f warn >/dev/null 2>&1; then
-      warn "[ERROR] ${var_name}: Port ${port} is out of valid range (1-65535)"
-      warn "[ACTION] Please set ${var_name} to a port between 1 and 65535"
+    if declare -f arr_error >/dev/null 2>&1; then
+      arr_error "${var_name}: Port ${port} is out of valid range (1-65535)"
+      arr_action "Please set ${var_name} to a port between 1 and 65535"
     else
       printf '[ERROR] %s: Port %s is out of valid range (1-65535)\n' "$var_name" "$port" >&2
       printf '[ACTION] Please set %s to a port between 1 and 65535\n' "$var_name" >&2
@@ -47,8 +47,8 @@ arr_validate_port() {
   
   # Check for privileged ports (informational)
   if ((port < 1024)); then
-    if declare -f msg >/dev/null 2>&1 && [[ "${ARR_TRACE:-0}" == "1" ]]; then
-      msg "[INFO] ${var_name}: Port ${port} is a privileged port (requires root or CAP_NET_BIND_SERVICE)"
+    if declare -f arr_info >/dev/null 2>&1 && [[ "${ARR_TRACE:-0}" == "1" ]]; then
+      arr_info "${var_name}: Port ${port} is a privileged port (requires root or CAP_NET_BIND_SERVICE)"
     fi
   fi
   

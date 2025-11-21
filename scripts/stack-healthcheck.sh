@@ -8,6 +8,27 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
+# Graceful shutdown handling
+_healthcheck_cleanup() {
+  local rc="${1:-$?}"
+  # Cleanup any API connections or temporary files if needed
+  if declare -f qbt_api_cleanup >/dev/null 2>&1; then
+    qbt_api_cleanup 2>/dev/null || true
+  fi
+  return "$rc"
+}
+
+_healthcheck_signal_handler() {
+  local signal="$1"
+  printf '\n[INFO] Received %s signal, cleaning up...\n' "$signal" >&2
+  _healthcheck_cleanup 130
+  exit 130
+}
+
+trap '_healthcheck_signal_handler INT' INT
+trap '_healthcheck_signal_handler TERM' TERM
+trap '_healthcheck_cleanup' EXIT
+
 if [[ -f "${REPO_ROOT}/scripts/stack-common.sh" ]]; then
   # shellcheck source=scripts/stack-common.sh
   . "${REPO_ROOT}/scripts/stack-common.sh"

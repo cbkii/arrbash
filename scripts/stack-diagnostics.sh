@@ -8,6 +8,24 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
+# Graceful shutdown handling
+_diagnostics_cleanup() {
+  local rc="${1:-$?}"
+  # Cleanup any temporary resources if needed
+  return "$rc"
+}
+
+_diagnostics_signal_handler() {
+  local signal="$1"
+  printf '\n[INFO] Received %s signal, cleaning up...\n' "$signal" >&2
+  _diagnostics_cleanup 130
+  exit 130
+}
+
+trap '_diagnostics_signal_handler INT' INT
+trap '_diagnostics_signal_handler TERM' TERM
+trap '_diagnostics_cleanup' EXIT
+
 if [[ -f "${REPO_ROOT}/scripts/stack-common.sh" ]]; then
   # shellcheck source=scripts/stack-common.sh
   . "${REPO_ROOT}/scripts/stack-common.sh"

@@ -60,7 +60,9 @@ _gluetun_api_request() {
     fi
     
     if ((attempt < max_attempts)); then
-      if declare -f warn >/dev/null 2>&1; then
+      if declare -f arr_retry >/dev/null 2>&1; then
+        arr_retry "Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
+      elif declare -f warn >/dev/null 2>&1; then
         warn "[RETRY] Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
       fi
       sleep "${retry_delay}"
@@ -68,7 +70,10 @@ _gluetun_api_request() {
     ((attempt++))
   done
 
-  if declare -f warn >/dev/null 2>&1; then
+  if declare -f arr_error >/dev/null 2>&1; then
+    arr_error "Gluetun API request to ${path} failed after ${max_attempts} attempts"
+    arr_action "Check if Gluetun container is running and GLUETUN_CONTROL_URL is correct"
+  elif declare -f warn >/dev/null 2>&1; then
     warn "[ERROR] Gluetun API request to ${path} failed after ${max_attempts} attempts"
   fi
   return 1

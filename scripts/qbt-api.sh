@@ -91,7 +91,9 @@ _qbt_api_ensure_cookie() {
     fi
 
     if ((attempt < max_attempts)); then
-      if declare -f warn >/dev/null 2>&1; then
+      if declare -f arr_retry >/dev/null 2>&1; then
+        arr_retry "qBittorrent authentication failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
+      elif declare -f warn >/dev/null 2>&1; then
         warn "[RETRY] qBittorrent authentication failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
       fi
       sleep "${retry_delay}"
@@ -99,7 +101,10 @@ _qbt_api_ensure_cookie() {
     ((attempt++))
   done
 
-  if declare -f warn >/dev/null 2>&1; then
+  if declare -f arr_error >/dev/null 2>&1; then
+    arr_error "qBittorrent authentication failed after ${max_attempts} attempts"
+    arr_action "Check QBT_USER and QBT_PASS credentials, and verify qBittorrent container is running"
+  elif declare -f warn >/dev/null 2>&1; then
     warn "[ERROR] qBittorrent authentication failed after ${max_attempts} attempts"
   fi
   _qbt_api_cleanup_cookie
@@ -141,7 +146,9 @@ _qbt_api_curl_json() {
 
     # Session expired or auth error - try to re-authenticate
     if [[ "$http_code" == "401" || "$http_code" == "403" ]] && ((attempt < max_attempts)); then
-      if declare -f warn >/dev/null 2>&1; then
+      if declare -f arr_info >/dev/null 2>&1; then
+        arr_info "qBittorrent session expired, re-authenticating..."
+      elif declare -f warn >/dev/null 2>&1; then
         warn "[INFO] qBittorrent session expired, re-authenticating..."
       fi
       _qbt_api_cleanup_cookie
