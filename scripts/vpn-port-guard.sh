@@ -154,7 +154,8 @@ controller_write_state() {
 
   trap 'rm -f "${tmp}"' RETURN
 
-  if ! jq -n \
+  local json_content
+  if ! json_content="$(jq -n \
     --arg vpn_status "${vpn_status}" \
     --arg forwarding_state "${forwarding_state}" \
     --arg controller_mode "${CONTROLLER_MODE_STRING}" \
@@ -174,8 +175,19 @@ controller_write_state() {
         last_update_epoch: $last_update_epoch,
         last_port: $last_port,
         last_error: $last_error
-      }' >"${tmp}"; then
-    controller_log "Failed to render controller status JSON"
+      }' 2>&1)"; then
+    controller_log "ERROR: Failed to render controller status JSON: ${json_content}"
+    return 1
+  fi
+
+  if ! printf '%s\n' "${json_content}" >"${tmp}"; then
+    controller_log "ERROR: Failed to write controller status to temp file"
+    return 1
+  fi
+  
+  # Validate the JSON before moving it
+  if ! jq empty "${tmp}" 2>/dev/null; then
+    controller_log "ERROR: Generated invalid JSON, not updating status file"
     return 1
   fi
 
@@ -252,10 +264,19 @@ controller_apply_port() {
 }
 
 controller_check_trigger() {
-  if [[ -f "${CONTROLLER_TRIGGER_FILE}" ]]; then
-    rm -f "${CONTROLLER_TRIGGER_FILE}" 2>/dev/null || true
+  # Check for trigger file and safely remove it
+  # Returns 0 if trigger was present, 1 otherwise
+  if [[ ! -f "${CONTROLLER_TRIGGER_FILE}" ]]; then
+    return 1
+  fi
+  
+  # Use a lock-free atomic removal to handle races
+  if rm -f "${CONTROLLER_TRIGGER_FILE}" 2>/dev/null; then
+    controller_log "Trigger file detected, forcing immediate poll"
     return 0
   fi
+  
+  # File existed but couldn't be removed (permissions or race)
   return 1
 }
 

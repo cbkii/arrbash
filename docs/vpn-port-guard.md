@@ -5,6 +5,24 @@ component allowed to control qBittorrent during runtime. The controller lives in
 `vpn-port-guard` container and runs `scripts/vpn-port-guard.sh`, depending exclusively
 on Gluetun’s HTTP control API and qBittorrent’s Web API.
 
+
+## Recent improvements
+
+The controller has been enhanced with improved reliability and observability:
+
+* **Automatic retry logic** – Both Gluetun and qBittorrent API calls retry up to 3 times
+  with configurable delays, handling temporary network issues gracefully.
+* **Session recovery** – Automatic re-authentication for qBittorrent when sessions expire,
+  eliminating manual intervention for long-running containers.
+* **Startup diagnostics** – Validates prerequisites (curl, jq) and tests API connectivity
+  at startup with detailed logging.
+* **Better error messages** – Actionable logs with ✓/⚠/ERROR prefixes and specific troubleshooting
+  guidance for common issues.
+* **Graceful shutdown** – Proper signal handling (INT, TERM, EXIT) ensures torrents are
+  paused and state is written cleanly during container restarts.
+* **Health check script** – Validates controller health for Docker/Kubernetes monitoring.
+* **Robust trigger handling** – Improved race condition handling for Gluetun hook triggers.
+* **Input validation** – Port range checking (1024-65535) and JSON validation before writes.
 ## ProtonVPN + Gluetun requirements
 
 * You need a ProtonVPN plan that supports port forwarding.
@@ -84,6 +102,27 @@ on Gluetun’s HTTP control API and qBittorrent’s Web API.
 * `vpn-port-guard` is the **only** service allowed to pause/resume torrents or change
   qBittorrent’s listening port at runtime. All other arrbash scripts have been reduced to
   read-only consumers of `port-guard-status.json`.
+
+## Health check
+
+The controller includes a health check script (`scripts/vpn-port-guard-healthcheck.sh`) that can be
+used for container monitoring. The script validates:
+
+* Status file exists and is readable
+* Status file contains valid JSON
+* Status file has been updated within the last 60 seconds (4x the default poll interval)
+
+To use in a Docker Compose file:
+
+```yaml
+vpn-port-guard:
+  healthcheck:
+    test: ["/bin/bash", "/scripts/vpn-port-guard-healthcheck.sh"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 30s
+```
 
 ## Configuration
 
