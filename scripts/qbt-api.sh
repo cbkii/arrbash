@@ -28,6 +28,8 @@ fi
 : "${QBT_USER:=admin}"
 : "${QBT_PASS:=adminadmin}"
 : "${QBT_API_TIMEOUT:=10}"
+: "${QBT_API_RETRY_COUNT:=3}"
+: "${QBT_API_RETRY_DELAY:=2}"
 
 _qbt_api_requires() {
   if ! command -v curl >/dev/null 2>&1; then
@@ -90,11 +92,15 @@ _qbt_api_ensure_cookie() {
 }
 
 qbt_api_login() {
+  # Clear any stale cookie and force re-authentication
+  _qbt_api_cleanup_cookie
   _qbt_api_ensure_cookie
 }
 
 _qbt_api_curl_json() {
   local path="$1"
+  local retry_auth="${2:-1}"
+  
   if ! _qbt_api_ensure_cookie; then
     return 1
   fi
@@ -102,11 +108,30 @@ _qbt_api_curl_json() {
   local url
   url="$(_qbt_api_base_url)${path}"
 
-  curl -fsS \
+  # Try the request, keeping stderr separate from stdout
+  local response
+  if response=$(curl -fsS \
     --connect-timeout "${QBT_API_TIMEOUT}" \
     --max-time "${QBT_API_TIMEOUT}" \
     -b "${_qbt_api_cookie_file}" \
-    "${url}"
+    "${url}" 2>/dev/null); then
+    printf '%s' "$response"
+    return 0
+  fi
+
+  # If request failed and we haven't retried auth yet, try re-authenticating once
+  if ((retry_auth)); then
+    _qbt_api_cleanup_cookie
+    if _qbt_api_ensure_cookie; then
+      curl -fsS \
+        --connect-timeout "${QBT_API_TIMEOUT}" \
+        --max-time "${QBT_API_TIMEOUT}" \
+        -b "${_qbt_api_cookie_file}" \
+        "${url}" 2>/dev/null
+      return $?
+    fi
+  fi
+  return 1
 }
 
 qbt_api_healthcheck() {
@@ -122,12 +147,28 @@ qbt_pause_all() {
   fi
   local url
   url="$(_qbt_api_base_url)/api/v2/torrents/pause"
-  curl -fsS \
-    --connect-timeout "${QBT_API_TIMEOUT}" \
-    --max-time "${QBT_API_TIMEOUT}" \
-    -b "${_qbt_api_cookie_file}" \
-    --data "hashes=all" \
-    "${url}" >/dev/null
+  
+  local attempt=1
+  while ((attempt <= QBT_API_RETRY_COUNT)); do
+    if curl -fsS \
+      --connect-timeout "${QBT_API_TIMEOUT}" \
+      --max-time "${QBT_API_TIMEOUT}" \
+      -b "${_qbt_api_cookie_file}" \
+      --data "hashes=all" \
+      "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+    
+    # Try re-authenticating on failure
+    if ((attempt < QBT_API_RETRY_COUNT)); then
+      _qbt_api_cleanup_cookie
+      if ! _qbt_api_ensure_cookie; then
+        sleep "${QBT_API_RETRY_DELAY}"
+      fi
+    fi
+    ((attempt++))
+  done
+  return 1
 }
 
 qbt_resume_all() {
@@ -136,12 +177,28 @@ qbt_resume_all() {
   fi
   local url
   url="$(_qbt_api_base_url)/api/v2/torrents/resume"
-  curl -fsS \
-    --connect-timeout "${QBT_API_TIMEOUT}" \
-    --max-time "${QBT_API_TIMEOUT}" \
-    -b "${_qbt_api_cookie_file}" \
-    --data "hashes=all" \
-    "${url}" >/dev/null
+  
+  local attempt=1
+  while ((attempt <= QBT_API_RETRY_COUNT)); do
+    if curl -fsS \
+      --connect-timeout "${QBT_API_TIMEOUT}" \
+      --max-time "${QBT_API_TIMEOUT}" \
+      -b "${_qbt_api_cookie_file}" \
+      --data "hashes=all" \
+      "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+    
+    # Try re-authenticating on failure
+    if ((attempt < QBT_API_RETRY_COUNT)); then
+      _qbt_api_cleanup_cookie
+      if ! _qbt_api_ensure_cookie; then
+        sleep "${QBT_API_RETRY_DELAY}"
+      fi
+    fi
+    ((attempt++))
+  done
+  return 1
 }
 
 qbt_current_listen_port() {
@@ -179,12 +236,27 @@ qbt_set_listen_port() {
   local url
   url="$(_qbt_api_base_url)/api/v2/app/setPreferences"
 
-  curl -fsS \
-    --connect-timeout "${QBT_API_TIMEOUT}" \
-    --max-time "${QBT_API_TIMEOUT}" \
-    -b "${_qbt_api_cookie_file}" \
-    --data-urlencode "json=${payload}" \
-    "${url}" >/dev/null
+  local attempt=1
+  while ((attempt <= QBT_API_RETRY_COUNT)); do
+    if curl -fsS \
+      --connect-timeout "${QBT_API_TIMEOUT}" \
+      --max-time "${QBT_API_TIMEOUT}" \
+      -b "${_qbt_api_cookie_file}" \
+      --data-urlencode "json=${payload}" \
+      "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+    
+    # Try re-authenticating on failure
+    if ((attempt < QBT_API_RETRY_COUNT)); then
+      _qbt_api_cleanup_cookie
+      if ! _qbt_api_ensure_cookie; then
+        sleep "${QBT_API_RETRY_DELAY}"
+      fi
+    fi
+    ((attempt++))
+  done
+  return 1
 }
 
 # Allow callers to clean up cookie files on exit.
