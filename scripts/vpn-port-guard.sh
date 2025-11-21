@@ -33,8 +33,17 @@ bool_true() {
 # Parse GLUETUN_CONTROL_URL if provided, otherwise use individual components
 if [[ -n "${GLUETUN_CONTROL_URL:-}" ]]; then
   # Extract host and port from URL (e.g., http://127.0.0.1:8000)
-  GLUETUN_API_HOST="${GLUETUN_API_HOST:-$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://([^:/]+).*|\1|')}"
-  GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://[^:]+:([0-9]+).*|\1|')}"
+  if [[ -z "${GLUETUN_API_HOST:-}" ]]; then
+    GLUETUN_API_HOST="$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -E 's|^https?://([^:/]+).*|\1|')"
+  fi
+  if [[ -z "${GLUETUN_CONTROL_PORT:-}" ]]; then
+    # Extract port only if URL contains :port pattern, otherwise leave unset to use default
+    _extracted_port="$(printf '%s' "${GLUETUN_CONTROL_URL}" | sed -nE 's|^https?://[^:]+:([0-9]+).*|\1|p')"
+    if [[ -n "$_extracted_port" ]]; then
+      GLUETUN_CONTROL_PORT="$_extracted_port"
+    fi
+    unset _extracted_port
+  fi
 fi
 : "${GLUETUN_CONTROL_PORT:=8000}"
 : "${GLUETUN_API_HOST:=127.0.0.1}"
@@ -51,8 +60,9 @@ fi
 : "${COOKIE_JAR:=/tmp/vpn-port-guard-qbt.cookie}"
 : "${STATUS_FILE:=${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}"
 
-# Support both CONTROLLER_POLL_INTERVAL and legacy POLL_INTERVAL
-: "${POLL_INTERVAL:=${CONTROLLER_POLL_INTERVAL:-10}}"
+# Support both CONTROLLER_POLL_INTERVAL (new) and legacy POLL_INTERVAL
+: "${CONTROLLER_POLL_INTERVAL:=${POLL_INTERVAL:-10}}"
+: "${POLL_INTERVAL:=${CONTROLLER_POLL_INTERVAL}}"
 : "${CONTROLLER_REQUIRE_PF:=false}"
 
 # Optional debug logging
