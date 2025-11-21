@@ -94,7 +94,7 @@ vpn_auto_pf_required() {
   provider="$(printf '%s' "$provider" | tr '[:upper:]' '[:lower:]')"
   local vpn_type="${VPN_TYPE:-openvpn}"
   vpn_type="$(printf '%s' "$vpn_type" | tr '[:upper:]' '[:lower:]')"
-  local pf="${VPN_PORT_FORWARDING:-on}"
+  local pf="${VPN_PORT_FORWARDING:-off}"
   pf="$(printf '%s' "$pf" | tr '[:upper:]' '[:lower:]')"
   if [[ "$vpn_type" != "openvpn" ]]; then
     return 1

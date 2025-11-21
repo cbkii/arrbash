@@ -1,115 +1,94 @@
 # vpn-port-guard controller
 
-`vpn-port-guard` replaces the legacy port-manager/port-watch helpers. It is the single
-component allowed to control qBittorrent during runtime. The controller lives in the
-`vpn-port-guard` container and runs `scripts/vpn-port-guard.sh`, depending exclusively
-on Gluetun’s HTTP control API and qBittorrent’s Web API.
+`vpn-port-guard` keeps qBittorrent aligned with Gluetun’s forwarded port **when
+you opt into Proton port forwarding**. The default stack leaves forwarding and
+hooks disabled so qBittorrent comes up reliably on day one with no controllers
+in the way. Enable forwarding only if you need inbound peers and are happy to
+accept the extra moving parts.
 
-## ProtonVPN + Gluetun requirements
+## What it does when enabled
 
-* You need a ProtonVPN plan that supports port forwarding.
-* Always use ProtonVPN’s **OpenVPN** credentials (not your account password) and
-  append `+pmp` to the username before supplying it to Gluetun.
-* Gluetun must run with:
-  * `VPN_SERVICE_PROVIDER=protonvpn`
-  * `VPN_TYPE=openvpn`
-  * `VPN_PORT_FORWARDING=on`
-  * `PORT_FORWARD_ONLY=on`
-  * `VPN_PORT_FORWARDING_PROVIDER=protonvpn`
-  * `VPN_PORT_FORWARDING_STATUS_FILE=/tmp/gluetun/forwarded_port`
-  * HTTP control server bound to `:${GLUETUN_CONTROL_PORT}` with
-    `HTTP_CONTROL_SERVER_AUTH=apikey` and `HTTP_CONTROL_SERVER_APIKEY` set.
-* The shared bind mount `${ARR_DOCKER_DIR}/gluetun/state` is mounted inside Gluetun
-  at `/tmp/gluetun` and inside `vpn-port-guard` at `/gluetun_state`. Gluetun writes the
-  ProtonVPN NAT-PMP lease file here and the controller publishes
-  `port-guard-status.json` for other helpers to read.
-* Gluetun’s `VPN_PORT_FORWARDING_UP/DOWN_COMMAND` values call
-  `/scripts/vpn-port-guard-hook.sh` (mounted read-only inside the container). The hook
-  merely touches `/gluetun_state/port-guard.trigger`, prompting the controller to run an
-  immediate sync pass without touching qBittorrent itself.
+- Polls Gluetun every `${POLL_INTERVAL:-10}` seconds using
+  `http://${GLUETUN_API_HOST:-127.0.0.1}:${GLUETUN_CONTROL_PORT:-8000}/v1/openvpn/portforwarded`.
+- Falls back to the Proton NAT-PMP file `${FORWARDED_PORT_FILE:-/tmp/gluetun/forwarded_port}`
+  only when the control API is unreachable.
+- Idempotently sets `listen_port` via qBittorrent’s Web API whenever the port
+  changes.
+- Optionally pauses/resumes torrents when `CONTROLLER_REQUIRE_PF=true` and no
+  forwarded port is available. The default (`false`) leaves torrents running
+  even when Proton has not assigned a port.
+- Writes one atomic JSON to `${STATUS_FILE:-${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json}`
+  on every poll.
 
-## Status file and shared mount
+There is no state machine or trigger file—just **observe → apply → record** on a
+fixed interval.
 
-* The authoritative status JSON is written to `/gluetun_state/port-guard-status.json`
-  inside the controller container and to `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`
-  on the host. The bind mount keeps the file stable across container restarts.
-* A skeleton JSON is created as soon as the controller starts so aliases never chase a
-  missing file while waiting for Proton to hand out a port.
-* Writes are atomic (`mktemp` + `mv`) to prevent partial reads; the previous JSON remains
-  visible until the new one is complete.
-* Quick host-side checks:
-  * `ls -l ${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`
-  * `jq '.' ${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`
+## Enabling Proton port forwarding (optional)
 
-## Runtime lifecycle
+- ProtonVPN plan that supports port forwarding.
+- Use ProtonVPN **OpenVPN** credentials; arrbash still appends `+pmp` just
+  before launch. Keep the stored username without the suffix.
+- Opt in via `${ARRCONF_DIR}/userr.conf` and rerun `./arr.sh`:
+  ```bash
+  VPN_PORT_FORWARDING=on
+  PORT_FORWARD_ONLY=off
+  VPN_PORT_FORWARDING_PROVIDER=protonvpn
+  VPN_PORT_FORWARDING_STATUS_FILE=/tmp/gluetun/forwarded_port
+  VPN_PORT_FORWARDING_UP_COMMAND=/scripts/vpn-port-guard-hook.sh up
+  VPN_PORT_FORWARDING_DOWN_COMMAND=/scripts/vpn-port-guard-hook.sh down
+  ```
+- Bind-mount `${ARR_DOCKER_DIR}/gluetun/state` into Gluetun at `/tmp/gluetun`
+  and into `vpn-port-guard` at `/gluetun_state` so the forwarded port file and
+  status JSON are shared.
 
-1. **Startup ordering**
-   1. Gluetun starts, establishes the OpenVPN tunnel, and negotiates a forwarded port.
-    2. `vpn-port-guard` starts after Gluetun is healthy. It immediately pauses
-      qBittorrent and waits for Gluetun to report `status=running`. Once the VPN
-      tunnel is up, the controller resumes qBittorrent even if Proton has not yet
-      granted a forwarded port, marking `forwarding_state="unavailable"` in the
-      status file until one appears.
-   3. qBittorrent starts (it depends on Gluetun and `vpn-port-guard`) and only runs
-      while the VPN is healthy. Exporting `CONTROLLER_REQUIRE_PF=true`
-      enables strict mode, keeping qBittorrent paused whenever Proton forwarding is
-      unavailable.
-2. **Continuous enforcement**
-   * The controller polls Gluetun every `${VPN_PORT_GUARD_POLL_SECONDS}` (15 seconds by
-     default) and also reacts instantly whenever the Gluetun NAT-PMP hook touches
-     `/gluetun_state/port-guard.trigger`.
-   * If Gluetun reports `status != running`, qBittorrent is paused and the status
-     file records `forwarding_state="unavailable"`.
-   * Once Gluetun reports `status == running` with a valid port, the controller
-     applies that port via qBittorrent’s Web API (disabling `random_port`), sets
-     `forwarding_state="active"`, and resumes torrents.
-   * When Proton has not granted a port (`forwarded_port == 0`) the controller keeps
-     qBittorrent running by default (still inside Gluetun’s namespace) but leaves
-     `forwarding_state="unavailable"` so you know seeding capacity is degraded.
-     Setting `CONTROLLER_REQUIRE_PF=true` switches to pf-strict mode and keeps
-     qBittorrent paused whenever no port is available.
-   * If qBittorrent’s Web API becomes unreachable (common in long uptimes when the
-     Gluetun namespace glitches), the controller pauses torrents, writes
-     `qbt_status="error"`, and relies on the container’s healthcheck+restart policy
-     to recover **without** bouncing Gluetun.
+## Environment variables
 
-## Security model
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GLUETUN_CONTROL_PORT` | `8000` | Gluetun control server port |
+| `GLUETUN_API_HOST` | `127.0.0.1` | Hostname used to reach the control API |
+| `GLUETUN_API_KEY` | _(empty)_ | Optional API key header (`X-API-Key`) |
+| `FORWARDED_PORT_FILE` | `/tmp/gluetun/forwarded_port` | Fallback file when the control API is unreachable |
+| `QBT_API_BASE` | `http://127.0.0.1:8080` | Base URL for qBittorrent Web API |
+| `QBT_USER` | `admin` | qBittorrent username |
+| `QBT_PASS` | `adminadmin` | qBittorrent password |
+| `COOKIE_JAR` | `/tmp/vpn-port-guard-qbt.cookie` | Where the controller stores qBittorrent auth cookies |
+| `STATUS_FILE` | `${ARR_DOCKER_DIR:-/var/lib/arr}/gluetun/state/port-guard-status.json` | Atomic status JSON output |
+| `POLL_INTERVAL` | `10` | Seconds between polls |
+| `CONTROLLER_REQUIRE_PF` | `false` | When `true`, pause torrents whenever no forwarded port is available |
 
-* Gluetun’s control API listens on all container interfaces but still requires the API
-  key. vpn-port-guard reaches it at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}`
-  **because** the service runs with `network_mode: service:gluetun`. Changing the
-  network mode requires exposing the control API explicitly or vpn-port-guard will fail.
-* qBittorrent’s Web UI remains inside the Gluetun network namespace unless you expose it
-  intentionally via a reverse proxy.
-* `vpn-port-guard` is the **only** service allowed to pause/resume torrents or change
-  qBittorrent’s listening port at runtime. All other arrbash scripts have been reduced to
-  read-only consumers of `port-guard-status.json`.
+The generated Compose leaves `VPN_PORT_FORWARDING` off and the hook commands empty, so `vpn-port-guard` stays dormant until you explicitly opt in via `${ARRCONF_DIR}/userr.conf`.
 
-## Troubleshooting
+## Status file
 
-* `arr.pf.status` / `arrvpn` – print the JSON status exported by `vpn-port-guard`
-  (including `forwarding_state`, `controller_mode`, and `qbt_status`).
-* `arr.pf.port` – shows the currently forwarded port (or reports it unavailable).
-* `arr.pf.tail` / `arrvpn-watch` – follow the status file to watch lease changes in
-  real time (falls back to a manual loop if `watch(1)` is missing).
-* `arr.pf.logs` – streams controller logs for deeper inspection.
-* `arr.pf.notify` – touches the trigger file to force an immediate poll (useful after
-  manual Gluetun restarts).
-* `arrvpn-events` – tails `/gluetun_state/port-guard-events.log` to observe Gluetun
-  hook activity.
-* Status file missing? Check these root causes:
-  * `docker inspect vpn-port-guard --format '{{.State.Status}}'` should show `running`.
-    If not, `./arr.sh --yes` will rebuild and restart the stack.
-  * Confirm the host path `${ARR_DOCKER_DIR}/gluetun/state` exists and is writable; the
-    controller will log permission errors if it cannot create the JSON.
-  * Verify the bind mount targets `/gluetun_state` inside both Gluetun and
-    `vpn-port-guard`. A mismatch leaves helpers looking in the wrong place.
-* Legacy helper scripts such as `vpn-port-watch.sh` and `vpn-auto-control.sh` have been
-  removed. Use the status file and aliases above instead of sourcing the old wrappers.
+The controller writes one JSON document at `${STATUS_FILE}` (default
+`${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`). Writes are atomic
+(`mktemp` + `mv`) so readers never see a partial file.
 
-If the status JSON shows `forwarded_port: 0` with `forwarding_state="unavailable"`, ProtonVPN has not
-granted a port yet or Gluetun lost the lease. Torrents continue downloading and seeding
-peers that can reach you, but connectability is reduced until the lease returns. Enable
-`CONTROLLER_REQUIRE_PF=true` if your tracker demands a fully open port and
-you prefer torrents to stay paused whenever forwarding is absent. Leave it `false`
-for pf-preferred mode so torrents keep running even while Proton rotates the lease.
+Fields (superset kept for backwards compatibility):
+
+- `vpn_status`: `running`, `down`, or `unknown`
+- `forwarded_port`: integer, `0` when unavailable
+- `pf_enabled`: boolean (`true` when `CONTROLLER_REQUIRE_PF=true`)
+- `forwarding_state`: `active` when `forwarded_port>0`, otherwise `unavailable`
+- `controller_mode`: `strict` or `preferred` (derived from `pf_enabled`)
+- `qbt_status`: `active`, `paused`, `error`, or `unknown`
+- `last_error`: string, empty when none
+- `last_update` / `last_update_epoch`: epoch timestamp
+
+Quick checks from the host:
+
+```bash
+ls -l ${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json
+cat ${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json
+```
+
+## Troubleshooting basics
+
+- Control API reachable? `curl -s http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded -H "X-API-Key: ${GLUETUN_API_KEY}"`.
+- Forwarded port file present? `cat /tmp/gluetun/forwarded_port` inside the
+  Gluetun container should show a number when Proton has assigned one.
+- qBittorrent credentials correct? `curl -i -X POST "${QBT_API_BASE}/api/v2/auth/login" --data "username=${QBT_USER}&password=${QBT_PASS}"`.
+- Strict mode pauses torrents. If `pf_enabled` is `true` and `forwarding_state`
+  is `unavailable`, expect `/api/v2/torrents/pause` calls until a port appears.
+- Logs: `docker logs vpn-port-guard` to watch loop activity.

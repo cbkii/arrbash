@@ -64,13 +64,16 @@ Set up the *arr media stack with Proton VPN port forwarding on a Debian-based ho
   ./arr.sh --help
   ```
 
-## Proton VPN port forwarding behaviour
-- When you choose **OpenVPN**, arrbash appends `+pmp` to the Proton username at runtime so Proton grants an inbound port. Leave your stored credentials without the suffix; the installer injects it only for Gluetun.
-- Proton’s WireGuard NAT-PMP workflow is not part of this release. Stick with Proton’s OpenVPN credentials (with `+pmp`) to guarantee a forwardable port.
-- Gluetun writes the active forwarded port to `/tmp/gluetun/forwarded_port` and mirrors it through the control API at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`.
-- Only the Gluetun container publishes ports to your LAN. qBittorrent and the *Arr apps run in Gluetun’s network namespace so torrent traffic never leaks directly.
-- The control server binds to `:${GLUETUN_CONTROL_PORT}` (all interfaces inside the container), requires the `GLUETUN_API_KEY`, and exposes only the minimal routes arrbash needs. Keep the published port behind trusted network boundaries.
-- `vpn-port-guard` now runs alongside Gluetun by default. It keeps qBittorrent paused until the VPN is healthy, applies the Proton-forwarded port when available, and publishes `forwarding_state`, `controller_mode`, and `qbt_status` in `/gluetun_state/port-guard-status.json` (host path `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`). By default torrents continue running behind the VPN even if Proton has not granted a port yet (reduced connectability); set `CONTROLLER_REQUIRE_PF=true` if you prefer strict “pause unless forwarded” behaviour. The status file is seeded at startup and written atomically so helpers never see a missing or partial JSON. The forwarded port is dynamic—expect it to rotate as ProtonVPN renews the NAT-PMP lease.
+## Proton VPN port forwarding (advanced, off by default)
+- qBittorrent now prioritises first-run reliability: port forwarding and its hooks are **disabled by default** so nothing exotic can pause torrents or block the WebUI. You still get full VPN egress through Gluetun, but inbound connections depend on Docker port mappings rather than Proton’s NAT-PMP lease. qBittorrent also self-selects a random listening port on first start so it keeps working even if controllers or hooks are absent.
+- If you deliberately want Proton port forwarding, stick with **OpenVPN** credentials (arrbash still appends `+pmp` just before launch) and opt in by setting `VPN_PORT_FORWARDING=on` plus the hook commands in `${ARRCONF_DIR}/userr.conf`:
+  ```bash
+  VPN_PORT_FORWARDING=on
+  VPN_PORT_FORWARDING_UP_COMMAND=/scripts/vpn-port-guard-hook.sh up
+  VPN_PORT_FORWARDING_DOWN_COMMAND=/scripts/vpn-port-guard-hook.sh down
+  ```
+  Rerun `./arr.sh` to regenerate Compose so Gluetun receives the overrides.
+- When enabled, Gluetun writes the active forwarded port to `/tmp/gluetun/forwarded_port` and mirrors it through the control API at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`. Only Gluetun publishes LAN ports; qBittorrent and Arr apps stay in Gluetun’s namespace so traffic never leaks directly.
 
 To remove the stack and clean up generated assets later, run:
 
@@ -99,7 +102,7 @@ To remove the stack and clean up generated assets later, run:
 ## First-run checklist
 - Confirm `LAN_IP` points at your host (run `hostname -I | awk '{print $1}'` if unsure).
 - Rotate qBittorrent credentials and update `QBT_USER`/`QBT_PASS` in `userr.conf`.
-- Verify Proton port forwarding is active. The summary should show a forwarded port; follow the Gluetun recovery steps if it fails.
+- If you enabled Proton port forwarding, confirm the summary shows a forwarded port; otherwise skip this step.
 - Confirm optional services and containers match your plan (see [Optional services and containers](./docs/configuration.md#optional-services-and-containers)).
 - Confirm direct LAN exposure meets your needs; arrbash does not manage HTTPS certificates for you.
 - Spot-check published ports with `ss -tulpn` to ensure only expected services listen on the LAN.

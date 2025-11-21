@@ -240,7 +240,7 @@ WARNING
 WARNING
   fi
 
-  if [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-on}" == "on" ]]; then
+  if [[ "${VPN_SERVICE_PROVIDER:-}" == "protonvpn" && "${VPN_PORT_FORWARDING:-off}" == "on" ]]; then
     local status_file=""
     if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
       status_file="$(gluetun_port_guard_status_file 2>/dev/null || printf '')"

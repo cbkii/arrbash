@@ -228,7 +228,7 @@ MigrationVersion=8
 PortForwardingEnabled=false
 
 [Preferences]
-General\UseRandomPort=false
+General\UseRandomPort=true
 Connection\UPnP=false
 Connection\UseNAT-PMP=false
 WebUI\UseUPnP=false
@@ -274,6 +274,7 @@ EOF
     "WebUI\\ClickjackingProtection=true"
     "WebUI\\HostHeaderValidation=false"
     "WebUI\\AuthSubnetWhitelist=${auth_whitelist}"
+    "General\\UseRandomPort=true"
   )
   managed_spec="$(printf '%s\n' "${managed_lines[@]}")"
   managed_spec="${managed_spec%$'\n'}"

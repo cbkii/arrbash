@@ -41,12 +41,13 @@ Tips:
 - If Gluetun is disabled, SAB automatically falls back to the LAN bridge so downloads continue.
 
 ## Proton port forwarding
-- **OpenVPN usernames require `+pmp`.** Proton only hands out a forwarded port when the username contains the `+pmp` suffix. arrbash injects it at runtime so you can keep your stored credentials unchanged.
-- **OpenVPN is the supported path today.** Proton’s WireGuard NAT-PMP flow is not yet part of arrbash; use Proton’s OpenVPN credentials with `+pmp` so a forwardable port is guaranteed.
-- **Forwarded port status lives in `/tmp/gluetun/forwarded_port`.** arrbash bind-mounts `${ARR_DOCKER_DIR}/gluetun/state` into Gluetun and `vpn-port-guard` so helpers and Arr apps can read the lease file and controller status JSON. The same port value is exposed over Gluetun’s control server at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`.
-- **Only Gluetun publishes ports.** qBittorrent, Arr apps, and `vpn-port-guard` all run inside Gluetun’s namespace via `network_mode: "service:gluetun"`, preventing accidental LAN exposure of VPN traffic.
+- **First-run reliability is the default.** Proton port forwarding and hooks are disabled so qBittorrent (and VueTorrent) cannot be paused or blocked by controllers. You still get VPN egress through Gluetun, and qBittorrent self-selects a random listening port on first start so it remains reachable even without forwarding helpers.
+- **OpenVPN usernames require `+pmp` when you opt in.** Proton hands out a forwarded port only when the username contains `+pmp`; arrbash injects it at runtime so you can keep stored credentials unchanged.
+- **Opt-in flow.** Set `VPN_PORT_FORWARDING=on` plus the hook commands in `${ARRCONF_DIR}/userr.conf` if you want forwarding, then rerun `./arr.sh` so Gluetun receives the overrides.
+- **Forwarded port status lives in `/tmp/gluetun/forwarded_port` only when forwarding is enabled.** With forwarding off, the lease file stays empty and vpn-port-guard remains idle. When enabled, arrbash bind-mounts `${ARR_DOCKER_DIR}/gluetun/state` into Gluetun and `vpn-port-guard` so helpers can read the lease file and controller status JSON.
+- **Only Gluetun publishes ports.** qBittorrent and the *Arr apps run inside Gluetun’s namespace via `network_mode: "service:gluetun"`, preventing accidental LAN exposure of VPN traffic.
 - **Control server safety.** The control API binds to `127.0.0.1`, enforces an API key, and arrbash whitelists only the status/port routes it needs. Do not remap it to the LAN.
-- **vpn-port-guard is authoritative.** The controller keeps qBittorrent paused until the VPN is healthy, applies Proton’s leased port when available, and records `forwarding_state` / `controller_mode` / `qbt_status` in `port-guard-status.json`. Torrents continue running behind the VPN when no port is leased unless you set `CONTROLLER_REQUIRE_PF=true`. See [`docs/vpn-port-guard.md`](./vpn-port-guard.md) for lifecycle details.
+- **vpn-port-guard is optional.** Use it alongside forwarding if you want the leased port applied automatically; torrents continue running unless you set `CONTROLLER_REQUIRE_PF=true`. See [`docs/vpn-port-guard.md`](./vpn-port-guard.md) for behaviour details.
 - **Helper aliases (source `.aliasarr`).**
   ```bash
   arr.pf.port        # print the forwarded port from port-guard-status.json

@@ -18,7 +18,7 @@ Use these Compose examples to deploy qBittorrent together with Prowlarr, Sonarr,
 - Only Gluetun publishes ports to the LAN. qBittorrent and optional helpers share Gluetun’s namespace using `network_mode: "service:gluetun"`, so torrent traffic never bypasses the VPN.
 - The control server binds to `:${GLUETUN_CONTROL_PORT}` (0.0.0.0 inside the container) by default. Set `GLUETUN_CONTROL_BIND=loopback` only if you deliberately want `127.0.0.1:${GLUETUN_CONTROL_PORT}` inside the container, and keep the published port constrained to trusted hosts.
 - Use `curl http://127.0.0.1:${GLUETUN_CONTROL_PORT}/healthz -H "X-API-Key: ${GLUETUN_API_KEY}"` (without escaping braces) to test locally.
-- `vpn-port-guard` now ships with the stack. It keeps qBittorrent paused until the VPN is healthy, applies the Proton lease via the Web API, and writes `forwarding_state` / `controller_mode` / `qbt_status` into `port-guard-status.json`. Torrents keep running without a leased port unless you opt into strict mode with `CONTROLLER_REQUIRE_PF=true`. See [vpn-port-guard](./vpn-port-guard.md) for lifecycle details.
+- `vpn-port-guard` is optional. The default Compose leaves Proton port forwarding off so qBittorrent starts reliably with no controllers involved and lets qBittorrent choose its own listening port on first boot. If you opt in, the controller polls Gluetun’s control API, applies the forwarded port to qBittorrent, and writes `forwarded_port` / `forwarding_state` / `pf_enabled` / `qbt_status` into `port-guard-status.json` while keeping torrents running unless you enable strict mode with `CONTROLLER_REQUIRE_PF=true`. See [vpn-port-guard](./vpn-port-guard.md) for behaviour and env vars.
 
 ## A) Split-mode ON (`SPLIT_VPN=1`, Arr apps on LAN)
 
@@ -45,11 +45,11 @@ services:
       HTTP_CONTROL_SERVER_ADDRESS: ":${GLUETUN_CONTROL_PORT}"
       HTTP_CONTROL_SERVER_AUTH: "apikey"
       HTTP_CONTROL_SERVER_APIKEY: "${GLUETUN_API_KEY}"
-      VPN_PORT_FORWARDING: "on"
-      VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
-      VPN_PORT_FORWARDING_STATUS_FILE: "/tmp/gluetun/forwarded_port"
-      VPN_PORT_FORWARDING_UP_COMMAND: "/scripts/vpn-port-guard-hook.sh up"
-      VPN_PORT_FORWARDING_DOWN_COMMAND: "/scripts/vpn-port-guard-hook.sh down"
+      VPN_PORT_FORWARDING: "${VPN_PORT_FORWARDING:-off}"
+      VPN_PORT_FORWARDING_PROVIDER: "${VPN_PORT_FORWARDING_PROVIDER:-protonvpn}"
+      VPN_PORT_FORWARDING_STATUS_FILE: "${VPN_PORT_FORWARDING_STATUS_FILE:-/tmp/gluetun/forwarded_port}"
+      VPN_PORT_FORWARDING_UP_COMMAND: "${VPN_PORT_FORWARDING_UP_COMMAND:-}"
+      VPN_PORT_FORWARDING_DOWN_COMMAND: "${VPN_PORT_FORWARDING_DOWN_COMMAND:-}"
       QBT_USER: "${QBT_USER}"
       QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
@@ -162,11 +162,11 @@ services:
       HTTP_CONTROL_SERVER_ADDRESS: ":${GLUETUN_CONTROL_PORT}"
       HTTP_CONTROL_SERVER_AUTH: "apikey"
       HTTP_CONTROL_SERVER_APIKEY: "${GLUETUN_API_KEY}"
-      VPN_PORT_FORWARDING: "on"
-      VPN_PORT_FORWARDING_PROVIDER: "protonvpn"
-      VPN_PORT_FORWARDING_STATUS_FILE: "/tmp/gluetun/forwarded_port"
-      VPN_PORT_FORWARDING_UP_COMMAND: "/scripts/vpn-port-guard-hook.sh up"
-      VPN_PORT_FORWARDING_DOWN_COMMAND: "/scripts/vpn-port-guard-hook.sh down"
+      VPN_PORT_FORWARDING: "${VPN_PORT_FORWARDING:-off}"
+      VPN_PORT_FORWARDING_PROVIDER: "${VPN_PORT_FORWARDING_PROVIDER:-protonvpn}"
+      VPN_PORT_FORWARDING_STATUS_FILE: "${VPN_PORT_FORWARDING_STATUS_FILE:-/tmp/gluetun/forwarded_port}"
+      VPN_PORT_FORWARDING_UP_COMMAND: "${VPN_PORT_FORWARDING_UP_COMMAND:-}"
+      VPN_PORT_FORWARDING_DOWN_COMMAND: "${VPN_PORT_FORWARDING_DOWN_COMMAND:-}"
       QBT_USER: "${QBT_USER}"
       QBT_PASS: "${QBT_PASS}"
       QBITTORRENT_ADDR: "http://${LOCALHOST_IP}:${QBT_INT_PORT}"
