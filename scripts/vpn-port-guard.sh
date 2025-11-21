@@ -33,11 +33,14 @@ fi
 : "${CONTROLLER_TRIGGER_FILE:=/gluetun_state/port-guard.trigger}"
 : "${CONTROLLER_TMP_DIR:=/tmp/vpn-port-guard}"
 : "${CONTROLLER_EVENTS_FILE:=/gluetun_state/port-guard-events.log}"
-: "${CONTROLLER_REQUIRE_PF:=}"
-: "${CONTROLLER_REQUIRE_PORT_FORWARDING:=}"
-: "${VPN_PORT_GUARD_REQUIRE_FORWARDING:=}"
+
+# Consolidate multiple config variables into a single canonical one
+# Priority: CONTROLLER_REQUIRE_PF > CONTROLLER_REQUIRE_PORT_FORWARDING > VPN_PORT_GUARD_REQUIRE_FORWARDING
+: "${CONTROLLER_REQUIRE_PF:=${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}}"
 
 _controller_last_port=0
+_controller_consecutive_failures=0
+_controller_max_consecutive_failures=5
 
 controller_bool() {
   case "${1:-}" in
@@ -50,12 +53,7 @@ controller_bool() {
   esac
 }
 
-controller_mode_raw="${CONTROLLER_REQUIRE_PF}"
-if [[ -z "${controller_mode_raw}" ]]; then
-  controller_mode_raw="${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}"
-fi
-
-CONTROLLER_REQUIRE_STRICT="$(controller_bool "${controller_mode_raw}")"
+CONTROLLER_REQUIRE_STRICT="$(controller_bool "${CONTROLLER_REQUIRE_PF}")"
 if [[ "${CONTROLLER_REQUIRE_STRICT}" == "true" ]]; then
   CONTROLLER_MODE_STRING="strict"
 else
@@ -229,18 +227,26 @@ controller_current_qbt_state() {
 controller_apply_port() {
   local target_port="$1"
   if [[ -z "$target_port" || ! "$target_port" =~ ^[0-9]+$ ]]; then
-    controller_log "Invalid port '${target_port}' from Gluetun"
+    controller_log "ERROR: Invalid port '${target_port}' from Gluetun (expected numeric value)"
     return 1
   fi
+  
+  if [[ "$target_port" -lt 1024 || "$target_port" -gt 65535 ]]; then
+    controller_log "ERROR: Port ${target_port} out of valid range (1024-65535)"
+    return 1
+  fi
+  
   local current
   current="$(qbt_current_listen_port 2>/dev/null || printf '0')"
   if [[ "$current" != "$target_port" ]]; then
-    controller_log "Applying forwarded port ${target_port} to qBittorrent"
+    controller_log "Applying forwarded port ${target_port} to qBittorrent (previous: ${current})"
     if ! qbt_set_listen_port "$target_port"; then
-      controller_log "Failed to set qBittorrent listen port"
+      controller_log "ERROR: Failed to set qBittorrent listen port to ${target_port}"
+      controller_log "  → Check qBittorrent Web UI accessibility and credentials"
       return 1
     fi
     controller_log_event "port:applied ${target_port}"
+    controller_log "✓ Successfully applied port ${target_port}"
   fi
   return 0
 }
@@ -253,15 +259,66 @@ controller_check_trigger() {
   return 1
 }
 
+controller_startup_diagnostics() {
+  controller_log "Running startup diagnostics..."
+  
+  # Check required commands
+  local missing_cmds=()
+  for cmd in curl jq; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing_cmds+=("$cmd")
+    fi
+  done
+  
+  if ((${#missing_cmds[@]} > 0)); then
+    controller_log "ERROR: Missing required commands: ${missing_cmds[*]}"
+    return 1
+  fi
+  
+  # Validate configuration
+  if [[ -n "${CONTROLLER_POLL_INTERVAL}" ]] && ! [[ "${CONTROLLER_POLL_INTERVAL}" =~ ^[0-9]+$ ]]; then
+    controller_log "WARNING: Invalid CONTROLLER_POLL_INTERVAL '${CONTROLLER_POLL_INTERVAL}', using default 15"
+    CONTROLLER_POLL_INTERVAL=15
+  fi
+  
+  # Check Gluetun connectivity (non-fatal, will retry in main loop)
+  controller_log "Testing Gluetun API connectivity at ${GLUETUN_CONTROL_URL}..."
+  if gluetun_api_status >/dev/null 2>&1; then
+    controller_log "✓ Gluetun API reachable"
+  else
+    controller_log "⚠ Gluetun API not reachable yet (will retry in main loop)"
+  fi
+  
+  # Check qBittorrent connectivity (non-fatal, will retry in main loop)
+  controller_log "Testing qBittorrent API connectivity at ${QBT_HOST}:${QBT_PORT}..."
+  if qbt_api_healthcheck 2>/dev/null; then
+    controller_log "✓ qBittorrent API reachable"
+  else
+    controller_log "⚠ qBittorrent API not reachable yet (will retry in main loop)"
+  fi
+  
+  controller_log "Diagnostics complete (mode=${CONTROLLER_MODE_STRING}, poll=${CONTROLLER_POLL_INTERVAL}s)"
+  return 0
+}
+
 main() {
   controller_log "Starting vpn-port-guard (poll=${CONTROLLER_POLL_INTERVAL}s, mode=${CONTROLLER_MODE_STRING})"
+  
+  # Run startup diagnostics
+  if ! controller_startup_diagnostics; then
+    controller_log "Startup diagnostics failed, exiting"
+    exit 1
+  fi
+  
   controller_log "🛡  Port Guard: initializing status file at ${CONTROLLER_STATUS_FILE}"
   controller_mark_init
 
-  controller_pause_qbt || true
-  qbt_api_login || controller_log "Unable to authenticate with qBittorrent API yet"
+  controller_pause_qbt || controller_log "⚠ Unable to pause qBittorrent during startup"
+  qbt_api_login || controller_log "⚠ Unable to authenticate with qBittorrent API yet (will retry)"
 
   local sleep_next=0
+  _controller_consecutive_failures=0
+  
   while true; do
     if ((sleep_next > 0)); then
       sleep "${sleep_next}"
@@ -292,28 +349,42 @@ main() {
     fi
 
     if ((status_rc != 0)); then
-      controller_log "Gluetun control API unreachable; keeping torrents paused"
+      ((_controller_consecutive_failures++))
+      if ((_controller_consecutive_failures >= _controller_max_consecutive_failures)); then
+        controller_log "ERROR: Gluetun API unreachable for ${_controller_consecutive_failures} consecutive attempts"
+      else
+        controller_log "Gluetun control API unreachable (attempt ${_controller_consecutive_failures}/${_controller_max_consecutive_failures}); keeping torrents paused"
+      fi
       controller_record_vpn_state "down"
       controller_pause_qbt || true
       controller_write_state "unknown" 0 "unreachable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "gluetun control API unreachable"
       continue
     fi
+    
+    # Reset failure counter on successful API call
+    _controller_consecutive_failures=0
 
     if ((port_rc != 0)) && [[ -z "${last_error}" ]]; then
       last_error="unable to read forwarded port payload"
     fi
 
     if ! qbt_api_healthcheck; then
-      controller_log "qBittorrent API unreachable; pausing until container recovers"
-      controller_pause_qbt || true
-      if [[ "$forwarded_port" != 0 ]]; then
-        forwarding_state="error"
+      controller_log "qBittorrent API unreachable; attempting to re-authenticate"
+      # Try to re-authenticate which will force a fresh login
+      if qbt_api_login 2>/dev/null && qbt_api_healthcheck 2>/dev/null; then
+        controller_log "qBittorrent API re-authentication successful"
+      else
+        controller_log "qBittorrent API remains unreachable; pausing torrents until container recovers"
+        controller_pause_qbt || true
+        if [[ "$forwarded_port" != 0 ]]; then
+          forwarding_state="error"
+        fi
+        if [[ -z "$last_error" ]]; then
+          last_error="qBittorrent API unreachable"
+        fi
+        controller_write_state "$status" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
+        continue
       fi
-      if [[ -z "$last_error" ]]; then
-        last_error="qBittorrent API unreachable"
-      fi
-      controller_write_state "$status" "$forwarded_port" "$forwarding_state" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "$last_error"
-      continue
     fi
 
     if [[ "$status" != "running" ]]; then
@@ -356,6 +427,17 @@ main() {
   done
 }
 
-trap 'controller_log "Shutting down"; controller_log_event "controller:shutdown"; controller_record_vpn_state "down"; controller_pause_qbt || true; controller_write_state "down" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}"' EXIT
+controller_shutdown() {
+  controller_log "Received shutdown signal, cleaning up..."
+  controller_log_event "controller:shutdown"
+  controller_record_vpn_state "down"
+  controller_pause_qbt || controller_log "⚠ Unable to pause qBittorrent during shutdown"
+  controller_write_state "down" 0 "unavailable" "$(controller_current_qbt_state)" "${CONTROLLER_REQUIRE_STRICT}" "controller shutting down"
+  qbt_api_cleanup
+  controller_log "Shutdown complete"
+  exit 0
+}
+
+trap controller_shutdown EXIT INT TERM
 
 main "$@"
