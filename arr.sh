@@ -710,7 +710,7 @@ done
 
 arr_setup_defaults
 
-# Prints CLI contract; keep aligned with docs/operations.md flag list
+# Prints CLI contract; keep aligned with docs/usage.md flag list
 help() {
   cat <<'USAGE'
 Usage: ./arr.sh [options]
@@ -854,7 +854,7 @@ main() {
   step "📝 Preparing environment values"
   prepare_env_context
   local env_target="${ARR_ENV_FILE:-${ARR_STACK_DIR}/.env}"
-  local template_path="${REPO_ROOT}/.env.template"
+  local template_path="${REPO_ROOT}/scripts/.env.template"
   local user_conf_path="${ARR_USERCONF_PATH:-${ARRCONF_DIR}/userr.conf}"
   check_immutable_integrity "pre-.env"
 

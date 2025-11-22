@@ -19,7 +19,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 * **Env generation (NEW):**
 
   * `scripts/gen-env.sh` — single, authoritative generator for `.env` using **Bash/Zsh logic + envsubst**.
-  * `.env.template` — repository-tracked template with `${VAR}` placeholders and optional blocks guarded by `# @if VAR` … `# @endif`.
+  * `scripts/.env.template` — repository-tracked template with `${VAR}` placeholders and optional blocks guarded by `# @if VAR` … `# @endif`.
   * Runtime layering is `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`. Mirror that order in all docs.
 * **Scripts directory:** `scripts/` — helper scripts (DNS, versions, networking, qbt helpers, etc.).
 
@@ -38,7 +38,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 * **Variables:** uppercase `SNAKE_CASE` with service/area prefixes (`ARR_`, `GLUETUN_`, `QBT_`, `PROWLARR_`, etc.).
 * **Compose/env artefacts:**
 
-  * `.env.template` (**tracked; hand-edited**)
+  * `scripts/.env.template` (**tracked; hand-edited**)
   * `.env` (**generated; do not hand-edit**) by `scripts/gen-env.sh`
 * **Examples/placeholders:** `*.example` suffix only (never committed with real secrets).
 
@@ -50,7 +50,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
    * `arrconf/userr.conf.defaults.sh` (defaults)
    * `${ARRCONF_DIR}/userr.conf` (user overrides; optional)
-   * `.env.template` (placeholders, optional `# @if VAR` guards)
+   * `scripts/.env.template` (placeholders, optional `# @if VAR` guards)
    * CLI flags and exported environment variables layered ahead of `${ARRCONF_DIR}/userr.conf`
 
 2. **Generator**
@@ -116,7 +116,7 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 
 ---
 
-## Variables Surface (must be covered in `.env.template`)
+## Variables Surface (must be covered in `scripts/.env.template`)
 
 Include placeholders for **all** user-settable variables found in `arrconf/userr.conf.example`, notably:
 
@@ -142,7 +142,7 @@ Include placeholders for **all** user-settable variables found in `arrconf/userr
 
 1. **Env system edits**
 
-   * Update `.env.template` when adding/removing config surface.
+   * Update `scripts/.env.template` when adding/removing config surface.
    * Extend `scripts/gen-env.sh` for new derived logic or flags (add defaulting/normalisation; add/consume `# @if VAR` guards).
    * Ensure the generator is the **only** writer for `.env`.
 
@@ -176,7 +176,7 @@ Include placeholders for **all** user-settable variables found in `arrconf/userr
 
 ```bash
 rm -f "${ARR_STACK_DIR}/.env"
-scripts/gen-env.sh .env.template "${ARR_STACK_DIR}/.env"
+scripts/gen-env.sh scripts/.env.template "${ARR_STACK_DIR}/.env"
 test -f "${ARR_STACK_DIR}/.env" && ls -l "${ARR_STACK_DIR}/.env"
 
 # Derived fallback

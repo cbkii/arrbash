@@ -1,94 +1,48 @@
-# Networking and VPN
+# Networking
 
 [← Back to README](../README.md)
 
-Use these settings to choose how traffic flows, manage Proton VPN forwarding, and enable optional DNS or HTTPS features.
+Choose how traffic flows, opt into Proton port forwarding, and place SABnzbd appropriately.
 
 ## VPN modes
-| Mode | Variable | Behaviour | When to use |
+| Mode | Setting | Behaviour | When to use |
 | --- | --- | --- | --- |
-| Full tunnel | `SPLIT_VPN=0` (default) | All services share Gluetun’s namespace. | Simplest setup when you do not need LAN-reachable APIs. |
-| Split tunnel | `SPLIT_VPN=1` | Only qBittorrent runs inside Gluetun; other services stay on the LAN bridge. | Recommended for faster metadata, fewer rate limits, and easier troubleshooting. |
+| Full tunnel | `SPLIT_VPN=0` (default) | All services share Gluetun’s namespace. | Simplest path when you do not need LAN-reachable APIs. |
+| Split tunnel | `SPLIT_VPN=1` | Only qBittorrent (and SABnzbd when `SABNZBD_USE_VPN=1`) live inside Gluetun; Arr apps stay on the LAN bridge. | Recommended for faster metadata and easier troubleshooting. |
 
-**Switching modes**
-1. Edit `${ARRCONF_DIR}/userr.conf` and set `SPLIT_VPN` as needed.
-2. (Optional, Recommended) Set `EXPOSE_DIRECT_PORTS=1` so Sonarr/Radarr/Lidarr/etc. publish LAN ports in split mode.
-3. Rerun the installer:
+Switch modes by editing `${ARRCONF_DIR}/userr.conf`, setting `EXPOSE_DIRECT_PORTS=1` when you want LAN URLs, and rerunning `./arr.sh --yes`. In split mode, point *Arr download clients at `http://LAN_IP:${QBT_PORT}` (qBittorrent listens on port 8082 inside Gluetun by default).
+
+## Proton port forwarding (optional)
+1. Use Proton credentials that support NAT-PMP (OpenVPN with `+pmp` is appended at runtime).
+2. Opt in via `${ARRCONF_DIR}/userr.conf` and rerun the installer:
    ```bash
-   ./arr.sh --yes
+   VPN_PORT_FORWARDING=on
+   VPN_PORT_FORWARDING_PROVIDER=protonvpn
+   VPN_PORT_FORWARDING_STATUS_FILE=/tmp/gluetun/forwarded_port
+   VPN_PORT_FORWARDING_UP_COMMAND=/scripts/vpn-port-guard-hook.sh up
+   VPN_PORT_FORWARDING_DOWN_COMMAND=/scripts/vpn-port-guard-hook.sh down
    ```
-4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_PORT}` when running split tunnel (the
-   host defaults to port **8082**).
+3. The forwarded port is written to `/tmp/gluetun/forwarded_port` and mirrored through `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json` when forwarding is enabled. Only Gluetun publishes ports; qBittorrent and the Arr apps stay inside the container namespace.
 
-> When `EXPOSE_DIRECT_PORTS=1` is enabled the installer prints the published LAN URLs and asks for confirmation. Use `hostname -I | awk '{print $1}'` to confirm your host address before accepting, or pass `--yes` when you intentionally expose the ports.
+### Port guard
+`vpn-port-guard` polls Gluetun’s control API every `${CONTROLLER_POLL_INTERVAL:-10}` seconds, applies the forwarded port to qBittorrent, and writes atomic status to `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`. Set `CONTROLLER_REQUIRE_PF=true` to pause torrents until a port exists. Helpers and aliases remain idle when forwarding is off.
 
-Revert by setting `SPLIT_VPN=0` and rerunning the installer.
+### Control API safety
+- Binds to `127.0.0.1:${GLUETUN_CONTROL_PORT}` and requires `GLUETUN_API_KEY`; keep it off the LAN.
+- Rotate the key anytime with `./arr.sh --rotate-api-key --yes` and verify with the health check printed by the installer.
 
-## SABnzbd network placements
-
-SABnzbd stays off by default. When you enable it, choose where it lives so download speeds and LAN access match your needs.
-
+## SABnzbd placements
 | Mode | `SABNZBD_USE_VPN` | Network namespace | Host port exposure | Notes |
 | --- | --- | --- | --- | --- |
-| Direct LAN (default) | `0` | `arr_net` (LAN bridge) | Controlled by `EXPOSE_DIRECT_PORTS` and `SABNZBD_PORT`. | Keeps SAB reachable by Sonarr/Radarr/Lidarr/Prowlarr over the LAN. |
-| Split-VPN direct | `0` | `arr_net` while qBittorrent stays in Gluetun | Optional | Works well with the default qBittorrent port (`8082`) so SAB can keep port 8080. |
-| VPN attached | `1` | Shares Gluetun (`network_mode: "service:gluetun"`) | No host port; access via Gluetun network only. | Use when Usenet providers must see the VPN exit IP. |
+| LAN bridge (default) | `0` | `arr_net` | Controlled by `EXPOSE_DIRECT_PORTS` and `SABNZBD_PORT`. | Keeps SAB reachable by Sonarr/Radarr/Lidarr over the LAN. |
+| VPN attached | `1` | Shares Gluetun via `network_mode: "service:gluetun"` | No host port; reach via Gluetun network only. | Use when Usenet traffic must use the VPN exit IP. |
 
-Tips:
+Keep `SABNZBD_INT_PORT=8080` when sharing Gluetun so it does not clash with qBittorrent’s `8082` WebUI. If Gluetun is disabled, SAB automatically falls back to the LAN bridge.
 
-- Leave `SABNZBD_INT_PORT=8080` when SAB shares Gluetun so it does not clash with qBittorrent, which listens on 8082 internally.
-- When VPN mode is active the stack skips LAN port mappings, so plan to reach SAB through Gluetun (for example using `docker compose exec sabnzbd ...`).
-- If Gluetun is disabled, SAB automatically falls back to the LAN bridge so downloads continue.
-
-## Proton port forwarding
-- **First-run reliability is the default.** Proton port forwarding and hooks are disabled so qBittorrent (and VueTorrent) cannot be paused or blocked by controllers. You still get VPN egress through Gluetun, and qBittorrent self-selects a random listening port on first start so it remains reachable even without forwarding helpers.
-- **OpenVPN with NAT-PMP is supported.** Proton hands out a forwarded port only when the username contains `+pmp`; arrbash injects it at runtime so you can keep stored credentials unchanged. This is the recommended and tested configuration.
-- **WireGuard with NAT-PMP:** ProtonVPN now supports WireGuard configs with NAT-PMP enabled. While Gluetun v3.40+ can handle these configs, arrbash currently focuses on the battle-tested OpenVPN path. Future versions may add native WireGuard support once the ecosystem matures.
-- **Opt-in flow.** Set `VPN_PORT_FORWARDING=on` plus the hook commands in `${ARRCONF_DIR}/userr.conf` if you want forwarding, then rerun `./arr.sh` so Gluetun receives the overrides.
-- **Forwarded port status lives in `/tmp/gluetun/forwarded_port` only when forwarding is enabled.** With forwarding off, the lease file stays empty and vpn-port-guard remains idle. When enabled, arrbash bind-mounts `${ARR_DOCKER_DIR}/gluetun/state` into Gluetun and `vpn-port-guard` so helpers can read the lease file and controller status JSON.
-- **Only Gluetun publishes ports.** qBittorrent and the *Arr apps run inside Gluetun’s namespace via `network_mode: "service:gluetun"`, preventing accidental LAN exposure of VPN traffic.
-- **Control server safety.** The control API binds to `127.0.0.1`, enforces an API key, and arrbash whitelists only the status/port routes it needs. Do not remap it to the LAN.
-- **vpn-port-guard is optional.** Use it alongside forwarding if you want the leased port applied automatically; torrents continue running unless you set `CONTROLLER_REQUIRE_PF=true`. See the [VPN quick guide](./vpn.md) for behaviour details and status file locations.
-- **Helper aliases (source `.aliasarr`).**
-  ```bash
-  arr.pf.port        # print the forwarded port from port-guard-status.json
-  arr.pf.status      # pretty-print vpn-port-guard status JSON (aliases: arrvpn)
-  arr.pf.tail        # follow the status file in real time (aliases: arrvpn-watch)
-  arr.pf.logs        # stream vpn-port-guard container logs
-  arr.pf.notify      # touch trigger file for compatibility (controller polls independently)
-  arrvpn-events      # tail Gluetun hook events emitted for port changes
-  ```
-- Rotate the Gluetun API key anytime with:
-  ```bash
-  ./arr.sh --rotate-api-key --yes
-  ```
-- Use `./arr.sh --sync-api-keys` to re-copy Sonarr/Radarr/Prowlarr API keys into Configarr when required.
-
-## Local DNS and HTTPS helpers
-
-LAN DNS overrides and HTTPS termination are not bundled. Manage hostname overrides and TLS termination with your own tooling when needed. arrbash exposes services directly on the LAN (when `EXPOSE_DIRECT_PORTS=1`) and relies on Gluetun to publish qBittorrent’s forwarded ports.
-
-## VPN auto-reconnect (optional)
-- Enable by setting `VPN_AUTO_RECONNECT_ENABLED=1` and rerunning the installer. The daemon now polls Gluetun’s control server (`/v1/openvpn/status`, `/v1/publicip/ip`, `/v1/openvpn/portforwarded`) instead of curling external IP services.
-- The tunnel is marked unhealthy only when OpenVPN is not `running`, the exit IP is missing, or a Proton NAT-PMP port fails to appear after `VPN_PORT_GRACE_SECONDS`. Each failure triggers a control-server stop/start first and only falls back to restarting the Gluetun container via the stack’s compose wrapper when required.
-- After a recovery the daemon re-runs the qBittorrent port hook so the client always listens on the forwarded port Gluetun negotiated with ProtonVPN.
-- Cooldowns respect `VPN_COOLDOWN_MINUTES`, `VPN_RETRY_DELAY_SECONDS`, and `VPN_MAX_RETRY_MINUTES`; manual overrides continue to work via `.vpn-auto-reconnect-<flag>` files.
-- Use helper aliases after sourcing `.aliasarr`:
-  ```bash
-  arr.vpn.auto.status
-  arr.vpn.auto.pause   # create a pause file
-  arr.vpn.auto.resume  # remove pause/kill overrides
-  arr.vpn.auto.once    # request a single reconnect
-  ```
-- Runtime status lives in `${ARR_STACK_DIR}/.vpn-auto-reconnect-status.json`; detailed logs sit under `${ARR_DOCKER_DIR}/gluetun/auto-reconnect/daemon.log`.
-
-### Manual VPN rotation
-- `arr.vpn.fastest` cycles OpenVPN in-place using Gluetun’s control API so you get a fresh exit IP while keeping qBittorrent inside Gluetun’s `network_mode: "service:gluetun"` boundary.
-- `arr.vpn.switch` without arguments behaves the same as `arr.vpn.fastest`. Pass `--next` to walk through `PVPN_ROTATE_COUNTRIES`, or provide an explicit country name to rewrite `SERVER_COUNTRIES` and restart Gluetun safely via `arr.vpn.reconnect --container`.
-- Gluetun’s `UPDATER_PERIOD=24h` keeps the Proton server list current, so rotations always consider fresh endpoints without manual maintenance.
-
-## Related topics
-- [Configuration](configuration.md) – variables referenced above.
-- [Operations](operations.md) – script details and command summaries.
-- [Security](security.md) – exposure and certificate handling guidance.
-- [Troubleshooting](troubleshooting.md) – DNS, HTTPS, or VPN recovery steps.
+## Useful checks
+```bash
+arr.vpn.status            # Gluetun control API health
+arr.vpn.port.state        # Forwarded port JSON (when enabled)
+arr.vpn.port.watch        # Follow port-guard status
+arr.vpn.fastest           # Rotate Proton endpoints via control API
+```
