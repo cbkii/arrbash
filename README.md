@@ -1,126 +1,78 @@
 # arrbash
 
-Set up the *arr media stack with Proton VPN port forwarding on a Debian-based host.
+Set up the *arr media stack with Proton VPN support on a Debian-based host.
 
 ## What you get
-- qBittorrent routed through Gluetun with Proton VPN port forwarding.
+- qBittorrent routed through Gluetun with optional Proton VPN port forwarding.
 - Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, and FlareSolverr on the LAN bridge.
 - Optional extras: Configarr sync, SABnzbd downloader, and the VueTorrent WebUI.
 
 ## Prerequisites
 - 64-bit Debian 12 (Bookworm) or equivalent with a static LAN IP, 4 CPU cores, and 4 GB RAM.
+- Docker, Docker Compose plugin, Git, `curl`, `jq`, `openssl`, and `envsubst` available on the host.
 - Proton VPN Plus or Unlimited subscription for port forwarding support.
 
-## Quick start
-1. **Install dependencies.**
+## Quickstart
+1. Install dependencies:
    ```bash
-   sudo apt update && sudo apt install docker.io docker-compose-plugin git curl jq openssl
+   sudo apt update && sudo apt install docker.io docker-compose-plugin git curl jq openssl gettext-base
    ```
-   > The installer expects these tools to be present already. It does not install Docker, Compose, or the helper CLIs for you.
-2. **Clone arrbash and enter the directory.**
-    ```bash
-    mkdir -p ~/srv && cd ~/srv
-    git clone https://github.com/cbkii/arrbash.git
-    cd arrbash
-    ```
-3. **Add Proton credentials.**
+
+2. Clone the repo and enter it:
+   ```bash
+   mkdir -p ~/srv && cd ~/srv
+   git clone https://github.com/cbkii/arrbash.git
+   cd arrbash
+   ```
+
+3. Prepare credentials and overrides (keep them outside the repo):
    ```bash
    mkdir -p ../arrconfigs
    cp arrconf/proton.auth.example ../arrconfigs/proton.auth
-   nano ../arrconfigs/proton.auth    # set PROTON_USER and PROTON_PASS (the script appends +pmp)
-   chmod 600 ../arrconfigs/proton.auth
-   ```
-4. **Create your overrides.**
-   ```bash
    cp arrconf/userr.conf.example ../arrconfigs/userr.conf
-   nano ../arrconfigs/userr.conf     # set LAN_IP and point DOWNLOADS_DIR/COMPLETED_DIR/MEDIA_DIR/MUSIC_DIR to your storage
+   chmod 600 ../arrconfigs/proton.auth ../arrconfigs/userr.conf
    ```
-5. **Run the installer.**
+   Edit `../arrconfigs/proton.auth` for `PROTON_USER`/`PROTON_PASS` and `../arrconfigs/userr.conf` for `LAN_IP`, download paths, and any toggles you want.
+
+4. Run the installer:
    ```bash
-   ./arr.sh --yes         # omit --yes for interactive mode
+   ./arr.sh --yes        # omit --yes for interactive confirmation
    ```
-   > The script checks Docker, Compose, and helper tools, then regenerates `.env` from `.env.template` via `scripts/gen-env.sh` alongside `docker-compose.yml` and support files before starting the stack. Do not edit those generated files by hand—change `userr.conf` instead and rerun the installer. The installer looks under `${ARR_DATA_ROOT}` (depth 4) and then the repo's parent directory for the first `userr.conf` it finds, so keep only the copy you want applied.
-  
-6. **Access services.** Follow the summary printed by the installer or visit `http://LAN_IP:PORT` (for example `http://192.168.1.50:8082` for qBittorrent). See **First-Run Checklist** below.
+   The script renders `.env` from `scripts/.env.template` via `scripts/gen-env.sh`, writes `docker-compose.yml`, and starts the stack. Rerun it after updating `userr.conf`; never edit generated files directly.
 
-## Minimal configuration
-- `ARR_DATA_ROOT`: top-level data directory for the stack (defaults to `~/srv`). Override it via the environment or `userr.conf` before running `./arr.sh`.
-- `ARRCONF_DIR`: configuration folder for Proton credentials and overrides (defaults to `${ARR_DATA_ROOT}/${STACK}configs`).
-- `userr.conf` and `proton.auth` both live in `${ARRCONF_DIR}`. Keep them out of version control. If multiple overrides exist, the installer scans `${ARR_DATA_ROOT}` (depth 4) and then above the repo for the first `userr.conf` it finds.
-- Configuration precedence is `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`. The later layers only apply when earlier ones do not set a value.
-- Check these values first:
-  - `LAN_IP`: private address of the host. Set this before exposing ports.
-  - `STACK`: project label used for generated paths and logs (defaults to `arr`).
-  - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`, `MUSIC_DIR`: defaults sit under `${ARR_DATA_ROOT}`, but point each one at your actual storage.
-  - `SPLIT_VPN`: set to `1` to tunnel only qBittorrent. Leave `0` for full VPN mode.
-  - `ENABLE_CONFIGARR`, `SABNZBD_ENABLED`: toggle optional services. See [Optional services and containers](./docs/configuration.md#optional-services-and-containers) for tips.
-- Secrets such as `QBT_USER`, `QBT_PASS`, and `GLUETUN_API_KEY` persist across runs. Rotate them with `./arr.sh --rotate-api-key --yes`—the installer regenerates `.env`, recreates Gluetun with the new `HTTP_CONTROL_SERVER_APIKEY`, and refreshes helper aliases so `arr.vpn.*` commands pick up the key immediately. Verify with:
+5. Access services using the summary printed by the installer (for example `http://192.168.1.50:8082` for qBittorrent).
+
+## Configuration basics
+- Defaults live in `arrconf/userr.conf.defaults.sh`; your overrides live in `${ARRCONF_DIR}/userr.conf` (defaults to `${ARR_DATA_ROOT}/${STACK}configs/userr.conf`).
+- Effective precedence is `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`.
+- Key values to set first:
+  - `LAN_IP` – host LAN address.
+  - `ARR_DATA_ROOT` – base path for generated assets (defaults to `~/srv`).
+  - `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`, `MUSIC_DIR` – storage locations.
+  - `SPLIT_VPN` – `1` to keep only qBittorrent inside Gluetun.
+  - `ENABLE_CONFIGARR`, `SABNZBD_ENABLED` – toggle optional services.
+- Rotate Gluetun credentials anytime with:
   ```bash
-  grep '^GLUETUN_API_KEY=' .env
-  curl -fsS -H "X-API-Key: ${GLUETUN_API_KEY}" "http://localhost:${GLUETUN_CONTROL_PORT}/healthz"
-  ```
-- Show available flags at any time:
-  ```bash
-  ./arr.sh --help
+  ./arr.sh --rotate-api-key --yes
   ```
 
-## Proton VPN port forwarding (advanced, off by default)
-- qBittorrent now prioritises first-run reliability: port forwarding and its hooks are **disabled by default** so nothing exotic can pause torrents or block the WebUI. You still get full VPN egress through Gluetun, but inbound connections depend on Docker port mappings rather than Proton’s NAT-PMP lease. qBittorrent also self-selects a random listening port on first start so it keeps working even if controllers or hooks are absent.
-- If you deliberately want Proton port forwarding, stick with **OpenVPN** credentials (arrbash still appends `+pmp` just before launch) and opt in by setting `VPN_PORT_FORWARDING=on` plus the hook commands in `${ARRCONF_DIR}/userr.conf`:
+## Everyday commands
+- Show flags and options: `./arr.sh --help`
+- Refresh generated files after edits: `./arr.sh --yes`
+- Uninstall and clean generated assets: `./arr.sh --uninstall`
+- Load helper aliases after the first run:
   ```bash
-  VPN_PORT_FORWARDING=on
-  VPN_PORT_FORWARDING_UP_COMMAND=/scripts/vpn-port-guard-hook.sh up
-  VPN_PORT_FORWARDING_DOWN_COMMAND=/scripts/vpn-port-guard-hook.sh down
+  source "${ARR_STACK_DIR:-$(pwd)}/.aliasarr"
+  arr.vpn.status
+  arr.logs
+  arr.open
   ```
-  Rerun `./arr.sh` to regenerate Compose so Gluetun receives the overrides.
-- When enabled, Gluetun writes the active forwarded port to `/tmp/gluetun/forwarded_port` and mirrors it through the control API at `http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/portforwarded`. Only Gluetun publishes LAN ports; qBittorrent and Arr apps stay in Gluetun’s namespace so traffic never leaks directly.
 
-To remove the stack and clean up generated assets later, run:
-
-```bash
-./arr.sh --uninstall
-```
-
-### Minimum tested container versions (2024-08-25)
-- `qmcgaw/gluetun:v3.40.0`
-- `lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415`
-- `lscr.io/linuxserver/sonarr:4.0.15.2941-ls291`
-- `lscr.io/linuxserver/radarr:5.27.5.10198-ls283`
-- `lscr.io/linuxserver/lidarr:latest`
-- `ghcr.io/flaresolverr/flaresolverr:v3.3.21`
-- `4km3/dnsmasq:2.90-r3` *(optional; not generated by default)*
-
-> LinuxServer.io apps that default to `:latest` (Prowlarr, Bazarr, SABnzbd, Configarr) remain unpinned; override them in `userr.conf` if you need to lock a tag.
-
-## Next steps
-- Read [Configuration](./docs/configuration.md) for variable precedence and permission profiles.
-- Review the [VPN quick guide](./docs/vpn.md) alongside [Networking](./docs/networking.md) before enabling split VPN.
-- Keep [Operations](./docs/operations.md) nearby for helper scripts, rotation commands, and rerun guidance.
-- Review [Security](./docs/security.md) before exposing services beyond your LAN.
-- Bookmark [Troubleshooting](./docs/troubleshooting.md) for recovery steps.
-
-## First-run checklist
-- Confirm `LAN_IP` points at your host (run `hostname -I | awk '{print $1}'` if unsure).
-- Rotate qBittorrent credentials and update `QBT_USER`/`QBT_PASS` in `userr.conf`.
-- If you enabled Proton port forwarding, confirm the summary shows a forwarded port; otherwise skip this step.
-- Confirm optional services and containers match your plan (see [Optional services and containers](./docs/configuration.md#optional-services-and-containers)).
-- Confirm direct LAN exposure meets your needs; arrbash does not manage HTTPS certificates for you.
-- Spot-check published ports with `ss -tulpn` to ensure only expected services listen on the LAN.
-- Review [credential hygiene tips](./docs/security.md#credential-hygiene) so core logins and API keys stay rotated.
-
-## Documentation index
-- [Architecture](./docs/architecture.md) – container map, generated files, and installer flow.
-- [Configuration](./docs/configuration.md) – precedence, core variables, and permission modes.
-- [Networking](./docs/networking.md) – VPN modes, port forwarding, DNS, and HTTPS guidance.
-- [VPN quick guide](./docs/vpn.md) – split vs full tunnel, Proton forwarding, and port-guard basics.
-- [Operations](./docs/operations.md) – script reference, aliases, and recurring tasks.
-- [Security](./docs/security.md) – credential handling, exposure guidance, and verification checks.
-- [Troubleshooting](./docs/troubleshooting.md) – diagnostic steps and targeted fixes.
-- [Version management](./docs/version-management.md) – process for adjusting image tags safely.
-- [FAQ](./docs/faq.md) and [Glossary](./docs/glossary.md) – quick answers and terminology.
-
-## Support & contributions
-Open an issue or PR for bugs or documentation gaps. Review `./arr.sh --help` and the docs before filing reports to confirm behaviour.
+## Documentation
+- [Usage](./docs/usage.md) – installation details, configuration layers, options, and helper commands.
+- [Architecture](./docs/architecture.md) – how templates render into compose and env files.
+- [Networking](./docs/networking.md) – VPN modes, Proton port forwarding, and SABnzbd placements.
+- [Troubleshooting](./docs/troubleshooting.md) – quick checks for connectivity and VPN issues.
 
 ## License
 [MIT](./LICENSE)

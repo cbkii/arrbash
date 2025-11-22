@@ -14,10 +14,10 @@ ARR_PERMISSION_PROFILE="strict"      # default: strict; strict=600/700, collab=6
 # --- Essential paths ---
 ARR_DATA_ROOT="${HOME}/srv"      # default: ${HOME}/srv; stack data root (~/srv)
 ARR_STACK_DIR="${ARR_DATA_ROOT}/${STACK}"      # default: ${ARR_DATA_ROOT}/${STACK}; compose + scripts
-ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"      # default: ${ARRCONF_DIR}; config & secrets dir
+ARRCONF_DIR="${ARR_DATA_ROOT}/${STACK}configs"      # default: ${ARR_STACK_DIR}configs; config & secrets dir
 
 DOWNLOADS_DIR="${HOME}/Downloads"      # default: ${HOME}/Downloads; qBittorrent active downloads
-COMPLETED_DIR="${DOWNLOADS_DIR}/completed"      # default: ${COMPLETED_DIR}; qBittorrent completed path
+COMPLETED_DIR="${DOWNLOADS_DIR}/completed"      # default: ${DOWNLOADS_DIR}/completed; qBittorrent completed path
 
 MEDIA_DIR="${ARR_DATA_ROOT}/media"      # default: ${ARR_DATA_ROOT}/media; library root under ARR_DATA_ROOT
 TV_DIR="${MEDIA_DIR}/Shows"      # default: ${MEDIA_DIR}/Shows; Sonarr library
@@ -26,50 +26,60 @@ MOVIES_DIR="${MEDIA_DIR}/Movies"      # default: ${MEDIA_DIR}/Movies; Radarr lib
 # SUBS_DIR="${MEDIA_DIR}/subs"      # default: ${MEDIA_DIR}/subs; optional Bazarr subtitles path
 
 # --- Internal/resolution paths (rarely touched) ---
-# ARR_ENV_FILE="${ARR_STACK_DIR}/.env"      # default: ${ARR_ENV_FILE}; generated secrets file
-# ARR_DOCKER_DIR="${ARR_STACK_DIR}/dockarr"      # default: ${ARR_DOCKER_DIR}; Docker volumes & persistent data
+# ARR_ENV_FILE="${ARR_STACK_DIR}/.env"      # default: ${ARR_STACK_DIR}/.env; generated secrets file
+# ARR_DOCKER_DIR="${ARR_STACK_DIR}/dockarr"      # default: ${ARR_STACK_DIR}/dockarr; Docker volumes & persistent data
 # ARR_USERCONF_PATH="${ARRCONF_DIR}/userr.conf"      # default: ${ARRCONF_DIR}/userr.conf; location of this file
 # ARR_LOG_DIR="${ARR_STACK_DIR}/logs"      # default: ${ARR_STACK_DIR}/logs; runtime/service logs
 # ARR_INSTALL_LOG="${ARR_LOG_DIR}/${STACK}-install.log"      # default: ${ARR_LOG_DIR}/${STACK}-install.log; installer log path
 
 # --- Network basics (local machine) ---
-LAN_IP=        # default: empty; bind services to specific LAN IP (set reservation first)
+# LAN_IP=        # default: empty; bind services to specific LAN IP (set reservation first)
 LOCALHOST_IP="127.0.0.1"      # default: 127.0.0.1; loopback used by Gluetun control API
 EXPOSE_DIRECT_PORTS="1"      # default: 1; publish WebUIs on http://${LAN_IP}:PORT (LAN_IP required)
+ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (enforce/warn/skip/fix with warn fallback)
 
 # --- Ports (user-facing) ---
-ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (enforce/warn/skip/fix with warn fallback)
-QBT_INT_PORT="8082"      # default: 8082; internal qBittorrent WebUI port
-QBT_PORT="${QBT_INT_PORT}"      # default: ${QBT_INT_PORT} (8082); qBittorrent WebUI LAN port
-QBT_BIND_ADDR="0.0.0.0"      # default: 0.0.0.0; qBittorrent WebUI bind address inside the container
-QBT_ENFORCE_WEBUI="1"      # default: 1; keep WebUI bind/port enforced at startup and during health checks (set 0 to opt out)
-SONARR_INT_PORT="8989"      # default: 8989; internal Sonarr WebUI port
-SONARR_PORT="${SONARR_INT_PORT}"      # default: ${SONARR_INT_PORT} (8989); Sonarr WebUI LAN port
-RADARR_INT_PORT="7878"      # default: 7878; internal Radarr WebUI port
-RADARR_PORT="${RADARR_INT_PORT}"      # default: ${RADARR_INT_PORT} (7878); Radarr WebUI LAN port
-LIDARR_INT_PORT="8686"      # default: 8686; internal Lidarr WebUI port
-LIDARR_PORT="${LIDARR_INT_PORT}"      # default: ${LIDARR_INT_PORT} (8686); Lidarr WebUI LAN port
-PROWLARR_INT_PORT="9696"      # default: 9696; internal Prowlarr WebUI port
-PROWLARR_PORT="${PROWLARR_INT_PORT}"      # default: ${PROWLARR_INT_PORT} (9696); Prowlarr WebUI LAN port
-BAZARR_INT_PORT="6767"      # default: 6767; internal Bazarr WebUI port
-BAZARR_PORT="${BAZARR_INT_PORT}"      # default: ${BAZARR_INT_PORT} (6767); Bazarr WebUI LAN port
-FLARR_INT_PORT="8191"      # default: 8191; internal FlareSolverr port
-FLARR_PORT="${FLARR_INT_PORT}"      # default: ${FLARR_INT_PORT} (8191); FlareSolverr LAN port
-SABNZBD_INT_PORT="8080"      # default: 8080; internal SABnzbd WebUI port
-SABNZBD_PORT="${SABNZBD_INT_PORT}"      # default: ${SABNZBD_INT_PORT} (8080); SABnzbd LAN port
-GLUETUN_CONTROL_PORT="8000"      # default: 8000; Gluetun control API port
-GLUETUN_CONNECTIVITY_PROBE_URLS="https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace"      # default: https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace; external URLs used to verify VPN connectivity
+# QBT_INT_PORT="8082"      # default: 8082; internal qBittorrent WebUI port
+# QBT_PORT="${QBT_INT_PORT}"      # default: ${QBT_INT_PORT}; qBittorrent WebUI LAN port
+# QBT_WEB_PORT="8080"      # default: 8080; qBittorrent Web API port exposed to helpers
+# QBT_BIND_ADDR="0.0.0.0"      # default: 0.0.0.0; qBittorrent WebUI bind address inside the container
+# QBT_ENFORCE_WEBUI="1"      # default: 1; keep WebUI bind/port enforced at startup and during health checks (set 0 to opt out)
+# QBT_API_TIMEOUT="10"      # default: 10; qBittorrent API timeout (seconds)
+# QBT_API_RETRY_COUNT="3"      # default: 3; login/retry attempts when the API is unavailable
+# QBT_API_RETRY_DELAY="2"      # default: 2; delay between qBittorrent API retries (seconds)
+# SONARR_INT_PORT="8989"      # default: 8989; internal Sonarr WebUI port
+# SONARR_PORT="${SONARR_INT_PORT}"      # default: ${SONARR_INT_PORT}; Sonarr WebUI LAN port
+# RADARR_INT_PORT="7878"      # default: 7878; internal Radarr WebUI port
+# RADARR_PORT="${RADARR_INT_PORT}"      # default: ${RADARR_INT_PORT}; Radarr WebUI LAN port
+# LIDARR_INT_PORT="8686"      # default: 8686; internal Lidarr WebUI port
+# LIDARR_PORT="${LIDARR_INT_PORT}"      # default: ${LIDARR_INT_PORT}; Lidarr WebUI LAN port
+# PROWLARR_INT_PORT="9696"      # default: 9696; internal Prowlarr WebUI port
+# PROWLARR_PORT="${PROWLARR_INT_PORT}"      # default: ${PROWLARR_INT_PORT}; Prowlarr WebUI LAN port
+# BAZARR_INT_PORT="6767"      # default: 6767; internal Bazarr WebUI port
+# BAZARR_PORT="${BAZARR_INT_PORT}"      # default: ${BAZARR_INT_PORT}; Bazarr WebUI LAN port
+# FLARR_INT_PORT="8191"      # default: 8191; internal FlareSolverr port
+# FLARR_PORT="${FLARR_INT_PORT}"      # default: ${FLARR_INT_PORT}; FlareSolverr LAN port
+# SABNZBD_INT_PORT="8080"      # default: 8080; internal SABnzbd WebUI port
+# SABNZBD_PORT="${SABNZBD_INT_PORT}"      # default: ${SABNZBD_INT_PORT}; SABnzbd LAN port
+# GLUETUN_CONTROL_PORT="8000"      # default: 8000; Gluetun control API port
+# GLUETUN_CONTROL_BIND="all"      # default: all; set loopback to restrict the control API to 127.0.0.1
+# GLUETUN_CONNECTIVITY_PROBE_URLS="https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace"      # default: https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace; external URLs used to verify VPN connectivity
+# GLUETUN_API_TIMEOUT="10"      # default: 10; Gluetun control API timeout (seconds)
+# GLUETUN_API_RETRY_COUNT="3"      # default: 3; number of Gluetun API attempts
+# GLUETUN_API_RETRY_DELAY="2"      # default: 2; delay between Gluetun API retries (seconds)
+# GLUETUN_API_MAX_RETRY_DELAY="8"      # default: 8; maximum backoff for Gluetun API retries (seconds)
 
 # --- qBitTorrent Client credentials (change on first run) ---
 QBT_USER="admin"      # default: admin; initial qBittorrent username
 QBT_PASS="adminadmin"      # default: adminadmin; initial qBittorrent password
+QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128 (+LAN/32 when LAN_IP set); CIDRs that bypass qBittorrent login
 
 # --- VPN basics (connectivity) ---
 SPLIT_VPN="1"      # default: 0=VPN for full stack; 1=restrict VPN to qBittorrent only
-SERVER_COUNTRIES="Netherlands"      # default: Netherlands; ProtonVPN exit countries
+SERVER_COUNTRIES="Netherlands,Singapore,Australia"      # default: Netherlands,Singapore; ProtonVPN exit countries
 # SERVER_NAMES=""      # default: empty; optionally pin Proton hosts (comma-separated)
-PVPN_ROTATE_COUNTRIES="Singapore,Japan,Spain,Malaysia,Portugal,Romania,Switzerland,Luxembourg,Iceland,Australia"      # default: empty; rotation order for arr.vpn switch
-GLUETUN_API_KEY=""      # default: empty; pre-seed Gluetun API key
+# PVPN_ROTATE_COUNTRIES="Singapore,Japan,Spain,Malaysia,Portugal,Romania,Switzerland,Luxembourg,Iceland,Australia"      # default: empty; rotation order for arr.vpn switch
+# GLUETUN_API_KEY=""      # default: empty; pre-seed Gluetun API key
 
 # --- VPN port guard (controller) ---
 VPN_PORT_GUARD_POLL_SECONDS="15"      # default: 15; controller loop interval for Gluetun/qBittorrent sync
@@ -80,13 +90,12 @@ VPN_AUTO_RECONNECT_ENABLED="0"      # default: 0; enable background VPN monitor
 VPN_SPEED_THRESHOLD_KBPS="12"      # default: 12; kbps threshold before reconnect
 VPN_CHECK_INTERVAL_MINUTES="20"      # default: 20; minutes between throughput samples
 VPN_CONSECUTIVE_CHECKS="3"      # default: 3; low samples required before reconnecting
-VPN_ALLOWED_HOURS_START=""      # default: empty; optional rotation window start hour
-VPN_ALLOWED_HOURS_END=""      # default: empty; optional rotation window end hour
+# VPN_ALLOWED_HOURS_START=""      # default: empty; optional rotation window start hour
+# VPN_ALLOWED_HOURS_END=""      # default: empty; optional rotation window end hour
 VPN_COOLDOWN_MINUTES="60"      # default: 60; cooldown after reconnect
 VPN_MAX_RETRY_MINUTES="20"      # default: 20; retry budget before disabling
 VPN_ROTATION_MAX_PER_DAY="6"      # default: 6; max automatic reconnects per day (0=unlimited)
 VPN_ROTATION_JITTER_SECONDS="0"      # default: 0; random jitter added to reconnect timing
-
 
 # --- SABnzbd (Usenet) ---
 SABNZBD_ENABLED="0"      # default: 0; enable SABnzbd container/helper
@@ -122,7 +131,7 @@ ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rul
 # ARR_CF_IDS_LQ_TITLE=("e2315f990da2e2cbfc9fa5b7a6fcfe48" "e204b80c87be9497a8a6eaff48f72905")      # default: see helper script; Low Quality title matches
 # ARR_CF_IDS_UPSCALED=("23297a736ca77c0fc8e70f8edd7ee56c" "bfd8eb01832d646a0a89c4deb46f8564")      # default: see helper script; Upscaled releases
 # ARR_CF_IDS_LANGUAGE=("69aa1e159f97d860440b04cd6d590c4f" "0dc8aec3bd1c47cd6c40c46ecd27e846")      # default: see helper script; Not English language
-# ARR_CF_IDS_MULTI=("7ba05c6e0e14e793538174c679126996" "4b900e171accbfb172729b63323ea8ca")      # default: see helper script; MULTi releases
+# ARR_CF_IDS_MULTI=("7ba05c6e0e14e793538174c679126996" "4b900e171accbfb172729b63323ea8ca")      # default: see helper script; MUTli releases
 # ARR_CF_IDS_X265=("47435ece6b99a0b477caf360e79ba0bb" "dc98083864ea246d05a42df0d05f81cc")      # default: see helper script; x265 (HD) releases
 
 # --- Images (advanced users; specify tags in config) ---
@@ -137,7 +146,6 @@ ARR_MBMIN_DECIMALS="1"      # default: 1; decimal precision for minimum size rul
 # SABNZBD_IMAGE="lscr.io/linuxserver/sabnzbd:latest"      # default: lscr.io/linuxserver/sabnzbd:latest; override SABnzbd tag
 # CONFIGARR_IMAGE="ghcr.io/raydak-labs/configarr:latest"      # default: ghcr.io/raydak-labs/configarr:latest; override ConfigArr tag
 # QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"      # default: ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest; Vuetorrent WebUI mod
-QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128; CIDRs that bypass qBittorrent login
 
 # --- Behaviour toggles ---
 # ASSUME_YES="0"      # default: 0; skip confirmation prompts when scripting installs

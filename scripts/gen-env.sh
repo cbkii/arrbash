@@ -53,7 +53,7 @@ resolve_path() {
 
 TEMPLATE_ARG="${1:-}"
 if [[ -z "$TEMPLATE_ARG" ]]; then
-  TEMPLATE_ARG="${REPO_ROOT}/.env.template"
+  TEMPLATE_ARG="${REPO_ROOT}/scripts/.env.template"
 fi
 OUT_ARG="${2:-}"
 CONF_ARG="${3:-}"
