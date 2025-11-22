@@ -9,12 +9,33 @@ accept the extra moving parts.
 
 ## Architecture
 
-The vpn-port-guard system consists of two simple components:
+The vpn-port-guard system uses battle-tested patterns from the Gluetun ecosystem:
 
-1. **Controller (`vpn-port-guard.sh`)**: A polling loop that checks Gluetun for 
-   the forwarded port and updates qBittorrent when it changes.
+1. **Controller (`vpn-port-guard.sh`)**: A polling loop that queries Gluetun's 
+   control API (`/v1/openvpn/portforwarded`) and updates qBittorrent when the 
+   port changes. Uses exponential backoff for reliability and verifies port 
+   updates succeed.
+   
 2. **Event Logger (`vpn-port-guard-hook.sh`)**: Called by Gluetun when port 
-   changes occur, logs events for monitoring but does not trigger the controller.
+   events occur, provides audit trail only. The controller polls independently 
+   and does not depend on hook events.
+
+### Why API polling instead of hooks?
+
+Gluetun's hook system is best for logging and notifications. For reliable port 
+synchronization, polling the API ensures:
+- Resilience to missed or dropped hook events
+- Recovery from temporary failures
+- Verification that ports are actually applied
+- Exponential backoff when services are unavailable
+
+### Reliability improvements
+
+Recent enhancements make the controller more robust:
+- **Port validation**: Ensures ports are in valid range (1024-65535)
+- **Verification**: Confirms qBittorrent accepted the port update
+- **Exponential backoff**: 2s → 4s → 8s delays when APIs are unavailable
+- **Health checks**: Uses Gluetun's `/healthcheck` endpoint for diagnostics
 
 ## What it does when enabled
 

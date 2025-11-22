@@ -219,9 +219,20 @@ qbt_current_listen_port() {
 
 qbt_set_listen_port() {
   local port="$1"
+  local verify="${2:-true}"
+  
   if [[ -z "$port" || ! "$port" =~ ^[0-9]+$ ]]; then
     return 1
   fi
+  
+  # Validate port is in valid range
+  if ((port < 1024 || port > 65535)); then
+    if declare -f warn >/dev/null 2>&1; then
+      warn "Invalid port number: ${port} (must be 1024-65535)"
+    fi
+    return 1
+  fi
+  
   if ! _qbt_api_ensure_cookie; then
     return 1
   fi
@@ -234,12 +245,29 @@ qbt_set_listen_port() {
   local url
   url="$(_qbt_api_base_url)/api/v2/app/setPreferences"
 
-  curl -fsS \
+  if ! curl -fsS \
     --connect-timeout "${QBT_API_TIMEOUT}" \
     --max-time "${QBT_API_TIMEOUT}" \
     -b "${_qbt_api_cookie_file}" \
     --data-urlencode "json=${payload}" \
-    "${url}" >/dev/null
+    "${url}" >/dev/null; then
+    return 1
+  fi
+  
+  # Verify the port was actually set if requested
+  if [[ "$verify" == "true" ]]; then
+    sleep 1
+    local actual_port
+    actual_port="$(qbt_current_listen_port 2>/dev/null || printf '0')"
+    if [[ "$actual_port" != "$port" ]]; then
+      if declare -f warn >/dev/null 2>&1; then
+        warn "Port verification failed: requested ${port}, got ${actual_port}"
+      fi
+      return 1
+    fi
+  fi
+  
+  return 0
 }
 
 # Allow callers to clean up cookie files on exit.

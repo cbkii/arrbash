@@ -207,13 +207,16 @@ apply_qbt_port() {
   local port="$1"
   log_debug "Updating qBittorrent listen port to ${port}"
   
-  # Use consolidated qbt_set_listen_port from qbt-api.sh
+  # Use consolidated qbt_set_listen_port from qbt-api.sh with verification
   if declare -f qbt_set_listen_port >/dev/null 2>&1; then
-    if qbt_set_listen_port "$port" 2>/dev/null; then
+    if qbt_set_listen_port "$port" "true" 2>/dev/null; then
       _qbt_state="active"
       _last_forwarded_port="$port"
-      log_debug "qBittorrent listen port updated successfully"
+      log "Successfully updated qBittorrent listen port to ${port}"
+      log_debug "Port verification passed"
       return 0
+    else
+      log "Failed to update qBittorrent listen port to ${port}"
     fi
   fi
   
