@@ -2560,7 +2560,7 @@ verify_single_level_env_placeholders() {
   local line_no=""
   local content=""
   while IFS=$'\t' read -r line_no content; do
-    warn "  L${line_no}: ${content}"
+    warn "L${line_no}: ${content}"
   done <<<"${nested}"
 
   local auto_fix=0

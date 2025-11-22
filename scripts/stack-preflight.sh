@@ -243,11 +243,11 @@ detect_internal_port_conflicts() {
 
 # Provides actionable suggestions when required ports are already bound
 port_conflict_guidance() {
-  warn "  Resolve the conflicts by stopping or reconfiguring the services listed above."
-  warn "  Common fixes include:"
-  warn "    • Stopping existing ${STACK} containers: ${DOCKER_COMPOSE_CMD[*]} down"
-  warn "    • Freeing the port from host services (e.g. sudo systemctl stop <service>)"
-  warn "    • Updating LAN_IP or port overrides in ${ARR_USERCONF_PATH}"
+  warn "Resolve the conflicts by stopping or reconfiguring the services listed above."
+  warn "Common fixes include:"
+  warn "• Stopping existing ${STACK} containers: ${DOCKER_COMPOSE_CMD[*]} down"
+  warn "• Freeing the port from host services (e.g. sudo systemctl stop <service>)"
+  warn "• Updating LAN_IP or port overrides in ${ARR_USERCONF_PATH}"
 }
 
 : "${ARR_PORT_CONFLICT_AUTO_FIX:=1}"
@@ -411,15 +411,15 @@ force_kill_port_listeners() {
     case "$proc_name" in
       docker-proxy) ;;
       *)
-        warn "  Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
+        warn "Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
         continue
         ;;
     esac
-    warn "  Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
+    warn "Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
     if kill "$pid" 2>/dev/null; then
       any_action=1
     else
-      warn "  Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
+      warn "Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
     fi
   done
   if ((any_action)); then
@@ -427,7 +427,7 @@ force_kill_port_listeners() {
     for pid in "${targets[@]}"; do
       [[ -z "$pid" ]] && continue
       if kill -0 "$pid" 2>/dev/null; then
-        warn "  PID ${pid} still running; sending SIGKILL."
+        warn "PID ${pid} still running; sending SIGKILL."
         kill -9 "$pid" 2>/dev/null || true
       fi
     done
@@ -474,7 +474,7 @@ simple_port_check() {
       mode="enforce"
       ;;
     *)
-      warn "  Unknown ARR_PORT_CHECK_MODE='${mode_raw}'. Falling back to enforce."
+      warn "Unknown ARR_PORT_CHECK_MODE='${mode_raw}'. Falling back to enforce."
       mode="enforce"
       ;;
   esac
@@ -484,7 +484,7 @@ simple_port_check() {
   fi
 
   if [[ "$mode" == "skip" ]]; then
-    warn "  Port availability checks skipped (ARR_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
+    warn "Port availability checks skipped (ARR_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
     return 0
   fi
 
@@ -526,14 +526,14 @@ simple_port_check() {
           summary_joined="$(printf '%s; ' "${summary_tokens[@]}")"
           summary_joined="${summary_joined%; }"
         fi
-        warn "  Port conflicts detected (ARR_PORT_CHECK_MODE=warn): ${summary_joined}; adjust ${ARR_USERCONF_PATH:-userr.conf} to assign unique host ports."
+        warn "Port conflicts detected (ARR_PORT_CHECK_MODE=warn): ${summary_joined}; adjust ${ARR_USERCONF_PATH:-userr.conf} to assign unique host ports."
       else
-        warn "  Stack configuration port conflicts detected:"
+        warn "Stack configuration port conflicts detected:"
         local detail_line=""
         for detail_line in "${detail_lines[@]}"; do
-          warn "    - ${detail_line}"
+          warn "- ${detail_line}"
         done
-        warn "  Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
+        warn "Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
         die "Resolve internal stack port conflicts (duplicate host bindings) and rerun ./arr.sh"
       fi
     fi
@@ -561,8 +561,8 @@ simple_port_check() {
           ;;
         2)
           if ((tool_missing_reported == 0)); then
-            warn "  Unable to inspect ports automatically (missing ss/lsof/netstat)."
-            warn "  Skipping port availability checks; ensure required ports are free manually."
+            warn "Unable to inspect ports automatically (missing ss/lsof/netstat)."
+            warn "Skipping port availability checks; ensure required ports are free manually."
             tool_missing_reported=1
           fi
           ;;
@@ -584,19 +584,19 @@ simple_port_check() {
       return
     fi
 
-    warn "  Port conflicts detected:"
+    warn "Port conflicts detected:"
     local entry=""
     for entry in "${conflicts[@]}"; do
       IFS='|' read -r label proto port expected details <<<"$entry"
-      warn "    - ${label} (${proto^^} ${port}) is already in use."
+      warn "- ${label} (${proto^^} ${port}) is already in use."
       if [[ -n "$expected" && "$expected" != "*" ]]; then
-        warn "      Expected bind address: ${expected}"
+        warn "Expected bind address: ${expected}"
       fi
       if [[ -n "$details" ]]; then
         local line
         while IFS= read -r line; do
           [[ -z "$line" ]] && continue
-          warn "      Listener: $line"
+          warn "Listener: $line"
         done < <(printf '%s\n' "$details" | head -n 3)
       fi
     done
@@ -631,13 +631,13 @@ simple_port_check() {
     fi
 
     if [[ "$mode" == "warn" ]]; then
-      warn "  Continuing despite port conflicts (ARR_PORT_CHECK_MODE=warn). Services may fail to bind."
+      warn "Continuing despite port conflicts (ARR_PORT_CHECK_MODE=warn). Services may fail to bind."
       return 0
     fi
 
     if [[ "$mode" == "fix" ]]; then
-      warn "  Automatic remediation was unable to clear all conflicting listeners."
-      warn "  Continuing despite port conflicts (ARR_PORT_CHECK_MODE=fix). Services may fail to bind."
+      warn "Automatic remediation was unable to clear all conflicting listeners."
+      warn "Continuing despite port conflicts (ARR_PORT_CHECK_MODE=fix). Services may fail to bind."
       return 0
     fi
 
