@@ -390,32 +390,7 @@ fi
 ENV_FILE="$(arr_env_file)"
 CONTAINER_NAME="qbittorrent"
 
-# Sources the stack .env so helper commands reflect deployed values
-load_env() {
-  [[ -f "$ENV_FILE" ]] || return
-
-  local line key raw value
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    line="${line//$'\r'/}"
-    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
-    [[ $line =~ ^[[:space:]]*export[[:space:]]+(.+)$ ]] && line="${BASH_REMATCH[1]}"
-    [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$ ]] || continue
-
-    key="${BASH_REMATCH[1]}"
-    raw="${BASH_REMATCH[2]}"
-    # Trim leading whitespace
-    raw="${raw#"${raw%%[![:space:]]*}"}"
-    value="$(unescape_env_value_from_compose "$raw")"
-
-    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-      printf -v "$key" '%s' "$value"
-      # shellcheck disable=SC2163  # export is intentional for dynamic key names
-      export "$key"
-    else
-      echo "Warning: Invalid environment variable name '$key' in $ENV_FILE, skipping." >&2
-    fi
-  done <"$ENV_FILE"
-}
+# load_env() is now sourced from stack-common.sh to avoid duplication
 
 # Determines dockarr directory from env overrides or common defaults
 resolve_docker_data() {
@@ -735,7 +710,7 @@ USAGE
 
 # Dispatches qbt-helper commands after loading environment context
 main() {
-  load_env
+  load_env "$ENV_FILE"
 
   DOCKER_DATA=$(resolve_docker_data) || die "Cannot find dockarr directory"
   export DOCKER_DATA

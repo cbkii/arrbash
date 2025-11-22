@@ -62,30 +62,7 @@ fi
 
 ENV_FILE="$(arr_env_file)"
 
-load_env() {
-  [[ -f "$ENV_FILE" ]] || return 0
-
-  local line key raw value
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    line="${line//$'\r'/}"
-    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
-    [[ $line =~ ^[[:space:]]*export[[:space:]]+(.+)$ ]] && line="${BASH_REMATCH[1]}"
-    [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$ ]] || continue
-
-    key="${BASH_REMATCH[1]}"
-    raw="${BASH_REMATCH[2]}"
-    raw="${raw#"${raw%%[![:space:]]*}"}"
-    value="$(unescape_env_value_from_compose "$raw")"
-
-    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-      printf -v "$key" '%s' "$value"
-      # shellcheck disable=SC2163  # export is intentional for dynamic key names
-      export "$key"
-    else
-      log_warn "Invalid environment variable name '$key' in $ENV_FILE, skipping."
-    fi
-  done <"$ENV_FILE"
-}
+# load_env() is now sourced from stack-common.sh to avoid duplication
 
 sab_enabled() {
   [[ "${SABNZBD_ENABLED:-0}" == "1" ]]
@@ -351,7 +328,7 @@ USAGE
 }
 
 main() {
-  load_env
+  load_env "$ENV_FILE"
 
   local cmd="${1:-}"
   # shellcheck disable=SC2221,SC2222  # -* pattern intentionally includes double-dash variants

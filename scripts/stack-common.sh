@@ -2780,6 +2780,36 @@ get_env_kv() {
   printf '%s\n' "${value}"
 }
 
+# Loads and exports environment variables from an env file, handling compose-style escaping
+load_env() {
+  local env_file="${1:-${ARR_ENV_FILE:-}}"
+  
+  [[ -f "$env_file" ]] || return 0
+
+  local line key raw value
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line//$'\r'/}"
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ $line =~ ^[[:space:]]*export[[:space:]]+(.+)$ ]] && line="${BASH_REMATCH[1]}"
+    [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$ ]] || continue
+
+    key="${BASH_REMATCH[1]}"
+    raw="${BASH_REMATCH[2]}"
+    raw="${raw#"${raw%%[![:space:]]*}"}"
+    value="$(unescape_env_value_from_compose "$raw")"
+
+    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      printf -v "$key" '%s' "$value"
+      # shellcheck disable=SC2163  # export is intentional for dynamic key names
+      export "$key"
+    else
+      if declare -f warn >/dev/null 2>&1; then
+        warn "Invalid environment variable name '$key' in $env_file, skipping."
+      fi
+    fi
+  done <"$env_file"
+}
+
 # Persists installer-discovered env vars back into .env without introducing duplicates
 persist_env_var() {
   local key="$1"
