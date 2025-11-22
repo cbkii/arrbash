@@ -26,10 +26,6 @@ arr_setup_defaults() {
     fi
   fi
 
-  if [[ -n "${LAN_DOMAIN_SUFFIX:-}" ]]; then
-    LAN_DOMAIN_SUFFIX="${LAN_DOMAIN_SUFFIX#.}"
-  fi
-
   if [[ -z "${QBT_DOCKER_MODS+x}" ]]; then
     QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"
   fi
@@ -55,8 +51,6 @@ arr_setup_defaults() {
   VUETORRENT_STATUS_LEVEL="msg"
   # shellcheck disable=SC2034
   VUETORRENT_VERSION=""
-
-  export LAN_DOMAIN_SUFFIX
 
   PROTON_USER_VALUE=""
   PROTON_PASS_VALUE=""
