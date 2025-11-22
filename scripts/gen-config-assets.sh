@@ -39,7 +39,7 @@ _configarr_sanitize_score() {
 }
 
 write_gluetun_control_assets() {
-  msg "  Preparing Gluetun control assets for Proton port forwarding"
+  msg "Preparing Gluetun control assets for Proton port forwarding"
 
   local gluetun_root="${ARR_DOCKER_DIR}/gluetun"
 
@@ -95,7 +95,7 @@ EOF
 
     if [[ -n "$auth_action" ]]; then
       atomic_write "$auth_config" "$auth_payload" "$SECRET_FILE_MODE"
-      msg "  Gluetun auth config ${auth_action} at ${auth_config}"
+      msg "Gluetun auth config ${auth_action} at ${auth_config}"
     fi
   else
     if gluetun_version_requires_auth_config 2>/dev/null; then
@@ -148,7 +148,7 @@ sync_vpn_port_guard_assets() {
     ensure_file_mode "$ARR_STACK_DIR/scripts/${asset}" 755
   done
 
-  msg "  vpn-port-guard scripts: ${ARR_STACK_DIR}/scripts"
+  msg "vpn-port-guard scripts: ${ARR_STACK_DIR}/scripts"
 }
 
 # Installs SABnzbd helper into the stack scripts directory
@@ -159,7 +159,7 @@ write_sab_helper_script() {
   cp "${REPO_ROOT}/scripts/stack-sab-helper.sh" "$ARR_STACK_DIR/scripts/sab-helper.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/sab-helper.sh" 755
 
-  msg "  SABnzbd helper: ${ARR_STACK_DIR}/scripts/sab-helper.sh"
+  msg "SABnzbd helper: ${ARR_STACK_DIR}/scripts/sab-helper.sh"
 }
 
 # Installs qBittorrent helper shim into the stack scripts directory
@@ -172,7 +172,7 @@ write_qbt_helper_script() {
 
   rm -f "$ARR_STACK_DIR/scripts/qbt-webui.sh"
 
-  msg "  qBittorrent helper (also init hook): ${ARR_STACK_DIR}/scripts/qbt-helper.sh"
+  msg "qBittorrent helper (also init hook): ${ARR_STACK_DIR}/scripts/qbt-helper.sh"
 }
 
 # Reconciles qBittorrent configuration defaults while preserving user customizations
@@ -201,7 +201,7 @@ write_qbt_config() {
   local auth_whitelist
   auth_whitelist="$(normalize_csv "${QBT_AUTH_WHITELIST:-$default_auth_whitelist}")"
   QBT_AUTH_WHITELIST="$auth_whitelist"
-  msg "  Stored WebUI auth whitelist entries: ${auth_whitelist}"
+  msg "Stored WebUI auth whitelist entries: ${auth_whitelist}"
 
   local vt_root="${VUETORRENT_ROOT:-/config/vuetorrent}"
   local vt_alt_value="true"
@@ -257,7 +257,7 @@ EOF
     if existing_content="$(arr_read_sensitive_file "$conf_file" || true)"; then
       source_content="$existing_content"
     else
-      warn "  Unable to read ${conf_file}; falling back to defaults"
+      warn "Unable to read ${conf_file}; falling back to defaults"
     fi
   fi
 
@@ -355,7 +355,7 @@ ensure_qbt_webui_config_ready() {
 }
 
 ensure_qbt_config() {
-  msg "  Ensuring qBittorrent configuration is applied"
+  msg "Ensuring qBittorrent configuration is applied"
 
   # Sleep to allow qBittorrent to restart safely; configurable via QBT_CONFIG_SLEEP (default: 5 seconds)
   sleep "${QBT_CONFIG_SLEEP:-5}"
@@ -379,7 +379,7 @@ ensure_qbt_config() {
 # Materializes Configarr config/secrets with sanitized policy values when enabled
 write_configarr_assets() {
   if [[ "${ENABLE_CONFIGARR:-0}" != "1" ]]; then
-    msg "  🧾 Skipping Configarr assets (ENABLE_CONFIGARR=0)"
+    msg "🧾 Skipping Configarr assets (ENABLE_CONFIGARR=0)"
     return 0
   fi
 
@@ -665,6 +665,6 @@ write_configarr_assets() {
     CONFIGARR_POLICY_RUNTIME CONFIGARR_POLICY_SEASON_GB CONFIGARR_POLICY_LANG \
     CONFIGARR_POLICY_ENGLISH CONFIGARR_POLICY_MULTI CONFIGARR_POLICY_X265 CONFIGARR_POLICY_JUNK
 
-  msg "  Configarr policy: ${resolution_display}, cap ${sanitized_ep_max_gb} GB (~${episode_max_mbmin} MB/min)"
-  msg "  Penalties: English=${configarr_policy[english_bias]}, Multi=${configarr_policy[multi_penalty]}, x265=${configarr_policy[x265_penalty]}, Junk=${configarr_policy[junk_reinforce]}"
+  msg "Configarr: ${resolution_display}, cap ${sanitized_ep_max_gb} GB (~${episode_max_mbmin} MB/min)"
+  msg "Penalties: EN=${configarr_policy[english_bias]}, Multi=${configarr_policy[multi_penalty]}, x265=${configarr_policy[x265_penalty]}, Junk=${configarr_policy[junk_reinforce]}"
 }

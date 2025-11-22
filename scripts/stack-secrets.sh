@@ -76,12 +76,12 @@ generate_api_key() {
     local auth_config="${ARR_DOCKER_DIR}/gluetun/auth/config.toml"
     if [[ -e "$auth_config" ]]; then
       if rm -f "$auth_config"; then
-        msg "  Removed existing auth config for key rotation"
+        msg "Removed existing auth config for key rotation"
       else
-        warn "  Failed to remove ${auth_config}; check permissions before restarting"
+        warn "Failed to remove ${auth_config}; check permissions before restarting"
       fi
     else
-      msg "  No existing auth config detected; skipping removal"
+      msg "No existing auth config detected; skipping removal"
     fi
   fi
 }

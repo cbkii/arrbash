@@ -298,10 +298,10 @@ print_summary() {
     echo
     warn "Some critical checks failed. Please review the errors above."
     warn "Actionable guidance:"
-    warn "  - Install missing dependencies with: sudo apt install docker.io curl jq openssl git"
-    warn "  - Ensure Docker daemon is running: sudo systemctl start docker"
-    warn "  - Check configuration in .env or userr.conf files"
-    warn "  - Verify API endpoints are accessible if services are expected to be running"
+    warn "- Install missing dependencies with: sudo apt install docker.io curl jq openssl git"
+    warn "- Ensure Docker daemon is running: sudo systemctl start docker"
+    warn "- Check configuration in .env or userr.conf files"
+    warn "- Verify API endpoints are accessible if services are expected to be running"
     return 1
   elif ((_diagnostics_warnings > 0)); then
     echo

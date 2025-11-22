@@ -338,8 +338,8 @@ VPN_AUTO_ALIAS
   ensure_nonsecret_file_mode "$snapshot_file"
 
   msg "✅ Helper aliases written to: $aliases_file"
-  msg "   Source them with: source $aliases_file"
-  msg "   Snapshot stored at: $snapshot_file"
+  msg " Source them with: source $aliases_file"
+  msg " Snapshot stored at: $snapshot_file"
 }
 
 update_alias_rc_block() {

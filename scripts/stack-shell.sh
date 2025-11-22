@@ -124,7 +124,7 @@ arr_shell_print_manual_steps() {
   msg "ℹ️ Run these commands to refresh your session:"
   local step
   for step in "${steps[@]}"; do
-    msg "   ${step}"
+    msg " ${step}"
   done
 }
 

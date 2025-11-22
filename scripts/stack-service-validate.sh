@@ -110,7 +110,7 @@ preflight_compose_interpolation() {
     if LC_ALL=C grep -E 'variable is not set' "$warn_log" >/dev/null 2>&1; then
       while IFS= read -r line; do
         [[ -z "$line" ]] && continue
-        msg "  ${line}"
+        msg "${line}"
       done < <(LC_ALL=C grep -E 'variable is not set' "$warn_log")
     fi
     exit 1
@@ -165,11 +165,11 @@ validate_compose_or_die() {
       local start=$((line - 5))
       local end=$((line + 5))
       ((start < 1)) && start=1
-      msg "  Error context from docker-compose.yml:"
+      msg "Error context from docker-compose.yml:"
       nl -ba "$file" | LC_ALL=C sed -n "${start},${end}p" \
         | while IFS= read -r context_line; do
           [[ -z "$context_line" ]] && continue
-          msg "    ${context_line}"
+          msg "${context_line}"
         done
     fi
 
@@ -179,13 +179,13 @@ validate_compose_or_die() {
       if "${compose_cmd[@]}" -f "$file" config --services >"$services_tmp" 2>"$services_err"; then
         while IFS= read -r service; do
           [[ -z "$service" ]] && continue
-          msg "  Checking service: ${service}"
+          msg "Checking service: ${service}"
           if ! "${compose_cmd[@]}" -f "$file" config "$service" >/dev/null 2>"${errlog}.${service}"; then
-            warn "  Service ${service} has configuration errors:"
+            warn "Service ${service} has configuration errors:"
             if [[ -s "${errlog}.${service}" ]]; then
               while IFS= read -r service_err; do
                 [[ -z "$service_err" ]] && continue
-                msg "    ${service_err}"
+                msg "${service_err}"
               done <"${errlog}.${service}"
             else
               cat "${errlog}.${service}" 2>/dev/null || true
@@ -272,7 +272,7 @@ check_image_exists() {
 validate_images() {
 
   if ! command -v docker >/dev/null 2>&1; then
-    warn "  Docker CLI unavailable; skipping image validation (sandbox)."
+    warn "Docker CLI unavailable; skipping image validation (sandbox)."
     return 0
   fi
 
@@ -301,10 +301,10 @@ validate_images() {
     local image="${!var_name:-}"
     [[ -z "$image" ]] && continue
 
-    msg "  Checking $image..."
+    msg "Checking $image..."
 
     if check_image_exists "$image"; then
-      msg "  ✅ Valid: $image"
+      msg "✅ Valid: $image"
       continue
     fi
 
@@ -317,17 +317,17 @@ validate_images() {
 
     if [[ "$tag" != "latest" && "$base_image" == lscr.io/linuxserver/* && "${ARR_ALLOW_TAG_DOWNGRADE:-0}" == "1" ]]; then
       local latest_image="${base_image}:latest"
-      msg "    Trying opt-in fallback: $latest_image"
+      msg "Trying opt-in fallback: $latest_image"
 
       if check_image_exists "$latest_image"; then
-        msg "    ✅ Using fallback: $latest_image"
+        msg "✅ Using fallback: $latest_image"
         downgrade_applied["$var_name"]="$latest_image"
         update_env_image_var "$var_name" "$latest_image"
         continue
       fi
     fi
 
-    warn "  ❌ Could not validate: $image"
+    warn "❌ Could not validate: $image"
     failed_images+=("$image")
   done
 
@@ -335,7 +335,7 @@ validate_images() {
     warn "================================================"
     warn "Some images could not be validated:"
     for img in "${failed_images[@]}"; do
-      warn "  - $img"
+      warn "- $img"
     done
     if [[ "${ARR_ALLOW_TAG_DOWNGRADE:-0}" != "1" ]]; then
       warn "Set ARR_ALLOW_TAG_DOWNGRADE=1 to permit temporary :latest fallback for LinuxServer images."
@@ -348,7 +348,7 @@ validate_images() {
   if ((${#downgrade_applied[@]} > 0)); then
     local key
     for key in "${!downgrade_applied[@]}"; do
-      msg "  ⤵️  ${key} downgraded to ${downgrade_applied[$key]} (ARR_ALLOW_TAG_DOWNGRADE=1)"
+      msg "⤵️  ${key} downgraded to ${downgrade_applied[$key]} (ARR_ALLOW_TAG_DOWNGRADE=1)"
     done
   fi
 

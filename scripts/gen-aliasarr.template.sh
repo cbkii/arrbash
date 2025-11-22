@@ -2087,7 +2087,7 @@ arr.vpn.status() {
     if [ "$pf_enabled_flag" -eq 1 ]; then
       msg "Forwarded port: ${pf_port} (active via vpn-port-guard)"
     else
-      msg "Forwarded port: ${pf_port} (lease detected but not yet applied; controller status ${qbt_status:-unknown})"
+      msg "Forwarded port: ${pf_port} (lease pending; status ${qbt_status:-unknown})"
     fi
   else
     if [ "$controller_mode" = "strict" ]; then
@@ -2559,7 +2559,7 @@ arr.vpn.switch() {
   local target_lower
   target_lower="$(_arr_lowercase "$target")"
   if [ -n "$current_lower" ] && [ "$current_lower" = "$target_lower" ]; then
-    msg "SERVER_COUNTRIES already set to ${target}; cycling tunnel within the existing region set."
+    msg "SERVER_COUNTRIES set to ${target}; cycling tunnel in region."
     arr.vpn.fastest
     return $?
   fi

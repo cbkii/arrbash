@@ -30,19 +30,19 @@ if [[ -f "${ARR_USERCONF_PATH}" ]]; then
 fi
 
 doctor_ok() {
-  msg "  $*"
+  msg "$*"
 }
 
 doctor_fail() {
-  warn "  $*"
+  warn "$*"
 }
 
 doctor_warn() {
-  warn "  $*"
+  warn "$*"
 }
 
 doctor_note() {
-  msg "  $*"
+  msg "$*"
 }
 
 # Reports whether a specific service port is free/bound, noting missing tooling
@@ -430,7 +430,7 @@ if [[ "${ARR_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
   if [[ -n "${ARR_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
     while IFS= read -r conflict_line; do
       [[ -z "$conflict_line" ]] && continue
-      msg "  • ${conflict_line}"
+      msg "• ${conflict_line}"
     done < <(printf '%s\n' "${ARR_INTERNAL_PORT_CONFLICT_DETAIL}")
   fi
 fi
@@ -487,14 +487,14 @@ doctor_check_sabnzbd
 lan_target="${LAN_IP:-<unset>}"
 step "From another LAN device you can try:"
 if [[ "${EXPOSE_DIRECT_PORTS}" == "1" ]]; then
-  msg "  curl -I http://${lan_target}:${QBT_PORT}"
-  msg "  curl -I http://${lan_target}:${SONARR_PORT}"
-  msg "  curl -I http://${lan_target}:${RADARR_PORT}"
+  msg "curl -I http://${lan_target}:${QBT_PORT}"
+  msg "curl -I http://${lan_target}:${SONARR_PORT}"
+  msg "curl -I http://${lan_target}:${RADARR_PORT}"
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
-    msg "  curl -I http://${lan_target}:${SABNZBD_PORT}"
+    msg "curl -I http://${lan_target}:${SABNZBD_PORT}"
   fi
 else
-  msg "  (Direct ports disabled; set EXPOSE_DIRECT_PORTS=1 to enable IP:PORT access.)"
+  msg "(Direct ports disabled; set EXPOSE_DIRECT_PORTS=1 to enable IP:PORT access.)"
 fi
 
 doctor_note "Local DNS helper removed; rely on LAN IP access instead."

@@ -6,7 +6,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
 # Verifies required tooling (docker/compose/curl/jq) and records versions for logs
 install_missing() {
-  msg "  🔧 Checking dependencies"
+  msg "🔧 Checking dependencies"
 
   require_dependencies docker
 
@@ -23,18 +23,18 @@ install_missing() {
 
   require_dependencies curl jq openssl yq
 
-  msg "  Docker: $(docker version --format '{{.Server.Version}}')"
+  msg "Docker: $(docker version --format '{{.Server.Version}}')"
   local compose_cmd_display="${DOCKER_COMPOSE_CMD[*]}"
   local compose_version_display="${ARR_COMPOSE_VERSION:-unknown}"
   if [[ -n "$compose_version_display" && "$compose_version_display" != "unknown" ]]; then
-    msg "  Compose: ${compose_cmd_display} ${compose_version_display}"
+    msg "Compose: ${compose_cmd_display} ${compose_version_display}"
   else
-    msg "  Compose: ${compose_cmd_display} (unknown)"
+    msg "Compose: ${compose_cmd_display} (unknown)"
   fi
 }
 
 verify_vpn_port_guard_prereqs() {
-  msg "  Validating vpn-port-guard prerequisites"
+  msg "Validating vpn-port-guard prerequisites"
 
   local controller_path="${REPO_ROOT}/scripts/vpn-port-guard.sh"
   local hook_path="${REPO_ROOT}/scripts/vpn-port-guard-hook.sh"
@@ -84,11 +84,11 @@ verify_vpn_port_guard_prereqs() {
   fi
 
   if [[ -z "${GLUETUN_API_KEY:-}" ]]; then
-    warn "  GLUETUN_API_KEY is empty; the installer will auto-generate one if required"
+    warn "GLUETUN_API_KEY is empty; the installer will auto-generate one if required"
   fi
 
   if [[ -z "${GLUETUN_CONTROL_PORT:-}" ]]; then
-    warn "  GLUETUN_CONTROL_PORT is unset; defaulting to 8000 unless overridden in your env"
+    warn "GLUETUN_CONTROL_PORT is unset; defaulting to 8000 unless overridden in your env"
   elif [[ ! "${GLUETUN_CONTROL_PORT}" =~ ^[0-9]+$ ]]; then
     die "GLUETUN_CONTROL_PORT='${GLUETUN_CONTROL_PORT}' is not numeric; adjust your configuration"
   fi
@@ -96,33 +96,33 @@ verify_vpn_port_guard_prereqs() {
   local proton_user="${PROTON_OPENVPN_USER:-${OPENVPN_USER:-}}"
   local proton_pass="${PROTON_OPENVPN_PASS:-${OPENVPN_PASSWORD:-}}"
   if [[ -z "$proton_user" ]]; then
-    warn "  Proton OpenVPN username not set; update arrconf/userr.conf before launch (must include +pmp suffix)"
+    warn "Proton OpenVPN username not set; update arrconf/userr.conf before launch (must include +pmp suffix)"
   elif [[ "$proton_user" != *"+pmp" ]]; then
-    warn "  Proton OpenVPN username '${proton_user}' is missing the +pmp suffix required for port forwarding"
+    warn "Proton OpenVPN username '${proton_user}' is missing the +pmp suffix required for port forwarding"
   fi
 
   if [[ -z "$proton_pass" ]]; then
-    warn "  Proton OpenVPN password not set; update arrconf/userr.conf before launch"
+    warn "Proton OpenVPN password not set; update arrconf/userr.conf before launch"
   fi
 
   if [[ -z "${QBT_USER:-}" || -z "${QBT_PASS:-}" ]]; then
-    warn "  QBT_USER/QBT_PASS not set; qBittorrent Web API credentials are required for vpn-port-guard"
+    warn "QBT_USER/QBT_PASS not set; qBittorrent Web API credentials are required for vpn-port-guard"
   fi
 
   local require_pf="${CONTROLLER_REQUIRE_PF:-${CONTROLLER_REQUIRE_PORT_FORWARDING:-${VPN_PORT_GUARD_REQUIRE_FORWARDING:-false}}}"
   case "$require_pf" in
     1 | true | TRUE | yes | YES | on | ON)
-      warn "  Strict mode enabled (CONTROLLER_REQUIRE_PF=true): torrents will pause whenever Proton forwarding is unavailable."
+      warn "Strict mode enabled (CONTROLLER_REQUIRE_PF=true): torrents will pause whenever Proton forwarding is unavailable."
       ;;
   esac
 
   local legacy_pm_dir="${ARR_STACK_DIR%/}/scripts"
   if [[ -d "$legacy_pm_dir" ]]; then
     if compgen -G "${legacy_pm_dir}/port-manager*" >/dev/null; then
-      warn "  Legacy port-manager assets found in ${legacy_pm_dir}; remove them to avoid conflicting with vpn-port-guard"
+      warn "Legacy port-manager assets found in ${legacy_pm_dir}; remove them to avoid conflicting with vpn-port-guard"
     fi
     if compgen -G "${legacy_pm_dir}/port-forward*" >/dev/null; then
-      warn "  Legacy port-forward hook scripts detected in ${legacy_pm_dir}; Gluetun now calls /scripts/vpn-port-guard-hook.sh"
+      warn "Legacy port-forward hook scripts detected in ${legacy_pm_dir}; Gluetun now calls /scripts/vpn-port-guard-hook.sh"
     fi
   fi
 
@@ -243,11 +243,11 @@ detect_internal_port_conflicts() {
 
 # Provides actionable suggestions when required ports are already bound
 port_conflict_guidance() {
-  warn "    Resolve the conflicts by stopping or reconfiguring the services listed above."
-  warn "    Common fixes include:"
-  warn "      • Stopping existing ${STACK} containers: ${DOCKER_COMPOSE_CMD[*]} down"
-  warn "      • Freeing the port from host services (e.g. sudo systemctl stop <service>)"
-  warn "      • Updating LAN_IP or port overrides in ${ARR_USERCONF_PATH}"
+  warn "Resolve the conflicts by stopping or reconfiguring the services listed above."
+  warn "Common fixes include:"
+  warn "• Stopping existing ${STACK} containers: ${DOCKER_COMPOSE_CMD[*]} down"
+  warn "• Freeing the port from host services (e.g. sudo systemctl stop <service>)"
+  warn "• Updating LAN_IP or port overrides in ${ARR_USERCONF_PATH}"
 }
 
 : "${ARR_PORT_CONFLICT_AUTO_FIX:=1}"
@@ -274,7 +274,7 @@ attempt_port_conflict_quickfix() {
   fi
 
   _arr_port_conflict_quickfix_attempted=1
-  msg "    Attempting automatic quick fix: stopping existing ${STACK} containers"
+  msg "Attempting automatic quick fix: stopping existing ${STACK} containers"
   safe_cleanup
   return 0
 }
@@ -411,15 +411,15 @@ force_kill_port_listeners() {
     case "$proc_name" in
       docker-proxy) ;;
       *)
-        warn "    Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
+        warn "Skipping PID ${pid} (${proc_name}) – not a docker-proxy; refusing to kill unrelated host services."
         continue
         ;;
     esac
-    warn "    Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
+    warn "Terminating ${proc_name} (PID ${pid}) blocking ${label} (${uppercase_proto} ${port})."
     if kill "$pid" 2>/dev/null; then
       any_action=1
     else
-      warn "    Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
+      warn "Failed to send SIGTERM to PID ${pid}; insufficient permissions?"
     fi
   done
   if ((any_action)); then
@@ -427,7 +427,7 @@ force_kill_port_listeners() {
     for pid in "${targets[@]}"; do
       [[ -z "$pid" ]] && continue
       if kill -0 "$pid" 2>/dev/null; then
-        warn "    PID ${pid} still running; sending SIGKILL."
+        warn "PID ${pid} still running; sending SIGKILL."
         kill -9 "$pid" 2>/dev/null || true
       fi
     done
@@ -461,7 +461,7 @@ attempt_force_clear_port_conflicts() {
 
 # Ensures host ports required by the stack are free (or warns per mode)
 simple_port_check() {
-  msg "  Checking required host ports"
+  msg "Checking required host ports"
 
   local mode_raw="${ARR_PORT_CHECK_MODE:-enforce}"
   local mode="${mode_raw,,}"
@@ -474,7 +474,7 @@ simple_port_check() {
       mode="enforce"
       ;;
     *)
-      warn "    Unknown ARR_PORT_CHECK_MODE='${mode_raw}'. Falling back to enforce."
+      warn "Unknown ARR_PORT_CHECK_MODE='${mode_raw}'. Falling back to enforce."
       mode="enforce"
       ;;
   esac
@@ -484,7 +484,7 @@ simple_port_check() {
   fi
 
   if [[ "$mode" == "skip" ]]; then
-    warn "    Port availability checks skipped (ARR_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
+    warn "Port availability checks skipped (ARR_PORT_CHECK_MODE=skip). Services may fail to bind if ports are busy."
     return 0
   fi
 
@@ -498,7 +498,7 @@ simple_port_check() {
     collect_port_requirements requirements
 
     if ((${#requirements[@]} == 0)); then
-      msg "    No host port reservations required for the selected configuration."
+      msg "No host port reservations required for the selected configuration."
       return
     fi
 
@@ -526,14 +526,14 @@ simple_port_check() {
           summary_joined="$(printf '%s; ' "${summary_tokens[@]}")"
           summary_joined="${summary_joined%; }"
         fi
-        warn "    Port conflicts detected (ARR_PORT_CHECK_MODE=warn): ${summary_joined}; adjust ${ARR_USERCONF_PATH:-userr.conf} to assign unique host ports."
+        warn "Port conflicts detected (ARR_PORT_CHECK_MODE=warn): ${summary_joined}; adjust ${ARR_USERCONF_PATH:-userr.conf} to assign unique host ports."
       else
-        warn "    Stack configuration port conflicts detected:"
+        warn "Stack configuration port conflicts detected:"
         local detail_line=""
         for detail_line in "${detail_lines[@]}"; do
-          warn "      - ${detail_line}"
+          warn "- ${detail_line}"
         done
-        warn "    Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
+        warn "Adjust ${ARR_USERCONF_PATH:-userr.conf} overrides so each service uses a unique host port."
         die "Resolve internal stack port conflicts (duplicate host bindings) and rerun ./arr.sh"
       fi
     fi
@@ -557,12 +557,12 @@ simple_port_check() {
           conflicts+=("$label|$proto|$port|$expected|$details")
           ;;
         1)
-          msg "    ✓ ${label} (${proto^^} ${port}) available"
+          msg "✓ ${label} (${proto^^} ${port}) available"
           ;;
         2)
           if ((tool_missing_reported == 0)); then
-            warn "    Unable to inspect ports automatically (missing ss/lsof/netstat)."
-            warn "    Skipping port availability checks; ensure required ports are free manually."
+            warn "Unable to inspect ports automatically (missing ss/lsof/netstat)."
+            warn "Skipping port availability checks; ensure required ports are free manually."
             tool_missing_reported=1
           fi
           ;;
@@ -575,28 +575,28 @@ simple_port_check() {
 
     if ((${#conflicts[@]} == 0)); then
       if ((fix_actions_used)); then
-        msg "    All required ports are free after fix actions."
+        msg "All required ports are free after fix actions."
       elif ((quickfix_used)); then
-        msg "    All required ports are free after quick fix."
+        msg "All required ports are free after quick fix."
       else
-        msg "    All required ports are free."
+        msg "All required ports are free."
       fi
       return
     fi
 
-    warn "    Port conflicts detected:"
+    warn "Port conflicts detected:"
     local entry=""
     for entry in "${conflicts[@]}"; do
       IFS='|' read -r label proto port expected details <<<"$entry"
-      warn "      - ${label} (${proto^^} ${port}) is already in use."
+      warn "- ${label} (${proto^^} ${port}) is already in use."
       if [[ -n "$expected" && "$expected" != "*" ]]; then
-        warn "        Expected bind address: ${expected}"
+        warn "Expected bind address: ${expected}"
       fi
       if [[ -n "$details" ]]; then
         local line
         while IFS= read -r line; do
           [[ -z "$line" ]] && continue
-          warn "        Listener: $line"
+          warn "Listener: $line"
         done < <(printf '%s\n' "$details" | head -n 3)
       fi
     done
@@ -617,27 +617,27 @@ simple_port_check() {
       if ((fix_applied)); then
         fix_mode=0
         mode="warn"
-        msg "    Retrying port availability check after fix (continuing in warn mode)..."
+        msg "Retrying port availability check after fix (continuing in warn mode)..."
         sleep 3
         continue
       fi
     else
       if ((quickfix_used == 0)) && attempt_port_conflict_quickfix 0; then
         quickfix_used=1
-        msg "    Retrying port availability check after quick fix..."
+        msg "Retrying port availability check after quick fix..."
         sleep 3
         continue
       fi
     fi
 
     if [[ "$mode" == "warn" ]]; then
-      warn "    Continuing despite port conflicts (ARR_PORT_CHECK_MODE=warn). Services may fail to bind."
+      warn "Continuing despite port conflicts (ARR_PORT_CHECK_MODE=warn). Services may fail to bind."
       return 0
     fi
 
     if [[ "$mode" == "fix" ]]; then
-      warn "    Automatic remediation was unable to clear all conflicting listeners."
-      warn "    Continuing despite port conflicts (ARR_PORT_CHECK_MODE=fix). Services may fail to bind."
+      warn "Automatic remediation was unable to clear all conflicting listeners."
+      warn "Continuing despite port conflicts (ARR_PORT_CHECK_MODE=fix). Services may fail to bind."
       return 0
     fi
 
@@ -650,7 +650,7 @@ simple_port_check() {
 preflight() {
   acquire_lock
 
-  msg "  Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
+  msg "Permission profile: ${ARR_PERMISSION_PROFILE} (umask $(umask))"
 
   local default_userconf=""
   if ! default_userconf="$(arr_default_userconf_path 2>/dev/null)"; then
@@ -674,7 +674,7 @@ preflight() {
 
   load_proton_credentials
 
-  msg "  OpenVPN username (enforced '+pmp'): $(obfuscate_sensitive "$OPENVPN_USER_VALUE" 2 4)"
+  msg "OpenVPN username (enforced '+pmp'): $(obfuscate_sensitive "$OPENVPN_USER_VALUE" 2 4)"
 
   if ((PROTON_USER_PMP_ADDED)); then
     warn "Proton username '${PROTON_USER_VALUE}' missing '+pmp'; using '${OPENVPN_USER_VALUE}'"
@@ -692,7 +692,7 @@ preflight() {
   fi
 
   if [[ -n "${GLUETUN_IMAGE:-}" ]] && gluetun_version_requires_auth_config 2>/dev/null && [[ -z "${GLUETUN_API_KEY:-}" ]]; then
-    warn "  Gluetun 3.40+ requires an API key. It will be auto-generated during setup."
+    warn "Gluetun 3.40+ requires an API key. It will be auto-generated during setup."
   fi
 
   simple_port_check
@@ -701,7 +701,7 @@ preflight() {
     local existing_unescaped=""
     existing_unescaped="$(get_env_kv "OPENVPN_USER" "${ARR_ENV_FILE}" || true)"
     if [[ -n "$existing_unescaped" && "$existing_unescaped" != *"+pmp" ]]; then
-      warn "  OPENVPN_USER in ${ARR_ENV_FILE} is '${existing_unescaped}' and will be updated to include '+pmp'."
+      warn "OPENVPN_USER in ${ARR_ENV_FILE} is '${existing_unescaped}' and will be updated to include '+pmp'."
     fi
   fi
 
@@ -710,7 +710,7 @@ preflight() {
   if [[ "${ASSUME_YES}" != "1" ]]; then
     local response=""
 
-    warn "  Continue with ProtonVPN OpenVPN setup? [y/N]: "
+    warn "Continue with ProtonVPN OpenVPN setup? [y/N]: "
     if ! IFS= read -r response; then
       response=""
     fi

@@ -1156,7 +1156,7 @@ arr_compose_autofix_env_names() {
     msg "compose env auto-repair mapped ${#summary[@]} placeholder(s):"
     local summary_entry=""
     for summary_entry in "${summary[@]}"; do
-      msg "  ${summary_entry}"
+      msg "${summary_entry}"
     done
   fi
 
@@ -1164,7 +1164,7 @@ arr_compose_autofix_env_names() {
     warn "compose env auto-repair skipped ambiguous placeholder(s):"
     local ambiguous_entry=""
     for ambiguous_entry in "${ambiguous_tokens[@]}"; do
-      warn "  ${ambiguous_entry}"
+      warn "${ambiguous_entry}"
     done
   fi
 
@@ -1172,7 +1172,7 @@ arr_compose_autofix_env_names() {
     warn "compose env auto-repair could not resolve placeholder(s):"
     local unresolved_entry=""
     for unresolved_entry in "${unresolved_tokens[@]}"; do
-      warn "  ${unresolved_entry}"
+      warn "${unresolved_entry}"
     done
   fi
 
@@ -1965,7 +1965,7 @@ arr_validate_compose_prerequisites() {
   warn "Compose prerequisites failed:"
   local err
   for err in "${errors[@]}"; do
-    warn "  - ${err}"
+    warn "- ${err}"
   done
   return 1
 }

@@ -21,12 +21,12 @@ arr_err_trap() {
   if declare -f warn >/dev/null 2>&1; then
     warn "[ERROR] ${label} error at ${src}:${line} (status=${rc})"
     if [[ -n "${ARR_TRACE_FILE:-}" ]]; then
-      warn "  Trace log: ${ARR_TRACE_FILE}"
+      warn "Trace log: ${ARR_TRACE_FILE}"
     fi
   else
     printf '[ERROR] %s error at %s:%s (status=%s)\n' "${label}" "${src}" "${line}" "${rc}" >&2
     if [[ -n "${ARR_TRACE_FILE:-}" ]]; then
-      printf '  Trace log: %s\n' "${ARR_TRACE_FILE}" >&2
+      printf 'Trace log: %s\n' "${ARR_TRACE_FILE}" >&2
     fi
   fi
   exit "${rc}"
@@ -897,7 +897,7 @@ main() {
   step "🧩 Writing qBittorrent config"
   write_qbt_config
   if ! write_aliases_file; then
-    warn "  Helper aliases file could not be generated"
+    warn "Helper aliases file could not be generated"
   fi
 
   step "🧾 Preparing Configarr assets"

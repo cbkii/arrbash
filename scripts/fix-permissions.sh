@@ -29,7 +29,7 @@ check_and_fix_mode() {
           warn "$mismatch_message"
           mismatch_logged=1
         fi
-        warn "  Permissions remain ${perms}; manual fix required for $target"
+        warn "Permissions remain ${perms}; manual fix required for $target"
         return 1
       fi
       return 0
@@ -38,7 +38,7 @@ check_and_fix_mode() {
     if ((mismatch_logged == 0)); then
       warn "$mismatch_message"
     fi
-    warn "  Could not fix permissions on $target"
+    warn "Could not fix permissions on $target"
     return 1
   fi
 
@@ -212,6 +212,6 @@ verify_permissions() {
   if ((issues > 0)); then
     warn "$issues permission issues detected (corrected where possible)"
   else
-    msg "  All permissions verified ✓"
+    msg "All permissions verified ✓"
   fi
 }
