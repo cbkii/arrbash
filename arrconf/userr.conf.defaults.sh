@@ -301,7 +301,7 @@ if [[ -z "${QBT_DOCKER_MODS+x}" ]]; then
 fi
 
 # Comma-separated CIDR list that can bypass the qBittorrent WebUI login
-QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
+QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128}"
 
 # Images
 GLUETUN_IMAGE="${GLUETUN_IMAGE:-qmcgaw/gluetun:v3.40.0}"
