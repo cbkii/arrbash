@@ -2791,9 +2791,11 @@ load_env() {
     line="${line//$'\r'/}"
     [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
     [[ $line =~ ^[[:space:]]*export[[:space:]]+(.+)$ ]] && line="${BASH_REMATCH[1]}"
-    [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$ ]] || continue
+    [[ $line =~ ^[[:space:]]*([^=]+)=(.*)$ ]] || continue
 
     key="${BASH_REMATCH[1]}"
+    # Trim trailing whitespace from key
+    key="${key%"${key##*[![:space:]]}"}"
     raw="${BASH_REMATCH[2]}"
     raw="${raw#"${raw%%[![:space:]]*}"}"
     value="$(unescape_env_value_from_compose "$raw")"
