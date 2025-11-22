@@ -52,8 +52,8 @@ lan_ipv4_subnet_cidr() {
   printf '%s.%s.%s.0/24' "$oct1" "$oct2" "$oct3"
 }
 
-# Produces host /32 CIDR for provided LAN IP, rejecting non-private inputs
-lan_ipv4_host_cidr() {
+# Produces /24 CIDR for provided LAN IP, rejecting non-private inputs
+lan_ipv4_host_cidr() { 
   local ip="$1"
 
   if [[ -z "$ip" || "$ip" == "0.0.0.0" ]]; then
@@ -64,7 +64,7 @@ lan_ipv4_host_cidr() {
     return 1
   fi
 
-  printf '%s/32' "$ip"
+  lan_ipv4_subnet_cidr "$ip"
 }
 
 # Attempts to auto-detect host LAN IPv4 using default route heuristics
