@@ -136,8 +136,8 @@ gluetun_api_forwarded_port() {
   local port
   port="$(printf '%s' "$body" | jq -r '.port // .data.port // 0' 2>/dev/null || printf '0')"
   
-  # Validate port is numeric and in valid range for forwarded ports
-  if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 6 && port <= 65535)); then
+  # Validate port is numeric and in valid range for forwarded ports (1024-65535)
+  if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
     printf '%s' "$port"
     return 0
   fi
