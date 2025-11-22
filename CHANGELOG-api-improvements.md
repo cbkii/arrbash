@@ -113,21 +113,9 @@ Behavior:
 [INFO] Cleaning up temporary resources...
 ```
 
-### 8. Configuration Consolidation
+### 8. Configuration Validation (clarified)
 
-**New file: `scripts/stack-config-consolidate.sh`**
-
-Features:
-- Clear configuration precedence: CLI > environment > userr.conf > defaults
-- Automatic validation of all configuration values
-- Configuration summary printing
-- Default value setting for retry configuration
-- Integration with validation helpers
-
-Functions:
-- `arr_load_and_validate_config` - Load and validate all configuration
-- `arr_print_config_summary` - Print configuration with precedence info
-- `arr_set_retry_defaults` - Set default retry values
+Validation continues to rely on the focused helpers in `scripts/stack-validation.sh` (ports, IPs, URLs, JSON, booleans). The unused `stack-config-consolidate.sh` wrapper was removed to keep checks colocated with the scripts that consume each setting.
 
 ### 9. VPN Code Consolidation
 
@@ -238,7 +226,6 @@ No changes needed - all new features are enabled by default with sensible defaul
 - `scripts/stack-diagnostics.sh` - Startup diagnostics
 - `scripts/stack-healthcheck.sh` - Health monitoring
 - `scripts/stack-validation.sh` - Input validation
-- `scripts/stack-config-consolidate.sh` - Configuration management
 
 ### Documentation
 - `docs/api-reliability.md` - Comprehensive API reliability guide

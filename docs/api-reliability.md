@@ -298,55 +298,9 @@ All scripts now handle signals gracefully:
 # Script exits cleanly
 ```
 
-## Configuration Consolidation
+## Configuration Precedence and Validation
 
-### Configuration Precedence
-
-Clear precedence order is now enforced:
-
-1. **CLI flags** (highest priority)
-2. **Exported environment variables**
-3. **userr.conf file**
-4. **Default values** (lowest priority)
-
-### Configuration Validation
-
-```bash
-# Source configuration consolidation
-. scripts/stack-config-consolidate.sh
-
-# Load and validate all configuration
-if arr_load_and_validate_config; then
-  echo "Configuration is valid"
-else
-  echo "Configuration has errors"
-  exit 1
-fi
-```
-
-### Configuration Summary
-
-```bash
-# Print configuration summary
-arr_print_config_summary
-```
-
-**Output:**
-```
-=== Configuration Summary ===
-Precedence: CLI flags > environment > userr.conf > defaults
-
-Network Configuration:
-  LAN_IP: 192.168.1.100
-  SPLIT_VPN: 0
-
-Gluetun Configuration:
-  GLUETUN_CONTROL_URL: http://127.0.0.1:8000
-  GLUETUN_CONTROL_PORT: 8000
-  GLUETUN_API_RETRY_COUNT: 3
-  GLUETUN_API_RETRY_DELAY: 2
-...
-```
+Configuration always follows the documented order: **CLI flags → exported environment → `${ARRCONF_DIR}/userr.conf` → `arrconf/userr.conf.defaults.sh`**. Use the focused validators in `scripts/stack-validation.sh` for ports, IPs, URLs, JSON, and booleans inside the scripts that own those settings. This keeps configuration checks close to where values are consumed without adding extra consolidation layers.
 
 ## Best Practices
 
