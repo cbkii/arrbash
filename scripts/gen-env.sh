@@ -167,14 +167,7 @@ if [[ -z "${BAZARR_PORT:-}" ]]; then BAZARR_PORT="$BAZARR_INT_PORT"; fi
 if [[ -z "${FLARR_PORT:-}" ]]; then FLARR_PORT="$FLARR_INT_PORT"; fi
 
 if [[ -z "${QBT_AUTH_WHITELIST:-}" ]]; then
-  QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"
-fi
-if declare -f lan_ipv4_subnet_cidr >/dev/null 2>&1; then
-  if lan_private_subnet="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null || true)"; then
-    if [[ -n "$lan_private_subnet" ]]; then
-      QBT_AUTH_WHITELIST+="${QBT_AUTH_WHITELIST:+,}${lan_private_subnet}"
-    fi
-  fi
+  QBT_AUTH_WHITELIST="${LAN_IP:+${LAN_IP}/32,}127.0.0.1/32,::1/128"
 fi
 if declare -f normalize_csv >/dev/null 2>&1; then
   QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"

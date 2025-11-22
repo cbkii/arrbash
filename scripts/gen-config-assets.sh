@@ -192,11 +192,7 @@ write_qbt_config() {
 
   ensure_dir "$config_dir"
   ensure_dir "$runtime_dir"
-  local default_auth_whitelist="${LOCALHOST_IP}/32,::1/128"
-  local qb_lan_whitelist=""
-  if qb_lan_whitelist="$(lan_ipv4_subnet_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
-    default_auth_whitelist+=,${qb_lan_whitelist}
-  fi
+  local default_auth_whitelist="${LAN_IP:+${LAN_IP}/32,}${LOCALHOST_IP}/32,::1/128"
 
   local auth_whitelist
   auth_whitelist="$(normalize_csv "${QBT_AUTH_WHITELIST:-$default_auth_whitelist}")"
