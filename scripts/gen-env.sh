@@ -7,17 +7,37 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMMON_LIB="${REPO_ROOT}/scripts/stack-common.sh"
 NETWORK_LIB="${REPO_ROOT}/scripts/stack-network.sh"
 SECRETS_LIB="${REPO_ROOT}/scripts/stack-secrets.sh"
-if [[ -f "$COMMON_LIB" ]]; then
-  # shellcheck source=scripts/stack-common.sh
-  . "$COMMON_LIB"
+
+missing_libs=()
+for lib in "$COMMON_LIB" "$NETWORK_LIB" "$SECRETS_LIB"; do
+  if [[ ! -f "$lib" ]]; then
+    missing_libs+=("$lib")
+  fi
+done
+
+if ((${#missing_libs[@]})); then
+  printf 'error: missing required helper(s): %s\n' "${missing_libs[*]}" >&2
+  printf '       run from a complete checkout of the repository.\n' >&2
+  exit 1
 fi
-if [[ -f "$NETWORK_LIB" ]]; then
-  # shellcheck source=scripts/stack-network.sh
-  . "$NETWORK_LIB"
-fi
-if [[ -f "$SECRETS_LIB" ]]; then
-  # shellcheck source=scripts/stack-secrets.sh
-  . "$SECRETS_LIB"
+
+# shellcheck source=scripts/stack-common.sh disable=SC1091
+. "$COMMON_LIB"
+# shellcheck source=scripts/stack-network.sh disable=SC1091
+. "$NETWORK_LIB"
+# shellcheck source=scripts/stack-secrets.sh disable=SC1091
+. "$SECRETS_LIB"
+
+for required_fn in arr_normalize_bool arr_register_temp_path arr_cleanup_temp_path generate_api_key; do
+  if ! declare -F "$required_fn" >/dev/null 2>&1; then
+    printf 'error: required helper "%s" is unavailable; ensure scripts/stack-*.sh are intact.\n' "$required_fn" >&2
+    exit 1
+  fi
+done
+
+if ! command -v awk >/dev/null 2>&1; then
+  printf 'error: awk is required to process conditional template blocks.\n' >&2
+  exit 1
 fi
 
 # All networking and string helpers now sourced from stack-common.sh/stack-network.sh
@@ -79,15 +99,13 @@ fi
 
 if [[ -f "$DEFAULTS_PATH" ]]; then
   set +u
-  # shellcheck source=arrconf/userr.conf.defaults.sh
-  # shellcheck disable=SC1090  # path is computed at runtime
+  # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1090
   . "$DEFAULTS_PATH"
   set -u
 fi
 if [[ -f "$CONF_PATH" ]]; then
   set +u
-  # shellcheck source=/dev/null
-  # shellcheck disable=SC1090  # path is computed at runtime based on ARR_USERCONF_PATH
+  # shellcheck source=/dev/null disable=SC1090
   . "$CONF_PATH"
   set -u
 fi
@@ -307,7 +325,7 @@ else
     printf 'error: could not persist GLUETUN_API_KEY to %s\n' "$OUT_PATH" >&2
     printf '  - Re-run: ./arr.sh --rotate-api-key --yes\n' >&2
     printf '  - Ensure write permissions to %s (try: chown/chmod)\n' "$OUT_PATH" >&2
-    printf '  - Debug tip: echo "$GLUETUN_API_KEY" before envsubst to confirm generation\n' >&2
+    printf "  - Debug tip: echo \"\$GLUETUN_API_KEY\" before envsubst to confirm generation\n" >&2
     exit 1
   fi
   printf 'Generated %s from %s using %s\n' "$OUT_PATH" "$TEMPLATE_PATH" "${CONF_PATH:-<none>}"
