@@ -85,6 +85,7 @@ trap 'arr_main_signal_trap HUP 129' HUP
 trap 'arr_main_signal_trap QUIT 131' QUIT
 trap 'arr_main_exit_trap' EXIT
 
+# shellcheck disable=SC2034  # used by sourced scripts/stack-common.sh
 ARR_MAIN_TRAP_INSTALLED=1
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -505,7 +506,7 @@ arr_expand_alias_placeholders_in_env() {
 if [[ -f "${_arr_defaults_file}" ]]; then
   set +u
   # shellcheck source=arrconf/userr.conf.defaults.sh disable=SC1091
-  set +u
+  # shellcheck disable=SC1090  # path is computed at runtime based on REPO_ROOT
   . "${_arr_defaults_file}"
   set -u
 fi
@@ -772,6 +773,7 @@ main() {
         shift
         ;;
       --force-unlock)
+        # shellcheck disable=SC2034  # used by sourced scripts/stack-defaults.sh and stack-common.sh
         ARR_FORCE_UNLOCK=1
         shift
         ;;

@@ -66,7 +66,7 @@ _last_forwarded_port=0
 json_escape() {
   local raw="$1"
   raw=${raw//\\/\\\\}
-  raw=${raw//"/\\\"}
+  raw=${raw//\"/\\\"}
   raw=${raw//$'\n'/\\n}
   printf '%s' "$raw"
 }
