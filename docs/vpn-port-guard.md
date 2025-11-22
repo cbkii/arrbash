@@ -48,6 +48,7 @@ The controller polls independently of Gluetun's hook events.
   VPN_PORT_FORWARDING_UP_COMMAND=/scripts/vpn-port-guard-hook.sh up
   VPN_PORT_FORWARDING_DOWN_COMMAND=/scripts/vpn-port-guard-hook.sh down
   ```
+
 - Bind-mount `${ARR_DOCKER_DIR}/gluetun/state` into Gluetun at `/tmp/gluetun`
   and into `vpn-port-guard` at `/gluetun_state` so the forwarded port file and
   status JSON are shared.

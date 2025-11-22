@@ -16,6 +16,7 @@ The Gluetun API now includes automatic retry logic with configurable delays:
 - `GLUETUN_API_TIMEOUT` - Request timeout in seconds (default: 8)
 
 **Example:**
+
 ```bash
 export GLUETUN_API_RETRY_COUNT=5
 export GLUETUN_API_RETRY_DELAY=3
@@ -43,6 +44,7 @@ Similar retry logic is implemented for qBittorrent API with session recovery:
 - Retries the original request after successful re-authentication
 
 **Example:**
+
 ```bash
 export QBT_API_RETRY_COUNT=5
 export QBT_API_RETRY_DELAY=3
@@ -86,12 +88,14 @@ arr_action "Check logs at /var/log/arr.log"
 Error messages now include specific guidance:
 
 **Before:**
-```
+
+```text
 [ERROR] qBittorrent authentication failed after 3 attempts
 ```
 
 **After:**
-```
+
+```text
 [ERROR] qBittorrent authentication failed after 3 attempts
 [ACTION] → Check QBT_USER and QBT_PASS credentials, and verify qBittorrent container is running
 ```
@@ -133,7 +137,7 @@ Run diagnostics before starting the stack:
 
 ### Example Output
 
-```
+```text
 Checking system dependencies...
 ✓ Command available: Bash shell
 ✓ Command available: Docker
@@ -181,6 +185,7 @@ Use JSON format for monitoring integrations:
 ```
 
 **Example Output:**
+
 ```json
 {
   "timestamp": "2024-11-21T23:23:10Z",
@@ -207,6 +212,7 @@ Use JSON format for monitoring integrations:
 ### Integration with Monitoring
 
 **Prometheus/Grafana:**
+
 ```bash
 # Export metrics
 ./scripts/stack-healthcheck.sh --format json | \
@@ -214,6 +220,7 @@ Use JSON format for monitoring integrations:
 ```
 
 **Docker Health Check:**
+
 ```yaml
 healthcheck:
   test: ["CMD", "/scripts/stack-healthcheck.sh", "--api-only"]
@@ -332,7 +339,7 @@ arr_print_config_summary
 ```
 
 **Output:**
-```
+```text
 === Configuration Summary ===
 Precedence: CLI flags > environment > userr.conf > defaults
 

@@ -65,6 +65,11 @@ _last_forwarded_port=0
 
 json_escape() {
   local raw="$1"
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$raw" | jq -Rs '.'
+    return 0
+  fi
+
   raw=${raw//\\/\\\\}
   raw=${raw//"/\\\"}
   raw=${raw//$'\n'/\\n}
@@ -132,7 +137,8 @@ write_status() {
         return 1
       }
   else
-    cat >"${tmp}" <<EOF_JSON
+    # shellcheck disable=SC1072,SC1073,SC1078,SC1079
+    if ! cat >"${tmp}" <<EOF_JSON
 {
   "vpn_status": "${escaped_vpn}",
   "forwarded_port": ${forwarded_port},
@@ -145,9 +151,18 @@ write_status() {
   "last_error": "${escaped_error}"
 }
 EOF_JSON
+    then
+      log "Failed to render status JSON without jq"
+      rm -f -- "$tmp"
+      return 1
+    fi
   fi
 
-  mv -f -- "$tmp" "$STATUS_FILE"
+  if ! mv -f -- "$tmp" "$STATUS_FILE"; then
+    log "Failed to update status file ${STATUS_FILE}"
+    rm -f -- "$tmp"
+    return 1
+  fi
 }
 
 parse_port_payload() {
@@ -180,7 +195,7 @@ fetch_forwarded_port() {
   # Fallback to file-based method
   log_debug "Attempting to read forwarded port from file: ${FORWARDED_PORT_FILE}"
   if [[ -f "$FORWARDED_PORT_FILE" ]]; then
-    port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" | tr -d '\n')"
+    port="$(head -n1 "$FORWARDED_PORT_FILE" | tr -cd '0-9' | tr -d '\n')"
     if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
       log_debug "Read port from file: ${port}"
       printf '%s' "$port"
@@ -327,7 +342,7 @@ main_loop() {
 
     write_status "$vpn_status" "${port:-0}" "$CONTROLLER_REQUIRE_PF" "${_qbt_state:-unknown}" "${last_error}" || true
     log_debug "Poll cycle complete"
-    sleep "${CONTROLLER_POLL_INTERVAL}"
+    sleep "${CONTROLLER_POLL_INTERVAL}" || break
   done
 }
 
