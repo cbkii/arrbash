@@ -80,14 +80,14 @@ fi
 if [[ -f "$DEFAULTS_PATH" ]]; then
   set +u
   # shellcheck source=arrconf/userr.conf.defaults.sh
-  set +u
+  # shellcheck disable=SC1090  # path is computed at runtime
   . "$DEFAULTS_PATH"
   set -u
 fi
 if [[ -f "$CONF_PATH" ]]; then
   set +u
   # shellcheck source=/dev/null
-  set +u
+  # shellcheck disable=SC1090  # path is computed at runtime based on ARR_USERCONF_PATH
   . "$CONF_PATH"
   set -u
 fi
