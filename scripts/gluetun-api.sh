@@ -26,9 +26,10 @@ fi
 
 : "${GLUETUN_CONTROL_URL:=http://127.0.0.1:8000}"
 : "${GLUETUN_API_KEY:=}"
-: "${GLUETUN_API_TIMEOUT:=8}"
+: "${GLUETUN_API_TIMEOUT:=10}"
 : "${GLUETUN_API_RETRY_COUNT:=3}"
 : "${GLUETUN_API_RETRY_DELAY:=2}"
+: "${GLUETUN_API_MAX_RETRY_DELAY:=8}"
 
 _gluetun_api_requires() {
   if ! command -v curl >/dev/null 2>&1; then
@@ -52,7 +53,8 @@ _gluetun_api_request() {
 
   local attempt=1
   local max_attempts="${GLUETUN_API_RETRY_COUNT}"
-  local retry_delay="${GLUETUN_API_RETRY_DELAY}"
+  local current_delay="${GLUETUN_API_RETRY_DELAY}"
+  local max_delay="${GLUETUN_API_MAX_RETRY_DELAY}"
 
   while ((attempt <= max_attempts)); do
     if "${args[@]}" 2>/dev/null; then
@@ -61,11 +63,17 @@ _gluetun_api_request() {
     
     if ((attempt < max_attempts)); then
       if declare -f arr_retry >/dev/null 2>&1; then
-        arr_retry "Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
+        arr_retry "Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${current_delay}s..."
       elif declare -f warn >/dev/null 2>&1; then
-        warn "[RETRY] Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${retry_delay}s..."
+        warn "[RETRY] Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${current_delay}s..."
       fi
-      sleep "${retry_delay}"
+      sleep "${current_delay}"
+      
+      # Exponential backoff with cap
+      current_delay=$((current_delay * 2))
+      if ((current_delay > max_delay)); then
+        current_delay="${max_delay}"
+      fi
     fi
     ((attempt++))
   done
@@ -84,6 +92,18 @@ _gluetun_api_get_json() {
   if ! _gluetun_api_request "$path"; then
     return 1
   fi
+}
+
+# Health check using Gluetun's official healthcheck endpoint
+# Returns 0 if healthy, 2 if unhealthy or unreachable
+gluetun_api_healthcheck() {
+  local body
+  if ! body="$(_gluetun_api_get_json "/healthcheck" 2>/dev/null)"; then
+    return 2
+  fi
+
+  # Gluetun returns HTTP 200 with empty response when healthy
+  return 0
 }
 
 # Returns the OpenVPN status string ("running", "connected", etc.).
@@ -105,6 +125,7 @@ gluetun_api_status() {
 }
 
 # Returns the forwarded port as an integer (0 if not available).
+# Port is validated to be in valid range (1024-65535 for forwarded ports)
 gluetun_api_forwarded_port() {
   local body
   if ! body="$(_gluetun_api_get_json "/v1/openvpn/portforwarded" 2>/dev/null)"; then
@@ -114,12 +135,33 @@ gluetun_api_forwarded_port() {
 
   local port
   port="$(printf '%s' "$body" | jq -r '.port // .data.port // 0' 2>/dev/null || printf '0')"
-  if [[ "$port" =~ ^[0-9]+$ ]]; then
+  
+  # Validate port is numeric and in valid range for forwarded ports
+  if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 6 && port <= 65535)); then
     printf '%s' "$port"
     return 0
   fi
 
   printf '0'
+  return 1
+}
+
+# Returns the current public IP address as seen through the VPN
+gluetun_api_public_ip() {
+  local body
+  if ! body="$(_gluetun_api_get_json "/v1/publicip/ip" 2>/dev/null)"; then
+    printf ''
+    return 1
+  fi
+
+  local ip
+  ip="$(printf '%s' "$body" | jq -r '.public_ip // .ip // empty' 2>/dev/null || true)"
+  if [[ -n "$ip" ]]; then
+    printf '%s' "$ip"
+    return 0
+  fi
+
+  printf ''
   return 1
 }
 

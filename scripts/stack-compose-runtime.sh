@@ -102,10 +102,15 @@ compose_emit_gluetun_environment() {
   if [[ -n "${SERVER_NAMES:-}" ]]; then
     arr_yaml_kv "      " "SERVER_NAMES" "${placeholder_server_names}" >>"$dest"
   fi
+  # ProtonVPN port forwarding (off by default for first-run reliability)
+  # When enabled, Gluetun negotiates a NAT-PMP port and writes it to the status file
+  # The vpn-port-guard controller polls /v1/openvpn/portforwarded and syncs to qBittorrent
   arr_yaml_kv "      " "VPN_PORT_FORWARDING" "${VPN_PORT_FORWARDING:-off}" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_PROVIDER" "${VPN_PORT_FORWARDING_PROVIDER:-protonvpn}" >>"$dest"
   arr_yaml_kv "      " "PORT_FORWARD_ONLY" "${PORT_FORWARD_ONLY:-off}" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_STATUS_FILE" "${VPN_PORT_FORWARDING_STATUS_FILE:-${GLUETUN_RUNTIME_FORWARD_STATUS_FILE}}" >>"$dest"
+  # Gluetun control API (used by vpn-port-guard and monitoring scripts)
+  # Always requires API key authentication for security
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_ADDRESS" "${control_address}" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_AUTH" "apikey" >>"$dest"
   arr_yaml_kv "      " "HTTP_CONTROL_SERVER_APIKEY" "${placeholder_api_key}" >>"$dest"

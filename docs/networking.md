@@ -18,7 +18,7 @@ Use these settings to choose how traffic flows, manage Proton VPN forwarding, an
    ./arr.sh --yes
    ```
 4. Update each *Arr download client entry to point at `http://LAN_IP:${QBT_PORT}` when running split tunnel (the
-   host defaults to port **8082** unless you preserved a legacy value).
+   host defaults to port **8082**).
 
 > When `EXPOSE_DIRECT_PORTS=1` is enabled the installer prints the published LAN URLs and asks for confirmation. Use `hostname -I | awk '{print $1}'` to confirm your host address before accepting, or pass `--yes` when you intentionally expose the ports.
 
@@ -42,19 +42,20 @@ Tips:
 
 ## Proton port forwarding
 - **First-run reliability is the default.** Proton port forwarding and hooks are disabled so qBittorrent (and VueTorrent) cannot be paused or blocked by controllers. You still get VPN egress through Gluetun, and qBittorrent self-selects a random listening port on first start so it remains reachable even without forwarding helpers.
-- **OpenVPN usernames require `+pmp` when you opt in.** Proton hands out a forwarded port only when the username contains `+pmp`; arrbash injects it at runtime so you can keep stored credentials unchanged.
+- **OpenVPN with NAT-PMP is supported.** Proton hands out a forwarded port only when the username contains `+pmp`; arrbash injects it at runtime so you can keep stored credentials unchanged. This is the recommended and tested configuration.
+- **WireGuard with NAT-PMP:** ProtonVPN now supports WireGuard configs with NAT-PMP enabled. While Gluetun v3.40+ can handle these configs, arrbash currently focuses on the battle-tested OpenVPN path. Future versions may add native WireGuard support once the ecosystem matures.
 - **Opt-in flow.** Set `VPN_PORT_FORWARDING=on` plus the hook commands in `${ARRCONF_DIR}/userr.conf` if you want forwarding, then rerun `./arr.sh` so Gluetun receives the overrides.
 - **Forwarded port status lives in `/tmp/gluetun/forwarded_port` only when forwarding is enabled.** With forwarding off, the lease file stays empty and vpn-port-guard remains idle. When enabled, arrbash bind-mounts `${ARR_DOCKER_DIR}/gluetun/state` into Gluetun and `vpn-port-guard` so helpers can read the lease file and controller status JSON.
 - **Only Gluetun publishes ports.** qBittorrent and the *Arr apps run inside Gluetun’s namespace via `network_mode: "service:gluetun"`, preventing accidental LAN exposure of VPN traffic.
 - **Control server safety.** The control API binds to `127.0.0.1`, enforces an API key, and arrbash whitelists only the status/port routes it needs. Do not remap it to the LAN.
-- **vpn-port-guard is optional.** Use it alongside forwarding if you want the leased port applied automatically; torrents continue running unless you set `CONTROLLER_REQUIRE_PF=true`. See [`docs/vpn-port-guard.md`](./vpn-port-guard.md) for behaviour details.
+- **vpn-port-guard is optional.** Use it alongside forwarding if you want the leased port applied automatically; torrents continue running unless you set `CONTROLLER_REQUIRE_PF=true`. See the [VPN quick guide](./vpn.md) for behaviour details and status file locations.
 - **Helper aliases (source `.aliasarr`).**
   ```bash
   arr.pf.port        # print the forwarded port from port-guard-status.json
   arr.pf.status      # pretty-print vpn-port-guard status JSON (aliases: arrvpn)
   arr.pf.tail        # follow the status file in real time (aliases: arrvpn-watch)
   arr.pf.logs        # stream vpn-port-guard container logs
-  arr.pf.notify      # (legacy) touch trigger file for compatibility (controller polls independently)
+  arr.pf.notify      # touch trigger file for compatibility (controller polls independently)
   arrvpn-events      # tail Gluetun hook events emitted for port changes
   ```
 - Rotate the Gluetun API key anytime with:
@@ -65,7 +66,7 @@ Tips:
 
 ## Local DNS and HTTPS helpers
 
-Legacy LAN DNS and HTTPS helpers have been retired. Manage hostname overrides and TLS termination with your own tooling when needed. arrbash now exposes services directly on the LAN (when `EXPOSE_DIRECT_PORTS=1`) and relies on Gluetun to publish qBittorrent’s forwarded ports.
+LAN DNS overrides and HTTPS termination are not bundled. Manage hostname overrides and TLS termination with your own tooling when needed. arrbash exposes services directly on the LAN (when `EXPOSE_DIRECT_PORTS=1`) and relies on Gluetun to publish qBittorrent’s forwarded ports.
 
 ## VPN auto-reconnect (optional)
 - Enable by setting `VPN_AUTO_RECONNECT_ENABLED=1` and rerunning the installer. The daemon now polls Gluetun’s control server (`/v1/openvpn/status`, `/v1/publicip/ip`, `/v1/openvpn/portforwarded`) instead of curling external IP services.
