@@ -407,14 +407,14 @@ prepare_env_context() {
   if [[ -z "$qbt_whitelist_raw" ]]; then
     qbt_whitelist_raw="${LOCALHOST_IP}/32,::1/128"
   fi
-  local lan_private_subnet=""
-  if lan_private_subnet="$(lan_ipv4_subnet_cidr "$LAN_IP" 2>/dev/null)"; then
+  local lan_host_cidr=""
+  if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
     :
   else
-    lan_private_subnet=""
+    lan_host_cidr=""
   fi
-  if [[ -n "$lan_private_subnet" ]]; then
-    qbt_whitelist_raw+="${qbt_whitelist_raw:+,}${lan_private_subnet}"
+  if [[ -n "$lan_host_cidr" ]]; then
+    qbt_whitelist_raw="${lan_host_cidr}${qbt_whitelist_raw:+,}${qbt_whitelist_raw}"
   fi
   QBT_AUTH_WHITELIST="$(normalize_csv "$qbt_whitelist_raw")"
   export QBT_AUTH_WHITELIST
