@@ -256,12 +256,23 @@ qbt_set_listen_port() {
   
   # Verify the port was actually set if requested
   if [[ "$verify" == "true" ]]; then
-    sleep 1
+    # Retry logic with exponential backoff for port verification
+    local delay="${QBT_VERIFICATION_DELAY:-1}"
+    local max_attempts=3
+    local attempt=1
     local actual_port
-    actual_port="$(qbt_current_listen_port 2>/dev/null || printf '0')"
+    while (( attempt <= max_attempts )); do
+      sleep "$delay"
+      actual_port="$(qbt_current_listen_port 2>/dev/null || printf '0')"
+      if [[ "$actual_port" == "$port" ]]; then
+        break
+      fi
+      (( attempt++ ))
+      delay=$(( delay * 2 ))
+    done
     if [[ "$actual_port" != "$port" ]]; then
       if declare -f warn >/dev/null 2>&1; then
-        warn "Port verification failed: requested ${port}, got ${actual_port}"
+        warn "Port verification failed after $max_attempts attempts: requested ${port}, got ${actual_port}"
       fi
       return 1
     fi
