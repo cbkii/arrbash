@@ -307,7 +307,7 @@ All scripts now handle signals gracefully:
 
 ## Configuration Precedence and Validation
 
-Configuration always follows the documented order: **CLI flags → exported environment → `${ARRCONF_DIR}/userr.conf` → `arrconf/userr.conf.defaults.sh`**. 
+Configuration always follows the documented order: **CLI flags → exported environment → `${ARRCONF_DIR}/userr.conf` → `arrconf/userr.conf.defaults.sh`**.
 Use the focused validators in `scripts/stack-validation.sh` for ports, IPs, URLs, JSON, and booleans inside the scripts that own those settings. This keeps configuration checks close to where values are consumed without adding extra consolidation layers.
 
 ## Best Practices
