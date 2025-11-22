@@ -453,6 +453,34 @@ arr_wait_for_gluetun_ready() {
       continue
     fi
 
+    local dns_verified=0
+    local dns_warned=0
+    if docker exec "$name" sh -eu -c 'command -v nslookup >/dev/null 2>&1 && nslookup github.com >/dev/null 2>&1' 2>/dev/null; then
+      dns_verified=1
+    elif docker exec "$name" sh -eu -c 'command -v host >/dev/null 2>&1 && host github.com >/dev/null 2>&1' 2>/dev/null; then
+      dns_verified=1
+    elif docker exec "$name" sh -eu -c 'command -v getent >/dev/null 2>&1 && getent hosts github.com >/dev/null 2>&1' 2>/dev/null; then
+      dns_verified=1
+    fi
+
+    if ((dns_verified)); then
+      msg "✅ DNS resolution working inside VPN"
+    else
+      if ((dns_warned == 0)); then
+        warn "Waiting for DNS resolution inside Gluetun..."
+        dns_warned=1
+      fi
+
+      local remaining=$((max_wait - elapsed))
+      local sleep_for=$check_interval
+      if ((remaining < sleep_for)); then
+        sleep_for=$remaining
+      fi
+      sleep "$sleep_for"
+      elapsed=$((elapsed + sleep_for))
+      continue
+    fi
+
     if arr_gluetun_connectivity_probe "$name"; then
       local probe_url="${ARR_GLUETUN_CONNECTIVITY_LAST_URL:-unknown}"
       msg "✅ VPN connectivity confirmed via ${probe_url}"
@@ -483,6 +511,64 @@ arr_wait_for_gluetun_ready() {
   ARR_GLUETUN_FAILURE_REASON="VPN connectivity not verified within ${max_wait}s"
   warn "Gluetun did not become ready within ${max_wait}s."
   return 1
+}
+
+arr_port_guard_status_file() {
+  if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
+    gluetun_port_guard_status_file
+    return
+  fi
+
+  if [[ -n "${ARR_DOCKER_DIR:-}" ]]; then
+    printf '%s\n' "${ARR_DOCKER_DIR%/}/gluetun/state/port-guard-status.json"
+    return
+  fi
+
+  printf ''
+}
+
+arr_wait_for_port_guard_ready() {
+  local max_wait="${1:-90}"
+  local poll_delay="${2:-5}"
+
+  local status_file=""
+  status_file="$(arr_port_guard_status_file 2>/dev/null || printf '')"
+  if [[ -z "$status_file" ]]; then
+    warn "vpn-port-guard status path unavailable; skipping readiness wait"
+    return 1
+  fi
+
+  local poll_seconds="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
+  [[ "$poll_seconds" =~ ^[0-9]+$ ]] || poll_seconds=15
+  local freshness_window="$((poll_seconds < 60 ? 60 : poll_seconds + 60))"
+
+  msg "Waiting for vpn-port-guard to publish status (${max_wait}s timeout)..."
+  local start
+  start="$(date +%s)"
+
+  while true; do
+    local now
+    now="$(date +%s)"
+    local age=$((now - start))
+    if ((age > max_wait)); then
+      warn "vpn-port-guard status not refreshed within ${max_wait}s; qBittorrent may start before port sync"
+      return 1
+    fi
+
+    if [[ -f "$status_file" ]]; then
+      local mtime=""
+      mtime="$(stat -c %Y "$status_file" 2>/dev/null || printf '')"
+      if [[ "$mtime" =~ ^[0-9]+$ ]]; then
+        local staleness=$((now - mtime))
+        if ((staleness <= freshness_window)); then
+          msg "✅ vpn-port-guard status refreshed (age ${staleness}s)"
+          return 0
+        fi
+      fi
+    fi
+
+    sleep "$poll_delay"
+  done
 }
 
 # Launches VPN auto-reconnect daemon when configured and available
@@ -613,12 +699,8 @@ show_service_status() {
     printf '  %-15s: %s\n' "$service" "$status"
   done
 
-  local port_guard_status
-  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
-    port_guard_status="$(arr_gluetun_state_dir)/port-guard-status.json"
-  else
-    port_guard_status="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
-  fi
+  local port_guard_status=""
+  port_guard_status="$(arr_port_guard_status_file 2>/dev/null || printf '')"
   if [[ -f "$port_guard_status" ]]; then
     local vpn_status=""
     local forwarded_port="0"
@@ -688,49 +770,60 @@ start_stack() {
   start_vpn_auto_reconnect_if_enabled
   service_start_sabnzbd
 
+  msg "Starting vpn-port-guard..."
+  ensure_qbt_webui_config_ready
+  local compose_output_guard=""
+  if ! compose_up_detached_capture compose_output_guard vpn-port-guard; then
+    warn "Failed to start vpn-port-guard"
+    if [[ -n "$compose_output_guard" ]]; then
+      printf '%s\n' "$compose_output_guard" | sed 's/^/    /'
+    fi
+  else
+    msg "vpn-port-guard started - waiting for initialization..."
+    arr_wait_for_port_guard_ready 90 5 || true
+  fi
+
+  msg "Starting remaining services (respecting dependency order)..."
+  local compose_output_all=""
+  if ! compose_up_detached_capture compose_output_all; then
+    warn "Some services may have failed to start"
+    if [[ -n "$compose_output_all" ]]; then
+      printf '%s\n' "$compose_output_all" | sed 's/^/    /'
+    fi
+  fi
+
+  local settle_start
+  settle_start="$(date +%s)"
+  local -a created_services=()
   local services=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     services+=(sabnzbd)
   fi
 
-  local service
-  local qb_started=0
-  local -a failed_services=()
-
-  for service in "${services[@]}"; do
-    msg "Starting $service..."
-
-    if [[ "$service" == "qbittorrent" ]]; then
-      ensure_qbt_webui_config_ready
-    fi
-
-    local compose_output_service=""
-    if compose_up_detached_capture compose_output_service "$service"; then
-      if [[ "$service" == "qbittorrent" ]]; then
-        qb_started=1
+  while true; do
+    created_services=()
+    local service
+    for service in "${services[@]}"; do
+      local container
+      container="$(service_container_name "$service")"
+      local status
+      status="$(docker inspect "$container" --format '{{.State.Status}}' 2>/dev/null || echo "not found")"
+      if [[ "$status" == "created" ]]; then
+        created_services+=("$service")
       fi
-    else
-      warn "Failed to start $service"
-      if [[ -n "$compose_output_service" ]]; then
-        printf '%s\n' "$compose_output_service" | sed 's/^/    /'
-      fi
-      failed_services+=("$service")
-      continue
+    done
+
+    if ((${#created_services[@]} == 0)); then
+      break
     fi
 
-    sleep 3
-  done
-
-  sleep 5
-  local -a created_services=()
-  for service in "${services[@]}"; do
-    local container
-    container="$(service_container_name "$service")"
-    local status
-    status="$(docker inspect "$container" --format '{{.State.Status}}' 2>/dev/null || echo "not found")"
-    if [[ "$status" == "created" ]]; then
-      created_services+=("$service")
+    local now
+    now="$(date +%s)"
+    if ((now - settle_start >= 15)); then
+      break
     fi
+
+    sleep 2
   done
 
   if ((${#created_services[@]} > 0)); then
@@ -740,13 +833,7 @@ start_stack() {
     done
   fi
 
-  if ((qb_started)); then
-    ensure_qbt_config || true
-  fi
-
-  if ((${#failed_services[@]} > 0)); then
-    warn "The following services failed to start: ${failed_services[*]}"
-  fi
+  ensure_qbt_config || true
 
   service_health_sabnzbd
 

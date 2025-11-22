@@ -15,6 +15,18 @@ docker compose config >/dev/null    # ensure no unresolved placeholders
 
 ## VPN and connectivity
 - **qBittorrent unreachable in split mode**: set `EXPOSE_DIRECT_PORTS=1` and point *Arr download clients at `http://LAN_IP:${QBT_PORT}`.
+- **qBittorrent starts but can't download**: Verify VPN DNS and connectivity:
+  ```bash
+  docker exec gluetun nslookup github.com        # Test DNS resolution
+  docker exec gluetun wget -O- https://ipinfo.io # Test connectivity
+  docker logs qbittorrent | grep -i "tracker\|peer"
+  ```
+- **Services starting too early**: Check healthcheck status to ensure proper ordering:
+  ```bash
+  docker ps --format "table {{.Names}}\t{{.Status}}"
+  docker inspect gluetun --format '{{.State.Health.Status}}'
+  docker inspect vpn-port-guard --format '{{.State.Health.Status}}'
+  ```
 - **Forwarded port missing**: check controller status and rotate the control API key if authentication fails:
   ```bash
   arr.vpn.port.state
