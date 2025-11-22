@@ -521,7 +521,7 @@ arr_resolve_compose_cmd() {
   if ((${#DOCKER_COMPOSE_CMD[@]} > 0)); then
     if [[ "$verbose" == "1" ]]; then
       local version_display="${ARR_COMPOSE_VERSION:-}"
-      msg "Using cached Docker Compose command: ${DOCKER_COMPOSE_CMD[*]}${version_display:+ (version ${version_display})}"
+      msg "Using cached Compose: ${DOCKER_COMPOSE_CMD[*]}${version_display:+ (v${version_display})}"
     fi
     return 0
   fi
@@ -568,7 +568,7 @@ arr_resolve_compose_cmd() {
   ARR_COMPOSE_VERSION="$version"
 
   if [[ "$verbose" == "1" ]]; then
-    msg "Resolved Docker Compose command: ${DOCKER_COMPOSE_CMD[*]}${version:+ (version ${version})}"
+    msg "Resolved Compose: ${DOCKER_COMPOSE_CMD[*]}${version:+ (v${version})}"
   fi
 }
 
@@ -1389,7 +1389,7 @@ arr_escalate_privileges() {
       return 0
     else
       script_label="$(basename "${_script_path}")"
-      msg "${script_label} escalating privileges with sudo; you may be prompted for your password…"
+      msg "${script_label} escalating privileges with sudo (password prompt)…"
       export ARR_ESCALATED=1
       # shellcheck disable=SC2093
       exec sudo -E "${_script_path}" "$@"
@@ -1400,7 +1400,7 @@ arr_escalate_privileges() {
 
   if command -v pkexec >/dev/null 2>&1; then
     script_label="$(basename "${_script_path}")"
-    msg "${script_label} escalating privileges with pkexec; you may be prompted for authentication…"
+    msg "${script_label} escalating privileges with pkexec (auth prompt)…"
     if command -v bash >/dev/null 2>&1; then
       export ARR_ESCALATED=1
       # shellcheck disable=SC2093
@@ -1417,7 +1417,7 @@ arr_escalate_privileges() {
 
   if command -v su >/dev/null 2>&1; then
     script_label="$(basename "${_script_path}")"
-    msg "${script_label} escalating privileges with su; you may be prompted for the root password…"
+    msg "${script_label} escalating privileges with su (root password)…"
 
     _cmd=""
     local _cmd_source=""

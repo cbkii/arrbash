@@ -426,7 +426,7 @@ arr_wait_for_gluetun_ready() {
       esac
     else
       if ((reported_no_healthcheck == 0)); then
-        msg "Gluetun container has no Docker healthcheck; relying on tunnel/connectivity probes."
+        msg "Gluetun has no Docker healthcheck; using tunnel/connectivity probes."
         reported_no_healthcheck=1
       fi
     fi
@@ -638,7 +638,7 @@ show_service_status() {
     pf_enabled="$(jq -r '.pf_enabled // empty' "$port_guard_status" 2>/dev/null || printf '')"
     if [[ -n "$vpn_status" ]]; then
       controller_mode="$(derive_controller_mode "$controller_mode" "$pf_enabled")"
-      msg "vpn-port-guard: vpn_status=${vpn_status}, forwarding_state=${forwarding_state}, forwarded_port=${forwarded_port:-0}, controller_mode=${controller_mode}, qbt_status=${qbt_state}"
+      msg "vpn-port-guard: vpn=${vpn_status}, fwd=${forwarding_state}, port=${forwarded_port:-0}, mode=${controller_mode}, qbt=${qbt_state}"
     fi
   fi
 }

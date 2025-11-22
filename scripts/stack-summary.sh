@@ -210,8 +210,8 @@ QBT_INFO
     printf '  %-11s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
     printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
   else
-    msg "Direct LAN URLs are not published (EXPOSE_DIRECT_PORTS=0)."
-    msg "Access services from the host network (docker compose exec/port-forward) or publish external routes manually."
+    msg "Direct LAN URLs not published (EXPOSE_DIRECT_PORTS=0)."
+    msg "Access via host network (docker compose exec/port-forward) or manual routes."
   fi
 
   cat <<'ACCESS_NOTICE'

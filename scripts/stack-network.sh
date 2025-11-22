@@ -120,5 +120,5 @@ check_network_requirements() {
     warn "jq not installed; helper scripts rely on it when parsing Gluetun responses"
   fi
 
-  msg "Skipping legacy NAT-PMP probe; Gluetun readiness is now verified via /v1/openvpn/status once the container starts"
+  msg "Skipping legacy NAT-PMP probe; using Gluetun /v1/openvpn/status"
 }

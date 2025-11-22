@@ -78,7 +78,7 @@ run_one_time_migrations() {
       done
 
       if ((collab_migrations > 0)); then
-        msg "Updated ${collab_migrations} directory(ies) to ${DATA_DIR_MODE} for the collaborative profile"
+        msg "Updated ${collab_migrations} dir(s) to ${DATA_DIR_MODE} (collaborative profile)"
       fi
 
       if ((collab_failures == 0)); then
