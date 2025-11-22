@@ -12,11 +12,8 @@ The installer renders configuration from a few scripts, then launches Docker con
 | Sonarr / Radarr / Lidarr / Prowlarr / Bazarr | Media automation apps on the LAN bridge. | `http://LAN_IP:${SONARR_PORT}`, `:${RADARR_PORT}`, `:${LIDARR_PORT}`, etc. |
 | FlareSolverr | Captcha solver service used by indexers. | `http://LAN_IP:${FLARR_PORT}`. |
 | Configarr (optional) | Keeps Sonarr/Radarr configuration in sync. | Runs headless; configure via Configarr secrets. |
-| Configarr (optional) | Keeps Sonarr/Radarr configuration in sync. | Runs headless; configure via Configarr secrets. |
 
 > **Note:** arrbash no longer ships built-in LAN DNS or HTTPS helpers. Services publish directly on LAN ports or through Gluetun's forwarded ports.
-
-## Generated files
 
 ## Generated files
 `./arr.sh` writes artifacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:

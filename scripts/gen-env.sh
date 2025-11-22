@@ -20,85 +20,8 @@ if [[ -f "$SECRETS_LIB" ]]; then
   . "$SECRETS_LIB"
 fi
 
-if ! type -t validate_ipv4 >/dev/null 2>&1; then
-  validate_ipv4() {
-    local ip="${1:-}"
-    [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
-    local IFS='.'
-    local -a octets=()
-    read -r -a octets <<<"$ip"
-    local octet
-    for octet in "${octets[@]}"; do
-      [[ "$octet" =~ ^[0-9]+$ ]] || return 1
-      if ((octet < 0 || octet > 255)); then
-        return 1
-      fi
-    done
-    return 0
-  }
-fi
-
-if ! type -t is_private_ipv4 >/dev/null 2>&1; then
-  is_private_ipv4() {
-    local ip="${1:-}"
-    validate_ipv4 "$ip" || return 1
-    case "$ip" in
-      10.* | 127.* | 192.168.* | 169.254.*) return 0 ;;
-      172.1[6-9].* | 172.2[0-9].* | 172.3[0-1].*) return 0 ;;
-      *) return 1 ;;
-    esac
-  }
-fi
-
-if ! type -t lan_ipv4_subnet_cidr >/dev/null 2>&1; then
-  lan_ipv4_subnet_cidr() {
-    local ip="${1:-}"
-    validate_ipv4 "$ip" || return 1
-    is_private_ipv4 "$ip" || return 1
-    local IFS='.'
-    local o1 o2 o3 _rest
-    read -r o1 o2 o3 _rest <<<"$ip"
-    printf '%s.%s.%s.0/24\n' "$o1" "$o2" "$o3"
-  }
-fi
-
-if ! type -t normalize_csv >/dev/null 2>&1; then
-  normalize_csv() {
-    local input="${1:-}"
-    input="${input//$'\r'/}"
-    input="${input//$'\n'/,}"
-    input="${input//$'\t'/,}"
-    input="${input// /,}"
-    local IFS=','
-    local -a parts=()
-    read -r -a parts <<<"$input"
-    local -a cleaned=()
-    local part trimmed
-    for part in "${parts[@]}"; do
-      trimmed="$(printf '%s' "$part" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-      [[ -z "$trimmed" ]] && continue
-      cleaned+=("$trimmed")
-    done
-    if ((${#cleaned[@]})); then
-      (
-        IFS=','
-        printf '%s\n' "${cleaned[*]}"
-      )
-    else
-      printf '%s\n' ""
-    fi
-  }
-fi
-
-if ! type -t sanitize_user >/dev/null 2>&1; then
-  sanitize_user() {
-    local input="${1:-}"
-    local sanitized
-    sanitized="${input,,}"
-    sanitized="${sanitized//[^a-z0-9._-]/}"
-    printf '%s\n' "$sanitized"
-  }
-fi
+# All networking and string helpers now sourced from stack-common.sh/stack-network.sh
+# No local fallback implementations to avoid duplication
 
 resolve_path() {
   local path="$1"
