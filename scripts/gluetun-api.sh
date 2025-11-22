@@ -95,7 +95,7 @@ _gluetun_api_get_json() {
 }
 
 # Health check using Gluetun's official healthcheck endpoint
-# Returns 0 if healthy, 1 if unhealthy, 2 if unreachable
+# Returns 0 if healthy, 2 if unhealthy or unreachable
 gluetun_api_healthcheck() {
   local body
   if ! body="$(_gluetun_api_get_json "/healthcheck" 2>/dev/null)"; then
@@ -103,7 +103,6 @@ gluetun_api_healthcheck() {
   fi
 
   # Gluetun returns HTTP 200 with empty response when healthy
-  # HTTP 503 when unhealthy
   return 0
 }
 
