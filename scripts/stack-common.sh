@@ -236,6 +236,74 @@ warn() {
   fi
 }
 
+# Enhanced error handling functions with severity prefixes and actionable guidance
+
+# Info-level message (no action required, informational only)
+arr_info() {
+  if msg_color_supported; then
+    printf '%b[INFO] %s%b\n' "$BLUE" "$*" "$RESET"
+  else
+    printf '[INFO] %s\n' "$*"
+  fi
+}
+
+# Warning-level message (potential issue, system continues)
+arr_warn() {
+  if msg_color_supported; then
+    printf '%b[WARN] %s%b\n' "$YELLOW" "$*" "$RESET" >&2
+  else
+    printf '[WARN] %s\n' "$*" >&2
+  fi
+}
+
+# Error-level message (serious issue, may cause failure)
+arr_error() {
+  local RED="${RED:-}"
+  if msg_color_supported && [[ -z "$RED" ]]; then
+    RED='\033[0;31m'
+  fi
+  if msg_color_supported; then
+    printf '%b[ERROR] %s%b\n' "$RED" "$*" "$RESET" >&2
+  else
+    printf '[ERROR] %s\n' "$*" >&2
+  fi
+}
+
+# Critical error message (unrecoverable, will exit)
+arr_fatal() {
+  local RED="${RED:-}"
+  if msg_color_supported && [[ -z "$RED" ]]; then
+    RED='\033[0;31m'
+  fi
+  if msg_color_supported; then
+    printf '%b[FATAL] %s%b\n' "${RED}${BOLD}" "$*" "$RESET" >&2
+  else
+    printf '[FATAL] %s\n' "$*" >&2
+  fi
+}
+
+# Retry-level message (temporary failure, will retry)
+arr_retry() {
+  if msg_color_supported; then
+    printf '%b[RETRY] %s%b\n' "$CYAN" "$*" "$RESET" >&2
+  else
+    printf '[RETRY] %s\n' "$*" >&2
+  fi
+}
+
+# Action guidance message (suggests what user should do)
+arr_action() {
+  local CYAN_BRIGHT="${CYAN:-}"
+  if msg_color_supported && [[ -z "$CYAN_BRIGHT" ]]; then
+    CYAN_BRIGHT='\033[0;36m'
+  fi
+  if msg_color_supported; then
+    printf '%b[ACTION] → %s%b\n' "$CYAN_BRIGHT" "$*" "$RESET" >&2
+  else
+    printf '[ACTION] → %s\n' "$*" >&2
+  fi
+}
+
 # Normalises mktemp templates so leading dashes are treated as literal paths
 arr_prepare_mktemp_template() {
   local template="$1"
