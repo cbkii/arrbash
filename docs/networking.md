@@ -27,6 +27,13 @@ Switch modes by editing `${ARRCONF_DIR}/userr.conf`, setting `EXPOSE_DIRECT_PORT
 ### Port guard
 `vpn-port-guard` polls Gluetun’s control API every `${CONTROLLER_POLL_INTERVAL:-10}` seconds, applies the forwarded port to qBittorrent, and writes atomic status to `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`. Set `CONTROLLER_REQUIRE_PF=true` to pause torrents until a port exists. Helpers and aliases remain idle when forwarding is off.
 
+The vpn-port-guard service has its own health check that verifies:
+- The status file exists and is fresh (updated within the expected polling interval)
+- Gluetun's control API is responding
+- qBittorrent's API is accessible
+
+qBittorrent waits for vpn-port-guard to become healthy before starting, ensuring port forwarding is initialized before torrent operations begin.
+
 ### Control API safety
 - Binds to `127.0.0.1:${GLUETUN_CONTROL_PORT}` and requires `GLUETUN_API_KEY`; keep it off the LAN.
 - Rotate the key anytime with `./arr.sh --rotate-api-key --yes` and verify with the health check printed by the installer.

@@ -1637,12 +1637,13 @@ arr_compose_emit_qbittorrent_service() {
       gluetun:
         condition: "service_healthy"
       vpn-port-guard:
-        condition: "service_started"
+        condition: "service_healthy"
     healthcheck:
       test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
       interval: "30s"
       timeout: "10s"
       retries: "3"
+      start_period: "30s"
     restart: "unless-stopped"
     logging:
       driver: "json-file"
@@ -1715,9 +1716,10 @@ arr_compose_emit_vpn_port_guard_service() {
             "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/status" >/dev/null
           curl -fsS --connect-timeout 5 --max-time 5 \
             "http://127.0.0.1:${QBT_INT_PORT}/api/v2/app/version" >/dev/null
-      interval: "30s"
+      interval: "15s"
       timeout: "10s"
       retries: "3"
+      start_period: "45s"
     restart: "unless-stopped"
     logging:
       driver: "json-file"
@@ -2113,6 +2115,13 @@ YAML
             ip -o link show 2>/dev/null | LC_ALL=C grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'); then
             exit 1;
           fi;
+          if command -v nslookup >/dev/null 2>&1; then
+            nslookup github.com >/dev/null 2>&1 || exit 1;
+          elif command -v host >/dev/null 2>&1; then
+            host github.com >/dev/null 2>&1 || exit 1;
+          elif command -v getent >/dev/null 2>&1; then
+            getent hosts github.com >/dev/null 2>&1 || exit 1;
+          fi;
           if command -v curl >/dev/null 2>&1; then
             curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${GLUETUN_API_KEY}" \
               "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/publicip/ip" >/dev/null || exit 1;
@@ -2355,6 +2364,13 @@ YAML
           if ! ({ ip -4 route show default; ip -6 route show default; } 2>/dev/null | LC_ALL=C grep -Eq 'dev (tun[0-9]+|wg[0-9]+)' || \
             ip -o link show 2>/dev/null | LC_ALL=C grep -Eq '[[:space:]](tun[0-9]+|wg[0-9]+):'); then
             exit 1;
+          fi;
+          if command -v nslookup >/dev/null 2>&1; then
+            nslookup github.com >/dev/null 2>&1 || exit 1;
+          elif command -v host >/dev/null 2>&1; then
+            host github.com >/dev/null 2>&1 || exit 1;
+          elif command -v getent >/dev/null 2>&1; then
+            getent hosts github.com >/dev/null 2>&1 || exit 1;
           fi;
           if command -v curl >/dev/null 2>&1; then
             curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${GLUETUN_API_KEY}" \

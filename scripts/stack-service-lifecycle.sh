@@ -453,6 +453,34 @@ arr_wait_for_gluetun_ready() {
       continue
     fi
 
+    local dns_verified=0
+    local dns_warned=0
+    if docker exec "$name" sh -eu -c 'command -v nslookup >/dev/null 2>&1 && nslookup github.com >/dev/null 2>&1' 2>/dev/null; then
+      dns_verified=1
+    elif docker exec "$name" sh -eu -c 'command -v host >/dev/null 2>&1 && host github.com >/dev/null 2>&1' 2>/dev/null; then
+      dns_verified=1
+    elif docker exec "$name" sh -eu -c 'command -v getent >/dev/null 2>&1 && getent hosts github.com >/dev/null 2>&1' 2>/dev/null; then
+      dns_verified=1
+    fi
+
+    if ((dns_verified)); then
+      msg "✅ DNS resolution working inside VPN"
+    else
+      if ((dns_warned == 0)); then
+        warn "Waiting for DNS resolution inside Gluetun..."
+        dns_warned=1
+      fi
+
+      local remaining=$((max_wait - elapsed))
+      local sleep_for=$check_interval
+      if ((remaining < sleep_for)); then
+        sleep_for=$remaining
+      fi
+      sleep "$sleep_for"
+      elapsed=$((elapsed + sleep_for))
+      continue
+    fi
+
     if arr_gluetun_connectivity_probe "$name"; then
       local probe_url="${ARR_GLUETUN_CONNECTIVITY_LAST_URL:-unknown}"
       msg "✅ VPN connectivity confirmed via ${probe_url}"
@@ -688,41 +716,36 @@ start_stack() {
   start_vpn_auto_reconnect_if_enabled
   service_start_sabnzbd
 
+  msg "Starting vpn-port-guard..."
+  ensure_qbt_webui_config_ready
+  local compose_output_guard=""
+  if ! compose_up_detached_capture compose_output_guard vpn-port-guard; then
+    warn "Failed to start vpn-port-guard"
+    if [[ -n "$compose_output_guard" ]]; then
+      printf '%s\n' "$compose_output_guard" | sed 's/^/    /'
+    fi
+  else
+    msg "vpn-port-guard started - waiting for initialization..."
+    sleep 5
+  fi
+
+  msg "Starting remaining services (respecting dependency order)..."
+  local compose_output_all=""
+  if ! compose_up_detached_capture compose_output_all; then
+    warn "Some services may have failed to start"
+    if [[ -n "$compose_output_all" ]]; then
+      printf '%s\n' "$compose_output_all" | sed 's/^/    /'
+    fi
+  fi
+
+  sleep 5
+  local -a created_services=()
   local services=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     services+=(sabnzbd)
   fi
 
   local service
-  local qb_started=0
-  local -a failed_services=()
-
-  for service in "${services[@]}"; do
-    msg "Starting $service..."
-
-    if [[ "$service" == "qbittorrent" ]]; then
-      ensure_qbt_webui_config_ready
-    fi
-
-    local compose_output_service=""
-    if compose_up_detached_capture compose_output_service "$service"; then
-      if [[ "$service" == "qbittorrent" ]]; then
-        qb_started=1
-      fi
-    else
-      warn "Failed to start $service"
-      if [[ -n "$compose_output_service" ]]; then
-        printf '%s\n' "$compose_output_service" | sed 's/^/    /'
-      fi
-      failed_services+=("$service")
-      continue
-    fi
-
-    sleep 3
-  done
-
-  sleep 5
-  local -a created_services=()
   for service in "${services[@]}"; do
     local container
     container="$(service_container_name "$service")"
@@ -740,13 +763,7 @@ start_stack() {
     done
   fi
 
-  if ((qb_started)); then
-    ensure_qbt_config || true
-  fi
-
-  if ((${#failed_services[@]} > 0)); then
-    warn "The following services failed to start: ${failed_services[*]}"
-  fi
+  ensure_qbt_config || true
 
   service_health_sabnzbd
 
