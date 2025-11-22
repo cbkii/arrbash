@@ -83,8 +83,9 @@ fi
 
 DEFAULTS_PATH="${REPO_ROOT}/arrconf/userr.conf.defaults.sh"
 if [[ -f "$DEFAULTS_PATH" ]]; then
-  # shellcheck source=arrconf/userr.conf.defaults.sh
   set +u
+  # shellcheck source=arrconf/userr.conf.defaults.sh
+  # shellcheck disable=SC1090  # path is computed at runtime
   . "$DEFAULTS_PATH"
   set -u
 fi
