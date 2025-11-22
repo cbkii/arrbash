@@ -513,6 +513,64 @@ arr_wait_for_gluetun_ready() {
   return 1
 }
 
+arr_port_guard_status_file() {
+  if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
+    gluetun_port_guard_status_file
+    return
+  fi
+
+  if [[ -n "${ARR_DOCKER_DIR:-}" ]]; then
+    printf '%s\n' "${ARR_DOCKER_DIR%/}/gluetun/state/port-guard-status.json"
+    return
+  fi
+
+  printf ''
+}
+
+arr_wait_for_port_guard_ready() {
+  local max_wait="${1:-90}"
+  local poll_delay="${2:-5}"
+
+  local status_file=""
+  status_file="$(arr_port_guard_status_file 2>/dev/null || printf '')"
+  if [[ -z "$status_file" ]]; then
+    warn "vpn-port-guard status path unavailable; skipping readiness wait"
+    return 1
+  fi
+
+  local poll_seconds="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
+  [[ "$poll_seconds" =~ ^[0-9]+$ ]] || poll_seconds=15
+  local freshness_window="$((poll_seconds < 60 ? 60 : poll_seconds + 60))"
+
+  msg "Waiting for vpn-port-guard to publish status (${max_wait}s timeout)..."
+  local start
+  start="$(date +%s)"
+
+  while true; do
+    local now
+    now="$(date +%s)"
+    local age=$((now - start))
+    if ((age > max_wait)); then
+      warn "vpn-port-guard status not refreshed within ${max_wait}s; qBittorrent may start before port sync"
+      return 1
+    fi
+
+    if [[ -f "$status_file" ]]; then
+      local mtime=""
+      mtime="$(stat -c %Y "$status_file" 2>/dev/null || printf '')"
+      if [[ "$mtime" =~ ^[0-9]+$ ]]; then
+        local staleness=$((now - mtime))
+        if ((staleness <= freshness_window)); then
+          msg "✅ vpn-port-guard status refreshed (age ${staleness}s)"
+          return 0
+        fi
+      fi
+    fi
+
+    sleep "$poll_delay"
+  done
+}
+
 # Launches VPN auto-reconnect daemon when configured and available
 stop_existing_vpn_auto_reconnect_workers() {
   local daemon_path="$1"
@@ -641,12 +699,8 @@ show_service_status() {
     printf '  %-15s: %s\n' "$service" "$status"
   done
 
-  local port_guard_status
-  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
-    port_guard_status="$(arr_gluetun_state_dir)/port-guard-status.json"
-  else
-    port_guard_status="${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json"
-  fi
+  local port_guard_status=""
+  port_guard_status="$(arr_port_guard_status_file 2>/dev/null || printf '')"
   if [[ -f "$port_guard_status" ]]; then
     local vpn_status=""
     local forwarded_port="0"
@@ -726,7 +780,7 @@ start_stack() {
     fi
   else
     msg "vpn-port-guard started - waiting for initialization..."
-    sleep 5
+    arr_wait_for_port_guard_ready 90 5 || true
   fi
 
   msg "Starting remaining services (respecting dependency order)..."
@@ -738,22 +792,38 @@ start_stack() {
     fi
   fi
 
-  sleep 5
+  local settle_start
+  settle_start="$(date +%s)"
   local -a created_services=()
   local services=(qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr)
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     services+=(sabnzbd)
   fi
 
-  local service
-  for service in "${services[@]}"; do
-    local container
-    container="$(service_container_name "$service")"
-    local status
-    status="$(docker inspect "$container" --format '{{.State.Status}}' 2>/dev/null || echo "not found")"
-    if [[ "$status" == "created" ]]; then
-      created_services+=("$service")
+  while true; do
+    created_services=()
+    local service
+    for service in "${services[@]}"; do
+      local container
+      container="$(service_container_name "$service")"
+      local status
+      status="$(docker inspect "$container" --format '{{.State.Status}}' 2>/dev/null || echo "not found")"
+      if [[ "$status" == "created" ]]; then
+        created_services+=("$service")
+      fi
+    done
+
+    if ((${#created_services[@]} == 0)); then
+      break
     fi
+
+    local now
+    now="$(date +%s)"
+    if ((now - settle_start >= 15)); then
+      break
+    fi
+
+    sleep 2
   done
 
   if ((${#created_services[@]} > 0)); then

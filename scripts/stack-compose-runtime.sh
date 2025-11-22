@@ -1637,7 +1637,9 @@ arr_compose_emit_qbittorrent_service() {
       gluetun:
         condition: "service_healthy"
       vpn-port-guard:
-        condition: "service_healthy"
+        # Avoid circular wait: vpn-port-guard polls qBittorrent for port sync,
+        # so treat it as started rather than requiring its healthcheck.
+        condition: "service_started"
     healthcheck:
       test: ["CMD", "/custom-cont-init.d/00-qbt-webui", "healthcheck"]
       interval: "30s"
