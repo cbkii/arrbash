@@ -42,7 +42,8 @@ Tips:
 
 ## Proton port forwarding
 - **First-run reliability is the default.** Proton port forwarding and hooks are disabled so qBittorrent (and VueTorrent) cannot be paused or blocked by controllers. You still get VPN egress through Gluetun, and qBittorrent self-selects a random listening port on first start so it remains reachable even without forwarding helpers.
-- **OpenVPN usernames require `+pmp` when you opt in.** Proton hands out a forwarded port only when the username contains `+pmp`; arrbash injects it at runtime so you can keep stored credentials unchanged.
+- **OpenVPN with NAT-PMP is supported.** Proton hands out a forwarded port only when the username contains `+pmp`; arrbash injects it at runtime so you can keep stored credentials unchanged. This is the recommended and tested configuration.
+- **WireGuard with NAT-PMP:** ProtonVPN now supports WireGuard configs with NAT-PMP enabled. While Gluetun v3.40+ can handle these configs, arrbash currently focuses on the battle-tested OpenVPN path. Future versions may add native WireGuard support once the ecosystem matures.
 - **Opt-in flow.** Set `VPN_PORT_FORWARDING=on` plus the hook commands in `${ARRCONF_DIR}/userr.conf` if you want forwarding, then rerun `./arr.sh` so Gluetun receives the overrides.
 - **Forwarded port status lives in `/tmp/gluetun/forwarded_port` only when forwarding is enabled.** With forwarding off, the lease file stays empty and vpn-port-guard remains idle. When enabled, arrbash bind-mounts `${ARR_DOCKER_DIR}/gluetun/state` into Gluetun and `vpn-port-guard` so helpers can read the lease file and controller status JSON.
 - **Only Gluetun publishes ports.** qBittorrent and the *Arr apps run inside Gluetun’s namespace via `network_mode: "service:gluetun"`, preventing accidental LAN exposure of VPN traffic.
