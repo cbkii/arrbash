@@ -133,7 +133,7 @@ compose_up_service() {
     was_running=1
   fi
 
-  msg "  Starting $service..."
+  msg "Starting $service..."
   if compose_up_detached_capture compose_output "$service"; then
     local running_after=0
     if compose_service_is_running "$service"; then
@@ -147,18 +147,18 @@ compose_up_service() {
 
     if ((running_after)); then
       if ((was_running)); then
-        msg "  $service already running (no changes needed)"
+        msg "$service already running (no changes needed)"
       else
-        msg "  $service started"
+        msg "$service started"
       fi
     else
-      warn "  $service not running after docker compose up; inspect container logs"
+      warn "$service not running after docker compose up; inspect container logs"
       if [[ -n "$compose_output" ]]; then
         printf '%s\n' "$compose_output" | sed 's/^/    /'
       fi
     fi
   else
-    warn "  Failed to start $service"
+    warn "Failed to start $service"
     if [[ -n "$compose_output" ]]; then
       printf '%s\n' "$compose_output" | sed 's/^/    /'
     fi
@@ -172,7 +172,7 @@ sync_qbt_password_from_logs() {
     return
   fi
 
-  msg "  Detecting qBittorrent temporary password..."
+  msg "Detecting qBittorrent temporary password..."
   local attempts=0
   local detected=""
 
@@ -181,14 +181,14 @@ sync_qbt_password_from_logs() {
     if [[ -n "$detected" ]]; then
       QBT_PASS="$detected"
       persist_env_var QBT_PASS "${QBT_PASS}"
-      msg "  Saved qBittorrent temporary password to .env (QBT_PASS)"
+      msg "Saved qBittorrent temporary password to .env (QBT_PASS)"
       return
     fi
     sleep 2
     ((attempts++))
   done
 
-  warn "  Unable to automatically determine the qBittorrent password. Update QBT_PASS in .env manually."
+  warn "Unable to automatically determine the qBittorrent password. Update QBT_PASS in .env manually."
 }
 
 # Checks if a default route exists via a VPN tunnel interface (configurable pattern)
@@ -325,7 +325,7 @@ arr_wait_for_gluetun_ready() {
     return 1
   fi
 
-  msg "  Waiting for Gluetun readiness (container, health, tunnel, connectivity)..."
+  msg "Waiting for Gluetun readiness (container, health, tunnel, connectivity)..."
 
   local elapsed=0
   local last_state=""
@@ -341,7 +341,7 @@ arr_wait_for_gluetun_ready() {
 
     if [[ -z "$inspect_output" ]]; then
       ARR_GLUETUN_FAILURE_REASON="Gluetun container '${name}' not found"
-      warn "  Gluetun container '${name}' not found."
+      warn "Gluetun container '${name}' not found."
       return 1
     fi
 
@@ -351,7 +351,7 @@ arr_wait_for_gluetun_ready() {
       :
     else
       ARR_GLUETUN_FAILURE_REASON="docker inspect returned empty/invalid output for ${name}"
-      warn "  docker inspect returned empty/invalid output; aborting readiness wait."
+      warn "docker inspect returned empty/invalid output; aborting readiness wait."
       return 1
     fi
 
@@ -359,22 +359,22 @@ arr_wait_for_gluetun_ready() {
       case "$state" in
         restarting)
           if [[ "$last_state" != "$state" ]]; then
-            warn "  Gluetun is restarting; waiting for stability..."
+            warn "Gluetun is restarting; waiting for stability..."
           fi
           ;;
         created | starting)
           if [[ "$last_state" != "$state" ]]; then
-            msg "  Gluetun container reported state '${state}'. Waiting for it to run..."
+            msg "Gluetun container reported state '${state}'. Waiting for it to run..."
           fi
           ;;
         exited | dead | removing | paused)
           ARR_GLUETUN_FAILURE_REASON="Gluetun state '${state}' (expected running)"
-          warn "  Gluetun state is '${state}' (expected running)."
+          warn "Gluetun state is '${state}' (expected running)."
           return 1
           ;;
         *)
           ARR_GLUETUN_FAILURE_REASON="Gluetun state '${state}' (expected running)"
-          warn "  Gluetun state is '${state}' (expected running)."
+          warn "Gluetun state is '${state}' (expected running)."
           return 1
           ;;
       esac
@@ -392,7 +392,7 @@ arr_wait_for_gluetun_ready() {
     fi
 
     if [[ "$last_state" != "running" ]]; then
-      msg "  ✅ Gluetun container is running"
+      msg "✅ Gluetun container is running"
     fi
     last_state="$state"
 
@@ -400,12 +400,12 @@ arr_wait_for_gluetun_ready() {
       case "$health_status" in
         healthy)
           if [[ "$last_health" != "healthy" ]]; then
-            msg "  ✅ Gluetun healthcheck reports healthy"
+            msg "✅ Gluetun healthcheck reports healthy"
           fi
           ;;
         starting)
           if [[ "$last_health" != "starting" ]]; then
-            msg "  Gluetun healthcheck starting; waiting for healthy signal..."
+            msg "Gluetun healthcheck starting; waiting for healthy signal..."
           fi
           last_health="$health_status"
 
@@ -420,13 +420,13 @@ arr_wait_for_gluetun_ready() {
           ;;
         *)
           ARR_GLUETUN_FAILURE_REASON="Gluetun healthcheck reported '${health_status}'"
-          warn "  Gluetun healthcheck reported '${health_status}'."
+          warn "Gluetun healthcheck reported '${health_status}'."
           return 1
           ;;
       esac
     else
       if ((reported_no_healthcheck == 0)); then
-        msg "  Gluetun container has no Docker healthcheck; relying on tunnel/connectivity probes."
+        msg "Gluetun container has no Docker healthcheck; relying on tunnel/connectivity probes."
         reported_no_healthcheck=1
       fi
     fi
@@ -434,12 +434,12 @@ arr_wait_for_gluetun_ready() {
 
     if arr_gluetun_tunnel_route_present "$name"; then
       if ((tunnel_announced == 0)); then
-        msg "  ✅ VPN tunnel interface (tun0/wg0) present"
+        msg "✅ VPN tunnel interface (tun0/wg0) present"
         tunnel_announced=1
       fi
     else
       if ((tunnel_warned == 0)); then
-        warn "  Waiting for VPN tunnel interface (tun0/wg0) inside Gluetun..."
+        warn "Waiting for VPN tunnel interface (tun0/wg0) inside Gluetun..."
         tunnel_warned=1
       fi
 
@@ -455,19 +455,19 @@ arr_wait_for_gluetun_ready() {
 
     if arr_gluetun_connectivity_probe "$name"; then
       local probe_url="${ARR_GLUETUN_CONNECTIVITY_LAST_URL:-unknown}"
-      msg "  ✅ VPN connectivity confirmed via ${probe_url}"
+      msg "✅ VPN connectivity confirmed via ${probe_url}"
       return 0
     fi
 
     local connectivity_rc=$?
     if ((connectivity_rc == 3)); then
       ARR_GLUETUN_FAILURE_REASON="${ARR_GLUETUN_CONNECTIVITY_FAILURE_REASON:-Gluetun connectivity probe missing curl/wget}"
-      warn "  Gluetun connectivity probe cannot run (missing curl/wget inside container)."
+      warn "Gluetun connectivity probe cannot run (missing curl/wget inside container)."
       return 1
     fi
 
     if ((connectivity_warned == 0)); then
-      warn "  Waiting for outbound connectivity through Gluetun tunnel..."
+      warn "Waiting for outbound connectivity through Gluetun tunnel..."
       connectivity_warned=1
     fi
 
@@ -481,7 +481,7 @@ arr_wait_for_gluetun_ready() {
   done
 
   ARR_GLUETUN_FAILURE_REASON="VPN connectivity not verified within ${max_wait}s"
-  warn "  Gluetun did not become ready within ${max_wait}s."
+  warn "Gluetun did not become ready within ${max_wait}s."
   return 1
 }
 
@@ -532,7 +532,7 @@ stop_existing_vpn_auto_reconnect_workers() {
   done
   candidate_pids=("${!seen_pids[@]}")
 
-  msg "  Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
+  msg "Stopping existing auto-reconnect worker(s): ${candidate_pids[*]}"
 
   for pid in "${candidate_pids[@]}"; do
     if kill "$pid" 2>/dev/null; then
@@ -638,7 +638,7 @@ show_service_status() {
     pf_enabled="$(jq -r '.pf_enabled // empty' "$port_guard_status" 2>/dev/null || printf '')"
     if [[ -n "$vpn_status" ]]; then
       controller_mode="$(derive_controller_mode "$controller_mode" "$pf_enabled")"
-      msg "  vpn-port-guard: vpn_status=${vpn_status}, forwarding_state=${forwarding_state}, forwarded_port=${forwarded_port:-0}, controller_mode=${controller_mode}, qbt_status=${qbt_state}"
+      msg "vpn-port-guard: vpn_status=${vpn_status}, forwarding_state=${forwarding_state}, forwarded_port=${forwarded_port:-0}, controller_mode=${controller_mode}, qbt_status=${qbt_state}"
     fi
   fi
 }
@@ -658,7 +658,7 @@ start_stack() {
 
   install_vuetorrent
 
-  msg "  Starting Gluetun VPN container..."
+  msg "Starting Gluetun VPN container..."
   local compose_output_gluetun=""
   local -a gluetun_up_args=()
   if [[ "${ARR_GLUETUN_FORCE_RECREATE:-0}" == "1" ]]; then
@@ -674,7 +674,7 @@ start_stack() {
     arr_write_run_failure "VPN not running: failed to start Gluetun via docker compose." "VPN_NOT_RUNNING"
     return 1
   fi
-  msg "  Gluetun container started"
+  msg "Gluetun container started"
 
   step "🔍 Validating Gluetun readiness"
   if ! arr_wait_for_gluetun_ready gluetun 150 5; then
@@ -698,7 +698,7 @@ start_stack() {
   local -a failed_services=()
 
   for service in "${services[@]}"; do
-    msg "  Starting $service..."
+    msg "Starting $service..."
 
     if [[ "$service" == "qbittorrent" ]]; then
       ensure_qbt_webui_config_ready
@@ -710,7 +710,7 @@ start_stack() {
         qb_started=1
       fi
     else
-      warn "  Failed to start $service"
+      warn "Failed to start $service"
       if [[ -n "$compose_output_service" ]]; then
         printf '%s\n' "$compose_output_service" | sed 's/^/    /'
       fi
@@ -734,7 +734,7 @@ start_stack() {
   done
 
   if ((${#created_services[@]} > 0)); then
-    msg "  Force-starting services that were stuck in 'created' state..."
+    msg "Force-starting services that were stuck in 'created' state..."
     for service in "${created_services[@]}"; do
       docker start "$(service_container_name "$service")" 2>/dev/null || true
     done
@@ -745,15 +745,15 @@ start_stack() {
   fi
 
   if ((${#failed_services[@]} > 0)); then
-    warn "  The following services failed to start: ${failed_services[*]}"
+    warn "The following services failed to start: ${failed_services[*]}"
   fi
 
   service_health_sabnzbd
 
   if ! arr_schedule_delayed_api_sync; then
-    warn "  arr_schedule_delayed_api_sync failed; API sync may be delayed or incomplete."
+    warn "arr_schedule_delayed_api_sync failed; API sync may be delayed or incomplete."
   fi
 
-  msg "  Services started - they may take a minute to be fully ready"
+  msg "Services started - they may take a minute to be fully ready"
   show_service_status
 }

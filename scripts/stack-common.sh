@@ -231,9 +231,9 @@ step() {
 # User-facing warning message with optional color
 warn() {
   if msg_color_supported; then
-    printf '%b[‽]  %s%b\n' "$YELLOW" "$*" "$RESET" >&2
+    printf '  %b[‽]  %s%b\n' "$YELLOW" "$*" "$RESET" >&2
   else
-    printf '[WARN]  %s\n' "$*" >&2
+    printf '  [WARN]  %s\n' "$*" >&2
   fi
 }
 
@@ -242,18 +242,18 @@ warn() {
 # Info-level message (no action required, informational only)
 arr_info() {
   if msg_color_supported; then
-    printf '%b[INFO] %s%b\n' "$BLUE" "$*" "$RESET"
+    printf '  %b[INFO] %s%b\n' "$BLUE" "$*" "$RESET"
   else
-    printf '[INFO] %s\n' "$*"
+    printf '  [INFO] %s\n' "$*"
   fi
 }
 
 # Warning-level message (potential issue, system continues)
 arr_warn() {
   if msg_color_supported; then
-    printf '%b[WARN] %s%b\n' "$YELLOW" "$*" "$RESET" >&2
+    printf '  %b[WARN] %s%b\n' "$YELLOW" "$*" "$RESET" >&2
   else
-    printf '[WARN] %s\n' "$*" >&2
+    printf '  [WARN] %s\n' "$*" >&2
   fi
 }
 
@@ -264,9 +264,9 @@ arr_error() {
     RED='\033[0;31m'
   fi
   if msg_color_supported; then
-    printf '%b[ERROR] %s%b\n' "$RED" "$*" "$RESET" >&2
+    printf '  %b[ERROR] %s%b\n' "$RED" "$*" "$RESET" >&2
   else
-    printf '[ERROR] %s\n' "$*" >&2
+    printf '  [ERROR] %s\n' "$*" >&2
   fi
 }
 
@@ -277,18 +277,18 @@ arr_fatal() {
     RED='\033[0;31m'
   fi
   if msg_color_supported; then
-    printf '%b[FATAL] %s%b\n' "${RED}${BOLD}" "$*" "$RESET" >&2
+    printf '  %b[FATAL] %s%b\n' "${RED}${BOLD}" "$*" "$RESET" >&2
   else
-    printf '[FATAL] %s\n' "$*" >&2
+    printf '  [FATAL] %s\n' "$*" >&2
   fi
 }
 
 # Retry-level message (temporary failure, will retry)
 arr_retry() {
   if msg_color_supported; then
-    printf '%b[RETRY] %s%b\n' "$CYAN" "$*" "$RESET" >&2
+    printf '  %b[RETRY] %s%b\n' "$CYAN" "$*" "$RESET" >&2
   else
-    printf '[RETRY] %s\n' "$*" >&2
+    printf '  [RETRY] %s\n' "$*" >&2
   fi
 }
 
@@ -299,9 +299,9 @@ arr_action() {
     CYAN_BRIGHT='\033[0;36m'
   fi
   if msg_color_supported; then
-    printf '%b[ACTION] → %s%b\n' "$CYAN_BRIGHT" "$*" "$RESET" >&2
+    printf '  %b[ACTION] → %s%b\n' "$CYAN_BRIGHT" "$*" "$RESET" >&2
   else
-    printf '[ACTION] → %s\n' "$*" >&2
+    printf '  [ACTION] → %s\n' "$*" >&2
   fi
 }
 
@@ -2421,7 +2421,7 @@ arr_replace_nested_placeholders_in_line() {
   while [[ "${working}" == *"\${"* ]]; do
     ((iterations++))
     if ((iterations > max_iterations)); then
-      warn "  Reached maximum nested placeholder resolution iterations; stopping"
+      warn "Reached maximum nested placeholder resolution iterations; stopping"
       break
     fi
 
@@ -2448,17 +2448,17 @@ arr_replace_nested_placeholders_in_line() {
     done
 
     if ((found == 0)); then
-      warn "  Unable to locate closing brace for nested placeholder starting at: ${remainder}"
+      warn "Unable to locate closing brace for nested placeholder starting at: ${remainder}"
       break
     fi
 
     if ! resolved="$(arr_evaluate_nested_placeholder "${placeholder}")"; then
-      warn "  Unable to resolve nested placeholder ${placeholder} automatically"
+      warn "Unable to resolve nested placeholder ${placeholder} automatically"
       break
     fi
     # Prevent infinite loop when no progress can be made
     if [[ "${resolved}" == "${placeholder}" ]]; then
-      warn "  Nested placeholder ${placeholder} did not resolve to a different value; stopping to avoid infinite loop"
+      warn "Nested placeholder ${placeholder} did not resolve to a different value; stopping to avoid infinite loop"
       break
     fi
 
@@ -2555,12 +2555,12 @@ verify_single_level_env_placeholders() {
   fi
 
   warn "Detected unsupported nested environment placeholders while rendering ${file}"
-  warn "  Offending lines:"
+  warn "Offending lines:"
 
   local line_no=""
   local content=""
   while IFS=$'\t' read -r line_no content; do
-    warn "    L${line_no}: ${content}"
+    warn "  L${line_no}: ${content}"
   done <<<"${nested}"
 
   local auto_fix=0
@@ -2674,7 +2674,7 @@ arr_verify_compose_placeholders() {
     warn "compose env placeholders unresolved after auto-repair:"
     local _arr_missing_entry=""
     for _arr_missing_entry in "${_arr_missing[@]}"; do
-      warn "  ${_arr_missing_entry}"
+      warn "${_arr_missing_entry}"
     done
   fi
   return "$_arr_unexpected"

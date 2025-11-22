@@ -537,23 +537,23 @@ verify_hosts_removal() {
   [[ -f "$hosts_file" ]] || return 0
 
   if grep -qi "${STACK}-managed" "$hosts_file" 2>/dev/null; then
-    warn "  Managed entries for ${STACK} still present in /etc/hosts"
+    warn "Managed entries for ${STACK} still present in /etc/hosts"
     return 1
   fi
 
-  msg "  Verified /etc/hosts no longer contains ${STACK}-managed entries"
+  msg "Verified /etc/hosts no longer contains ${STACK}-managed entries"
   return 0
 }
 
 step "Detected installation state"
-msg "  Stack name: ${STACK}"
-msg "  Stack directory: ${ARR_STACK_DIR:-<unknown>}"
-msg "  Config directory: ${ARRCONF_DIR:-<unknown>}"
-msg "  Docker data root: ${ARR_DOCKER_DIR:-<unknown>}"
-msg "  Environment file: ${ARR_ENV_FILE:-<unknown>}"
-msg "  User config: ${ARR_USERCONF_PATH:-<unknown>}"
+msg "Stack name: ${STACK}"
+msg "Stack directory: ${ARR_STACK_DIR:-<unknown>}"
+msg "Config directory: ${ARRCONF_DIR:-<unknown>}"
+msg "Docker data root: ${ARR_DOCKER_DIR:-<unknown>}"
+msg "Environment file: ${ARR_ENV_FILE:-<unknown>}"
+msg "User config: ${ARR_USERCONF_PATH:-<unknown>}"
 if [[ -n "${PRIMARY_HOME}" ]]; then
-  msg "  Shell config home: ${PRIMARY_HOME}"
+  msg "Shell config home: ${PRIMARY_HOME}"
 fi
 
 if ((${#REMOVAL_PATHS[@]} == 0)); then
@@ -660,7 +660,7 @@ detect_compose_command() {
 
 step "Stopping Docker services"
 if detect_compose_command && [[ -f "${ARR_STACK_DIR}/docker-compose.yml" ]]; then
-  msg "  Using compose command: ${compose_command[*]}"
+  msg "Using compose command: ${compose_command[*]}"
   (
     set +e
     cd "$ARR_STACK_DIR" 2>/dev/null || exit 0
@@ -689,18 +689,18 @@ if ! remove_managed_hosts_entries; then
 fi
 case "$hosts_cleanup_status" in
   0)
-    msg "  Removed ${STACK}-managed block from /etc/hosts"
+    msg "Removed ${STACK}-managed block from /etc/hosts"
     verify_hosts_removal
     ;;
   1)
     if [[ "$HOSTS_BLOCK_PRESENT" == "1" ]]; then
-      warn "  Unable to locate removable ${STACK}-managed hosts block"
+      warn "Unable to locate removable ${STACK}-managed hosts block"
     else
-      msg "  No ${STACK}-managed hosts entries detected"
+      msg "No ${STACK}-managed hosts entries detected"
     fi
     ;;
   2)
-    warn "  Failed to update /etc/hosts; remove ${STACK}-managed entries manually"
+    warn "Failed to update /etc/hosts; remove ${STACK}-managed entries manually"
     ;;
 esac
 
@@ -778,7 +778,7 @@ if [[ -n "${ALIAS_HELPER_PATH}" && -n "${PRIMARY_HOME}" ]]; then
   removed_any=0
   for rc in "${ALIAS_RC_FILES[@]}"; do
     if remove_alias_block "$rc" "$ALIAS_HELPER_PATH"; then
-      msg "  Removed ARR alias block from ${rc}"
+      msg "Removed ARR alias block from ${rc}"
       removed_any=1
     fi
   done
@@ -786,7 +786,7 @@ if [[ -n "${ALIAS_HELPER_PATH}" && -n "${PRIMARY_HOME}" ]]; then
     remove_path_with_privileges "$ALIAS_HELPER_PATH" || true
   fi
   if [[ "$removed_any" != 1 ]]; then
-    msg "  No ARR alias blocks found in shell rc files."
+    msg "No ARR alias blocks found in shell rc files."
   fi
 fi
 

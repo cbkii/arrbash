@@ -23,21 +23,21 @@ arr_prompt_direct_port_exposure() {
     fi
   fi
 
-  msg "  EXPOSE_DIRECT_PORTS=1 will publish the following LAN URLs:"
-  printf '  %-11s → http://%s:%s\n' "qBittorrent" "$ip_hint" "$QBT_PORT"
-  printf '  %-11s → http://%s:%s\n' "Sonarr" "$ip_hint" "$SONARR_PORT"
-  printf '  %-11s → http://%s:%s\n' "Radarr" "$ip_hint" "$RADARR_PORT"
-  printf '  %-11s → http://%s:%s\n' "Lidarr" "$ip_hint" "$LIDARR_PORT"
-  printf '  %-11s → http://%s:%s\n' "Prowlarr" "$ip_hint" "$PROWLARR_PORT"
-  printf '  %-11s → http://%s:%s\n' "Bazarr" "$ip_hint" "$BAZARR_PORT"
-  printf '  %-11s → http://%s:%s\n' "FlareSolverr" "$ip_hint" "$FLARR_PORT"
+  msg "EXPOSE_DIRECT_PORTS=1 will publish the following LAN URLs:"
+  msg "$(printf '%-11s → http://%s:%s' "qBittorrent" "$ip_hint" "$QBT_PORT")"
+  msg "$(printf '%-11s → http://%s:%s' "Sonarr" "$ip_hint" "$SONARR_PORT")"
+  msg "$(printf '%-11s → http://%s:%s' "Radarr" "$ip_hint" "$RADARR_PORT")"
+  msg "$(printf '%-11s → http://%s:%s' "Lidarr" "$ip_hint" "$LIDARR_PORT")"
+  msg "$(printf '%-11s → http://%s:%s' "Prowlarr" "$ip_hint" "$PROWLARR_PORT")"
+  msg "$(printf '%-11s → http://%s:%s' "Bazarr" "$ip_hint" "$BAZARR_PORT")"
+  msg "$(printf '%-11s → http://%s:%s' "FlareSolverr" "$ip_hint" "$FLARR_PORT")"
 
   if [[ "${ASSUME_YES:-0}" == "1" ]]; then
-    msg "  ASSUME_YES=1; continuing without additional confirmation."
+    msg "ASSUME_YES=1; continuing without additional confirmation."
     return 0
   fi
 
-  printf '  Expose these ports on the LAN? [y/N]: '
+  printf 'Expose these ports on the LAN? [y/N]: '
   local response=""
   if ! read -r response; then
     warn "Could not read confirmation response; disabling EXPOSE_DIRECT_PORTS for safety."
@@ -47,10 +47,10 @@ arr_prompt_direct_port_exposure() {
 
   case "${response,,}" in
     y | yes)
-      msg "  Continuing with EXPOSE_DIRECT_PORTS=1."
+      msg "Continuing with EXPOSE_DIRECT_PORTS=1."
       ;;
     *)
-      warn "  Disabling EXPOSE_DIRECT_PORTS for this run; rerun with --yes to skip the prompt."
+      warn "Disabling EXPOSE_DIRECT_PORTS for this run; rerun with --yes to skip the prompt."
       EXPOSE_DIRECT_PORTS=0
       ;;
   esac
@@ -70,7 +70,7 @@ prepare_env_context() {
   case "$split_vpn_raw" in
     '' | 0 | 1 | true | TRUE | false | FALSE | yes | YES | no | NO | on | ON | off | OFF) ;;
     *)
-      warn "  Invalid SPLIT_VPN=${split_vpn_raw}; defaulting to 0 (full tunnel)."
+      warn "Invalid SPLIT_VPN=${split_vpn_raw}; defaulting to 0 (full tunnel)."
       split_vpn=0
       ;;
   esac
@@ -90,15 +90,15 @@ prepare_env_context() {
       die "  Invalid LAN_IP provided (${user_supplied_lan_ip}). Fix ${userconf_path} or unset to auto-detect."
     fi
     LAN_IP="$user_supplied_lan_ip"
-    msg "  Using configured LAN_IP: $LAN_IP"
+    msg "Using configured LAN_IP: $LAN_IP"
   else
     if detected_ip="$(detect_lan_ip 2>/dev/null)"; then
       LAN_IP="$detected_ip"
-      msg "  Auto-detected LAN_IP: $LAN_IP"
+      msg "Auto-detected LAN_IP: $LAN_IP"
     else
       LAN_IP="0.0.0.0"
-      warn "  LAN_IP could not be detected automatically; set it in ${userconf_path} so services bind to the correct interface."
-      warn "  Determine the address with: hostname -I | awk \"{print \\\$1}\""
+      warn "LAN_IP could not be detected automatically; set it in ${userconf_path} so services bind to the correct interface."
+      warn "Determine the address with: hostname -I | awk \"{print \\\$1}\""
     fi
   fi
 
@@ -140,7 +140,7 @@ prepare_env_context() {
   case "$sab_use_vpn_raw" in
     '' | 0 | 1 | true | TRUE | false | FALSE | yes | YES | no | NO | on | ON | off | OFF) ;;
     *)
-      warn "  Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
+      warn "Invalid SABNZBD_USE_VPN=${sab_use_vpn_raw}; defaulting to 0 (direct mode)."
       sab_use_vpn=0
       ;;
   esac
@@ -171,7 +171,7 @@ prepare_env_context() {
   fi
 
   if ((sab_enabled)) && ((sab_use_vpn == 1)) && ((gluetun_available == 0)); then
-    warn "  SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
+    warn "SABNZBD_USE_VPN=1 ignored (Gluetun disabled)"
     sab_use_vpn=0
   fi
 

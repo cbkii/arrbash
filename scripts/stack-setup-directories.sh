@@ -83,7 +83,7 @@ mkdirs() {
 
     DATA_DIR_MODE="$fallback_mode"
     export DATA_DIR_MODE
-    warn "  DATA_DIR_MODE was unset; defaulting to ${DATA_DIR_MODE}"
+    warn "DATA_DIR_MODE was unset; defaulting to ${DATA_DIR_MODE}"
   fi
   ensure_dir_mode "$ARR_STACK_DIR" 755
 

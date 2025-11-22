@@ -168,7 +168,7 @@ QBT_INFO
     if [[ -n "${ARR_INTERNAL_PORT_CONFLICT_DETAIL:-}" ]]; then
       while IFS= read -r conflict_line; do
         [[ -z "$conflict_line" ]] && continue
-        warn "  - ${conflict_line}"
+        warn "- ${conflict_line}"
       done < <(printf '%s\n' "${ARR_INTERNAL_PORT_CONFLICT_DETAIL}")
     fi
   fi
@@ -177,7 +177,7 @@ QBT_INFO
     msg "Credential preservation decisions:"
     while IFS= read -r preserve_note; do
       [[ -z "$preserve_note" ]] && continue
-      msg "  - ${preserve_note}"
+      msg "- ${preserve_note}"
     done < <(printf '%s\n' "${ARR_PRESERVE_NOTES}")
   fi
 
@@ -366,16 +366,16 @@ WARNING
     esac
 
     msg "vpn-port-guard:"
-    msg "  • Mode: ${controller_mode} (require forwarded port=${pf_enabled})"
-    msg "  • VPN: ${vpn_summary}"
-    msg "  • Forwarding: ${forwarding_summary}"
-    msg "  • qBittorrent: ${qbt_summary}"
+    msg "• Mode: ${controller_mode} (require forwarded port=${pf_enabled})"
+    msg "• VPN: ${vpn_summary}"
+    msg "• Forwarding: ${forwarding_summary}"
+    msg "• qBittorrent: ${qbt_summary}"
     if [[ -n "$last_update" ]]; then
-      msg "  • Last update: ${last_update}"
+      msg "• Last update: ${last_update}"
     fi
-    msg "  • Status JSON: ${status_file}"
-    msg "  • Logs: docker logs vpn-port-guard --tail 100"
-    msg "  • Commands: arr.pf.status | arr.pf.logs"
+    msg "• Status JSON: ${status_file}"
+    msg "• Logs: docker logs vpn-port-guard --tail 100"
+    msg "• Commands: arr.pf.status | arr.pf.logs"
   fi
 
   local vpn_auto_status_file="${ARR_STACK_DIR%/}/.vpn-auto-reconnect-status.json"
@@ -432,10 +432,10 @@ WARNING
         auto_container_restart="$(sed -n 's/.*"last_container_restart"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
         auto_port_missing="$(sed -n 's/.*"port_missing_since"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vpn_auto_status_file" | head -n1 || printf '')"
       fi
-      msg "  Status: ${auto_status}${auto_detail:+ (${auto_detail})}"
-      msg "  Consecutive failures: ${auto_failures}"
+      msg "Status: ${auto_status}${auto_detail:+ (${auto_detail})}"
+      msg "Consecutive failures: ${auto_failures}"
       if [[ -n "$auto_ip" ]]; then
-        msg "  Public IP: ${auto_ip}"
+        msg "Public IP: ${auto_ip}"
       fi
       if [[ "$auto_port" =~ ^[0-9]+$ && "$auto_port" -gt 0 ]]; then
         local port_line="  Forwarded port: ${auto_port}"
@@ -445,28 +445,28 @@ WARNING
         msg "$port_line"
       fi
       if [[ -n "$auto_port_missing" ]]; then
-        msg "  Port missing since: ${auto_port_missing}"
+        msg "Port missing since: ${auto_port_missing}"
       fi
       if [[ -n "$auto_last_recovery" ]]; then
-        msg "  Last recovery: ${auto_last_recovery}"
+        msg "Last recovery: ${auto_last_recovery}"
       fi
       if [[ -n "$auto_last_action" ]]; then
-        msg "  Last action: ${auto_last_action}"
+        msg "Last action: ${auto_last_action}"
       fi
       if [[ -n "$auto_cooldown" ]]; then
-        msg "  Cooldown until: ${auto_cooldown}"
+        msg "Cooldown until: ${auto_cooldown}"
       fi
       if [[ -n "$auto_control_restart" ]]; then
-        msg "  Last control restart: ${auto_control_restart}"
+        msg "Last control restart: ${auto_control_restart}"
       fi
       if [[ -n "$auto_container_restart" ]]; then
-        msg "  Last container restart: ${auto_container_restart}"
+        msg "Last container restart: ${auto_container_restart}"
       fi
       if [[ -n "$auto_last_error" ]]; then
-        msg "  Last error: ${auto_last_error}"
+        msg "Last error: ${auto_last_error}"
       fi
     else
-      msg "  Status: (no status file yet)"
+      msg "Status: (no status file yet)"
     fi
     local window_display="none"
     if [[ -n "${VPN_ALLOWED_HOURS_START:-}" && -n "${VPN_ALLOWED_HOURS_END:-}" ]]; then
@@ -475,10 +475,10 @@ WARNING
       end_fmt=$(printf '%02d' "${VPN_ALLOWED_HOURS_END:-0}" 2>/dev/null || printf '%02d' 0)
       window_display="${start_fmt}–${end_fmt} UTC"
     fi
-    msg "  Interval: ${VPN_CHECK_INTERVAL_MINUTES:-20}m; Cooldown: ${VPN_COOLDOWN_MINUTES:-15}m"
-    msg "  Port grace: ${VPN_PORT_GRACE_SECONDS:-300}s"
-    msg "  Allowed window: ${window_display}"
-    msg "  Use arr.vpn.auto.status / arr.vpn.auto.history for diagnostics."
+    msg "Interval: ${VPN_CHECK_INTERVAL_MINUTES:-20}m; Cooldown: ${VPN_COOLDOWN_MINUTES:-15}m"
+    msg "Port grace: ${VPN_PORT_GRACE_SECONDS:-300}s"
+    msg "Allowed window: ${window_display}"
+    msg "Use arr.vpn.auto.status / arr.vpn.auto.history for diagnostics."
   elif [[ -f "$vpn_auto_status_file" || -f "$vpn_auto_state_file" ]]; then
     msg "VPN Auto-Reconnect: disabled (present but disabled)"
   fi
@@ -487,7 +487,7 @@ WARNING
     warn "Collaborative profile notes:"
     while IFS= read -r collab_warning; do
       [[ -z "$collab_warning" ]] && continue
-      warn "  - ${collab_warning}"
+      warn "- ${collab_warning}"
     done < <(printf '%s\n' "${COLLAB_PERMISSION_WARNINGS}")
   fi
 
@@ -520,7 +520,7 @@ POLICY
       if [[ -n "${API_KEYS_SYNCED_DETAILS:-}" ]]; then
         while IFS= read -r detail_line; do
           [[ -z "$detail_line" ]] && continue
-          msg "  - ${detail_line}"
+          msg "- ${detail_line}"
         done < <(printf '%s\n' "${API_KEYS_SYNCED_DETAILS}")
       fi
     fi

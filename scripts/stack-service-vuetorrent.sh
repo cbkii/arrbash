@@ -67,11 +67,11 @@ install_vuetorrent() {
     # shellcheck disable=SC2034
     VUETORRENT_STATUS_LEVEL="msg"
     if [[ -n "$version" ]]; then
-      msg "  VueTorrent already present at ${manual_dir} (version ${version})"
+      msg "VueTorrent already present at ${manual_dir} (version ${version})"
       # shellcheck disable=SC2034
       VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT} (version ${version})."
     else
-      msg "  VueTorrent already present at ${manual_dir}"
+      msg "VueTorrent already present at ${manual_dir}"
       # shellcheck disable=SC2034
       VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT}."
     fi
@@ -120,7 +120,7 @@ install_vuetorrent() {
   local archive_sha
   archive_sha="$(sha256sum "$tmp_archive" 2>/dev/null | awk '{print $1}' || true)"
   if [[ -n "$archive_sha" ]]; then
-    msg "  VueTorrent archive SHA256 ${archive_sha}"
+    msg "VueTorrent archive SHA256 ${archive_sha}"
   fi
 
   if [[ -n "${VUETORRENT_SHA256:-}" && "$archive_sha" != "${VUETORRENT_SHA256}" ]]; then
@@ -222,11 +222,11 @@ install_vuetorrent() {
   # shellcheck disable=SC2034
   VUETORRENT_STATUS_LEVEL="msg"
   if [[ -n "$version" ]]; then
-    msg "  VueTorrent installed at ${manual_dir} (version ${version})"
+    msg "VueTorrent installed at ${manual_dir} (version ${version})"
     # shellcheck disable=SC2034
     VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT} (version ${version})."
   else
-    msg "  VueTorrent installed at ${manual_dir}"
+    msg "VueTorrent installed at ${manual_dir}"
     # shellcheck disable=SC2034
     VUETORRENT_STATUS_MESSAGE="VueTorrent manual install ready at ${VUETORRENT_ROOT}."
   fi
