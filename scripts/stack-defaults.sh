@@ -188,7 +188,8 @@ arr_setup_defaults() {
   BLUE='\033[0;36m'
   CYAN='\033[1;36m'
   YELLOW='\033[0;33m'
+  GREEN='\033[0;32m'
   RESET='\033[0m'
   BOLD='\033[1m'
-  : "$BLUE" "$CYAN" "$YELLOW" "$RESET" "$BOLD"
+  : "$BLUE" "$CYAN" "$YELLOW" "$GREEN" "$RESET" "$BOLD"
 }

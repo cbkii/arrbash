@@ -6,6 +6,7 @@
 : "${BLUE:=}"
 : "${CYAN:=}"
 : "${YELLOW:=}"
+: "${GREEN:=}"
 : "${RESET:=}"
 : "${BOLD:=}"
 : "${ARR_COLOR_OUTPUT:=1}"
@@ -212,16 +213,16 @@ msg_color_supported() {
 # User-facing info message without additional styling
 msg() {
   if msg_color_supported; then
-    printf '%b%s%b\n' "$BLUE" "$*" "$RESET"
+    printf '  %b%s%b\n' "$BLUE" "$*" "$RESET"
   else
-    printf '%s\n' "$*"
+    printf '  %s\n' "$*"
   fi
 }
 
 # User-facing step banner with bold styling
 step() {
   if msg_color_supported; then
-    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${BLUE}${BOLD}" "$*" "$RESET"
+    printf '%b[STEP] ⁂ ⟫ %s%b\n' "${GREEN}${BOLD}" "$*" "$RESET"
   else
     printf '[STEP] ⁂ ⟫ %s\n' "$*"
   fi
