@@ -27,7 +27,7 @@ Effective order: `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf >
 
 ## Key settings
 - **LAN and paths**: set `LAN_IP`, `ARR_DATA_ROOT` (base working directory), `ARRCONF_DIR` (config folder), `ARR_STACK_DIR` (stack output), and download/library paths such as `DOWNLOADS_DIR`, `COMPLETED_DIR`, `MEDIA_DIR`, `TV_DIR`, `MOVIES_DIR`, and `MUSIC_DIR`.
-- **Networking**: `SPLIT_VPN=1` keeps qBittorrent (and optionally SABnzbd) inside Gluetun; `EXPOSE_DIRECT_PORTS=1` publishes LAN ports for *Arr apps. `LAN_DOMAIN_SUFFIX` remains for compatibility but no DNS helper ships with the stack.
+- **Networking**: `SPLIT_VPN=1` keeps qBittorrent (and optionally SABnzbd) inside Gluetun; `EXPOSE_DIRECT_PORTS=1` publishes LAN ports for *Arr apps.
 - **Ports**: internal ports like `QBT_INT_PORT`, `SONARR_INT_PORT`, etc., backfill host ports (`QBT_PORT`, `SONARR_PORT`, …) when `EXPOSE_DIRECT_PORTS=1`.
 - **API resilience**: adjust `QBT_API_TIMEOUT`, `QBT_API_RETRY_COUNT`, `QBT_API_RETRY_DELAY`, `GLUETUN_API_TIMEOUT`, `GLUETUN_API_RETRY_COUNT`, `GLUETUN_API_RETRY_DELAY`, and `GLUETUN_API_MAX_RETRY_DELAY` if control endpoints are unstable.
 - **Images**: override `*_IMAGE` values in `userr.conf` to pin or float tags; the installer validates availability when rendering.
