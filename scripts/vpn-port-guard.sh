@@ -68,6 +68,10 @@ json_escape() {
   raw=${raw//\\/\\\\}
   raw=${raw//\"/\\\"}
   raw=${raw//$'\n'/\\n}
+  raw=${raw//$'\r'/\\r}
+  raw=${raw//$'\t'/\\t}
+  raw=${raw//$'\b'/\\b}
+  raw=${raw//$'\f'/\\f}
   printf '%s' "$raw"
 }
 
