@@ -325,7 +325,7 @@ else
     printf 'error: could not persist GLUETUN_API_KEY to %s\n' "$OUT_PATH" >&2
     printf '  - Re-run: ./arr.sh --rotate-api-key --yes\n' >&2
     printf '  - Ensure write permissions to %s (try: chown/chmod)\n' "$OUT_PATH" >&2
-    printf "  - Debug tip: echo \"\$GLUETUN_API_KEY\" before envsubst to confirm generation\n" >&2
+    printf '  - Debug tip: echo "$GLUETUN_API_KEY" before envsubst to confirm generation\n' >&2
     exit 1
   fi
   printf 'Generated %s from %s using %s\n' "$OUT_PATH" "$TEMPLATE_PATH" "${CONF_PATH:-<none>}"
