@@ -169,7 +169,8 @@ compose_up_service() {
 # Captures qBittorrent temporary password from logs and persists to .env
 # qBittorrent 4.5.0+ log format:
 #   "A temporary password is provided for this session: XXXXXXXX"
-# Earlier versions may have slightly different formats, so we try multiple patterns.
+#   "The WebUI administrator password was not set. A temporary password is provided for this session: XXXXXXXX"
+# The password is typically 8+ alphanumeric characters.
 sync_qbt_password_from_logs() {
   if [[ "${QBT_PASS}" != "adminadmin" ]]; then
     return
@@ -179,32 +180,33 @@ sync_qbt_password_from_logs() {
   local attempts=0
   local detected=""
   local logs=""
+  local max_attempts=30
 
-  while ((attempts < 60)); do
+  while ((attempts < max_attempts)); do
     logs="$(docker logs qbittorrent 2>&1 || true)"
     
-    # Try modern format: "A temporary password is provided for this session: XXXXXXXX"
-    # The password appears after the last colon on the line
-    detected="$(printf '%s' "$logs" | grep -i "temporary password.*:" | tail -1 | sed 's/.*: *//' | awk '{print $1}' || true)"
-    
-    # Fallback: try to find password after "session:" specifically
-    if [[ -z "$detected" ]]; then
-      detected="$(printf '%s' "$logs" | grep -i "for this session:" | tail -1 | sed 's/.*session: *//' | awk '{print $1}' || true)"
+    # Modern format (qBittorrent 4.5.0+): "A temporary password is provided for this session: XXXXXXXX"
+    # We look for any line containing "temporary password" followed by content after a colon
+    if detected="$(printf '%s' "$logs" | grep -iE "temporary password" | tail -1)"; then
+      # Extract the password after the last colon, which should be the actual password
+      detected="$(printf '%s' "$detected" | sed 's/.*://' | tr -d '[:space:]' | head -c 20)"
     fi
     
-    # Validate: password should be at least 6 alphanumeric characters
-    if [[ -n "$detected" && "$detected" =~ ^[A-Za-z0-9]{6,}$ ]]; then
+    # Validate: password should be 6-20 alphanumeric characters
+    if [[ -n "$detected" && "$detected" =~ ^[A-Za-z0-9]{6,20}$ ]]; then
       QBT_PASS="$detected"
       persist_env_var QBT_PASS "${QBT_PASS}"
       msg "Saved qBittorrent temporary password to .env (QBT_PASS)"
       return
     fi
+    
     detected=""
     sleep 2
     ((attempts++))
   done
 
   warn "Unable to automatically determine the qBittorrent password. Update QBT_PASS in .env manually."
+  warn "Check 'docker logs qbittorrent' for a line containing 'temporary password'."
 }
 
 # Checks if a default route exists via a VPN tunnel interface (configurable pattern)
