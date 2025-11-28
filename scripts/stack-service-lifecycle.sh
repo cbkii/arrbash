@@ -8,6 +8,14 @@ if [[ -n "${__SERVICE_LIFECYCLE_LOADED:-}" ]]; then
 fi
 __SERVICE_LIFECYCLE_LOADED=1
 
+# Source qbt-api.sh for qBittorrent API functions (qbt_set_password, etc.)
+_lifecycle_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${_lifecycle_script_dir}/qbt-api.sh" ]]; then
+  # shellcheck source=scripts/qbt-api.sh
+  . "${_lifecycle_script_dir}/qbt-api.sh"
+fi
+unset _lifecycle_script_dir
+
 arr_effective_project_name() {
   local project="${COMPOSE_PROJECT_NAME:-}"
 
@@ -189,6 +197,82 @@ sync_qbt_password_from_logs() {
   done
 
   warn "Unable to automatically determine the qBittorrent password. Update QBT_PASS in .env manually."
+}
+
+# Applies user-configured qBittorrent password when it differs from the temp password.
+# Called after qBittorrent starts to sync userr.conf QBT_PASS with qBittorrent WebUI.
+apply_qbt_password_from_config() {
+  local desired_pass="${1:-${QBT_PASS:-}}"
+  local default_pass="adminadmin"
+
+  # If desired password is empty or default, nothing to apply
+  if [[ -z "$desired_pass" || "$desired_pass" == "$default_pass" ]]; then
+    return 0
+  fi
+
+  # Check if qBittorrent is running
+  if ! docker inspect qbittorrent --format '{{.State.Running}}' 2>/dev/null | grep -q "true"; then
+    warn "qBittorrent not running, cannot apply password from config"
+    return 1
+  fi
+
+  # Detect temp password from logs (qBittorrent generates this on first start)
+  local temp_pass=""
+  local attempts=0
+  while ((attempts < 30)); do
+    temp_pass="$(docker logs qbittorrent 2>&1 | grep -i "temporary password" | tail -1 | sed 's/.*temporary password[^:]*: *//' | awk '{print $1}' || true)"
+    if [[ -n "$temp_pass" ]]; then
+      break
+    fi
+    sleep 1
+    ((attempts++))
+  done
+
+  # If no temp password found, qBittorrent might already have a password set
+  if [[ -z "$temp_pass" ]]; then
+    # Try logging in with the desired password
+    if QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+      msg "qBittorrent password from config is already applied"
+      persist_env_var QBT_PASS "$desired_pass"
+      return 0
+    fi
+    # If that fails, we can't determine the current password
+    warn "Cannot apply password from config: no temp password found and current password unknown"
+    return 1
+  fi
+
+  # If temp password matches desired, just save to .env
+  if [[ "$temp_pass" == "$desired_pass" ]]; then
+    persist_env_var QBT_PASS "$desired_pass"
+    return 0
+  fi
+
+  # Login with temp password
+  msg "Applying qBittorrent password from userr.conf..."
+  if ! QBT_PASS="$temp_pass" qbt_api_login 2>/dev/null; then
+    warn "Failed to login with temporary password, cannot apply password from config"
+    persist_env_var QBT_PASS "$temp_pass"
+    return 1
+  fi
+
+  # Set the new password via API
+  if declare -f qbt_set_password >/dev/null 2>&1; then
+    if QBT_PASS="$temp_pass" qbt_set_password "$desired_pass" 2>/dev/null; then
+      msg "Successfully set qBittorrent password from userr.conf"
+      QBT_PASS="$desired_pass"
+      persist_env_var QBT_PASS "$desired_pass"
+      qbt_api_cleanup 2>/dev/null || true
+      return 0
+    else
+      warn "Failed to set qBittorrent password via API"
+      persist_env_var QBT_PASS "$temp_pass"
+      return 1
+    fi
+  else
+    warn "qbt_set_password function not available, password not applied"
+    persist_env_var QBT_PASS "$temp_pass"
+    return 1
+  fi
 }
 
 # Checks if a default route exists via a VPN tunnel interface (configurable pattern)
