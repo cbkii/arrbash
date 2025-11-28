@@ -171,6 +171,7 @@ parse_port_payload() {
 
 fetch_forwarded_port() {
   # Use consolidated gluetun_api_forwarded_port from gluetun-api.sh
+  # This function now tries /v1/portforward first, then falls back to /v1/openvpn/portforwarded
   local port
   if declare -f gluetun_api_forwarded_port >/dev/null 2>&1; then
     port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
@@ -179,9 +180,12 @@ fetch_forwarded_port() {
       printf '%s' "$port"
       return 0
     fi
+    log_debug "Gluetun API returned invalid or zero port: '${port}'"
+  else
+    log_debug "gluetun_api_forwarded_port function not available"
   fi
 
-  # Fallback to file-based method
+  # Fallback to file-based method (Gluetun writes port to this file when forwarding is active)
   log_debug "Attempting to read forwarded port from file: ${FORWARDED_PORT_FILE}"
   if [[ -f "$FORWARDED_PORT_FILE" ]]; then
     port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" | tr -d '\n')"
@@ -190,6 +194,7 @@ fetch_forwarded_port() {
       printf '%s' "$port"
       return 0
     fi
+    log_debug "Port file exists but contains invalid data"
   fi
   log_debug "No valid forwarded port available from API or file"
   printf '0'
@@ -272,7 +277,20 @@ initialise() {
   log_debug "  Status file: ${STATUS_FILE}"
   log_debug "  Forwarded port file: ${FORWARDED_PORT_FILE}"
   
-  write_status "init" 0 "$CONTROLLER_REQUIRE_PF" "unknown" "initializing" || true
+  # Write initial status immediately so arr_wait_for_port_guard_ready() sees us running
+  if ! write_status "starting" 0 "$CONTROLLER_REQUIRE_PF" "pending" ""; then
+    log "Warning: Failed to write initial status file"
+  else
+    log "Published initial status to ${STATUS_FILE}"
+  fi
+  
+  # Try to get an initial port reading early (best effort)
+  local initial_port="0"
+  initial_port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
+  if [[ "$initial_port" =~ ^[1-9][0-9]*$ ]]; then
+    log "Initial forwarded port detected: ${initial_port}"
+    write_status "running" "$initial_port" "$CONTROLLER_REQUIRE_PF" "pending" "" || true
+  fi
   
   if qbt_login; then
     log_debug "Initial qBittorrent login successful"

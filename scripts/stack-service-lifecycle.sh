@@ -167,6 +167,9 @@ compose_up_service() {
 }
 
 # Captures qBittorrent temporary password from logs and persists to .env
+# qBittorrent 4.5.0+ log format:
+#   "A temporary password is provided for this session: XXXXXXXX"
+# Earlier versions may have slightly different formats, so we try multiple patterns.
 sync_qbt_password_from_logs() {
   if [[ "${QBT_PASS}" != "adminadmin" ]]; then
     return
@@ -175,15 +178,28 @@ sync_qbt_password_from_logs() {
   msg "Detecting qBittorrent temporary password..."
   local attempts=0
   local detected=""
+  local logs=""
 
   while ((attempts < 60)); do
-    detected="$(docker logs qbittorrent 2>&1 | grep -i "temporary password" | tail -1 | sed 's/.*temporary password[^:]*: *//' | awk '{print $1}' || true)"
-    if [[ -n "$detected" ]]; then
+    logs="$(docker logs qbittorrent 2>&1 || true)"
+    
+    # Try modern format: "A temporary password is provided for this session: XXXXXXXX"
+    # The password appears after the last colon on the line
+    detected="$(printf '%s' "$logs" | grep -i "temporary password.*:" | tail -1 | sed 's/.*: *//' | awk '{print $1}' || true)"
+    
+    # Fallback: try to find password after "session:" specifically
+    if [[ -z "$detected" ]]; then
+      detected="$(printf '%s' "$logs" | grep -i "for this session:" | tail -1 | sed 's/.*session: *//' | awk '{print $1}' || true)"
+    fi
+    
+    # Validate: password should be at least 6 alphanumeric characters
+    if [[ -n "$detected" && "$detected" =~ ^[A-Za-z0-9]{6,}$ ]]; then
       QBT_PASS="$detected"
       persist_env_var QBT_PASS "${QBT_PASS}"
       msg "Saved qBittorrent temporary password to .env (QBT_PASS)"
       return
     fi
+    detected=""
     sleep 2
     ((attempts++))
   done

@@ -125,21 +125,31 @@ gluetun_api_status() {
 }
 
 # Returns the forwarded port as an integer (0 if not available).
-# Port is validated to be in valid range (1024-65535 for forwarded ports)
+# Port is validated to be in valid range (1024-65535 for forwarded ports).
+# Supports both the new /v1/portforward endpoint (Gluetun v3.35+) and the legacy
+# /v1/openvpn/portforwarded endpoint for compatibility. The legacy endpoint
+# redirects to the new one in recent Gluetun versions.
 gluetun_api_forwarded_port() {
   local body
-  if ! body="$(_gluetun_api_get_json "/v1/openvpn/portforwarded" 2>/dev/null)"; then
-    printf '0'
-    return 1
+  local port
+
+  # Try the canonical /v1/portforward endpoint first (works for both WireGuard and OpenVPN)
+  if body="$(_gluetun_api_get_json "/v1/portforward" 2>/dev/null)"; then
+    # Response format: {"port": 12345} for single port, {"ports": [12345]} for multiple
+    port="$(printf '%s' "$body" | jq -r '.port // .ports[0] // 0' 2>/dev/null || printf '0')"
+    if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
+      printf '%s' "$port"
+      return 0
+    fi
   fi
 
-  local port
-  port="$(printf '%s' "$body" | jq -r '.port // .data.port // 0' 2>/dev/null || printf '0')"
-  
-  # Validate port is numeric and in valid range for forwarded ports (1024-65535)
-  if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
-    printf '%s' "$port"
-    return 0
+  # Fallback to legacy /v1/openvpn/portforwarded endpoint for older Gluetun versions
+  if body="$(_gluetun_api_get_json "/v1/openvpn/portforwarded" 2>/dev/null)"; then
+    port="$(printf '%s' "$body" | jq -r '.port // .data.port // 0' 2>/dev/null || printf '0')"
+    if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
+      printf '%s' "$port"
+      return 0
+    fi
   fi
 
   printf '0'
