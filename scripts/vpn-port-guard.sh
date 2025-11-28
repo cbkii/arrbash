@@ -74,6 +74,17 @@ bool_true() {
 : "${CONTROLLER_STARTUP_DELAY:=5}"
 : "${CONTROLLER_MAX_API_RETRIES:=3}"
 
+# Validate numeric configuration values
+if ! [[ "${CONTROLLER_POLL_INTERVAL}" =~ ^[0-9]+$ ]]; then
+  CONTROLLER_POLL_INTERVAL=15
+fi
+if ! [[ "${CONTROLLER_STARTUP_DELAY}" =~ ^[0-9]+$ ]]; then
+  CONTROLLER_STARTUP_DELAY=5
+fi
+if ! [[ "${CONTROLLER_MAX_API_RETRIES}" =~ ^[0-9]+$ ]]; then
+  CONTROLLER_MAX_API_RETRIES=3
+fi
+
 # Debug mode
 : "${VPN_PORT_GUARD_DEBUG:=false}"
 

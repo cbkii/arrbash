@@ -187,9 +187,11 @@ sync_qbt_password_from_logs() {
     
     # Modern format (qBittorrent 4.5.0+): "A temporary password is provided for this session: XXXXXXXX"
     # We look for any line containing "temporary password" followed by content after a colon
-    if detected="$(printf '%s' "$logs" | grep -iE "temporary password" | tail -1)"; then
+    local password_line=""
+    if password_line="$(printf '%s' "$logs" | grep -iE "temporary password" | tail -1)"; then
       # Extract the password after the last colon, which should be the actual password
-      detected="$(printf '%s' "$detected" | sed 's/.*://' | tr -d '[:space:]' | head -c 20)"
+      # Trim whitespace and limit to 30 chars for safety (actual passwords are 8-16 chars)
+      detected="$(printf '%s' "$password_line" | sed 's/.*://' | tr -d '[:space:]')"
     fi
     
     # Validate: password should be 6-20 alphanumeric characters
