@@ -663,7 +663,7 @@ arr_wait_for_port_guard_ready() {
     now="$(date +%s)"
     local age=$((now - start))
     if ((age > max_wait)); then
-      warn "vpn-port-guard status file not ready within ${max_wait}s (VPN_PORT_GUARD_STATUS_TIMEOUT=${max_wait}); qBittorrent may start before port sync"
+      warn "vpn-port-guard status file not ready within ${max_wait}s (VPN_PORT_GUARD_STATUS_TIMEOUT=${VPN_PORT_GUARD_STATUS_TIMEOUT:-90}); qBittorrent may start before port sync"
       return 1
     fi
 
