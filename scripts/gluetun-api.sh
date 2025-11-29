@@ -6,9 +6,8 @@
 # Optimized for Gluetun v3.40+ (specifically tested with v3.40.3)
 #
 # Gluetun API Endpoint Reference (v3.40+):
-#   - /v1/portforward            - Unified port forwarding (PRIMARY - works for both WireGuard and OpenVPN)
-#   - /v1/openvpn/portforwarded  - Legacy OpenVPN (deprecated, will be removed in v4.0)
-#   - /v1/wireguard/portforwarded - Legacy WireGuard (deprecated, will be removed in v4.0)
+#   - /v1/openvpn/portforwarded  - OpenVPN forwarded port
+#   - /v1/wireguard/portforwarded - WireGuard forwarded port
 #   - /v1/openvpn/status         - OpenVPN tunnel status
 #   - /v1/wireguard/status       - WireGuard tunnel status
 #   - /v1/publicip/ip            - Public IP through VPN tunnel
@@ -17,7 +16,7 @@
 # Important v3.40+ changes:
 #   - API key authentication is REQUIRED via X-API-Key header
 #   - VPN_PORT_FORWARDING_STATUS_FILE is deprecated (use API instead)
-#   - /v1/portforward is the recommended unified endpoint
+#   - Port forwarding endpoints are protocol-specific (/v1/openvpn/portforwarded or /v1/wireguard/portforwarded)
 #
 # shellcheck disable=SC1091,SC2250
 
@@ -236,9 +235,9 @@ gluetun_api_status() {
 # Returns the forwarded port as an integer (0 if not available).
 # Port is validated to be in valid range (1024-65535 for forwarded ports).
 #
-# For Gluetun v3.40+, we ONLY use /v1/portforward as it's the unified endpoint.
-# Legacy endpoints (/v1/openvpn/portforwarded, /v1/wireguard/portforwarded) are
-# deprecated and will be removed in v4.0.
+# Uses protocol-specific endpoints based on VPN_TYPE:
+#   - /v1/openvpn/portforwarded for OpenVPN
+#   - /v1/wireguard/portforwarded for WireGuard
 #
 # Response formats supported:
 #   - {"port": 12345}           - Single port (most common)
@@ -247,12 +246,22 @@ gluetun_api_status() {
 gluetun_api_forwarded_port() {
   local body
   local port
+  local vpn_type_lower
+  vpn_type_lower="$(printf '%s' "${VPN_TYPE:-openvpn}" | tr '[:upper:]' '[:lower:]')"
 
-  _gluetun_api_debug "Fetching forwarded port from /v1/portforward"
+  local primary_endpoint="/v1/openvpn/portforwarded"
+  local fallback_endpoint="/v1/wireguard/portforwarded"
   
-  # Use the unified /v1/portforward endpoint (recommended for v3.40+)
-  if body="$(_gluetun_api_get_json "/v1/portforward" 2>/dev/null)"; then
-    _gluetun_api_debug "Response: ${body}"
+  if [[ "$vpn_type_lower" == "wireguard" ]]; then
+    primary_endpoint="/v1/wireguard/portforwarded"
+    fallback_endpoint="/v1/openvpn/portforwarded"
+  fi
+
+  _gluetun_api_debug "Fetching forwarded port (VPN_TYPE=${vpn_type_lower})"
+  
+  # Try primary endpoint based on VPN_TYPE
+  if body="$(_gluetun_api_get_json "$primary_endpoint" 2>/dev/null)"; then
+    _gluetun_api_debug "Response from ${primary_endpoint}: ${body}"
     
     # Parse port from response - handle both {"port": N} and {"ports": [N]} formats
     port="$(printf '%s' "$body" | jq -r '.port // .ports[0] // 0' 2>/dev/null || printf '0')"
@@ -268,7 +277,23 @@ gluetun_api_forwarded_port() {
       _gluetun_api_debug "Invalid port value: ${port}"
     fi
   else
-    _gluetun_api_debug "Failed to query /v1/portforward endpoint"
+    _gluetun_api_debug "Failed to query ${primary_endpoint} endpoint"
+  fi
+
+  # Fallback to other protocol endpoint
+  _gluetun_api_debug "Trying fallback endpoint ${fallback_endpoint}"
+  if body="$(_gluetun_api_get_json "$fallback_endpoint" 2>/dev/null)"; then
+    _gluetun_api_debug "Response from ${fallback_endpoint}: ${body}"
+    
+    port="$(printf '%s' "$body" | jq -r '.port // .ports[0] // 0' 2>/dev/null || printf '0')"
+    
+    if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
+      _gluetun_api_debug "Valid forwarded port from fallback: ${port}"
+      printf '%s' "$port"
+      return 0
+    fi
+  else
+    _gluetun_api_debug "Failed to query ${fallback_endpoint} endpoint"
   fi
 
   printf '0'

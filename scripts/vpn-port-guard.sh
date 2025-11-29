@@ -5,7 +5,7 @@
 # Optimized for Gluetun v3.40+ with ProtonVPN port forwarding
 #
 # Key features:
-# - Uses Gluetun's /v1/portforward API (recommended for v3.40+)
+# - Uses Gluetun's protocol-specific API endpoints (/v1/openvpn/portforwarded or /v1/wireguard/portforwarded)
 # - File-based fallback is deprecated but supported for compatibility
 # - Writes status to port-guard-status.json for stack health monitoring
 # - Supports both strict (pause on no port) and preferred (best effort) modes
@@ -224,7 +224,7 @@ EOF_JSON
 fetch_forwarded_port() {
   local port=""
   
-  # PRIMARY: Use Gluetun's /v1/portforward API (recommended for v3.40+)
+  # PRIMARY: Use Gluetun's protocol-specific API endpoints
   if declare -f gluetun_api_forwarded_port >/dev/null 2>&1; then
     log_debug "Querying Gluetun API for forwarded port..."
     port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
