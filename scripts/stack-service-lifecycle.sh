@@ -195,7 +195,11 @@ sync_qbt_password_from_logs() {
     logs="$(LC_ALL=C docker logs --tail 200 qbittorrent 2>&1 || true)"
     
     # Modern format (qBittorrent 4.5.0+): "A temporary password is provided for this session: XXXXXXXX"
-    # Extract the first non-whitespace sequence after "temporary password...:"
+    # Regex breakdown:
+    #   .*[Tt]emporary [Pp]assword  - Match up to "temporary password" (case-insensitive T/P)
+    #   [^:]*:                       - Skip any text until the colon
+    #   [[:space:]]*                 - Skip whitespace after colon
+    #   \([^[:space:]]*\)            - Capture the password (first non-whitespace sequence)
     detected="$(printf '%s' "$logs" | LC_ALL=C sed -n 's/.*[Tt]emporary [Pp]assword[^:]*:[[:space:]]*\([^[:space:]]*\).*/\1/p' | tail -1)"
     
     # Strip any surrounding quotes if present

@@ -253,7 +253,9 @@ fetch_forwarded_port() {
   if [[ -f "$FORWARDED_PORT_FILE" ]]; then
     log_debug "Trying deprecated file-based fallback: ${FORWARDED_PORT_FILE}"
     port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" 2>/dev/null | head -c 5)"
-    if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
+    # Strip leading zeros for proper arithmetic comparison
+    port="${port#"${port%%[!0]*}"}"
+    if [[ -n "$port" && "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
       log_debug "Got port ${port} from status file (deprecated method)"
       printf '%s' "$port"
       return 0
