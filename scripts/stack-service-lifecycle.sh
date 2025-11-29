@@ -178,7 +178,7 @@ compose_up_service() {
 # qBittorrent 4.5.0+ log format:
 #   "A temporary password is provided for this session: XXXXXXXX"
 #   "The WebUI administrator password was not set. A temporary password is provided for this session: XXXXXXXX"
-# The password is typically 8+ alphanumeric characters.
+# The password is typically 8-16 alphanumeric characters (validated as 6-20 for flexibility).
 sync_qbt_password_from_logs() {
   if [[ "${QBT_PASS}" != "adminadmin" ]]; then
     return
@@ -191,16 +191,18 @@ sync_qbt_password_from_logs() {
   local max_attempts=30
 
   while ((attempts < max_attempts)); do
-    logs="$(docker logs qbittorrent 2>&1 || true)"
+    # Use --tail to reduce I/O and ensure stable parsing with LC_ALL=C
+    logs="$(LC_ALL=C docker logs --tail 200 qbittorrent 2>&1 || true)"
     
     # Modern format (qBittorrent 4.5.0+): "A temporary password is provided for this session: XXXXXXXX"
-    # We look for any line containing "temporary password" followed by content after a colon
-    local password_line=""
-    if password_line="$(printf '%s' "$logs" | grep -iE "temporary password" | tail -1)"; then
-      # Extract the password after the last colon, which should be the actual password
-      # Trim whitespace and limit to 30 chars for safety (actual passwords are 8-16 chars)
-      detected="$(printf '%s' "$password_line" | sed 's/.*://' | tr -d '[:space:]')"
-    fi
+    # Extract the first non-whitespace sequence after "temporary password...:"
+    detected="$(printf '%s' "$logs" | LC_ALL=C sed -n 's/.*[Tt]emporary [Pp]assword[^:]*:[[:space:]]*\([^[:space:]]*\).*/\1/p' | tail -1)"
+    
+    # Strip any surrounding quotes if present
+    detected="${detected#\"}"
+    detected="${detected%\"}"
+    detected="${detected#\'}"
+    detected="${detected%\'}"
     
     # Validate: password should be 6-20 alphanumeric characters
     if [[ -n "$detected" && "$detected" =~ ^[A-Za-z0-9]{6,20}$ ]]; then

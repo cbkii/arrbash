@@ -76,12 +76,15 @@ bool_true() {
 
 # Validate numeric configuration values
 if ! [[ "${CONTROLLER_POLL_INTERVAL}" =~ ^[0-9]+$ ]]; then
+  log "Warning: Invalid CONTROLLER_POLL_INTERVAL='${CONTROLLER_POLL_INTERVAL}', using default 15"
   CONTROLLER_POLL_INTERVAL=15
 fi
 if ! [[ "${CONTROLLER_STARTUP_DELAY}" =~ ^[0-9]+$ ]]; then
+  log "Warning: Invalid CONTROLLER_STARTUP_DELAY='${CONTROLLER_STARTUP_DELAY}', using default 5"
   CONTROLLER_STARTUP_DELAY=5
 fi
 if ! [[ "${CONTROLLER_MAX_API_RETRIES}" =~ ^[0-9]+$ ]]; then
+  log "Warning: Invalid CONTROLLER_MAX_API_RETRIES='${CONTROLLER_MAX_API_RETRIES}', using default 3"
   CONTROLLER_MAX_API_RETRIES=3
 fi
 
@@ -99,6 +102,13 @@ if ! mkdir -p -- "${STATUS_DIR}" 2>/dev/null; then
   log_error "Unable to create status directory ${STATUS_DIR}"
   exit 1
 fi
+
+# --- Graceful shutdown handler ---
+_on_exit() {
+  # Best-effort write; ignore errors during shutdown
+  write_status "stopped" 0 "$CONTROLLER_REQUIRE_PF" "${_qbt_state:-unknown}" "controller exited" || true
+}
+trap _on_exit EXIT TERM INT
 
 # --- State tracking ---
 _qbt_state="unknown"
@@ -242,8 +252,8 @@ fetch_forwarded_port() {
   # Note: This method is deprecated in Gluetun v3.40+ and will be removed in v4.0
   if [[ -f "$FORWARDED_PORT_FILE" ]]; then
     log_debug "Trying deprecated file-based fallback: ${FORWARDED_PORT_FILE}"
-    port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" 2>/dev/null | head -c 10)"
-    if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
+    port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" 2>/dev/null | head -c 5)"
+    if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
       log_debug "Got port ${port} from status file (deprecated method)"
       printf '%s' "$port"
       return 0

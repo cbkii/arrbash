@@ -116,28 +116,34 @@ _gluetun_api_request() {
     if ((curl_exit == 0)) && [[ -n "$response" ]]; then
       # Extract HTTP status code from last line
       http_code="${response##*$'\n'}"
-      response="${response%$'\n'"$http_code"}"
       
-      _gluetun_api_debug "Response HTTP ${http_code} for ${path}"
-      
-      # Check for successful HTTP codes (200-299)
-      if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
-        printf '%s' "$response"
-        return 0
+      # Validate that http_code is a 3-digit number before using it
+      if [[ "$http_code" =~ ^[0-9]{3}$ ]]; then
+        response="${response%$'\n'"$http_code"}"
+        
+        _gluetun_api_debug "Response HTTP ${http_code} for ${path}"
+        
+        # Check for successful HTTP codes (200-299)
+        if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+          printf '%s' "$response"
+          return 0
+        fi
+        
+        # Handle specific error codes
+        case "$http_code" in
+          401|403)
+            _gluetun_api_debug "Authentication failed for ${path}. Check GLUETUN_API_KEY."
+            ;;
+          404)
+            _gluetun_api_debug "Endpoint not found: ${path}"
+            ;;
+          500|502|503)
+            _gluetun_api_debug "Server error (${http_code}) for ${path}"
+            ;;
+        esac
+      else
+        _gluetun_api_debug "Failed to parse HTTP status code from response for ${path}"
       fi
-      
-      # Handle specific error codes
-      case "$http_code" in
-        401|403)
-          _gluetun_api_debug "Authentication failed for ${path}. Check GLUETUN_API_KEY."
-          ;;
-        404)
-          _gluetun_api_debug "Endpoint not found: ${path}"
-          ;;
-        500|502|503)
-          _gluetun_api_debug "Server error (${http_code}) for ${path}"
-          ;;
-      esac
     else
       _gluetun_api_debug "curl failed with exit code ${curl_exit} for ${path}"
     fi

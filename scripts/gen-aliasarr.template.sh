@@ -944,7 +944,7 @@ _arr_port_guard_print_json() {
 _arr_port_guard_forwarded_port() {
   local file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
-    # Try canonical /v1/portforward endpoint first (Gluetun v3.35+), then fallback to legacy
+    # Try canonical /v1/portforward endpoint first (Gluetun v3.40+), then fallback to legacy
     local payload=""
     if payload="$(_arr_gluetun_api /v1/portforward 2>/dev/null || true)"; then
       :
@@ -2843,7 +2843,7 @@ arr.qbt.port.set() {
 
 arr.qbt.port.sync() {
   local payload port=""
-  # Try canonical /v1/portforward endpoint first (Gluetun v3.35+)
+  # Try canonical /v1/portforward endpoint first (Gluetun v3.40+)
   payload="$(_arr_gluetun_api /v1/portforward 2>/dev/null || true)"
   if [ -z "$payload" ]; then
     payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"

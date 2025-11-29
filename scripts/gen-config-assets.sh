@@ -81,8 +81,9 @@ routes = [
   # Public IP information
   "GET /v1/publicip/ip",
   
-  # Health check (typically doesn't require auth but included for completeness)
-  "GET /healthcheck"
+  # Health check endpoints (primary and fallback)
+  "GET /healthcheck",
+  "GET /healthz"
 ]
 EOF
     )
