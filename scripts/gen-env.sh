@@ -190,7 +190,10 @@ fi
 if declare -f lan_ipv4_host_cidr >/dev/null 2>&1; then
   if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
     if [[ -n "$lan_host_cidr" ]]; then
-      QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+      # Prepend LAN CIDR if not already present in the whitelist
+      if [[ ",${QBT_AUTH_WHITELIST}," != *",${lan_host_cidr},"* ]]; then
+        QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+      fi
     fi
   fi
 fi

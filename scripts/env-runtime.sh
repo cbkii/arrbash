@@ -414,7 +414,10 @@ prepare_env_context() {
     lan_host_cidr=""
   fi
   if [[ -n "$lan_host_cidr" ]]; then
-    qbt_whitelist_raw="${lan_host_cidr}${qbt_whitelist_raw:+,}${qbt_whitelist_raw}"
+    # Prepend LAN CIDR if not already present in the whitelist
+    if [[ ",${qbt_whitelist_raw}," != *",${lan_host_cidr},"* ]]; then
+      qbt_whitelist_raw="${lan_host_cidr}${qbt_whitelist_raw:+,}${qbt_whitelist_raw}"
+    fi
   fi
   QBT_AUTH_WHITELIST="$(normalize_csv "$qbt_whitelist_raw")"
   export QBT_AUTH_WHITELIST

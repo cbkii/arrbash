@@ -50,6 +50,15 @@ docker compose config >/dev/null    # ensure no unresolved placeholders
 - **VueTorrent blank or HTTP 500**: ensure `QBT_DOCKER_MODS` matches the desired mode; in manual mode confirm `/config/vuetorrent` exists inside the container.
 - **Need qBittorrent credentials**: run `scripts/stack-qbt-helper.sh show` or `... reset` to generate new ones.
 - **Configarr complaining about API keys**: rerun `./arr.sh --sync-api-keys --yes` after Sonarr/Radarr/Prowlarr create their configs.
+- **qBittorrent API authentication failing**: ensure `QBT_PASS` in `.env` matches the actual qBittorrent WebUI password:
+  ```bash
+  grep QBT_PASS "${ARR_STACK_DIR}/.env"
+  # If changed in WebUI, update userr.conf and rerun installer
+  ```
+- **LAN IP not in qBittorrent whitelist**: `QBT_AUTH_WHITELIST` is automatically populated with `LAN_IP/24` when `LAN_IP` is set. Check the generated config:
+  ```bash
+  grep AuthSubnetWhitelist "${ARR_DOCKER_DIR}/qbittorrent/qBittorrent/qBittorrent.conf"
+  ```
 
 ## Network exposure sanity checks
 - arrbash does not provision DNS or HTTPS. Manage those layers externally.

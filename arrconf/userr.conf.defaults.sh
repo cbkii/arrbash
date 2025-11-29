@@ -293,14 +293,16 @@ ARRBASH_USENET_CLIENT="${ARRBASH_USENET_CLIENT:-sabnzbd}"
 # Expose application ports directly on the host
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-1}"
 
-# qBittorrent credentials (override after first login)
+# qBittorrent credentials - these are applied via API on first install when set to non-default values.
+# After changing password in WebUI, update QBT_PASS here or in .env to match.
 QBT_USER="${QBT_USER:-admin}"
 QBT_PASS="${QBT_PASS:-adminadmin}"
 if [[ -z "${QBT_DOCKER_MODS+x}" ]]; then
   QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"
 fi
 
-# Comma-separated CIDR list that can bypass the qBittorrent WebUI login
+# Comma-separated CIDR list that can bypass the qBittorrent WebUI login.
+# LAN_IP/24 is automatically added if LAN_IP is set.
 QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
 
 # Images
@@ -617,10 +619,10 @@ CONTROLLER_REQUIRE_PF="${CONTROLLER_REQUIRE_PF}"               # true pauses unt
 
 # --- Credentials ---
 QBT_USER="admin"                       # Initial qBittorrent username (change after first login)
-QBT_PASS="adminadmin"                  # Initial qBittorrent password (update immediately after install)
+QBT_PASS="adminadmin"                  # qBittorrent password (applied via API on first install; update here after changing in WebUI)
 GLUETUN_API_KEY=""                     # Pre-seed a Gluetun API key or leave empty to auto-generate
 QBT_DOCKER_MODS="${QBT_DOCKER_MODS}"  # Vuetorrent WebUI mod (set empty to disable)
-QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBittorrent login prompt (default: ${QBT_AUTH_WHITELIST})
+QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBittorrent login prompt (+LAN/24 auto-added when LAN_IP set)
 
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="${SABNZBD_ENABLED}"             # 1 enables SABnzbd container/helper integration (default: ${SABNZBD_ENABLED})

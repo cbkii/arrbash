@@ -129,7 +129,10 @@ show_configuration_preview() {
   local qbt_whitelist_final="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
   local lan_host_cidr
   if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$lan_host_cidr" ]]; then
-    qbt_whitelist_final="${lan_host_cidr}${qbt_whitelist_final:+,}${qbt_whitelist_final}"
+    # Prepend LAN CIDR if not already present in the whitelist
+    if [[ ",${qbt_whitelist_final}," != *",${lan_host_cidr},"* ]]; then
+      qbt_whitelist_final="${lan_host_cidr}${qbt_whitelist_final:+,}${qbt_whitelist_final}"
+    fi
   fi
   qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_final")"
 

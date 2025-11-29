@@ -24,5 +24,5 @@ mkdir -p "$(dirname "${events_log}")" >/dev/null 2>&1 || true
   printf '[%s] Gluetun port forwarding: %s\n' "$timestamp" "$event"
 } >>"${events_log}" 2>/dev/null || true
 
-# Note: vpn-port-guard polls /v1/openvpn/portforwarded independently
+# Note: vpn-port-guard polls /v1/portforward independently
 # This hook provides audit trail only

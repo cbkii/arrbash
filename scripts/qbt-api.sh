@@ -281,6 +281,50 @@ qbt_set_listen_port() {
   return 0
 }
 
+# Sets the qBittorrent WebUI password via the API.
+# Must be called while logged in (after successful authentication).
+# Returns 0 on success, 1 on failure.
+qbt_set_password() {
+  local new_password="$1"
+
+  if [[ -z "$new_password" ]]; then
+    if declare -f warn >/dev/null 2>&1; then
+      warn "Cannot set empty password"
+    fi
+    return 1
+  fi
+
+  if ! _qbt_api_ensure_cookie; then
+    return 1
+  fi
+
+  local payload
+  if ! payload="$(jq -cn --arg pass "$new_password" '{web_ui_password: $pass}' 2>/dev/null)"; then
+    printf 'Failed to generate qBittorrent password update JSON\n' >&2
+    return 1
+  fi
+
+  local url
+  url="$(_qbt_api_base_url)/api/v2/app/setPreferences"
+
+  if ! curl -fsS \
+    --connect-timeout "${QBT_API_TIMEOUT}" \
+    --max-time "${QBT_API_TIMEOUT}" \
+    -b "${_qbt_api_cookie_file}" \
+    --data-urlencode "json=${payload}" \
+    "${url}" >/dev/null; then
+    if declare -f warn >/dev/null 2>&1; then
+      warn "Failed to set qBittorrent password via API"
+    fi
+    return 1
+  fi
+
+  # Clear the cookie to force re-authentication with new password
+  _qbt_api_cleanup_cookie
+
+  return 0
+}
+
 # Allow callers to clean up cookie files on exit.
 qbt_api_cleanup() {
   _qbt_api_cleanup_cookie
