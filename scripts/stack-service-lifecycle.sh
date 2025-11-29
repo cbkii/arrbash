@@ -638,7 +638,9 @@ arr_port_guard_status_file() {
 }
 
 arr_wait_for_port_guard_ready() {
-  local max_wait="${1:-90}"
+  local default_timeout="${VPN_PORT_GUARD_STATUS_TIMEOUT:-90}"
+  [[ "$default_timeout" =~ ^[1-9][0-9]*$ ]] || default_timeout=90
+  local max_wait="${1:-$default_timeout}"
   local poll_delay="${2:-5}"
 
   local status_file=""
@@ -652,7 +654,7 @@ arr_wait_for_port_guard_ready() {
   [[ "$poll_seconds" =~ ^[0-9]+$ ]] || poll_seconds=15
   local freshness_window="$((poll_seconds < 60 ? 60 : poll_seconds + 60))"
 
-  msg "Waiting for vpn-port-guard to publish status (${max_wait}s timeout)..."
+  msg "Waiting for vpn-port-guard status file (timeout: ${max_wait}s, configurable via VPN_PORT_GUARD_STATUS_TIMEOUT)..."
   local start
   start="$(date +%s)"
 
@@ -661,7 +663,7 @@ arr_wait_for_port_guard_ready() {
     now="$(date +%s)"
     local age=$((now - start))
     if ((age > max_wait)); then
-      warn "vpn-port-guard status not refreshed within ${max_wait}s; qBittorrent may start before port sync"
+      warn "vpn-port-guard status file not ready within ${max_wait}s (VPN_PORT_GUARD_STATUS_TIMEOUT=${max_wait}); qBittorrent may start before port sync"
       return 1
     fi
 
@@ -671,7 +673,7 @@ arr_wait_for_port_guard_ready() {
       if [[ "$mtime" =~ ^[0-9]+$ ]]; then
         local staleness=$((now - mtime))
         if ((staleness <= freshness_window)); then
-          msg "✅ vpn-port-guard status refreshed (age ${staleness}s)"
+          msg "✅ vpn-port-guard status file ready (age ${staleness}s)"
           return 0
         fi
       fi

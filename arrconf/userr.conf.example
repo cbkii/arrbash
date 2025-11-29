@@ -83,6 +83,7 @@ SERVER_COUNTRIES="Netherlands,Singapore,Australia"      # default: Netherlands,S
 
 # --- VPN port guard (controller) ---
 VPN_PORT_GUARD_POLL_SECONDS="15"      # default: 15; controller loop interval for Gluetun/qBittorrent sync
+VPN_PORT_GUARD_STATUS_TIMEOUT="90"      # default: 90; max seconds to wait for vpn-port-guard status file at startup
 CONTROLLER_REQUIRE_PF="false"      # default: false; pause torrents whenever Proton forwarding is absent
 
 # --- VPN auto-reconnect (optional) ---

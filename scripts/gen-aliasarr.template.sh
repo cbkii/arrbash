@@ -921,6 +921,9 @@ _arr_port_guard_status_hint() {
       warn "vpn-port-guard container present but state unknown; run arr.pf.logs for details."
     elif [ "$pg_state" != "running" ]; then
       warn "vpn-port-guard container state: ${pg_state}; start or recreate the stack."
+    else
+      local timeout_val="${VPN_PORT_GUARD_STATUS_TIMEOUT:-90}"
+      warn "vpn-port-guard is running but status file not yet written. Increase VPN_PORT_GUARD_STATUS_TIMEOUT (current: ${timeout_val}s) if startup takes longer."
     fi
   else
     warn "vpn-port-guard container not found; rerun ./arr.sh --yes to regenerate and start the stack."
@@ -2054,7 +2057,8 @@ arr.vpn.status() {
 
   local status_file="$(_arr_port_guard_status_file)"
   if [ ! -f "$status_file" ]; then
-    msg 'vpn-port-guard: status file not found (controller has not written /gluetun_state/port-guard-status.json yet)'
+    local timeout_val="${VPN_PORT_GUARD_STATUS_TIMEOUT:-90}"
+    msg "vpn-port-guard: status file not found (controller has not written ${status_file} yet; startup wait configured to ${timeout_val}s via VPN_PORT_GUARD_STATUS_TIMEOUT)"
     _arr_port_guard_status_hint "$status_file"
     return 0
   fi
