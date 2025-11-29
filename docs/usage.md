@@ -64,7 +64,8 @@ Effective order: `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf >
 
 ## Security basics
 - Keep `proton.auth`, `userr.conf`, and generated `.env` files out of version control; permissions default to `600` for secrets.
-- Rotate qBittorrent credentials after first login and store them in `userr.conf` (`QBT_USER`/`QBT_PASS`) before rerunning the installer.
+- **qBittorrent password**: On first install, if you set a custom `QBT_PASS` in `userr.conf` (not the default `adminadmin`), the installer will apply it to qBittorrent via API. After that, if you change the password in qBittorrent's WebUI, update `QBT_PASS` in your `userr.conf` to match.
+- **LAN whitelist**: When `LAN_IP` is set, the installer automatically adds `LAN_IP/24` to `QBT_AUTH_WHITELIST` for passwordless access from your local network.
 - Rotate the Gluetun API key periodically with `./arr.sh --rotate-api-key --yes`; validate with the control API health check printed in the installer summary.
 - Verify exposed ports explicitly when `EXPOSE_DIRECT_PORTS=1`:
   ```bash

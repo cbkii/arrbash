@@ -197,14 +197,17 @@ write_qbt_config() {
 
   ensure_dir "$config_dir"
   ensure_dir "$runtime_dir"
-  local default_auth_whitelist="${LOCALHOST_IP}/32,::1/128"
+
+  # Build auth whitelist: always include LAN_IP/24 if LAN_IP is set
+  local auth_whitelist="${QBT_AUTH_WHITELIST:-${LOCALHOST_IP}/32,::1/128}"
   local qb_lan_whitelist=""
   if qb_lan_whitelist="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
-    default_auth_whitelist="${qb_lan_whitelist},${default_auth_whitelist}"
+    # Prepend LAN CIDR if not already present in the whitelist
+    if [[ ",${auth_whitelist}," != *",${qb_lan_whitelist},"* ]]; then
+      auth_whitelist="${qb_lan_whitelist},${auth_whitelist}"
+    fi
   fi
-
-  local auth_whitelist
-  auth_whitelist="$(normalize_csv "${QBT_AUTH_WHITELIST:-$default_auth_whitelist}")"
+  auth_whitelist="$(normalize_csv "$auth_whitelist")"
   QBT_AUTH_WHITELIST="$auth_whitelist"
   msg "Stored WebUI auth whitelist entries: ${auth_whitelist}"
 
@@ -367,9 +370,19 @@ ensure_qbt_config() {
 
   if ! docker inspect qbittorrent --format '{{.State.Running}}' 2>/dev/null | grep -q "true"; then
     warn "qBittorrent container not running, skipping config sync"
+    return 0
   fi
 
+  # Save the desired password from userr.conf before any modifications
+  local desired_pass="${QBT_PASS:-adminadmin}"
+
+  # First try to sync temp password (for fresh installs where QBT_PASS is adminadmin)
   sync_qbt_password_from_logs || true
+
+  # If user configured a custom password, apply it via API
+  if [[ "$desired_pass" != "adminadmin" ]] && declare -f apply_qbt_password_from_config >/dev/null 2>&1; then
+    apply_qbt_password_from_config "$desired_pass" || true
+  fi
 
   docker stop qbittorrent >/dev/null 2>&1 || true
   sleep "${QBT_CONFIG_SLEEP:-5}"
