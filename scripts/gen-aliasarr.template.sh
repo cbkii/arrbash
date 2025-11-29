@@ -944,11 +944,11 @@ _arr_port_guard_print_json() {
 _arr_port_guard_forwarded_port() {
   local file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
-    # Try canonical /v1/portforward endpoint first (Gluetun v3.40+), then fallback to legacy
+    # Try protocol-specific endpoints (openvpn first, then wireguard)
     local payload=""
-    if payload="$(_arr_gluetun_api /v1/portforward 2>/dev/null || true)"; then
+    if payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"; then
       :
-    elif payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"; then
+    elif payload="$(_arr_gluetun_api /v1/wireguard/portforwarded 2>/dev/null || true)"; then
       :
     fi
     if [ -n "$payload" ]; then
@@ -1413,7 +1413,7 @@ Gluetun helpers:
   arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
   arr.gluetun.status         Inspect OpenVPN status (GET /v1/openvpn/status)
   arr.gluetun.status.set '{}'  Update OpenVPN status payload (PUT /v1/openvpn/status)
-  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/portforward)
+  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/openvpn/portforwarded)
   arr.gluetun.health         Check Gluetun control health (GET /healthz)
   arr.gluetun.diagnose       Verify control API health, status, and recent port-forward errors
 EOF
@@ -1425,7 +1425,7 @@ arr.gluetun.status.set() {
   local payload="${1:-{}}"
   _arr_gluetun_http PUT /v1/openvpn/status -H 'Content-Type: application/json' --data "$payload" | _arr_pretty_guess
 }
-arr.gluetun.portfwd() { _arr_gluetun_http GET /v1/portforward | _arr_pretty_guess; }
+arr.gluetun.portfwd() { _arr_gluetun_http GET /v1/openvpn/portforwarded | _arr_pretty_guess; }
 arr.gluetun.health() { _arr_gluetun_http GET /healthz | _arr_pretty_guess; }
 arr.gluetun.diagnose() {
   local port host key base rc=0
@@ -1801,7 +1801,7 @@ ProtonVPN & Gluetun (arr.vpn ...):
   arr.vpn port.state           Print the controller status JSON
   arr.vpn port.watch           Follow the controller status JSON for changes
   arr.vpn port.sync            Touch the controller trigger (compatibility shim)
-  arr.vpn pf                   Dump the raw Gluetun /v1/portforward payload
+  arr.vpn pf                   Dump the raw Gluetun /v1/openvpn/portforwarded payload
   arr.vpn ip                   Show the current public IP reported by Gluetun
   arr.vpn health               Print the Gluetun container health status
   arr.vpn paths                Display credential/config paths for ProtonVPN assets
@@ -2180,10 +2180,10 @@ arr.vpn.ip() {
 }
 
 arr.vpn.pf() {
-  # Try canonical /v1/portforward endpoint first (Gluetun v3.35+)
-  if _arr_gluetun_api /v1/portforward; then
+  # Try protocol-specific endpoints (openvpn first, then wireguard)
+  if _arr_gluetun_api /v1/openvpn/portforwarded; then
     printf '\n'
-  elif _arr_gluetun_api /v1/openvpn/portforwarded; then
+  elif _arr_gluetun_api /v1/wireguard/portforwarded; then
     printf '\n'
   else
     warn "${_arr_gluetun_last_error:-Unable to query forwarded port payload.}"
@@ -2843,10 +2843,10 @@ arr.qbt.port.set() {
 
 arr.qbt.port.sync() {
   local payload port=""
-  # Try canonical /v1/portforward endpoint first (Gluetun v3.40+)
-  payload="$(_arr_gluetun_api /v1/portforward 2>/dev/null || true)"
+  # Try protocol-specific endpoints (openvpn first, then wireguard)
+  payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"
   if [ -z "$payload" ]; then
-    payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"
+    payload="$(_arr_gluetun_api /v1/wireguard/portforwarded 2>/dev/null || true)"
   fi
   if [ -z "$payload" ]; then
     echo 'Unable to query forwarded port.' >&2

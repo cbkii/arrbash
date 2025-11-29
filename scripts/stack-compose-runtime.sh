@@ -104,7 +104,7 @@ compose_emit_gluetun_environment() {
   fi
   # ProtonVPN port forwarding (off by default for first-run reliability)
   # When enabled, Gluetun negotiates a NAT-PMP port and writes it to the status file
-  # The vpn-port-guard controller polls /v1/portforward and syncs to qBittorrent
+  # The vpn-port-guard controller polls protocol-specific endpoints and syncs to qBittorrent
   arr_yaml_kv "      " "VPN_PORT_FORWARDING" "${VPN_PORT_FORWARDING:-off}" >>"$dest"
   arr_yaml_kv "      " "VPN_PORT_FORWARDING_PROVIDER" "${VPN_PORT_FORWARDING_PROVIDER:-protonvpn}" >>"$dest"
   arr_yaml_kv "      " "PORT_FORWARD_ONLY" "${PORT_FORWARD_ONLY:-off}" >>"$dest"

@@ -69,8 +69,9 @@ name = "${STACK}"
 auth = "apikey"
 apikey = "${sanitized_key}"
 routes = [
-  # Port forwarding endpoints (unified endpoint for Gluetun v3.40+)
-  "GET /v1/portforward",
+  # Port forwarding endpoints (protocol-specific, required for Gluetun control API)
+  "GET /v1/openvpn/portforwarded",
+  "GET /v1/wireguard/portforwarded",
   
   # VPN status endpoints (both OpenVPN and WireGuard)
   "GET /v1/openvpn/status",
