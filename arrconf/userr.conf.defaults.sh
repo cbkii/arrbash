@@ -126,6 +126,13 @@ if ! declare -f arr_defaults_fail >/dev/null 2>&1; then
           normalized="15"
         fi
         ;;
+      VPN_PORT_GUARD_STATUS_TIMEOUT)
+        if [[ "$raw_value" =~ ^[1-9][0-9]*$ ]]; then
+          normalized="$raw_value"
+        else
+          normalized="90"
+        fi
+        ;;
       CONTROLLER_REQUIRE_PF)
         raw_value="${raw_value,,}"
         case "$raw_value" in
@@ -201,6 +208,11 @@ GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
 VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
 if [[ ! "${VPN_PORT_GUARD_POLL_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
   arr_defaults_fail "VPN_PORT_GUARD_POLL_SECONDS" "VPN_PORT_GUARD_POLL_SECONDS must be a positive integer (got '${VPN_PORT_GUARD_POLL_SECONDS}')"
+fi
+
+VPN_PORT_GUARD_STATUS_TIMEOUT="${VPN_PORT_GUARD_STATUS_TIMEOUT:-90}"
+if [[ ! "${VPN_PORT_GUARD_STATUS_TIMEOUT}" =~ ^[1-9][0-9]*$ ]]; then
+  arr_defaults_fail "VPN_PORT_GUARD_STATUS_TIMEOUT" "VPN_PORT_GUARD_STATUS_TIMEOUT must be a positive integer (got '${VPN_PORT_GUARD_STATUS_TIMEOUT}')"
 fi
 
 if [[ -z "${CONTROLLER_REQUIRE_PF+x}" && -n "${CONTROLLER_REQUIRE_PORT_FORWARDING:-}" ]]; then
@@ -376,6 +388,7 @@ ARR_USERCONF_TEMPLATE_VARS=(
   ARR_PORT_CHECK_MODE
   EXPOSE_DIRECT_PORTS
   VPN_PORT_GUARD_POLL_SECONDS
+  VPN_PORT_GUARD_STATUS_TIMEOUT
   CONTROLLER_REQUIRE_PF
   QBT_DOCKER_MODS
   QBT_AUTH_WHITELIST
@@ -612,9 +625,11 @@ EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS}"                # Keep 1 so WebUIs p
 
 # --- VPN port guard ---
 VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS}"   # Poll interval (positive integer seconds, default: ${VPN_PORT_GUARD_POLL_SECONDS})
+VPN_PORT_GUARD_STATUS_TIMEOUT="${VPN_PORT_GUARD_STATUS_TIMEOUT}"   # Max seconds to wait for vpn-port-guard status file at startup (default: ${VPN_PORT_GUARD_STATUS_TIMEOUT})
 CONTROLLER_REQUIRE_PF="${CONTROLLER_REQUIRE_PF}"               # true pauses until Proton forwards a port, false lets torrents run without (default: ${CONTROLLER_REQUIRE_PF})
 # Example overrides:
 # VPN_PORT_GUARD_POLL_SECONDS=10
+# VPN_PORT_GUARD_STATUS_TIMEOUT=120
 # CONTROLLER_REQUIRE_PF=true
 
 # --- Credentials ---
