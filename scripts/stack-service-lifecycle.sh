@@ -256,8 +256,8 @@ apply_qbt_password_from_config() {
 
   # If no temp password found, qBittorrent might already have a password set
   if [[ -z "$temp_pass" ]]; then
-    # Try logging in with the desired password
-    if QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+    # Try logging in with the desired password (honor custom username from userr.conf)
+    if QBT_USER="${QBT_USER:-admin}" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
       msg "qBittorrent password from config is already applied"
       persist_env_var QBT_PASS "$desired_pass"
       return 0
@@ -273,17 +273,17 @@ apply_qbt_password_from_config() {
     return 0
   fi
 
-  # Login with temp password
+  # Login with temp password (honor custom username from userr.conf)
   msg "Applying qBittorrent password from userr.conf..."
-  if ! QBT_PASS="$temp_pass" qbt_api_login 2>/dev/null; then
+  if ! QBT_USER="${QBT_USER:-admin}" QBT_PASS="$temp_pass" qbt_api_login 2>/dev/null; then
     warn "Failed to login with temporary password, cannot apply password from config"
     persist_env_var QBT_PASS "$temp_pass"
     return 1
   fi
 
-  # Set the new password via API
+  # Set the new password via API (honor custom username from userr.conf)
   if declare -f qbt_set_password >/dev/null 2>&1; then
-    if QBT_PASS="$temp_pass" qbt_set_password "$desired_pass" 2>/dev/null; then
+    if QBT_USER="${QBT_USER:-admin}" QBT_PASS="$temp_pass" qbt_set_password "$desired_pass" 2>/dev/null; then
       msg "Successfully set qBittorrent password from userr.conf"
       QBT_PASS="$desired_pass"
       persist_env_var QBT_PASS "$desired_pass"
