@@ -883,7 +883,7 @@ _arr_port_guard_status_file() {
 _arr_port_guard_status_timeout() {
   local raw_timeout
   raw_timeout="${VPN_PORT_GUARD_STATUS_TIMEOUT:-}"
-  if [ -z "$raw_timeout" ] || ! printf '%s' "$raw_timeout" | grep -Eq '^[0-9]+$'; then
+  if [ -z "$raw_timeout" ] || ! printf '%s' "$raw_timeout" | grep -Eq '^[1-9][0-9]*$'; then
     printf '90'
     return
   fi
