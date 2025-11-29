@@ -73,6 +73,7 @@ GLUETUN_API_KEY=""      # default: empty; pre-seed Gluetun API key
 
 # --- VPN port guard (controller) ---
 VPN_PORT_GUARD_POLL_SECONDS="15"      # default: 15; controller loop interval for Gluetun/qBittorrent sync
+VPN_PORT_GUARD_STATUS_TIMEOUT="90"    # default: 90; wait for vpn-port-guard to publish status JSON
 CONTROLLER_REQUIRE_PF="false"      # default: false; pause torrents whenever Proton forwarding is absent
 
 # --- VPN auto-reconnect (optional) ---

@@ -880,6 +880,42 @@ _arr_port_guard_status_file() {
   printf '%s/port-guard-status.json' "$(_arr_port_guard_state_dir)"
 }
 
+_arr_port_guard_status_timeout() {
+  local raw_timeout
+  raw_timeout="${VPN_PORT_GUARD_STATUS_TIMEOUT:-}"
+  if [ -z "$raw_timeout" ] || ! printf '%s' "$raw_timeout" | grep -Eq '^[0-9]+$'; then
+    printf '90'
+    return
+  fi
+
+  printf '%s' "$raw_timeout"
+}
+
+_arr_port_guard_wait_for_status_file() {
+  local file
+  file="${1:-$(_arr_port_guard_status_file)}"
+  local timeout waited
+  timeout="$(_arr_port_guard_status_timeout)"
+  waited=0
+
+  while [ "$waited" -lt "$timeout" ]; do
+    if [ -s "$file" ]; then
+      return 0
+    fi
+
+    if [ "$waited" -eq 0 ]; then
+      printf 'Waiting for vpn-port-guard to publish status (%ss timeout)...\n' "$timeout" >&2
+    fi
+
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  printf 'vpn-port-guard status file not found after %ss (%s)\n' "$timeout" "$file" >&2
+  _arr_port_guard_status_hint "$file"
+  return 1
+}
+
 _arr_port_guard_trigger_file() {
   printf '%s/port-guard.trigger' "$(_arr_port_guard_state_dir)"
 }
@@ -929,11 +965,7 @@ _arr_port_guard_status_hint() {
 
 _arr_port_guard_print_json() {
   local file="$(_arr_port_guard_status_file)"
-  if [ ! -f "$file" ]; then
-    printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
-    _arr_port_guard_status_hint "$file"
-    return 1
-  fi
+  _arr_port_guard_wait_for_status_file "$file" || return 1
   if _arr_has_cmd jq; then
     jq '.' "$file"
   else
@@ -943,7 +975,7 @@ _arr_port_guard_print_json() {
 
 _arr_port_guard_forwarded_port() {
   local file="$(_arr_port_guard_status_file)"
-  if [ ! -f "$file" ]; then
+  if ! _arr_port_guard_wait_for_status_file "$file"; then
     if payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"; then
       if _arr_port_guard_require_jq; then
         local port
@@ -954,7 +986,6 @@ _arr_port_guard_forwarded_port() {
         fi
       fi
     fi
-    _arr_port_guard_status_hint "$file"
     return 1
   fi
   if ! _arr_port_guard_require_jq; then
@@ -966,10 +997,7 @@ _arr_port_guard_forwarded_port() {
 _arr_port_guard_forwarding_state() {
   local file
   file="$(_arr_port_guard_status_file)"
-  if [ ! -f "$file" ]; then
-    _arr_port_guard_status_hint "$file"
-    return 1
-  fi
+  _arr_port_guard_wait_for_status_file "$file" || return 1
   if ! _arr_port_guard_require_jq; then
     return 1
   fi
@@ -979,9 +1007,7 @@ _arr_port_guard_forwarding_state() {
 _arr_port_guard_controller_mode() {
   local file
   file="$(_arr_port_guard_status_file)"
-  if [ ! -f "$file" ]; then
-    return 1
-  fi
+  _arr_port_guard_wait_for_status_file "$file" || return 1
   if ! _arr_port_guard_require_jq; then
     return 1
   fi
@@ -1014,9 +1040,7 @@ _arr_port_guard_effective_mode() {
 
 _arr_port_guard_pf_enabled() {
   local file="$(_arr_port_guard_status_file)"
-  if [ ! -f "$file" ]; then
-    return 1
-  fi
+  _arr_port_guard_wait_for_status_file "$file" || return 1
   if ! _arr_port_guard_require_jq; then
     return 1
   fi
@@ -1026,9 +1050,10 @@ _arr_port_guard_pf_enabled() {
 _arr_port_guard_json_value() {
   local key="$1"
   local file="$(_arr_port_guard_status_file)"
-  if [ -z "$key" ] || [ ! -f "$file" ]; then
+  if [ -z "$key" ]; then
     return 1
   fi
+  _arr_port_guard_wait_for_status_file "$file" || return 1
   if ! _arr_port_guard_require_jq; then
     return 1
   fi
@@ -2211,11 +2236,7 @@ arr.pf.status() {
 arr.pf.tail() {
   local file
   file="$(_arr_port_guard_status_file)"
-  if [ ! -f "$file" ]; then
-    printf 'vpn-port-guard status file not found (%s)\n' "$file" >&2
-    _arr_port_guard_status_hint "$file"
-    return 1
-  fi
+  _arr_port_guard_wait_for_status_file "$file" || return 1
   exec tail -Fn0 "$file"
 }
 
