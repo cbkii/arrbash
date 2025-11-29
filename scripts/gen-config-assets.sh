@@ -61,6 +61,15 @@ write_gluetun_control_assets() {
     sanitized_key=${sanitized_key//\\/\\\\}
     sanitized_key="$(printf '%s' "$sanitized_key" | sed 's/"/\\"/g')"
 
+    # Determine VPN type and generate protocol-specific routes only
+    # Gluetun 3.40+ validates routes and rejects endpoints not supported by the active VPN type
+    local vpn_type_lower
+    vpn_type_lower="$(printf '%s' "${VPN_TYPE:-openvpn}" | tr '[:upper:]' '[:lower:]')"
+    case "$vpn_type_lower" in
+      wireguard) ;;
+      *) vpn_type_lower="openvpn" ;;
+    esac
+
     local auth_payload
     auth_payload=$(
       cat <<EOF
@@ -69,19 +78,16 @@ name = "${STACK}"
 auth = "apikey"
 apikey = "${sanitized_key}"
 routes = [
-  # Port forwarding endpoints (protocol-specific, required for Gluetun control API)
-  "GET /v1/openvpn/portforwarded",
-  "GET /v1/wireguard/portforwarded",
-  
-  # VPN status endpoints (both OpenVPN and WireGuard)
-  "GET /v1/openvpn/status",
-  "PUT /v1/openvpn/status",
-  "GET /v1/wireguard/status",
-  "PUT /v1/wireguard/status",
+  # Port forwarding endpoint (protocol-specific for ${vpn_type_lower})
+  "GET /v1/${vpn_type_lower}/portforwarded",
+
+  # VPN status endpoints (protocol-specific for ${vpn_type_lower})
+  "GET /v1/${vpn_type_lower}/status",
+  "PUT /v1/${vpn_type_lower}/status",
 
   # Public IP information
   "GET /v1/publicip/ip",
-  
+
   # Health check endpoints (primary and fallback)
   "GET /healthcheck",
   "GET /healthz"
