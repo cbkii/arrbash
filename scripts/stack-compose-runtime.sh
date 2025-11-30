@@ -1715,7 +1715,7 @@ arr_compose_emit_vpn_port_guard_service() {
             exit 1
           fi
           curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" \
-            "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/openvpn/status" >/dev/null
+            "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/${VPN_TYPE:-openvpn}/status" >/dev/null
           curl -fsS --connect-timeout 5 --max-time 5 \
             "http://127.0.0.1:${QBT_INT_PORT}/api/v2/app/version" >/dev/null
       interval: "15s"

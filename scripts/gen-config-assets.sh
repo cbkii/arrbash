@@ -89,7 +89,7 @@ routes = [
   "GET /v1/publicip/ip",
 
   # Health check endpoints
-  # GET /v1/openvpn/status (above) serves checking VPN health in v3.40+.
+  # GET /v1/{vpn_type}/status (above) serves checking VPN health in v3.40+.
 ]
 EOF
     )

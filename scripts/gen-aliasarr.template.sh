@@ -171,6 +171,16 @@ _arr_lowercase() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+# Returns the current VPN type (openvpn or wireguard), defaults to openvpn
+_arr_vpn_type() {
+  local vpn_type="${VPN_TYPE:-openvpn}"
+  vpn_type="$(_arr_lowercase "$vpn_type")"
+  case "$vpn_type" in
+    wireguard) printf 'wireguard' ;;
+    *) printf 'openvpn' ;;
+  esac
+}
+
 _arr_sanitize_error() {
   local value="$1"
   value="${value//$'\r'/ }"
@@ -947,11 +957,21 @@ _arr_port_guard_print_json() {
 _arr_port_guard_forwarded_port() {
   local file="$(_arr_port_guard_status_file)"
   if [ ! -f "$file" ]; then
-    # Try protocol-specific endpoints (openvpn first, then wireguard)
+    # Use VPN_TYPE to select primary endpoint, fall back to the other protocol
+    local vpn_type
+    vpn_type="$(_arr_vpn_type)"
+    local primary_endpoint="/v1/${vpn_type}/portforwarded"
+    local fallback_endpoint
+    if [ "$vpn_type" = "wireguard" ]; then
+      fallback_endpoint="/v1/openvpn/portforwarded"
+    else
+      fallback_endpoint="/v1/wireguard/portforwarded"
+    fi
+
     local payload=""
-    if payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"; then
+    if payload="$(_arr_gluetun_api "$primary_endpoint" 2>/dev/null || true)"; then
       :
-    elif payload="$(_arr_gluetun_api /v1/wireguard/portforwarded 2>/dev/null || true)"; then
+    elif payload="$(_arr_gluetun_api "$fallback_endpoint" 2>/dev/null || true)"; then
       :
     fi
     if [ -n "$payload" ]; then
@@ -1205,24 +1225,36 @@ _arr_gluetun_is_transport_error() {
   return 1
 }
 
-_arr_gluetun_set_openvpn_status() {
+_arr_gluetun_set_vpn_status() {
   local desired="$1"
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
   local payload
   payload="{\"status\":\"${desired}\"}"
-  if _arr_gluetun_api /v1/openvpn/status PUT "$payload" >/dev/null 2>&1; then
+  if _arr_gluetun_api "/v1/${vpn_type}/status" PUT "$payload" >/dev/null 2>&1; then
     return 0
   fi
   return 1
 }
 
-_arr_gluetun_cycle_openvpn() {
-  if ! _arr_gluetun_set_openvpn_status stopped; then
+# Legacy alias for backwards compatibility
+_arr_gluetun_set_openvpn_status() {
+  _arr_gluetun_set_vpn_status "$@"
+}
+
+_arr_gluetun_cycle_vpn() {
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  local vpn_label
+  vpn_label="$(printf '%s' "$vpn_type" | sed 's/./\U&/')"  # Capitalize first letter
+
+  if ! _arr_gluetun_set_vpn_status stopped; then
     local err
     err="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
     if [ -n "$err" ]; then
-      _arr_gluetun_last_error="Unable to stop OpenVPN tunnel via control API: ${err}"
+      _arr_gluetun_last_error="Unable to stop ${vpn_label} tunnel via control API: ${err}"
     else
-      _arr_gluetun_last_error="Unable to stop OpenVPN tunnel via control API."
+      _arr_gluetun_last_error="Unable to stop ${vpn_label} tunnel via control API."
     fi
     return 1
   fi
@@ -1231,18 +1263,23 @@ _arr_gluetun_cycle_openvpn() {
     sleep 1
   fi
 
-  if ! _arr_gluetun_set_openvpn_status running; then
+  if ! _arr_gluetun_set_vpn_status running; then
     local err
     err="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
     if [ -n "$err" ]; then
-      _arr_gluetun_last_error="Unable to start OpenVPN tunnel via control API: ${err}"
+      _arr_gluetun_last_error="Unable to start ${vpn_label} tunnel via control API: ${err}"
     else
-      _arr_gluetun_last_error="Unable to start OpenVPN tunnel via control API."
+      _arr_gluetun_last_error="Unable to start ${vpn_label} tunnel via control API."
     fi
     return 1
   fi
 
   return 0
+}
+
+# Legacy alias for backwards compatibility
+_arr_gluetun_cycle_openvpn() {
+  _arr_gluetun_cycle_vpn "$@"
 }
 
 _arr_qbt_base() { _arr_service_base qbittorrent; }
@@ -1411,27 +1448,41 @@ _arr_gluetun_http() {
 }
 
 arr.gluetun.help() {
-  cat <<'EOF'
-Gluetun helpers:
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  cat <<EOF
+Gluetun helpers (VPN_TYPE=${vpn_type}):
   arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
-  arr.gluetun.status         Inspect OpenVPN status (GET /v1/openvpn/status)
-  arr.gluetun.status.set '{}'  Update OpenVPN status payload (PUT /v1/openvpn/status)
-  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/openvpn/portforwarded)
+  arr.gluetun.status         Inspect VPN status (GET /v1/${vpn_type}/status)
+  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/${vpn_type}/status)
+  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/${vpn_type}/portforwarded)
   arr.gluetun.health         Check Gluetun control health (GET /healthz)
   arr.gluetun.diagnose       Verify control API health, status, and recent port-forward errors
 EOF
 }
 
 arr.gluetun.ip() { _arr_gluetun_http GET /v1/publicip/ip | _arr_pretty_guess; }
-arr.gluetun.status() { _arr_gluetun_http GET /v1/openvpn/status | _arr_pretty_guess; }
+arr.gluetun.status() {
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  _arr_gluetun_http GET "/v1/${vpn_type}/status" | _arr_pretty_guess
+}
 arr.gluetun.status.set() {
   local payload="${1:-{}}"
-  _arr_gluetun_http PUT /v1/openvpn/status -H 'Content-Type: application/json' --data "$payload" | _arr_pretty_guess
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  _arr_gluetun_http PUT "/v1/${vpn_type}/status" -H 'Content-Type: application/json' --data "$payload" | _arr_pretty_guess
 }
-arr.gluetun.portfwd() { _arr_gluetun_http GET /v1/openvpn/portforwarded | _arr_pretty_guess; }
+arr.gluetun.portfwd() {
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  _arr_gluetun_http GET "/v1/${vpn_type}/portforwarded" | _arr_pretty_guess
+}
 arr.gluetun.health() { _arr_gluetun_http GET /healthz | _arr_pretty_guess; }
 arr.gluetun.diagnose() {
   local port host key base rc=0
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
   port="$(_arr_gluetun_port)"
   host="$(_arr_gluetun_host)"
   key="$(_arr_gluetun_key)"
@@ -1448,6 +1499,7 @@ arr.gluetun.diagnose() {
 
   printf 'Configured control host: %s\n' "$host"
   printf 'Configured control port: %s\n' "$port"
+  printf 'Configured VPN type: %s\n' "$vpn_type"
 
   base="http://${host}:${port}"
 
@@ -1459,11 +1511,11 @@ arr.gluetun.diagnose() {
     printf '/healthz: %s\n' "$health"
   fi
 
-  if ! status_output="$(curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${key}" "${base}/v1/openvpn/status" 2>&1)"; then
-    printf '/v1/openvpn/status request failed: %s\n' "$(_arr_sanitize_error "$status_output")" >&2
+  if ! status_output="$(curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${key}" "${base}/v1/${vpn_type}/status" 2>&1)"; then
+    printf '/v1/%s/status request failed: %s\n' "$vpn_type" "$(_arr_sanitize_error "$status_output")" >&2
     rc=1
   else
-    printf '/v1/openvpn/status: %s\n' "$status_output"
+    printf '/v1/%s/status: %s\n' "$vpn_type" "$status_output"
   fi
 
   if _arr_docker_available; then
@@ -1804,7 +1856,7 @@ ProtonVPN & Gluetun (arr.vpn ...):
   arr.vpn port.state           Print the controller status JSON
   arr.vpn port.watch           Follow the controller status JSON for changes
   arr.vpn port.sync            Touch the controller trigger (compatibility shim)
-  arr.vpn pf                   Dump the raw Gluetun /v1/openvpn/portforwarded payload
+  arr.vpn pf                   Dump the raw Gluetun portforwarded payload (uses VPN_TYPE)
   arr.vpn ip                   Show the current public IP reported by Gluetun
   arr.vpn health               Print the Gluetun container health status
   arr.vpn paths                Display credential/config paths for ProtonVPN assets
@@ -1923,8 +1975,12 @@ arr.vpn.reconnect() {
   done
 
   if [ "$force_container" -ne 1 ]; then
-    if _arr_gluetun_cycle_openvpn; then
-      msg 'Restarted Gluetun OpenVPN tunnel via control API.'
+    if _arr_gluetun_cycle_vpn; then
+      local vpn_type
+      vpn_type="$(_arr_vpn_type)"
+      local vpn_label
+      vpn_label="$(printf '%s' "$vpn_type" | sed 's/./\U&/')"
+      msg "Restarted Gluetun ${vpn_label} tunnel via control API."
       arr.vpn.status
       return 0
     fi
@@ -1992,13 +2048,15 @@ arr.vpn.reconnect() {
 }
 
 arr.vpn.status() {
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
   local status_payload
-  if ! status_payload="$(_arr_gluetun_api /v1/openvpn/status 2>/dev/null)"; then
+  if ! status_payload="$(_arr_gluetun_api "/v1/${vpn_type}/status" 2>/dev/null)"; then
     if _arr_gluetun_is_transport_error; then
       warn 'VPN status is not available in this environment (cannot reach Gluetun control API).'
     else
       local err
-      err="$(_arr_sanitize_error "${_arr_gluetun_last_error:-Unable to query Gluetun OpenVPN status.}")"
+      err="$(_arr_sanitize_error "${_arr_gluetun_last_error:-Unable to query Gluetun VPN status.}")"
       warn "$err"
     fi
     return 0
@@ -2184,10 +2242,20 @@ arr.vpn.ip() {
 }
 
 arr.vpn.pf() {
-  # Try protocol-specific endpoints (openvpn first, then wireguard)
-  if _arr_gluetun_api /v1/openvpn/portforwarded; then
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  # Use VPN_TYPE to select primary endpoint, fall back to the other protocol
+  local primary_endpoint="/v1/${vpn_type}/portforwarded"
+  local fallback_endpoint
+  if [ "$vpn_type" = "wireguard" ]; then
+    fallback_endpoint="/v1/openvpn/portforwarded"
+  else
+    fallback_endpoint="/v1/wireguard/portforwarded"
+  fi
+
+  if _arr_gluetun_api "$primary_endpoint"; then
     printf '\n'
-  elif _arr_gluetun_api /v1/wireguard/portforwarded; then
+  elif _arr_gluetun_api "$fallback_endpoint"; then
     printf '\n'
   else
     warn "${_arr_gluetun_last_error:-Unable to query forwarded port payload.}"
@@ -2441,8 +2509,14 @@ arr.vpn.countries() {
 # - Both commands surface a single warn on unsupported providers, respect ARR_STACK_DIR by
 #   delegating to arr.env.set / arr.vpn.reconnect, and introduce no legacy exposure paths.
 arr.vpn.fastest() {
-  if _arr_gluetun_cycle_openvpn; then
-    msg 'Cycling Gluetun OpenVPN tunnel via control API.'
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  local vpn_label
+  # Capitalize first letter for display
+  vpn_label="$(printf '%s' "$vpn_type" | sed 's/./\U&/')"
+
+  if _arr_gluetun_cycle_vpn; then
+    msg "Cycling Gluetun ${vpn_label} tunnel via control API."
     arr.vpn.status
     return 0
   fi
@@ -2450,9 +2524,9 @@ arr.vpn.fastest() {
   local control_error
   control_error="$(_arr_sanitize_error "${_arr_gluetun_last_error:-}")"
   if [ -n "$control_error" ]; then
-    warn "Unable to cycle Gluetun OpenVPN via control API (${control_error})."
+    warn "Unable to cycle Gluetun ${vpn_label} via control API (${control_error})."
   else
-    warn 'Unable to cycle Gluetun OpenVPN via control API.'
+    warn "Unable to cycle Gluetun ${vpn_label} via control API."
   fi
   warn 'Falling back to a Gluetun container restart.'
   arr.vpn.reconnect --container
@@ -2847,10 +2921,20 @@ arr.qbt.port.set() {
 
 arr.qbt.port.sync() {
   local payload port=""
-  # Try protocol-specific endpoints (openvpn first, then wireguard)
-  payload="$(_arr_gluetun_api /v1/openvpn/portforwarded 2>/dev/null || true)"
+  # Use VPN_TYPE to select primary endpoint, fall back to the other protocol
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  local primary_endpoint="/v1/${vpn_type}/portforwarded"
+  local fallback_endpoint
+  if [ "$vpn_type" = "wireguard" ]; then
+    fallback_endpoint="/v1/openvpn/portforwarded"
+  else
+    fallback_endpoint="/v1/wireguard/portforwarded"
+  fi
+
+  payload="$(_arr_gluetun_api "$primary_endpoint" 2>/dev/null || true)"
   if [ -z "$payload" ]; then
-    payload="$(_arr_gluetun_api /v1/wireguard/portforwarded 2>/dev/null || true)"
+    payload="$(_arr_gluetun_api "$fallback_endpoint" 2>/dev/null || true)"
   fi
   if [ -z "$payload" ]; then
     echo 'Unable to query forwarded port.' >&2

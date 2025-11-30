@@ -202,6 +202,10 @@ ENABLE_CONFIGARR="${ENABLE_CONFIGARR:-1}"
 # Host port preflight behaviour: enforce (default), warn, skip, or fix (auto-remediate then warn)
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE:-enforce}"
 
+# VPN type: openvpn (default) or wireguard (future feature).
+# Only openvpn is fully supported at this time; wireguard support is planned but not yet reliable.
+VPN_TYPE="${VPN_TYPE:-openvpn}"
+
 # Gluetun control server
 GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
 
@@ -386,6 +390,7 @@ ARR_USERCONF_TEMPLATE_VARS=(
   SPLIT_VPN
   ENABLE_CONFIGARR
   ARR_PORT_CHECK_MODE
+  VPN_TYPE
   EXPOSE_DIRECT_PORTS
   VPN_PORT_GUARD_POLL_SECONDS
   VPN_PORT_GUARD_STATUS_TIMEOUT
@@ -489,7 +494,6 @@ ARR_USERCONF_IMPLICIT_VARS=(
 ARR_DERIVED_ENV_VARS=(
   ARR_DOCKER_SERVICES_LIST
   ARR_DOCKER_SERVICES_CSV
-  VPN_TYPE
   OPENVPN_USER
   OPENVPN_PASSWORD
   OPENVPN_USER_ENFORCED
@@ -619,6 +623,8 @@ GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT}"            # Host port that expos
 GLUETUN_CONTROL_BIND="${GLUETUN_CONTROL_BIND}"          # all binds 0.0.0.0 inside the container; set loopback to restrict to 127.0.0.1
 # SPLIT_VPN=1 → Only qbittorrent behind VPN; other services run outside it.
 SPLIT_VPN="${SPLIT_VPN}"
+# VPN protocol: openvpn (default) is fully supported; wireguard is a future feature.
+VPN_TYPE="${VPN_TYPE}"
 ENABLE_CONFIGARR="${ENABLE_CONFIGARR}"             # Configarr one-shot sync for TRaSH-Guides profiles (set 0 to omit the container)
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE}"     # enforce (default) fails on conflicts, warn logs & continues, skip disables port probing, fix auto-clears blockers
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS}"                # Keep 1 so WebUIs publish on http://${LAN_IP}:PORT (requires LAN_IP set to your private IPv4)
