@@ -135,5 +135,5 @@ check_network_requirements() {
     warn "jq not installed; helper scripts rely on it when parsing Gluetun responses"
   fi
 
-  msg "Skipping legacy NAT-PMP probe; using Gluetun /v1/openvpn/status"
+  msg "Skipping legacy NAT-PMP probe; using Gluetun control API"
 }
