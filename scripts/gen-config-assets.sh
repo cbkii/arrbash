@@ -88,9 +88,8 @@ routes = [
   # Public IP information
   "GET /v1/publicip/ip",
 
-  # Health check endpoints (primary and fallback)
-  "GET /healthcheck",
-  "GET /healthz"
+  # Health check endpoints
+  # GET /v1/openvpn/status (above) serves checking VPN health in v3.40+.
 ]
 EOF
     )
