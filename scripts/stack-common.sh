@@ -718,7 +718,7 @@ arr_port_guard_status_path() {
   printf '%s/port-guard-status.json' "$(arr_gluetun_state_dir)"
 }
 
-# Ensures the vpn-port-guard status file is writable, recreating it when needed
+# Ensures the vpn-port-guard status file is writable, recreating it only as a last resort
 arr_repair_port_guard_status_file() {
   local status_file="${1:-$(arr_port_guard_status_path)}"
   if [[ -z "$status_file" ]]; then
@@ -737,15 +737,17 @@ arr_repair_port_guard_status_file() {
   rm -f -- "$probe" 2>/dev/null || true
 
   if [[ -f "$status_file" && ! -w "$status_file" ]]; then
-    local reset_tmp="${status_file}.reset"
-    if rm -f -- "$status_file" 2>/dev/null \
-      && : >"$reset_tmp" 2>/dev/null \
-      && mv -f -- "$reset_tmp" "$status_file" 2>/dev/null; then
+    # First, attempt non-destructive chmod to preserve file contents
+    if chmod u+w "$status_file" 2>/dev/null; then
+      return 0
+    fi
+
+    # As a last resort, recreate the file (data loss, but file is now writable)
+    if rm -f -- "$status_file" 2>/dev/null && touch -- "$status_file" 2>/dev/null; then
       ensure_nonsecret_file_mode "$status_file"
       return 0
     fi
 
-    rm -f -- "$reset_tmp" 2>/dev/null || true
     warn "Existing ${status_file} is not writable; fix permissions before continuing"
     return 1
   fi
