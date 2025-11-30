@@ -880,6 +880,9 @@ main() {
   step "🛠️ Preparing Gluetun control assets"
   write_gluetun_control_assets
 
+  step "📦 Syncing core library scripts"
+  sync_core_libraries
+
   step "📚 Syncing Gluetun helper library"
   sync_gluetun_library
 

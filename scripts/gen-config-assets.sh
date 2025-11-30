@@ -119,6 +119,26 @@ EOF
   ensure_dir_mode "${gluetun_root}/hooks" "$DATA_DIR_MODE"
 }
 
+# Syncs core library scripts required by installed helpers
+sync_core_libraries() {
+
+  ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
+
+  # Core libraries required by qbt-helper, sab-helper, and VPN scripts
+  local lib
+  for lib in \
+    stack-common.sh \
+    stack-logging.sh \
+    env-config.sh \
+    gen-yaml-emit.sh \
+    vpn-port-probe.sh; do
+    cp "${REPO_ROOT}/scripts/${lib}" "$ARR_STACK_DIR/scripts/${lib}"
+    ensure_file_mode "$ARR_STACK_DIR/scripts/${lib}" 755
+  done
+
+  msg "Core libraries synced to ${ARR_STACK_DIR}/scripts"
+}
+
 # Copies the shared Gluetun helper script into the stack workspace
 sync_gluetun_library() {
 
