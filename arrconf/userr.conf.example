@@ -76,6 +76,7 @@ QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128 (
 
 # --- VPN basics (connectivity) ---
 SPLIT_VPN="1"      # default: 0=VPN for full stack; 1=restrict VPN to qBittorrent only
+VPN_TYPE="openvpn"      # default: openvpn; VPN protocol type (openvpn or wireguard). Only openvpn is fully supported; wireguard is a future feature.
 SERVER_COUNTRIES="Netherlands,Singapore,Australia"      # default: Netherlands,Singapore; ProtonVPN exit countries
 # SERVER_NAMES=""      # default: empty; optionally pin Proton hosts (comma-separated)
 # PVPN_ROTATE_COUNTRIES="Singapore,Japan,Spain,Malaysia,Portugal,Romania,Switzerland,Luxembourg,Iceland,Australia"      # default: empty; rotation order for arr.vpn switch
