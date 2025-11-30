@@ -84,7 +84,7 @@ _qbt_api_ensure_cookie() {
       --data-urlencode "username=${QBT_USER}" \
       --data-urlencode "password=${QBT_PASS}" \
       "${url}" >/dev/null 2>/dev/null; then
-      
+
       if grep -q "SID" "${_qbt_api_cookie_file}" 2>/dev/null; then
         return 0
       fi
@@ -135,7 +135,7 @@ _qbt_api_curl_json() {
       --max-time "${QBT_API_TIMEOUT}" \
       -b "${_qbt_api_cookie_file}" \
       "${url}" 2>/dev/null)
-    
+
     http_code=$(printf '%s' "$response" | tail -n1)
     response=$(printf '%s' "$response" | sed '$d')
 
@@ -220,11 +220,11 @@ qbt_current_listen_port() {
 qbt_set_listen_port() {
   local port="$1"
   local verify="${2:-true}"
-  
+
   if [[ -z "$port" || ! "$port" =~ ^[0-9]+$ ]]; then
     return 1
   fi
-  
+
   # Validate port is in valid range
   if ((port < 1024 || port > 65535)); then
     if declare -f warn >/dev/null 2>&1; then
@@ -232,7 +232,7 @@ qbt_set_listen_port() {
     fi
     return 1
   fi
-  
+
   if ! _qbt_api_ensure_cookie; then
     return 1
   fi
@@ -253,7 +253,7 @@ qbt_set_listen_port() {
     "${url}" >/dev/null; then
     return 1
   fi
-  
+
   # Verify the port was actually set if requested
   if [[ "$verify" == "true" ]]; then
     # Retry logic with exponential backoff for port verification
@@ -261,14 +261,14 @@ qbt_set_listen_port() {
     local max_attempts=3
     local attempt=1
     local actual_port
-    while (( attempt <= max_attempts )); do
+    while ((attempt <= max_attempts)); do
       sleep "$delay"
       actual_port="$(qbt_current_listen_port 2>/dev/null || printf '0')"
       if [[ "$actual_port" == "$port" ]]; then
         break
       fi
-      (( attempt++ ))
-      delay=$(( delay * 2 ))
+      ((attempt++))
+      delay=$((delay * 2))
     done
     if [[ "$actual_port" != "$port" ]]; then
       if declare -f warn >/dev/null 2>&1; then
@@ -277,7 +277,7 @@ qbt_set_listen_port() {
       return 1
     fi
   fi
-  
+
   return 0
 }
 

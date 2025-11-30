@@ -193,7 +193,7 @@ sync_qbt_password_from_logs() {
   while ((attempts < max_attempts)); do
     # Use --tail to reduce I/O and ensure stable parsing with LC_ALL=C
     logs="$(LC_ALL=C docker logs --tail 200 qbittorrent 2>&1 || true)"
-    
+
     # Modern format (qBittorrent 4.5.0+): "A temporary password is provided for this session: XXXXXXXX"
     # Regex breakdown:
     #   .*[Tt]emporary [Pp]assword  - Match up to "temporary password" (case-insensitive T/P)
@@ -201,13 +201,13 @@ sync_qbt_password_from_logs() {
     #   [[:space:]]*                 - Skip whitespace after colon
     #   \([^[:space:]]*\)            - Capture the password (first non-whitespace sequence)
     detected="$(printf '%s' "$logs" | LC_ALL=C sed -n 's/.*[Tt]emporary [Pp]assword[^:]*:[[:space:]]*\([^[:space:]]*\).*/\1/p' | tail -1)"
-    
+
     # Strip any surrounding quotes if present
     detected="${detected#\"}"
     detected="${detected%\"}"
     detected="${detected#\'}"
     detected="${detected%\'}"
-    
+
     # Validate: password should be 6-20 alphanumeric characters
     if [[ -n "$detected" && "$detected" =~ ^[A-Za-z0-9]{6,20}$ ]]; then
       QBT_PASS="$detected"
@@ -215,7 +215,7 @@ sync_qbt_password_from_logs() {
       msg "Saved qBittorrent temporary password to .env (QBT_PASS)"
       return
     fi
-    
+
     detected=""
     sleep 2
     ((attempts++))

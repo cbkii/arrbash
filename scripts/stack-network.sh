@@ -53,7 +53,7 @@ lan_ipv4_subnet_cidr() {
 }
 
 # Produces /24 CIDR for provided LAN IP, rejecting non-private inputs
-lan_ipv4_host_cidr() { 
+lan_ipv4_host_cidr() {
   local ip="$1"
 
   if [[ -z "$ip" || "$ip" == "0.0.0.0" ]]; then

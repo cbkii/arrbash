@@ -395,8 +395,8 @@ _arr_services_populate() {
     arr_require_services_array
   fi
 
-  if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 && \
-    declare -p ARR_DOCKER_SERVICES 2>/dev/null | grep -q 'declare \-a'; then
+  if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 \
+    && declare -p ARR_DOCKER_SERVICES 2>/dev/null | grep -q 'declare \-a'; then
     # shellcheck disable=SC2154 # ARR_DOCKER_SERVICES may come from sourced config
     if ((${#ARR_DOCKER_SERVICES[@]} > 0)); then
       _arr_services=("${ARR_DOCKER_SERVICES[@]}")

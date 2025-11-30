@@ -71,9 +71,9 @@ _record_health_check() {
   local service="$1"
   local status="$2"
   local message="$3"
-  
+
   ((_health_checks_total++))
-  
+
   if [[ "$status" == "pass" ]]; then
     ((_health_checks_passed++))
     _health_details+=("${service}|pass|${message}")
@@ -87,20 +87,20 @@ _record_health_check() {
 # Check Docker container health
 _check_container_health() {
   local container_name="$1"
-  
+
   if ! command -v docker >/dev/null 2>&1; then
     _record_health_check "$container_name" "fail" "Docker command not available"
     return 1
   fi
-  
+
   local container_status
   container_status=$(docker inspect --format='{{.State.Status}}' "$container_name" 2>/dev/null || echo "not_found")
-  
+
   case "$container_status" in
     running)
       local health_status
       health_status=$(docker inspect --format='{{.State.Health.Status}}' "$container_name" 2>/dev/null || echo "none")
-      
+
       if [[ "$health_status" == "healthy" ]]; then
         _record_health_check "$container_name" "pass" "Container running and healthy"
         return 0
@@ -127,7 +127,7 @@ _check_container_health() {
 _check_gluetun_vpn() {
   local gluetun_status
   gluetun_status=$(gluetun_api_status 2>/dev/null || echo "unknown")
-  
+
   if [[ "$gluetun_status" == "running" ]]; then
     _record_health_check "gluetun-vpn" "pass" "VPN tunnel status: running"
     return 0
@@ -141,7 +141,7 @@ _check_gluetun_vpn() {
 _check_gluetun_port_forwarding() {
   local forwarded_port
   forwarded_port=$(gluetun_api_forwarded_port 2>/dev/null || echo "0")
-  
+
   if [[ "$forwarded_port" =~ ^[1-9][0-9]*$ ]]; then
     _record_health_check "gluetun-port-forwarding" "pass" "Forwarded port: $forwarded_port"
     return 0
@@ -166,7 +166,7 @@ _check_qbittorrent_api() {
 _check_http_endpoint() {
   local service_name="$1"
   local url="$2"
-  
+
   if curl -fsS --connect-timeout 3 --max-time "${HEALTHCHECK_TIMEOUT}" "$url" >/dev/null 2>&1; then
     _record_health_check "$service_name" "pass" "HTTP endpoint accessible"
     return 0
@@ -185,16 +185,16 @@ _output_text() {
   echo "Checks: ${_health_checks_passed}/${_health_checks_total} passed"
   echo "=========================================="
   echo
-  
+
   for detail in "${_health_details[@]}"; do
-    IFS='|' read -r service status message <<< "$detail"
+    IFS='|' read -r service status message <<<"$detail"
     local icon="✓"
     if [[ "$status" == "fail" ]]; then
       icon="✗"
     fi
     printf '%s %-30s %s\n' "$icon" "$service" "$message"
   done
-  
+
   echo
   if [[ "$_health_status" == "healthy" ]]; then
     echo "Result: All health checks passed"
@@ -209,7 +209,7 @@ _output_text() {
 _output_json() {
   local timestamp
   timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')
-  
+
   printf '{\n'
   printf '  "timestamp": "%s",\n' "$timestamp"
   printf '  "status": "%s",\n' "$_health_status"
@@ -217,26 +217,26 @@ _output_json() {
   printf '  "checks_passed": %d,\n' "$_health_checks_passed"
   printf '  "checks_failed": %d,\n' "$_health_checks_failed"
   printf '  "details": [\n'
-  
+
   local first=1
   for detail in "${_health_details[@]}"; do
-    IFS='|' read -r service status message <<< "$detail"
-    
+    IFS='|' read -r service status message <<<"$detail"
+
     if ((first == 0)); then
       printf ',\n'
     fi
     first=0
-    
+
     printf '    {\n'
     printf '      "service": "%s",\n' "$service"
     printf '      "status": "%s",\n' "$status"
     printf '      "message": "%s"\n' "$message"
     printf '    }'
   done
-  
+
   printf '\n  ]\n'
   printf '}\n'
-  
+
   if [[ "$_health_status" == "healthy" ]]; then
     return 0
   else
@@ -250,7 +250,7 @@ main() {
   local check_vpn=1
   local check_api=1
   local check_services=1
-  
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --format)
@@ -276,7 +276,7 @@ main() {
         check_services=0
         shift
         ;;
-      --help|-h)
+      --help | -h)
         cat <<'USAGE'
 Usage: stack-healthcheck.sh [OPTIONS]
 
@@ -301,7 +301,7 @@ USAGE
         ;;
     esac
   done
-  
+
   # Perform health checks
   if ((check_containers)); then
     _check_container_health "${STACK}-gluetun" 2>/dev/null || true
@@ -310,7 +310,7 @@ USAGE
     _check_container_health "${STACK}-radarr" 2>/dev/null || true
     _check_container_health "${STACK}-prowlarr" 2>/dev/null || true
   fi
-  
+
   if ((check_vpn)); then
     _check_gluetun_vpn 2>/dev/null || true
     # Only check port forwarding if VPN is configured for it
@@ -318,11 +318,11 @@ USAGE
       _check_gluetun_port_forwarding 2>/dev/null || true
     fi
   fi
-  
+
   if ((check_api)); then
     _check_qbittorrent_api 2>/dev/null || true
   fi
-  
+
   if ((check_services)); then
     # Check web endpoints if configured
     if [[ -n "${LAN_IP:-}" ]]; then
@@ -331,13 +331,13 @@ USAGE
       [[ -n "${RADARR_PORT:-}" ]] && _check_http_endpoint "radarr-web" "http://${LAN_IP}:${RADARR_PORT}" 2>/dev/null || true
     fi
   fi
-  
+
   # Output results
   case "$HEALTHCHECK_OUTPUT_FORMAT" in
     json)
       _output_json
       ;;
-    text|*)
+    text | *)
       _output_text
       ;;
   esac

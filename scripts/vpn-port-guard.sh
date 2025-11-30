@@ -188,10 +188,10 @@ write_status() {
         last_error: $last_error,
         api_failures: $api_failures
       }' >"${tmp}" || {
-        log_error "Failed to render status JSON"
-        rm -f -- "$tmp"
-        return 1
-      }
+      log_error "Failed to render status JSON"
+      rm -f -- "$tmp"
+      return 1
+    }
   else
     cat >"${tmp}" <<EOF_JSON
 {
@@ -223,12 +223,12 @@ EOF_JSON
 # Fetches the forwarded port from Gluetun API (primary) or status file (deprecated fallback)
 fetch_forwarded_port() {
   local port=""
-  
+
   # PRIMARY: Use Gluetun's protocol-specific API endpoints
   if declare -f gluetun_api_forwarded_port >/dev/null 2>&1; then
     log_debug "Querying Gluetun API for forwarded port..."
     port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
-    
+
     if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
       _consecutive_api_failures=0
       _last_successful_api_call="$(date +%s)"
@@ -236,7 +236,7 @@ fetch_forwarded_port() {
       printf '%s' "$port"
       return 0
     fi
-    
+
     # Track API failures
     ((_consecutive_api_failures++)) || true
     if ((_consecutive_api_failures >= CONTROLLER_MAX_API_RETRIES)); then
@@ -262,7 +262,7 @@ fetch_forwarded_port() {
     fi
     log_debug "Status file exists but contains no valid port"
   fi
-  
+
   log_debug "No valid forwarded port available"
   printf '0'
   return 1
@@ -284,7 +284,7 @@ qbt_login() {
 apply_qbt_port() {
   local port="$1"
   log_debug "Updating qBittorrent listen port to ${port}"
-  
+
   if declare -f qbt_set_listen_port >/dev/null 2>&1; then
     if qbt_set_listen_port "$port" "true" 2>/dev/null; then
       _qbt_state="active"
@@ -296,7 +296,7 @@ apply_qbt_port() {
   else
     log_error "qbt_set_listen_port function not available"
   fi
-  
+
   _qbt_state="error"
   return 1
 }
@@ -305,7 +305,7 @@ pause_qbt() {
   if [[ "${_qbt_state}" == "paused" ]]; then
     return 0
   fi
-  
+
   if declare -f qbt_pause_all >/dev/null 2>&1; then
     if qbt_pause_all 2>/dev/null; then
       _qbt_state="paused"
@@ -313,7 +313,7 @@ pause_qbt() {
       return 0
     fi
   fi
-  
+
   _qbt_state="error"
   return 1
 }
@@ -322,7 +322,7 @@ resume_qbt() {
   if [[ "${_qbt_state}" == "active" ]]; then
     return 0
   fi
-  
+
   if declare -f qbt_resume_all >/dev/null 2>&1; then
     if qbt_resume_all 2>/dev/null; then
       _qbt_state="active"
@@ -330,7 +330,7 @@ resume_qbt() {
       return 0
     fi
   fi
-  
+
   _qbt_state="error"
   return 1
 }
@@ -345,25 +345,25 @@ initialise() {
   log_debug "  Poll interval: ${CONTROLLER_POLL_INTERVAL}s"
   log_debug "  Require port forwarding: ${CONTROLLER_REQUIRE_PF}"
   log_debug "  Status file: ${STATUS_FILE}"
-  
+
   # Check for API key (required for Gluetun v3.40+)
   if [[ -z "${GLUETUN_API_KEY}" ]]; then
     log "Warning: GLUETUN_API_KEY is not set. Gluetun v3.40+ requires API key authentication."
   fi
-  
+
   # Write initial status immediately so arr_wait_for_port_guard_ready() sees us running
   if ! write_status "starting" 0 "$CONTROLLER_REQUIRE_PF" "initializing" ""; then
     log_error "Failed to write initial status file"
   else
     log "Published initial status to ${STATUS_FILE}"
   fi
-  
+
   # Give Gluetun time to negotiate port forwarding after VPN connects
   if ((CONTROLLER_STARTUP_DELAY > 0)); then
     log_debug "Waiting ${CONTROLLER_STARTUP_DELAY}s for Gluetun to negotiate port forwarding..."
     sleep "${CONTROLLER_STARTUP_DELAY}"
   fi
-  
+
   # Try to get an initial port reading
   local initial_port="0"
   initial_port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
@@ -373,7 +373,7 @@ initialise() {
   else
     log "No forwarded port yet (VPN may still be negotiating)"
   fi
-  
+
   # Attempt qBittorrent login
   local qbt_login_attempts=0
   local qbt_login_max=3
@@ -396,18 +396,18 @@ initialise() {
 main_loop() {
   local last_error=""
   local poll_count=0
-  
+
   while true; do
     ((poll_count++)) || true
     last_error=""
     local vpn_status="unknown"
     local port="0"
-    
+
     log_debug "=== Poll cycle #${poll_count} ==="
-    
+
     # Fetch forwarded port from Gluetun API
     port="$(fetch_forwarded_port 2>/dev/null || printf '0')"
-    
+
     # Determine VPN status based on port availability
     if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
       vpn_status="running"
@@ -429,7 +429,7 @@ main_loop() {
           last_error="failed to set qBittorrent listen port"
         fi
       fi
-      
+
       # Ensure torrents are running
       if ! resume_qbt; then
         if bool_true "$CONTROLLER_REQUIRE_PF"; then
@@ -450,7 +450,7 @@ main_loop() {
 
     # Update status file
     write_status "$vpn_status" "${port:-0}" "$CONTROLLER_REQUIRE_PF" "${_qbt_state:-unknown}" "${last_error}" || true
-    
+
     log_debug "Poll cycle #${poll_count} complete, sleeping ${CONTROLLER_POLL_INTERVAL}s"
     sleep "${CONTROLLER_POLL_INTERVAL}"
   done

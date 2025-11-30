@@ -18,7 +18,7 @@ _ARR_VALIDATION_SOURCED=1
 arr_validate_port() {
   local port="$1"
   local var_name="${2:-PORT}"
-  
+
   if [[ -z "$port" ]]; then
     if declare -f arr_error >/dev/null 2>&1; then
       arr_error "${var_name}: Port value is empty or not set"
@@ -27,7 +27,7 @@ arr_validate_port() {
     fi
     return 1
   fi
-  
+
   if ! [[ "$port" =~ ^[0-9]+$ ]]; then
     if declare -f arr_error >/dev/null 2>&1; then
       arr_error "${var_name}: Port must be a positive integer, got: ${port}"
@@ -38,7 +38,7 @@ arr_validate_port() {
     fi
     return 1
   fi
-  
+
   if ((port < 1 || port > 65535)); then
     if declare -f arr_error >/dev/null 2>&1; then
       arr_error "${var_name}: Port ${port} is out of valid range (1-65535)"
@@ -49,14 +49,14 @@ arr_validate_port() {
     fi
     return 1
   fi
-  
+
   # Check for privileged ports (informational)
   if ((port < 1024)); then
     if declare -f arr_info >/dev/null 2>&1 && [[ "${ARR_TRACE:-0}" == "1" ]]; then
       arr_info "${var_name}: Port ${port} is a privileged port (requires root or CAP_NET_BIND_SERVICE)"
     fi
   fi
-  
+
   return 0
 }
 
@@ -66,7 +66,7 @@ arr_validate_port() {
 arr_validate_json() {
   local json_content="$1"
   local description="${2:-JSON content}"
-  
+
   if [[ -z "$json_content" ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${description}: JSON content is empty"
@@ -75,16 +75,16 @@ arr_validate_json() {
     fi
     return 1
   fi
-  
+
   if ! command -v jq >/dev/null 2>&1; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[WARN] ${description}: Cannot validate JSON (jq not available)"
     else
       printf '[WARN] %s: Cannot validate JSON (jq not available)\n' "$description" >&2
     fi
-    return 0  # Cannot validate without jq, assume valid
+    return 0 # Cannot validate without jq, assume valid
   fi
-  
+
   local error_output
   if error_output=$(printf '%s' "$json_content" | jq empty 2>&1); then
     return 0
@@ -108,7 +108,7 @@ arr_validate_json() {
 arr_validate_ip() {
   local ip="$1"
   local var_name="${2:-IP}"
-  
+
   if [[ -z "$ip" ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: IP address is empty or not set"
@@ -117,12 +117,12 @@ arr_validate_ip() {
     fi
     return 1
   fi
-  
+
   # IPv4 validation
   if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     local -a octets
-    IFS='.' read -r -a octets <<< "$ip"
-    
+    IFS='.' read -r -a octets <<<"$ip"
+
     for octet in "${octets[@]}"; do
       if ((octet < 0 || octet > 255)); then
         if declare -f warn >/dev/null 2>&1; then
@@ -137,7 +137,7 @@ arr_validate_ip() {
     done
     return 0
   fi
-  
+
   # IPv6 basic validation (simplified)
   if [[ "$ip" =~ : ]]; then
     # Basic IPv6 check - just ensure it has colons and valid hex characters
@@ -145,7 +145,7 @@ arr_validate_ip() {
       return 0
     fi
   fi
-  
+
   if declare -f warn >/dev/null 2>&1; then
     warn "[ERROR] ${var_name}: Invalid IP address format: ${ip}"
     warn "[ACTION] Provide a valid IPv4 (e.g., 192.168.1.100) or IPv6 address"
@@ -162,7 +162,7 @@ arr_validate_ip() {
 arr_validate_url() {
   local url="$1"
   local var_name="${2:-URL}"
-  
+
   if [[ -z "$url" ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: URL is empty or not set"
@@ -171,7 +171,7 @@ arr_validate_url() {
     fi
     return 1
   fi
-  
+
   if [[ ! "$url" =~ ^https?:// ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: URL must start with http:// or https://, got: ${url}"
@@ -182,7 +182,7 @@ arr_validate_url() {
     fi
     return 1
   fi
-  
+
   return 0
 }
 
@@ -193,7 +193,7 @@ arr_validate_directory() {
   local path="$1"
   local var_name="${2:-DIRECTORY}"
   local must_exist="${3:-0}"
-  
+
   if [[ -z "$path" ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: Directory path is empty or not set"
@@ -202,7 +202,7 @@ arr_validate_directory() {
     fi
     return 1
   fi
-  
+
   if [[ ! "$path" =~ ^/ ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[WARN] ${var_name}: Directory path is not absolute: ${path}"
@@ -212,7 +212,7 @@ arr_validate_directory() {
       printf '[ACTION] Consider using an absolute path for clarity\n' >&2
     fi
   fi
-  
+
   if [[ "$must_exist" == "1" && ! -d "$path" ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: Directory does not exist: ${path}"
@@ -223,7 +223,7 @@ arr_validate_directory() {
     fi
     return 1
   fi
-  
+
   return 0
 }
 
@@ -233,7 +233,7 @@ arr_validate_directory() {
 arr_validate_boolean() {
   local value="$1"
   local var_name="${2:-BOOLEAN}"
-  
+
   if [[ -z "$value" ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: Boolean value is empty or not set"
@@ -242,9 +242,9 @@ arr_validate_boolean() {
     fi
     return 1
   fi
-  
+
   case "$value" in
-    0|1|true|false|TRUE|FALSE|yes|no|YES|NO|on|off|ON|OFF)
+    0 | 1 | true | false | TRUE | FALSE | yes | no | YES | NO | on | off | ON | OFF)
       return 0
       ;;
     *)
@@ -268,7 +268,7 @@ arr_validate_positive_integer() {
   local var_name="${2:-INTEGER}"
   local min="${3:-1}"
   local max="${4:-}"
-  
+
   if [[ -z "$value" ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: Value is empty or not set"
@@ -277,7 +277,7 @@ arr_validate_positive_integer() {
     fi
     return 1
   fi
-  
+
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: Must be a positive integer, got: ${value}"
@@ -288,7 +288,7 @@ arr_validate_positive_integer() {
     fi
     return 1
   fi
-  
+
   if [[ -n "$min" ]] && ((value < min)); then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: Value ${value} is below minimum ${min}"
@@ -299,7 +299,7 @@ arr_validate_positive_integer() {
     fi
     return 1
   fi
-  
+
   if [[ -n "$max" ]] && ((value > max)); then
     if declare -f warn >/dev/null 2>&1; then
       warn "[ERROR] ${var_name}: Value ${value} exceeds maximum ${max}"
@@ -310,6 +310,6 @@ arr_validate_positive_integer() {
     fi
     return 1
   fi
-  
+
   return 0
 }

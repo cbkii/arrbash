@@ -96,7 +96,7 @@ vpn_auto_pf_required() {
   vpn_type="$(printf '%s' "$vpn_type" | tr '[:upper:]' '[:lower:]')"
   local pf="${VPN_PORT_FORWARDING:-off}"
   pf="$(printf '%s' "$pf" | tr '[:upper:]' '[:lower:]')"
-  
+
   # ProtonVPN supports port forwarding with both OpenVPN and WireGuard
   # For OpenVPN: requires +pmp suffix on username
   # For WireGuard: requires NAT-PMP enabled in config (done at config generation time)
@@ -104,12 +104,12 @@ vpn_auto_pf_required() {
     protonvpn) ;; # supported
     *) return 1 ;;
   esac
-  
+
   # Check if port forwarding is enabled
   case "$pf" in
     '' | off | false | 0 | disabled) return 1 ;;
   esac
-  
+
   # Both OpenVPN and WireGuard support port forwarding with ProtonVPN
   case "$vpn_type" in
     openvpn | wireguard) return 0 ;;

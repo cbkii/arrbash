@@ -65,7 +65,7 @@ arr_main_signal_trap() {
 
   trap - "${signal}"
   ARR_MAIN_INTERRUPTED=1
-  
+
   # Provide user feedback about graceful shutdown
   if declare -f arr_info >/dev/null 2>&1; then
     arr_info "Received ${signal} signal, performing graceful shutdown..."
@@ -74,7 +74,7 @@ arr_main_signal_trap() {
   else
     printf '[INFO] Received %s signal, performing graceful shutdown...\n' "${signal}" >&2
   fi
-  
+
   arr_main_cleanup_dispatch "${code}"
   exit "${code}"
 }

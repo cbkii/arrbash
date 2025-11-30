@@ -86,10 +86,10 @@ _gluetun_api_request() {
   local url="${GLUETUN_CONTROL_URL%/}${path}"
   local -a args=(
     "curl"
-    "-sS"                                        # Silent but show errors
+    "-sS" # Silent but show errors
     "--connect-timeout" "${GLUETUN_API_TIMEOUT}"
     "--max-time" "${GLUETUN_API_TIMEOUT}"
-    "-w" "\n%{http_code}"                        # Append HTTP status code
+    "-w" "\n%{http_code}" # Append HTTP status code
     "${url}"
   )
 
@@ -105,38 +105,38 @@ _gluetun_api_request() {
 
   while ((attempt <= max_attempts)); do
     _gluetun_api_debug "Request attempt ${attempt}/${max_attempts}: ${path}"
-    
+
     local response=""
     local http_code=""
     local curl_exit=0
-    
+
     response="$("${args[@]}" 2>/dev/null)" || curl_exit=$?
-    
+
     if ((curl_exit == 0)) && [[ -n "$response" ]]; then
       # Extract HTTP status code from last line
       http_code="${response##*$'\n'}"
-      
+
       # Validate that http_code is a 3-digit number before using it
       if [[ "$http_code" =~ ^[0-9]{3}$ ]]; then
         response="${response%$'\n'"$http_code"}"
-        
+
         _gluetun_api_debug "Response HTTP ${http_code} for ${path}"
-        
+
         # Check for successful HTTP codes (200-299)
         if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
           printf '%s' "$response"
           return 0
         fi
-        
+
         # Handle specific error codes
         case "$http_code" in
-          401|403)
+          401 | 403)
             _gluetun_api_debug "Authentication failed for ${path}. Check GLUETUN_API_KEY."
             ;;
           404)
             _gluetun_api_debug "Endpoint not found: ${path}"
             ;;
-          500|502|503)
+          500 | 502 | 503)
             _gluetun_api_debug "Server error (${http_code}) for ${path}"
             ;;
         esac
@@ -146,13 +146,13 @@ _gluetun_api_request() {
     else
       _gluetun_api_debug "curl failed with exit code ${curl_exit} for ${path}"
     fi
-    
+
     if ((attempt < max_attempts)); then
       if declare -f arr_retry >/dev/null 2>&1; then
         arr_retry "Gluetun API request to ${path} failed (attempt ${attempt}/${max_attempts}), retrying in ${current_delay}s..."
       fi
       sleep "${current_delay}"
-      
+
       # Exponential backoff with cap
       current_delay=$((current_delay * 2))
       if ((current_delay > max_delay)); then
@@ -175,14 +175,14 @@ _gluetun_api_get_json() {
 # Returns 0 if healthy, 1 if unhealthy or unreachable
 gluetun_api_healthcheck() {
   _gluetun_api_debug "Checking Gluetun health via /healthcheck"
-  
+
   # Note: /healthcheck doesn't require API key in most configurations
   local body
   if body="$(_gluetun_api_get_json "/healthcheck" 2>/dev/null)"; then
     _gluetun_api_debug "Healthcheck passed"
     return 0
   fi
-  
+
   _gluetun_api_debug "Healthcheck failed"
   return 1
 }
@@ -195,17 +195,17 @@ gluetun_api_status() {
   local status
   local vpn_type_lower
   vpn_type_lower="$(printf '%s' "${VPN_TYPE:-openvpn}" | tr '[:upper:]' '[:lower:]')"
-  
+
   local primary_endpoint="/v1/openvpn/status"
   local fallback_endpoint="/v1/wireguard/status"
-  
+
   if [[ "$vpn_type_lower" == "wireguard" ]]; then
     primary_endpoint="/v1/wireguard/status"
     fallback_endpoint="/v1/openvpn/status"
   fi
-  
+
   _gluetun_api_debug "Fetching VPN status (VPN_TYPE=${vpn_type_lower})"
-  
+
   # Try primary endpoint based on VPN_TYPE
   if body="$(_gluetun_api_get_json "$primary_endpoint" 2>/dev/null)"; then
     _gluetun_api_debug "Response from ${primary_endpoint}: ${body}"
@@ -215,7 +215,7 @@ gluetun_api_status() {
       return 0
     fi
   fi
-  
+
   # Fallback to other endpoint
   _gluetun_api_debug "Trying fallback endpoint ${fallback_endpoint}"
   if body="$(_gluetun_api_get_json "$fallback_endpoint" 2>/dev/null)"; then
@@ -226,7 +226,7 @@ gluetun_api_status() {
       return 0
     fi
   fi
-  
+
   _gluetun_api_debug "Failed to get VPN status from any endpoint"
   printf 'unknown'
   return 1
@@ -251,21 +251,21 @@ gluetun_api_forwarded_port() {
 
   local primary_endpoint="/v1/openvpn/portforwarded"
   local fallback_endpoint="/v1/wireguard/portforwarded"
-  
+
   if [[ "$vpn_type_lower" == "wireguard" ]]; then
     primary_endpoint="/v1/wireguard/portforwarded"
     fallback_endpoint="/v1/openvpn/portforwarded"
   fi
 
   _gluetun_api_debug "Fetching forwarded port (VPN_TYPE=${vpn_type_lower})"
-  
+
   # Try primary endpoint based on VPN_TYPE
   if body="$(_gluetun_api_get_json "$primary_endpoint" 2>/dev/null)"; then
     _gluetun_api_debug "Response from ${primary_endpoint}: ${body}"
-    
+
     # Parse port from response - handle both {"port": N} and {"ports": [N]} formats
     port="$(printf '%s' "$body" | jq -r '.port // .ports[0] // 0' 2>/dev/null || printf '0')"
-    
+
     # Validate port is in valid range
     if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
       _gluetun_api_debug "Valid forwarded port: ${port}"
@@ -284,9 +284,9 @@ gluetun_api_forwarded_port() {
   _gluetun_api_debug "Trying fallback endpoint ${fallback_endpoint}"
   if body="$(_gluetun_api_get_json "$fallback_endpoint" 2>/dev/null)"; then
     _gluetun_api_debug "Response from ${fallback_endpoint}: ${body}"
-    
+
     port="$(printf '%s' "$body" | jq -r '.port // .ports[0] // 0' 2>/dev/null || printf '0')"
-    
+
     if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
       _gluetun_api_debug "Valid forwarded port from fallback: ${port}"
       printf '%s' "$port"
@@ -303,9 +303,9 @@ gluetun_api_forwarded_port() {
 # Returns the current public IP address as seen through the VPN
 gluetun_api_public_ip() {
   local body
-  
+
   _gluetun_api_debug "Fetching public IP via /v1/publicip/ip"
-  
+
   if ! body="$(_gluetun_api_get_json "/v1/publicip/ip" 2>/dev/null)"; then
     _gluetun_api_debug "Failed to fetch public IP"
     printf ''
@@ -313,7 +313,7 @@ gluetun_api_public_ip() {
   fi
 
   _gluetun_api_debug "Response: ${body}"
-  
+
   local ip
   ip="$(printf '%s' "$body" | jq -r '.public_ip // .ip // empty' 2>/dev/null || true)"
   if [[ -n "$ip" && "$ip" != "null" ]]; then
@@ -338,7 +338,7 @@ gluetun_wait_until_ready() {
   local require_port="${2:-}"
   local start elapsed
   start="$(date +%s)"
-  
+
   # Auto-detect if port forwarding is expected
   if [[ -z "$require_port" ]]; then
     local pf_setting="${VPN_PORT_FORWARDING:-off}"
@@ -349,13 +349,13 @@ gluetun_wait_until_ready() {
       require_port="false"
     fi
   fi
-  
+
   _gluetun_api_debug "Waiting for Gluetun ready (timeout=${timeout}s, require_port=${require_port})"
 
   while true; do
     local status
     status="$(gluetun_api_status 2>/dev/null || printf 'unknown')"
-    
+
     if [[ "$status" == "running" ]]; then
       if [[ "$require_port" == "true" ]]; then
         local port

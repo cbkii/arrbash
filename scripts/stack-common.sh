@@ -26,7 +26,7 @@ arr_require_services_array() {
     unset -v ARR_DOCKER_SERVICES 2>/dev/null || true
     declare -g -a ARR_DOCKER_SERVICES=()
     if [[ -n "${_scalar:-}" ]]; then
-      read -r -a ARR_DOCKER_SERVICES <<< "$_scalar"
+      read -r -a ARR_DOCKER_SERVICES <<<"$_scalar"
     fi
   fi
 
@@ -2784,7 +2784,7 @@ get_env_kv() {
 # Loads and exports environment variables from an env file, handling compose-style escaping
 load_env() {
   local env_file="${1:-${ARR_ENV_FILE:-}}"
-  
+
   [[ -f "$env_file" ]] || return 0
 
   local line key raw value
