@@ -103,6 +103,11 @@ if ! mkdir -p -- "${STATUS_DIR}" 2>/dev/null; then
   exit 1
 fi
 
+if ! arr_repair_port_guard_status_file "$STATUS_FILE"; then
+  log_error "Existing ${STATUS_FILE} is not writable; fix permissions before continuing"
+  exit 1
+fi
+
 # --- Graceful shutdown handler ---
 _on_exit() {
   # Best-effort write; ignore errors during shutdown

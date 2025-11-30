@@ -624,6 +624,11 @@ arr_wait_for_gluetun_ready() {
 }
 
 arr_port_guard_status_file() {
+  if declare -f arr_port_guard_status_path >/dev/null 2>&1; then
+    arr_port_guard_status_path
+    return
+  fi
+
   if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
     gluetun_port_guard_status_file
     return
