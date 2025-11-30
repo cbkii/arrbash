@@ -713,6 +713,48 @@ arr_gluetun_state_dir() {
   printf '%s/state' "$(arr_gluetun_dir)"
 }
 
+# Resolves the shared vpn-port-guard status file path
+arr_port_guard_status_path() {
+  printf '%s/port-guard-status.json' "$(arr_gluetun_state_dir)"
+}
+
+# Ensures the vpn-port-guard status file is writable, recreating it only as a last resort
+arr_repair_port_guard_status_file() {
+  local status_file="${1:-$(arr_port_guard_status_path)}"
+  if [[ -z "$status_file" ]]; then
+    return 1
+  fi
+
+  local status_dir
+  status_dir="$(dirname -- "$status_file")"
+  ensure_dir_mode "$status_dir" "$DATA_DIR_MODE"
+
+  local probe="${status_dir}/.port-guard-status-probe"
+  if ! : >"$probe" 2>/dev/null; then
+    warn "Unable to write inside ${status_dir}; adjust permissions for vpn-port-guard state sharing"
+    return 1
+  fi
+  rm -f -- "$probe" 2>/dev/null || true
+
+  if [[ -f "$status_file" && ! -w "$status_file" ]]; then
+    # First, attempt non-destructive chmod to preserve file contents
+    if chmod u+w "$status_file" 2>/dev/null; then
+      return 0
+    fi
+
+    # As a last resort, recreate the file (data loss, but file is now writable)
+    if rm -f -- "$status_file" 2>/dev/null && touch -- "$status_file" 2>/dev/null; then
+      ensure_nonsecret_file_mode "$status_file"
+      return 0
+    fi
+
+    warn "Existing ${status_file} is not writable; fix permissions before continuing"
+    return 1
+  fi
+
+  return 0
+}
+
 # Resolves the VPN auto-reconnect working directory under Gluetun assets
 arr_gluetun_auto_reconnect_dir() {
   printf '%s/auto-reconnect' "$(arr_gluetun_dir)"

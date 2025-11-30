@@ -61,26 +61,8 @@ verify_vpn_port_guard_prereqs() {
     die "ARR_DOCKER_DIR is not set; run ./arr.sh configure to establish stack directories"
   fi
 
-  local state_dir
-  if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
-    state_dir="$(arr_gluetun_state_dir)"
-  else
-    state_dir="${ARR_DOCKER_DIR%/}/gluetun/state"
-  fi
-
-  if ! mkdir -p "$state_dir" 2>/dev/null; then
-    die "Unable to create ${state_dir}; verify filesystem permissions"
-  fi
-
-  local probe="${state_dir}/.port-guard-preflight"
-  if ! touch "$probe" 2>/dev/null; then
-    die "Unable to write inside ${state_dir}; adjust permissions for vpn-port-guard state sharing"
-  fi
-  rm -f "$probe" 2>/dev/null
-
-  local status_file="${state_dir}/port-guard-status.json"
-  if [[ -f "$status_file" && ! -w "$status_file" ]]; then
-    die "Existing ${status_file} is not writable; fix permissions before continuing"
+  if ! arr_repair_port_guard_status_file; then
+    die "Could not ensure vpn-port-guard status file is writable; check logs and fix permissions"
   fi
 
   if [[ -z "${GLUETUN_API_KEY:-}" ]]; then

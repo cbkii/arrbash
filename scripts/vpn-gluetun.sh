@@ -137,6 +137,11 @@ gluetun_wait_for_forwarding() {
 # Convenience helper for scripts needing the shared controller status file
 # path within the host filesystem.
 gluetun_port_guard_status_file() {
+  if declare -f arr_port_guard_status_path >/dev/null 2>&1; then
+    arr_port_guard_status_path
+    return
+  fi
+
   local root
   if declare -f arr_gluetun_state_dir >/dev/null 2>&1; then
     root="$(arr_gluetun_state_dir 2>/dev/null || printf '')"
