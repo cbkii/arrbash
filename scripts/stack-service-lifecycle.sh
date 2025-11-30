@@ -360,7 +360,10 @@ apply_qbt_credentials_from_config() {
 
     if ((success && need_user_change)); then
       if declare -f qbt_set_username >/dev/null 2>&1; then
-        if qbt_set_username "$desired_user" 2>/dev/null; then
+        # Re-login with new password before setting username
+        if ! QBT_USER="$default_user" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+          warn "Failed to re-login with new password, cannot set username"
+        elif qbt_set_username "$desired_user" 2>/dev/null; then
           msg "Successfully set qBittorrent username from userr.conf"
           persist_env_var QBT_USER "$desired_user"
         else
