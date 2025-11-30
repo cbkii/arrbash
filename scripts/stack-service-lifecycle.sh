@@ -225,20 +225,31 @@ sync_qbt_password_from_logs() {
   warn "Check 'docker logs qbittorrent' for a line containing 'temporary password'."
 }
 
-# Applies user-configured qBittorrent password when it differs from the temp password.
-# Called after qBittorrent starts to sync userr.conf QBT_PASS with qBittorrent WebUI.
-apply_qbt_password_from_config() {
-  local desired_pass="${1:-${QBT_PASS:-}}"
+# Applies user-configured qBittorrent credentials when they differ from defaults.
+# Called after qBittorrent starts to sync userr.conf QBT_USER/QBT_PASS with qBittorrent WebUI.
+apply_qbt_credentials_from_config() {
+  local desired_user="${1:-${QBT_USER:-admin}}"
+  local desired_pass="${2:-${QBT_PASS:-adminadmin}}"
+  local default_user="admin"
   local default_pass="adminadmin"
 
-  # If desired password is empty or default, nothing to apply
-  if [[ -z "$desired_pass" || "$desired_pass" == "$default_pass" ]]; then
+  # Check if there's anything to change
+  local need_user_change=0
+  local need_pass_change=0
+  if [[ "$desired_user" != "$default_user" ]]; then
+    need_user_change=1
+  fi
+  if [[ "$desired_pass" != "$default_pass" ]]; then
+    need_pass_change=1
+  fi
+
+  if ((need_user_change == 0 && need_pass_change == 0)); then
     return 0
   fi
 
   # Check if qBittorrent is running
   if ! docker inspect qbittorrent --format '{{.State.Running}}' 2>/dev/null | grep -q "true"; then
-    warn "qBittorrent not running, cannot apply password from config"
+    warn "qBittorrent not running, cannot apply credentials from config"
     return 1
   fi
 
@@ -254,51 +265,121 @@ apply_qbt_password_from_config() {
     ((attempts++))
   done
 
-  # If no temp password found, qBittorrent might already have a password set
+  # If no temp password found, qBittorrent might already have credentials set
   if [[ -z "$temp_pass" ]]; then
-    # Try logging in with the desired password (honor custom username from userr.conf)
-    if QBT_USER="${QBT_USER:-admin}" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
-      msg "qBittorrent password from config is already applied"
+    # Try logging in with the desired credentials
+    if QBT_USER="$desired_user" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+      msg "qBittorrent credentials from config are already applied"
+      persist_env_var QBT_USER "$desired_user"
       persist_env_var QBT_PASS "$desired_pass"
       return 0
     fi
-    # If that fails, we can't determine the current password
-    warn "Cannot apply password from config: no temp password found and current password unknown"
+    # Try with default username but desired password
+    if QBT_USER="$default_user" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+      msg "qBittorrent password already applied, setting username..."
+      if ((need_user_change)) && declare -f qbt_set_username >/dev/null 2>&1; then
+        if QBT_USER="$default_user" QBT_PASS="$desired_pass" qbt_set_username "$desired_user" 2>/dev/null; then
+          msg "Successfully set qBittorrent username from userr.conf"
+          persist_env_var QBT_USER "$desired_user"
+        else
+          warn "Failed to set qBittorrent username via API"
+        fi
+      fi
+      persist_env_var QBT_PASS "$desired_pass"
+      qbt_api_cleanup 2>/dev/null || true
+      return 0
+    fi
+    # If that fails, we can't determine the current credentials
+    warn "Cannot apply credentials from config: no temp password found and current credentials unknown"
     return 1
   fi
 
-  # If temp password matches desired, just save to .env
-  if [[ "$temp_pass" == "$desired_pass" ]]; then
+  # If temp password matches desired password and no username change needed, just save
+  if [[ "$temp_pass" == "$desired_pass" ]] && ((need_user_change == 0)); then
     persist_env_var QBT_PASS "$desired_pass"
     return 0
   fi
 
-  # Login with temp password (honor custom username from userr.conf)
-  msg "Applying qBittorrent password from userr.conf..."
-  if ! QBT_USER="${QBT_USER:-admin}" QBT_PASS="$temp_pass" qbt_api_login 2>/dev/null; then
-    warn "Failed to login with temporary password, cannot apply password from config"
+  # Login with default username and temp password
+  msg "Applying qBittorrent credentials from userr.conf..."
+  if ! QBT_USER="$default_user" QBT_PASS="$temp_pass" qbt_api_login 2>/dev/null; then
+    warn "Failed to login with temporary password, cannot apply credentials from config"
     persist_env_var QBT_PASS "$temp_pass"
     return 1
   fi
 
-  # Set the new password via API (honor custom username from userr.conf)
-  if declare -f qbt_set_password >/dev/null 2>&1; then
-    if QBT_USER="${QBT_USER:-admin}" QBT_PASS="$temp_pass" qbt_set_password "$desired_pass" 2>/dev/null; then
-      msg "Successfully set qBittorrent password from userr.conf"
-      QBT_PASS="$desired_pass"
-      persist_env_var QBT_PASS "$desired_pass"
-      qbt_api_cleanup 2>/dev/null || true
-      return 0
-    else
-      warn "Failed to set qBittorrent password via API"
-      persist_env_var QBT_PASS "$temp_pass"
-      return 1
+  # Apply credentials via API - use qbt_set_credentials if available, otherwise individual functions
+  if declare -f qbt_set_credentials >/dev/null 2>&1; then
+    local new_user=""
+    local new_pass=""
+    if ((need_user_change)); then
+      new_user="$desired_user"
+    fi
+    if ((need_pass_change)) || [[ "$temp_pass" != "$desired_pass" ]]; then
+      new_pass="$desired_pass"
+    fi
+
+    if [[ -n "$new_user" || -n "$new_pass" ]]; then
+      if QBT_USER="$default_user" QBT_PASS="$temp_pass" qbt_set_credentials "$new_user" "$new_pass" 2>/dev/null; then
+        msg "Successfully set qBittorrent credentials from userr.conf"
+        persist_env_var QBT_USER "$desired_user"
+        persist_env_var QBT_PASS "$desired_pass"
+        qbt_api_cleanup 2>/dev/null || true
+        return 0
+      else
+        warn "Failed to set qBittorrent credentials via API"
+        persist_env_var QBT_PASS "$temp_pass"
+        return 1
+      fi
     fi
   else
-    warn "qbt_set_password function not available, password not applied"
-    persist_env_var QBT_PASS "$temp_pass"
-    return 1
+    # Fallback: use individual functions
+    local success=1
+    if ((need_pass_change)) || [[ "$temp_pass" != "$desired_pass" ]]; then
+      if declare -f qbt_set_password >/dev/null 2>&1; then
+        if QBT_USER="$default_user" QBT_PASS="$temp_pass" qbt_set_password "$desired_pass" 2>/dev/null; then
+          msg "Successfully set qBittorrent password from userr.conf"
+          persist_env_var QBT_PASS "$desired_pass"
+          # Need to re-login with new password to set username
+          if ((need_user_change)); then
+            if ! QBT_USER="$default_user" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+              warn "Failed to re-login after password change"
+              success=0
+            fi
+          fi
+        else
+          warn "Failed to set qBittorrent password via API"
+          persist_env_var QBT_PASS "$temp_pass"
+          success=0
+        fi
+      else
+        warn "qbt_set_password function not available"
+        success=0
+      fi
+    fi
+
+    if ((success && need_user_change)); then
+      if declare -f qbt_set_username >/dev/null 2>&1; then
+        if qbt_set_username "$desired_user" 2>/dev/null; then
+          msg "Successfully set qBittorrent username from userr.conf"
+          persist_env_var QBT_USER "$desired_user"
+        else
+          warn "Failed to set qBittorrent username via API"
+        fi
+      else
+        warn "qbt_set_username function not available"
+      fi
+    fi
   fi
+
+  qbt_api_cleanup 2>/dev/null || true
+  return 0
+}
+
+# Legacy wrapper for backward compatibility
+apply_qbt_password_from_config() {
+  local desired_pass="${1:-${QBT_PASS:-}}"
+  apply_qbt_credentials_from_config "${QBT_USER:-admin}" "$desired_pass"
 }
 
 # Checks if a default route exists via a VPN tunnel interface (configurable pattern)

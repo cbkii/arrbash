@@ -401,15 +401,22 @@ ensure_qbt_config() {
     return 0
   fi
 
-  # Save the desired password from userr.conf before any modifications
+  # Save the desired credentials from userr.conf before any modifications
+  local desired_user="${QBT_USER:-admin}"
   local desired_pass="${QBT_PASS:-adminadmin}"
 
   # First try to sync temp password (for fresh installs where QBT_PASS is adminadmin)
   sync_qbt_password_from_logs || true
 
-  # If user configured a custom password, apply it via API
-  if [[ "$desired_pass" != "adminadmin" ]] && declare -f apply_qbt_password_from_config >/dev/null 2>&1; then
-    apply_qbt_password_from_config "$desired_pass" || true
+  # If user configured custom credentials, apply them via API
+  # Use apply_qbt_credentials_from_config if available (handles both user and pass)
+  # Otherwise fall back to apply_qbt_password_from_config (legacy, password only)
+  if [[ "$desired_user" != "admin" || "$desired_pass" != "adminadmin" ]]; then
+    if declare -f apply_qbt_credentials_from_config >/dev/null 2>&1; then
+      apply_qbt_credentials_from_config "$desired_user" "$desired_pass" || true
+    elif declare -f apply_qbt_password_from_config >/dev/null 2>&1; then
+      apply_qbt_password_from_config "$desired_pass" || true
+    fi
   fi
 
   docker stop qbittorrent >/dev/null 2>&1 || true
