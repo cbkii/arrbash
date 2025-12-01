@@ -215,6 +215,24 @@ grep LAN_IP ~/srv/arrconfigs/userr.conf
 ./arr.sh --yes
 ```
 
+### Docker networking masks client IP (whitelist bypass fails)
+
+**Symptom**: LAN whitelist is configured, but login is still required.
+
+**Explanation**: When qBittorrent runs behind Gluetun (`network_mode: service:gluetun`), connections to its WebUI arrive from Docker's bridge network (by default `172.17.0.0/16`, or another subnet within `172.16.0.0/12`), not from your actual LAN IP. This means the client's true IP is masked.
+
+**Solution**: The default `QBT_AUTH_WHITELIST` now includes `172.17.0.0/16,::ffff:172.28.0.1/128` to cover Docker's default bridge network internal traffic. Additionally, `LocalHostAuth` is set to `false` so the whitelist bypass works correctly. If you use custom Docker networks, add their subnets explicitly.
+
+If you're running an older configuration:
+1. Update `userr.conf` to include Docker's default bridge subnet in the whitelist:
+   ```bash
+   QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128"
+   ```
+2. Re-run the installer to apply changes:
+   ```bash
+   ./arr.sh --yes
+   ```
+
 ### Configarr API key errors
 
 **Symptom**: Configarr fails with "invalid API key" errors.
