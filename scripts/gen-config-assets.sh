@@ -491,7 +491,7 @@ ensure_qbt_config() {
       docker_root="$(arr_docker_data_root)"
       local conf_file
       conf_file="$(arr_qbt_conf_path "$docker_root")"
-      
+
       # Only update non-credential settings without restarting
       if [[ -f "$conf_file" ]]; then
         # Write config (which will update all settings including password if set)

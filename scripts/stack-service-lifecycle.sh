@@ -94,7 +94,7 @@ qbt_apply_password_to_config() {
   fi
 
   # Write back to config file
-  if ! printf '%s\n' "$conf_content" > "$conf_file"; then
+  if ! printf '%s\n' "$conf_content" >"$conf_file"; then
     return 1
   fi
 

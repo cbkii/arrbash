@@ -1246,7 +1246,7 @@ _arr_gluetun_cycle_vpn() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
   local vpn_label
-  vpn_label="$(printf '%s' "$vpn_type" | sed 's/./\U&/')"  # Capitalize first letter
+  vpn_label="$(printf '%s' "$vpn_type" | sed 's/./\U&/')" # Capitalize first letter
 
   if ! _arr_gluetun_set_vpn_status stopped; then
     local err
