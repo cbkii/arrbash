@@ -713,6 +713,51 @@ arr_gluetun_state_dir() {
   printf '%s/state' "$(arr_gluetun_dir)"
 }
 
+# Resolves the canonical port-guard status file path
+arr_port_guard_status_path() {
+  printf '%s/port-guard-status.json' "$(arr_gluetun_state_dir)"
+}
+
+# Repairs an unwritable port-guard status file by recreating it
+# Tries non-destructive chmod first, then falls back to rm + touch
+arr_repair_port_guard_status_file() {
+  local status_file
+  status_file="$(arr_port_guard_status_path)"
+
+  local state_dir
+  state_dir="$(dirname "$status_file")"
+
+  # Ensure the parent directory exists and is writable
+  if ! mkdir -p "$state_dir" 2>/dev/null || ! touch "${state_dir}/.probe" 2>/dev/null; then
+    warn "Unable to create or write to ${state_dir}; verify filesystem permissions"
+    return 1
+  fi
+  rm -f "${state_dir}/.probe" 2>/dev/null
+
+  # If file doesn't exist, nothing to repair
+  if [[ ! -e "$status_file" ]]; then
+    return 0
+  fi
+
+  # If already writable, nothing to repair
+  if [[ -w "$status_file" ]]; then
+    return 0
+  fi
+
+  # Try non-destructive chmod first
+  if chmod u+w "$status_file" 2>/dev/null; then
+    return 0
+  fi
+
+  # Fall back to rm + touch pattern
+  if rm -f "$status_file" 2>/dev/null && touch "$status_file" 2>/dev/null; then
+    return 0
+  fi
+
+  warn "Failed to repair ${status_file}; could not chmod or recreate file (check parent directory permissions)"
+  return 1
+}
+
 # Resolves the VPN auto-reconnect working directory under Gluetun assets
 arr_gluetun_auto_reconnect_dir() {
   printf '%s/auto-reconnect' "$(arr_gluetun_dir)"
