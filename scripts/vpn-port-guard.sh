@@ -103,6 +103,13 @@ if ! mkdir -p -- "${STATUS_DIR}" 2>/dev/null; then
   exit 1
 fi
 
+# Repair unwritable status file before runtime operations
+if declare -f arr_repair_port_guard_status_file >/dev/null 2>&1; then
+  if ! arr_repair_port_guard_status_file; then
+    log_error "Failed to repair status file; status updates may fail"
+  fi
+fi
+
 # --- Graceful shutdown handler ---
 _on_exit() {
   # Best-effort write; ignore errors during shutdown

@@ -78,8 +78,18 @@ verify_vpn_port_guard_prereqs() {
   fi
   rm -f "$probe" 2>/dev/null
 
-  local status_file="${state_dir}/port-guard-status.json"
-  if [[ -f "$status_file" && ! -w "$status_file" ]]; then
+  local status_file
+  if declare -f arr_port_guard_status_path >/dev/null 2>&1; then
+    status_file="$(arr_port_guard_status_path)"
+  else
+    status_file="${state_dir}/port-guard-status.json"
+  fi
+
+  if declare -f arr_repair_port_guard_status_file >/dev/null 2>&1; then
+    if ! arr_repair_port_guard_status_file; then
+      die "Failed to repair port-guard status file; fix permissions before continuing"
+    fi
+  elif [[ -f "$status_file" && ! -w "$status_file" ]]; then
     die "Existing ${status_file} is not writable; fix permissions before continuing"
   fi
 

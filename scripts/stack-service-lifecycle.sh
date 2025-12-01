@@ -708,6 +708,13 @@ arr_wait_for_gluetun_ready() {
 }
 
 arr_port_guard_status_file() {
+  # Primary: Use centralized path helper
+  if declare -f arr_port_guard_status_path >/dev/null 2>&1; then
+    arr_port_guard_status_path
+    return
+  fi
+
+  # Fallback: Use gluetun helper for backward compatibility
   if declare -f gluetun_port_guard_status_file >/dev/null 2>&1; then
     gluetun_port_guard_status_file
     return
