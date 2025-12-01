@@ -8,221 +8,285 @@ You are an AI coding agent for the `cbkii/arrbash` project. Your responsibilitie
 * Ensuring consistency between docs, examples, and code behaviour.
 * Providing diffs or patches when making changes.
 * Suggesting PR messages, structural improvements, and diagnostics.
-* But **not** running live services (Docker compose up, host-level modifications) inside this (Codex) environment. Those tasks are for a host machine.
+* But **not** running live services (Docker compose up, host-level modifications) inside this environment. Those tasks are for a host machine.
 
 ---
 
 ## Repository Overview
 
-* **Entry script:** `arr.sh` — orchestrates setup on Debian hosts, handles flags like `--yes`, `--rotate-api-key`, `--split`, etc.
-* **Config directory:** `arrconf/` — user and defaults config; **this is the canonical source of config variables**.
-* **Env generation (NEW):**
+### Entry script
 
-  * `scripts/gen-env.sh` — single, authoritative generator for `.env` using **Bash/Zsh logic + envsubst**.
-  * `scripts/.env.template` — repository-tracked template with `${VAR}` placeholders and optional blocks guarded by `# @if VAR` … `# @endif`.
-  * Runtime layering is `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`. Mirror that order in all docs.
-* **Scripts directory:** `scripts/` — helper scripts (DNS, versions, networking, qbt helpers, etc.).
+* `arr.sh` — Main orchestrator that handles installation, configuration, and stack management.
+* Flags: `--trace`, `--yes`, `--enable-sab`, `--rotate-api-key`, `--sync-api-keys`, `--no-auto-api-sync`, `--refresh-aliases`, `--force-unlock`, `--uninstall`, `--help`
 
-  * **ENV EMISSION MOVED HERE** (via `gen-env.sh` only).
-  * Compose YAML helpers remain (YAML emit/escape).
-* **Docs:** `README.md`, `docs/` (guides, troubleshooting, operations).
+### Config directory: `arrconf/`
 
-> **Consolidate, don’t duplicate**: update and centralise existing code paths. If a helper overlaps with an existing function, **merge** them and remove the old one. Avoid “wrapper-of-a-wrapper” patterns; keep a single authoritative implementation per concern.
+This is the canonical source of configuration variables:
+
+| File | Purpose |
+|------|---------|
+| `userr.conf.defaults.sh` | Default values for all configuration variables |
+| `userr.conf.example` | Example user configuration file |
+| `proton.auth.example` | Example ProtonVPN credentials file |
+
+### Scripts directory: `scripts/`
+
+Key helper scripts:
+
+| Script | Purpose |
+|--------|---------|
+| `gen-env.sh` | Generates `.env` from template (authoritative env emission) |
+| `.env.template` | Template with `${VAR}` placeholders and `# @if` guards |
+| `stack-compose.sh` | Generates `docker-compose.yml` |
+| `stack-common.sh` | Shared utility functions (`msg`, `warn`, `die`, etc.) |
+| `stack-defaults.sh` | Runtime defaults and permission handling |
+| `stack-preflight.sh` | Pre-installation validation |
+| `vpn-port-guard.sh` | Port forwarding monitor controller |
+| `vpn-gluetun.sh` | Gluetun API helpers |
+| `gluetun-api.sh` | Low-level Gluetun control API wrapper |
+| `qbt-api.sh` | qBittorrent WebUI API wrapper |
+| `stack-apikeys.sh` | API key sync for Configarr |
+| `gen-aliasarr.sh` | Shell alias generator |
+| `stack-uninstall.sh` | Uninstallation handler |
+
+### Documentation: `docs/`
+
+| File | Content |
+|------|---------|
+| `usage.md` | Installation, configuration, and operation guide |
+| `architecture.md` | System design and file generation |
+| `networking.md` | VPN modes and port forwarding |
+| `troubleshooting.md` | Problem diagnosis and fixes |
+| `AGENTS.md` | This file - agent guidance |
 
 ---
 
-## Naming Conventions (arrbash-specific)
+## Configuration Precedence
 
-* **User config (canonical):** `arrconf/userr.conf.defaults.sh` → `${ARRCONF_DIR}/userr.conf` (**double r**).
-* **Scripts / helpers:** file names kebab-case; shared helpers prefixed `arr_` when appropriate.
-* **Variables:** uppercase `SNAKE_CASE` with service/area prefixes (`ARR_`, `GLUETUN_`, `QBT_`, `PROWLARR_`, etc.).
-* **Compose/env artefacts:**
+Configuration is layered (highest to lowest precedence):
 
-  * `scripts/.env.template` (**tracked; hand-edited**)
-  * `.env` (**generated; do not hand-edit**) by `scripts/gen-env.sh`
-* **Examples/placeholders:** `*.example` suffix only (never committed with real secrets).
+1. **CLI flags** — e.g., `--enable-sab` sets `SABNZBD_ENABLED=1`
+2. **Exported environment variables** — e.g., `export SPLIT_VPN=1`
+3. **User config file** — `${ARRCONF_DIR}/userr.conf` (default: `~/srv/arrconfigs/userr.conf`)
+4. **Defaults file** — `arrconf/userr.conf.defaults.sh`
+
+### Default paths
+
+| Variable | Default |
+|----------|---------|
+| `ARR_DATA_ROOT` | `~/srv` |
+| `ARR_STACK_DIR` | `${ARR_DATA_ROOT}/${STACK}` (default: `~/srv/arr`) |
+| `ARRCONF_DIR` | `${ARR_STACK_DIR}configs` (default: `~/srv/arrconfigs`) |
+| `ARR_DOCKER_DIR` | `${ARR_STACK_DIR}/dockarr` |
+| `ARR_ENV_FILE` | `${ARR_STACK_DIR}/.env` |
 
 ---
 
-## New Env Generation Workflow (authoritative)
+## Env Generation Workflow
 
-1. **Inputs**
+### Process
 
+1. **Inputs**:
    * `arrconf/userr.conf.defaults.sh` (defaults)
-   * `${ARRCONF_DIR}/userr.conf` (user overrides; optional)
-   * `scripts/.env.template` (placeholders, optional `# @if VAR` guards)
-   * CLI flags and exported environment variables layered ahead of `${ARRCONF_DIR}/userr.conf`
+   * `${ARRCONF_DIR}/userr.conf` (user overrides)
+   * `scripts/.env.template` (placeholders + guards)
+   * CLI flags and exported environment variables
 
-2. **Generator**
+2. **Generator** (`scripts/gen-env.sh`):
+   * Sources defaults then user overrides
+   * Applies derived logic (port fallbacks, boolean normalization)
+   * Processes conditional blocks (`# @if VAR` ... `# @endif`)
+   * Runs `envsubst` on surviving placeholders
+   * Writes to `${ARR_ENV_FILE}` with mode `0600`
 
-   * `scripts/gen-env.sh`:
+3. **Output format**:
+   * `KEY=value` (no `export`, no wrapping quotes)
+   * Compose reads values literally
 
-    * Sources defaults then user overrides (arr.sh applies CLI/environment overrides before invoking the generator).
-   * Applies **derived logic** (internal→external port fallbacks, ProtonVPN port-forward defaults, boolean normalisation).
-     * Processes conditional blocks: keeps content between `# @if VAR` … `# @endif` only when `VAR` is “truthy” (`1/true/yes/on`, case-insensitive).
-     * Runs `envsubst` **scoped** to placeholders actually used in the filtered template.
-     * Writes to `${ARR_ENV_FILE}` (default `${ARR_STACK_DIR}/.env`) with mode `0600`.
-     * Emits `KEY=value` with no wrapping quotes; Compose consumes the file literally.
+### Template guards
 
-3. **Outcomes**
+Optional blocks use `# @if VAR` syntax:
 
-   * No change to effective values seen by Compose or runtime.
-   * Post-install scripts may still **surgically update** keys in `${ARR_ENV_FILE}` (e.g., image pinning, temporary passwords).
+```bash
+# @if SABNZBD_ENABLED
+SABNZBD_HOST=${SABNZBD_HOST}
+SABNZBD_PORT=${SABNZBD_PORT}
+# @endif
+```
+
+When `SABNZBD_ENABLED` is falsey, these lines are omitted entirely.
 
 ---
 
-## What Was Removed / Must Not Be Reintroduced
+## Core Services
 
-* **Remove** legacy env emission and placeholder-tracking in `scripts/files.sh`:
+| Service | Image | Purpose |
+|---------|-------|---------|
+| gluetun | `qmcgaw/gluetun` | VPN tunnel (ProtonVPN) |
+| vpn-port-guard | Uses gluetun namespace | Port forwarding monitor |
+| qbittorrent | `linuxserver/qbittorrent` | Torrent client |
+| sonarr | `linuxserver/sonarr` | TV automation |
+| radarr | `linuxserver/radarr` | Movie automation |
+| lidarr | `linuxserver/lidarr` | Music automation |
+| prowlarr | `linuxserver/prowlarr` | Indexer management |
+| bazarr | `linuxserver/bazarr` | Subtitle automation |
+| flaresolverr | `flaresolverr/flaresolverr` | Captcha solver |
+| sabnzbd (optional) | `linuxserver/sabnzbd` | Usenet downloader |
+| configarr (optional) | `raydak-labs/configarr` | TRaSH profile sync |
 
-  * `ARR_COMPOSE_VARS`, `ARR_COMPOSE_MISSING`, `ARR_COMPOSE_REQUIRED_BY`
-  * `arr_compose_reset_tracking`, `arr_compose_set_context`
-  * `arr_compose_inline_escape`, `arr_compose_stream_line`, `arr_compose_stream_block`
-  * `arr_emit_compose_env_file`
-* **Trim** `scripts/gen-yaml-emit.sh` to YAML-only helpers actually used elsewhere; it must **not** write `.env`.
-* **Do not** add migration wrappers/shims around `gen-env.sh`.
+---
+
+## Naming Conventions
+
+* **User config (canonical)**: `arrconf/userr.conf.defaults.sh` → `${ARRCONF_DIR}/userr.conf` (double 'r')
+* **Scripts/helpers**: kebab-case filenames; shared helpers prefixed `arr_`
+* **Variables**: uppercase `SNAKE_CASE` with service prefixes (`ARR_`, `GLUETUN_`, `QBT_`, `PROWLARR_`, etc.)
+* **Compose/env artifacts**:
+  * `scripts/.env.template` (tracked, hand-edited)
+  * `.env` (generated, do not hand-edit)
+* **Examples**: `*.example` suffix only (never commit real secrets)
 
 ---
 
 ## Coding Style & Conventions
 
-* Use **Bash** with strict safety: `#!/usr/bin/env bash`, `set -Eeuo pipefail`. When authoring shell code, ensure constructs remain
-  **zsh-compatible** (e.g., avoid Bash-only arrays where unnecessary, prefer POSIX-compatible parameter expansion, and test critical
-  scripts with `zsh` when feasible) so contributors using Z shell can run the tooling seamlessly.
-* Scripts must check dependencies (`curl`, `jq`, `openssl`, etc.) and fail with clear messages.
-* Permissions: secrets/auth files default to `600`; never commit real credentials.
+* Use Bash with strict safety: `#!/usr/bin/env bash`, `set -Eeuo pipefail`
+* Scripts should remain zsh-compatible where possible
+* Check dependencies at runtime and fail with clear messages
+* Permissions: secrets default to `600`; never commit real credentials
 * Standalone helpers bootstrap with:
-
-  * `SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`,
-  * derive `REPO_ROOT`,
-  * source `scripts/stack-common.sh`,
-  * call `arr_escalate_privileges "$@"` before enabling strict mode when root access is required.
-* Reuse shared helpers in `scripts/stack-common.sh` — **do not** reimplement `msg`, `warn`, `die`, permission logic, or env quoting/escaping already available.
-* Consistent indenting and quoting; always quote variables in paths.
-* Example/template files (`*.example`) reflect defaults or placeholders only.
-
----
-
-## Robust Variable Escaping & Emission
-
-* **Authority for `.env`:** `scripts/gen-env.sh` (only).
-
-  * Format: `NAME=VALUE` (no `export`), one per line.
-  * Values are produced via `envsubst`; source variables must be set before substitution. Do not add quotes around values in `userr.conf`—Compose reads `.env` values literally, so quotes become part of the value. Spaces and `#` are allowed in values; just ensure there’s no trailing comment after the value in the template.
-  * Optional blocks rely on `# @if VAR` guards so feature-scoped variables disappear entirely when falsey.
-* **YAML emission:** keep YAML-escape logic (double-quoted scalars; escape `\` → `\\`, `"` → `\"`, newlines → `\n`). Prefer list-form commands/healthchecks.
-  * Feature-gated sections (SABnzbd, Configarr, VPN helpers, etc.) must drop their services and dependent variables whenever the controlling flag is disabled.
-* **Double-expansion guard:** after writing YAML, ensure unresolved placeholders are only those intended for Compose interpolation (allow-list common runtime names).
+  ```bash
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+  ```
+* Reuse shared helpers from `scripts/stack-common.sh` — don't reimplement `msg`, `warn`, `die`
+* Quote variables in paths: `"${VAR}"` not `$VAR`
+* Example/template files reflect defaults or placeholders only
 
 ---
 
-## Variables Surface (must be covered in `scripts/.env.template`)
+## Key Variable Groups
 
-Include placeholders for **all** user-settable variables found in `arrconf/userr.conf.example`, notably:
+### Paths and identity
 
-* **Core/paths & identity:** `STACK`, `ARR_STACK_DIR`, `ARRCONF_DIR`, `ARR_DATA_ROOT`, `PUID`, `PGID`, `TIMEZONE`
-* **Media & downloads:** `MEDIA_DIR`, `TV_DIR`, `MOVIES_DIR`, `SUBS_DIR`, `DOWNLOADS_DIR`, `COMPLETED_DIR`
-* **LAN & loopback:** `LAN_IP`, `LOCALHOST_IP`
-* **VPN/Proton/Gluetun & controller tuning:** `SERVER_COUNTRIES`, `PVPN_ROTATE_COUNTRIES`, `GLUETUN_API_KEY`, `GLUETUN_CONTROL_PORT`, `VPN_PORT_GUARD_POLL_SECONDS`, `VPN_*`, `SPLIT_VPN`
-* **Images:** `CONFIGARR_IMAGE`, `FLARR_IMAGE`, `GLUETUN_IMAGE`, `PROWLARR_IMAGE`, `QBITTORRENT_IMAGE`, `RADARR_IMAGE`, `SONARR_IMAGE`
-* **Service ports:**
+`STACK`, `ARR_STACK_DIR`, `ARRCONF_DIR`, `ARR_DATA_ROOT`, `ARR_DOCKER_DIR`, `ARR_ENV_FILE`, `PUID`, `PGID`, `TIMEZONE`
 
-  * Internal: `QBT_INT_PORT`, `SONARR_INT_PORT`, `RADARR_INT_PORT`, `PROWLARR_INT_PORT`, `BAZARR_INT_PORT`, `FLARR_INT_PORT`
-  * LAN exposed (guard with `# @if EXPOSE_DIRECT_PORTS`): `EXPOSE_DIRECT_PORTS`, `QBT_PORT`, `SONARR_PORT`, `RADARR_PORT`, `PROWLARR_PORT`, `BAZARR_PORT`, `FLARR_PORT`
-* **qBittorrent:** `QBT_USER`, `QBT_PASS`, `QBT_BIND_ADDR`, `QBT_ENFORCE_WEBUI`, `QBT_AUTH_WHITELIST`
-* **SABnzbd (guard with `# @if SABNZBD_ENABLED`):** `SABNZBD_ENABLED`, `SABNZBD_USE_VPN`, `SABNZBD_HOST`, `SABNZBD_INT_PORT`, `SABNZBD_PORT`, `SABNZBD_API_KEY`, `SABNZBD_CATEGORY`, `SABNZBD_TIMEOUT`
-* **Scoring/tuning:** all `ARR_*` from the example file, incl.:
-  `ARRBASH_USENET_CLIENT`, `ARR_COLOR_OUTPUT`, `ARR_DISCOURAGE_MULTI`, `ARR_ENGLISH_ONLY`, `ARR_ENGLISH_POSITIVE_SCORE`, `ARR_EP_MAX_GB`, `ARR_EP_MIN_MB`, `ARR_JUNK_NEGATIVE_SCORE`, `ARR_LANG_PRIMARY`, `ARR_MBMIN_DECIMALS`, `ARR_MULTI_NEGATIVE_SCORE`, `ARR_PENALIZE_HD_X265`, `ARR_PERMISSION_PROFILE`, `ARR_PORT_CHECK_MODE`, `ARR_SEASON_MAX_GB`, `ARR_STRICT_JUNK_BLOCK`, `ARR_TV_RUNTIME_MIN`, `ARR_VIDEO_MAX_RES`, `ARR_VIDEO_MIN_RES`, `ARR_X265_HD_NEGATIVE_SCORE`
+### Media and downloads
 
-> **Derived-only values** need **no** placeholder unless they are persisted into `.env`. If persisted today, add `${VAR}` and compute it in `gen-env.sh` to keep behaviour identical.
+`MEDIA_DIR`, `TV_DIR`, `MOVIES_DIR`, `MUSIC_DIR`, `SUBS_DIR`, `DOWNLOADS_DIR`, `COMPLETED_DIR`
 
----
+### Network and VPN
 
-## Tasks You Will Commonly Perform
+`LAN_IP`, `LOCALHOST_IP`, `SPLIT_VPN`, `EXPOSE_DIRECT_PORTS`, `SERVER_COUNTRIES`, `PVPN_ROTATE_COUNTRIES`, `GLUETUN_API_KEY`, `GLUETUN_CONTROL_PORT`, `GLUETUN_CONTROL_BIND`
 
-1. **Env system edits**
+### VPN port guard
 
-   * Update `scripts/.env.template` when adding/removing config surface.
-   * Extend `scripts/gen-env.sh` for new derived logic or flags (add defaulting/normalisation; add/consume `# @if VAR` guards).
-   * Ensure the generator is the **only** writer for `.env`.
+`VPN_PORT_GUARD_POLL_SECONDS`, `VPN_PORT_GUARD_STATUS_TIMEOUT`, `CONTROLLER_REQUIRE_PF`
 
-2. **Remove duplication**
+### Service ports
 
-   * When you find env-emission logic elsewhere, migrate callers to the generator, delete the duplicate, and update docs.
+Internal: `QBT_INT_PORT`, `SONARR_INT_PORT`, `RADARR_INT_PORT`, etc.
+External: `QBT_PORT`, `SONARR_PORT`, `RADARR_PORT`, etc. (when `EXPOSE_DIRECT_PORTS=1`)
 
-3. **Compose/YAML**
+### qBittorrent
 
-   * Keep YAML emitters minimal and focused on YAML formatting & escaping.
-   * Do **not** generate `.env` from YAML or vice-versa.
+`QBT_USER`, `QBT_PASS`, `QBT_BIND_ADDR`, `QBT_ENFORCE_WEBUI`, `QBT_AUTH_WHITELIST`, `QBT_DOCKER_MODS`
 
-4. **Docs sync**
+### SABnzbd (when enabled)
 
-   * Keep README and docs aligned with the env workflow (how to set `userr.conf`, how to regenerate `.env`).
+`SABNZBD_ENABLED`, `SABNZBD_USE_VPN`, `SABNZBD_HOST`, `SABNZBD_INT_PORT`, `SABNZBD_PORT`, `SABNZBD_API_KEY`
+
+### Configarr
+
+`ENABLE_CONFIGARR`, `ARR_VIDEO_MIN_RES`, `ARR_VIDEO_MAX_RES`, `ARR_EP_MIN_MB`, `ARR_EP_MAX_GB`, etc.
 
 ---
 
-## Testing & Validation (within Codex)
+## Testing & Validation
 
-* **Static:** `shellcheck` for all changed shell scripts.
-* **Generator parity:**
+### Static checks
 
-  * Remove `.env`, run `scripts/gen-env.sh`, ensure a new `.env` appears with `0600`.
-  * Toggle guards in `arrconf/userr.conf` and re-generate; verify guarded blocks appear/disappear as expected.
-  * Confirm internal→external port fallbacks (e.g., empty `QBT_PORT` with `QBT_INT_PORT` set yields populated `QBT_PORT`).
-* **Compose parity (syntax-level):** `docker compose config` against the working tree (if Compose is available in the environment you’re testing) — no unresolved placeholders beyond intended runtime envs.
-* **Docs:** `./arr.sh --help` must reflect changes when flags/config surface shift.
+* `shellcheck` for all changed shell scripts
+* `bash -n script.sh` for syntax validation
 
-**Quick commands (illustrative):**
+### Generator parity
 
 ```bash
-rm -f "${ARR_STACK_DIR}/.env"
-scripts/gen-env.sh scripts/.env.template "${ARR_STACK_DIR}/.env"
-test -f "${ARR_STACK_DIR}/.env" && ls -l "${ARR_STACK_DIR}/.env"
+# Remove .env and regenerate
+rm -f ~/srv/arr/.env
+./scripts/gen-env.sh scripts/.env.template ~/srv/arr/.env
 
-# Derived fallback
-sed -i 's/^QBT_PORT=.*/QBT_PORT=/' arrconf/userr.conf; scripts/gen-env.sh
-grep -q '^QBT_PORT=' "${ARR_STACK_DIR}/.env"
+# Verify file exists with correct permissions
+ls -l ~/srv/arr/.env  # Should show -rw------- (600)
+```
+
+### Compose validation
+
+```bash
+docker compose config >/dev/null  # No unresolved placeholders
+```
+
+### CLI help
+
+```bash
+./arr.sh --help  # Should reflect current flags
 ```
 
 ---
 
-## What Agent MAY Do vs MAY NOT Do (in this environment)
+## Agent Responsibilities
 
-| May Do                                                                                  | May NOT Do / Should Avoid                                     |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Modify code, scripts, config, docs.                                                     | Launch the full stack via Docker Compose.                     |
-| Generate patches, suggestions, tests.                                                   | Make host OS changes (DNS, services).                         |
-| Update example/template permissions.                                                    | Use secrets/private credentials.                              |
-| Validate static correctness, pins, env alignment.                                       | Assume unrestricted network or host privileges.               |
-| **Consolidate duplicates into one authoritative function/module** and refactor callers. | **Add parallel or near-identical logic** to existing helpers. |
+### May do
+
+* Modify code, scripts, config, and docs
+* Generate patches and suggestions
+* Update example/template permissions
+* Validate static correctness
+* Consolidate duplicates into authoritative functions
+
+### May not do
+
+* Launch the full stack via Docker Compose
+* Make host OS changes (DNS, services)
+* Use real secrets/credentials
+* Assume unrestricted network or host privileges
+* Add parallel/duplicate logic to existing helpers
 
 ---
 
-## Pull Request / Commit Guidelines
+## Pull Request Guidelines
 
-* Commit messages: `<type>(<area>): short description` (e.g., `feat(env): add ENABLE_FOO guard to template`).
-* PR body:
+### Commit format
 
-  1. Summary of change.
-  2. Impact / user-visible differences.
-  3. Host actions (e.g., “re-run `scripts/gen-env.sh`”).
-  4. Static check results (shellcheck; generator parity notes).
-* Include a “Testing Done” block with the exact commands run.
+`<type>(<area>): short description`
+
+Examples:
+* `feat(env): add ENABLE_FOO guard to template`
+* `fix(vpn): correct port-guard polling interval`
+* `docs(usage): update CLI flag documentation`
+
+### PR body
+
+1. Summary of change
+2. Impact / user-visible differences
+3. Host actions required (e.g., "re-run `./arr.sh --yes`")
+4. Static check results
 
 ---
 
 ## Security & Secrets
 
-* Never commit real credentials. Use placeholders (`*.example`) only.
-* Files containing secrets (including generated `.env`) default to mode `600`.
-* If adding control APIs (e.g., Gluetun), keep API keys out of repo and ensure loopback bindings by default.
+* Never commit real credentials
+* Use placeholders (`*.example`) only
+* Files containing secrets default to mode `600`
+* API keys should stay out of repo; use loopback bindings by default
 
 ---
 
 ## Agent Priorities
 
-1. **Correctness** — behaviour matches docs and remains stable.
-2. **Clarity** — errors/help/docs are clear and concise.
-3. **Safety** — no secret leaks; cautious file modes.
-4. **Maintainability** — remove duplication; keep code small and cohesive.
-5. **Minimal assumptions** — operate within Codex constraints.
+1. **Correctness** — behavior matches docs and remains stable
+2. **Clarity** — errors/help/docs are clear and concise
+3. **Safety** — no secret leaks; cautious file modes
+4. **Maintainability** — remove duplication; keep code small and cohesive
+5. **Minimal assumptions** — operate within environment constraints
