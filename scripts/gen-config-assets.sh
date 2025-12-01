@@ -275,7 +275,7 @@ WebUI\AlternativeUIEnabled=${vt_alt_value}
 WebUI\RootFolder=${vt_root}
 WebUI\Port=${QBT_INT_PORT}
 WebUI\Username=${QBT_USER}
-WebUI\LocalHostAuth=true
+WebUI\LocalHostAuth=false
 WebUI\AuthSubnetWhitelistEnabled=true
 WebUI\AuthSubnetWhitelist=${auth_whitelist}
 WebUI\CSRFProtection=false
@@ -303,7 +303,7 @@ EOF
     "WebUI\\AlternativeUIEnabled=${vt_alt_value}"
     "WebUI\\RootFolder=${vt_root}"
     "WebUI\\ServerDomains=*"
-    "WebUI\\LocalHostAuth=true"
+    "WebUI\\LocalHostAuth=false"
     "WebUI\\AuthSubnetWhitelistEnabled=true"
     "WebUI\\CSRFProtection=false"
     "WebUI\\ClickjackingProtection=true"

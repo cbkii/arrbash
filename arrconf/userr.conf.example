@@ -72,7 +72,7 @@ ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (e
 # --- qBitTorrent Client credentials (change on first run) ---
 QBT_USER="admin"      # default: admin; initial qBittorrent username
 QBT_PASS="adminadmin"      # default: adminadmin; qBittorrent password (applied via API on first install; update here after changing in WebUI)
-QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"      # default: 127.0.0.1/32,::1/128 (+LAN/24 auto-added when LAN_IP set); CIDRs that bypass qBittorrent login
+QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128,172.16.0.0/12"      # default: 127.0.0.1/32,::1/128,172.16.0.0/12 (+LAN/24 auto-added when LAN_IP set); CIDRs that bypass qBittorrent login (Docker bridge included for Gluetun)
 
 # --- VPN basics (connectivity) ---
 SPLIT_VPN="1"      # default: 0=VPN for full stack; 1=restrict VPN to qBittorrent only
