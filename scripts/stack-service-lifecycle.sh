@@ -289,9 +289,51 @@ apply_qbt_credentials_from_config() {
       qbt_api_cleanup 2>/dev/null || true
       return 0
     fi
-    # If that fails, we can't determine the current credentials
-    warn "Cannot apply credentials from config: no temp password found and current credentials unknown"
-    return 1
+    # If that fails, we can't determine the current credentials - force a password reset
+    msg "Cannot determine current credentials - forcing password reset..."
+
+    # Get the config file path using helper function
+    local qbt_conf=""
+    if declare -f arr_qbt_conf_path >/dev/null 2>&1; then
+      qbt_conf="$(arr_qbt_conf_path)"
+    elif [[ -n "${ARR_DOCKER_DIR:-}" ]]; then
+      qbt_conf="${ARR_DOCKER_DIR%/}/qbittorrent/qBittorrent/qBittorrent.conf"
+    else
+      warn "Cannot determine qBittorrent config path, cannot force password reset"
+      return 1
+    fi
+
+    # Remove password hash to force qBittorrent to generate a new temp password
+    if [[ -f "$qbt_conf" ]]; then
+      sed -i '/WebUI\\Password_PBKDF2/d' "$qbt_conf" || true
+    else
+      warn "qBittorrent config file not found at $qbt_conf"
+      return 1
+    fi
+
+    # Restart qBittorrent container to trigger new temp password generation
+    msg "Restarting qBittorrent to generate new temporary password..."
+    docker restart qbittorrent >/dev/null 2>&1 || true
+    sleep 5
+
+    # Wait for qBittorrent to be ready and capture the new temp password
+    local reset_attempts=0
+    temp_pass=""
+    while ((reset_attempts < 30)); do
+      temp_pass="$(docker logs qbittorrent 2>&1 | grep -i "temporary password" | tail -1 | sed 's/.*temporary password[^:]*: *//' | awk '{print $1}' || true)"
+      if [[ -n "$temp_pass" ]]; then
+        break
+      fi
+      sleep 1
+      ((reset_attempts++))
+    done
+
+    if [[ -z "$temp_pass" ]]; then
+      warn "Failed to capture new temporary password after reset"
+      return 1
+    fi
+
+    msg "Password reset successful, applying desired credentials..."
   fi
 
   # If temp password matches desired password and no username change needed, just save
