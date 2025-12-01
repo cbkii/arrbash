@@ -13,7 +13,7 @@
 
 - **Operating System**: 64-bit Debian 12 (Bookworm), Ubuntu 22.04+, or equivalent. A static/reserved LAN IP is strongly recommended.
 - **Hardware**: Minimum 4 CPU cores and 4 GB RAM.
-- **Software**: Docker, Docker Compose v2 plugin, Git, `curl`, `jq`, `openssl`, `envsubst` (from `gettext-base`), and `python3`. Optionally install `yq` for YAML normalization (recommended but not required).
+- **Software**: Docker, Docker Compose v2 plugin, Git, `curl`, `jq`, `openssl`, `yq`, `envsubst` (from `gettext-base`), and `python3`.
 - **VPN**: ProtonVPN Plus or Unlimited subscription (required for port forwarding support).
 
 ## Quick start
@@ -133,16 +133,16 @@ See `arrconf/userr.conf.example` for the full list of options.
 ./arr.sh [options]
 
 Options:
-  --trace              Enable detailed debug tracing (writes a log file)
-  --yes                Run non-interactively; skip confirmation prompts
-  --enable-sab         Enable SABnzbd for this run (temporary)
+  --trace              Enable detailed tracing and write a log for debugging
+  --yes                Run non-interactively and assume yes to prompts
+  --enable-sab         Enable SABnzbd for this run (sets SABNZBD_ENABLED=1)
   --rotate-api-key     Force regeneration of the Gluetun API key
-  --sync-api-keys      Sync Sonarr/Radarr/Prowlarr API keys into Configarr
-  --no-auto-api-sync   Skip automatic Configarr API key sync for this run
-  --refresh-aliases    Regenerate helper shell aliases
-  --force-unlock       Remove an existing installer lock file
-  --uninstall          Stop all containers and remove generated files
-  --help               Show help message
+  --sync-api-keys      Force Sonarr/Radarr/Prowlarr API key sync into Configarr secrets
+  --no-auto-api-sync   Disable automatic Configarr API key sync for this run
+  --refresh-aliases    Regenerate helper aliases and reload your shell
+  --force-unlock       Remove an existing installer lock before continuing
+  --uninstall          Remove the ARR stack and revert host changes
+  --help               Show this help message
 ```
 
 ## Everyday commands

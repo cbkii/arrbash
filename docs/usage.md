@@ -13,7 +13,7 @@ This guide covers installation, configuration, and daily operation of the arrbas
 Before installing, ensure your system has:
 
 1. **Docker** and **Docker Compose v2** (the `docker compose` subcommand, not the legacy `docker-compose`)
-2. **Git**, **curl**, **jq**, **openssl**, **envsubst** (from `gettext-base`), and **python3**. Optionally install **yq** for YAML normalization (recommended but not required)
+2. **Git**, **curl**, **jq**, **openssl**, **yq**, **envsubst** (from `gettext-base`), and **python3**
 
 Install on Debian/Ubuntu:
 
@@ -186,15 +186,15 @@ All available command-line options:
 ./arr.sh [options]
 
 Options:
-  --trace              Enable detailed bash tracing; writes a debug log file
-  --yes                Run non-interactively; assume yes to all prompts
-  --enable-sab         Enable SABnzbd for this run only (sets SABNZBD_ENABLED=1)
-  --rotate-api-key     Force regeneration of the Gluetun control API key
-  --sync-api-keys      Sync Sonarr/Radarr/Prowlarr API keys into Configarr secrets
+  --trace              Enable detailed tracing and write a log for debugging
+  --yes                Run non-interactively and assume yes to prompts
+  --enable-sab         Enable SABnzbd for this run (sets SABNZBD_ENABLED=1)
+  --rotate-api-key     Force regeneration of the Gluetun API key
+  --sync-api-keys      Force Sonarr/Radarr/Prowlarr API key sync into Configarr secrets
   --no-auto-api-sync   Disable automatic Configarr API key sync for this run
-  --refresh-aliases    Regenerate shell helper aliases without running full install
-  --force-unlock       Remove an existing installer lock file and continue
-  --uninstall          Stop all containers and remove generated files
+  --refresh-aliases    Regenerate helper aliases and reload your shell
+  --force-unlock       Remove an existing installer lock before continuing
+  --uninstall          Remove the ARR stack and revert host changes
   --help               Show this help message
 ```
 
