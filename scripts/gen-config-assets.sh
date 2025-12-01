@@ -373,12 +373,12 @@ EOF
     "WebUI\\AuthSubnetWhitelist=${auth_whitelist}"
     "General\\UseRandomPort=true"
   )
-  
+
   # Add password hash to managed lines if we generated one
   if [[ -n "$password_line" ]]; then
     managed_lines+=("$password_line")
   fi
-  
+
   managed_spec="$(printf '%s\n' "${managed_lines[@]}")"
   managed_spec="${managed_spec%$'\n'}"
 
@@ -494,18 +494,9 @@ ensure_qbt_config() {
       
       # Only update non-credential settings without restarting
       if [[ -f "$conf_file" ]]; then
-        # Preserve existing password hash
-        local existing_password_line=""
-        existing_password_line="$(grep '^WebUI\\Password_PBKDF2=' "$conf_file" 2>/dev/null || true)"
-        
-        # Write config (which will update all settings)
+        # Write config (which will update all settings including password if set)
+        # The password hash will be preserved by write_qbt_config if credentials haven't changed
         write_qbt_config
-        
-        # If there was a password hash and we're not changing password, restore it
-        if [[ -n "$existing_password_line" && "$desired_pass" != "adminadmin" ]]; then
-          # Config already has correct password from write_qbt_config
-          :
-        fi
       fi
       return 0
     fi
