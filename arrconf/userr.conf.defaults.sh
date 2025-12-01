@@ -320,7 +320,7 @@ fi
 # Comma-separated CIDR list that can bypass the qBittorrent WebUI login.
 # LAN_IP/24 is automatically added if LAN_IP is set.
 # Docker bridge subnet (172.17.0.0/16,::ffff:172.28.0.1/128) is included by default because qBittorrent runs behind Gluetun (network_mode: service:gluetun), which masks client IPs.
-QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128,172.16.0.0/12}"
+QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128}"
 
 # Images
 GLUETUN_IMAGE="${GLUETUN_IMAGE:-qmcgaw/gluetun:v3.40.0}"
