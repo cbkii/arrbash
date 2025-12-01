@@ -244,9 +244,69 @@ write_qbt_config() {
     vt_alt_value="false"
   fi
 
+  # Pre-generate PBKDF2 password hash if user has custom credentials
+  # This ensures credentials are applied BEFORE first container start
+  local password_line=""
+  local desired_user="${QBT_USER:-admin}"
+  local desired_pass="${QBT_PASS:-adminadmin}"
+  if [[ "$desired_pass" != "adminadmin" ]]; then
+    if declare -f qbt_generate_pbkdf2_hash >/dev/null 2>&1; then
+      local pbkdf2_hash=""
+      if pbkdf2_hash="$(qbt_generate_pbkdf2_hash "$desired_pass" 2>/dev/null)"; then
+        password_line="WebUI\\Password_PBKDF2=\"${pbkdf2_hash}\""
+        msg "Pre-generated PBKDF2 password hash for qBittorrent config (user: ${desired_user})"
+      else
+        warn "Failed to pre-generate PBKDF2 hash; qBittorrent will use temporary password on first start"
+      fi
+    fi
+  fi
+
   local default_conf
-  default_conf="$(
-    cat <<EOF
+  if [[ -n "$password_line" ]]; then
+    default_conf="$(
+      cat <<EOF
+[AutoRun]
+enabled=false
+
+[BitTorrent]
+Session\AddTorrentStopped=false
+Session\DefaultSavePath=/completed/
+Session\TempPath=/downloads/incomplete/
+Session\TempPathEnabled=true
+
+[Meta]
+MigrationVersion=8
+
+[Network]
+PortForwardingEnabled=false
+
+[Preferences]
+General\UseRandomPort=true
+Connection\UPnP=false
+Connection\UseNAT-PMP=false
+WebUI\UseUPnP=false
+Downloads\SavePath=/completed/
+Downloads\TempPath=/downloads/incomplete/
+Downloads\TempPathEnabled=true
+WebUI\Address=${QBT_BIND_ADDR}
+WebUI\AlternativeUIEnabled=${vt_alt_value}
+WebUI\RootFolder=${vt_root}
+WebUI\Port=${QBT_INT_PORT}
+WebUI\Username=${QBT_USER}
+${password_line}
+WebUI\LocalHostAuth=false
+WebUI\AuthSubnetWhitelistEnabled=true
+WebUI\AuthSubnetWhitelist=${auth_whitelist}
+WebUI\CSRFProtection=false
+WebUI\ClickjackingProtection=true
+WebUI\HostHeaderValidation=false
+WebUI\HTTPS\Enabled=false
+WebUI\ServerDomains=*
+EOF
+    )"
+  else
+    default_conf="$(
+      cat <<EOF
 [AutoRun]
 enabled=false
 
@@ -284,7 +344,8 @@ WebUI\HostHeaderValidation=false
 WebUI\HTTPS\Enabled=false
 WebUI\ServerDomains=*
 EOF
-  )"
+    )"
+  fi
 
   local source_content="$default_conf"
   if [[ -f "$conf_file" ]]; then
@@ -303,6 +364,7 @@ EOF
     "WebUI\\AlternativeUIEnabled=${vt_alt_value}"
     "WebUI\\RootFolder=${vt_root}"
     "WebUI\\ServerDomains=*"
+    "WebUI\\Username=${QBT_USER}"
     "WebUI\\LocalHostAuth=false"
     "WebUI\\AuthSubnetWhitelistEnabled=true"
     "WebUI\\CSRFProtection=false"
@@ -311,6 +373,12 @@ EOF
     "WebUI\\AuthSubnetWhitelist=${auth_whitelist}"
     "General\\UseRandomPort=true"
   )
+  
+  # Add password hash to managed lines if we generated one
+  if [[ -n "$password_line" ]]; then
+    managed_lines+=("$password_line")
+  fi
+  
   managed_spec="$(printf '%s\n' "${managed_lines[@]}")"
   managed_spec="${managed_spec%$'\n'}"
 
@@ -392,7 +460,7 @@ ensure_qbt_webui_config_ready() {
 ensure_qbt_config() {
   msg "Ensuring qBittorrent configuration is applied"
 
-  # Sleep to allow qBittorrent to restart safely; configurable via QBT_CONFIG_SLEEP (default: 5 seconds)
+  # Sleep to allow qBittorrent to start safely; configurable via QBT_CONFIG_SLEEP (default: 5 seconds)
   sleep "${QBT_CONFIG_SLEEP:-5}"
 
   if ! docker inspect qbittorrent --format '{{.State.Running}}' 2>/dev/null | grep -q "true"; then
@@ -405,19 +473,62 @@ ensure_qbt_config() {
   local desired_pass="${QBT_PASS:-adminadmin}"
 
   # First try to sync temp password (for fresh installs where QBT_PASS is adminadmin)
-  sync_qbt_password_from_logs || true
+  # This only runs if QBT_PASS is still the default value
+  if [[ "$desired_pass" == "adminadmin" ]]; then
+    sync_qbt_password_from_logs || true
+  fi
 
-  # If user configured custom credentials, apply them via API
-  # Use apply_qbt_credentials_from_config if available (handles both user and pass)
-  # Otherwise fall back to apply_qbt_password_from_config (legacy, password only)
-  if [[ "$desired_user" != "admin" || "$desired_pass" != "adminadmin" ]]; then
-    if declare -f apply_qbt_credentials_from_config >/dev/null 2>&1; then
-      apply_qbt_credentials_from_config "$desired_user" "$desired_pass" || true
-    elif declare -f apply_qbt_password_from_config >/dev/null 2>&1; then
-      apply_qbt_password_from_config "$desired_pass" || true
+  # Verify if credentials are working via API
+  # If they work, no need to restart container
+  if declare -f qbt_api_login >/dev/null 2>&1; then
+    if QBT_USER="$desired_user" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+      msg "qBittorrent credentials from config are already working"
+      if declare -f qbt_api_cleanup >/dev/null 2>&1; then
+        qbt_api_cleanup 2>/dev/null || true
+      fi
+      # Still update config to ensure other settings are applied
+      local docker_root
+      docker_root="$(arr_docker_data_root)"
+      local conf_file
+      conf_file="$(arr_qbt_conf_path "$docker_root")"
+      
+      # Only update non-credential settings without restarting
+      if [[ -f "$conf_file" ]]; then
+        # Preserve existing password hash
+        local existing_password_line=""
+        existing_password_line="$(grep '^WebUI\\Password_PBKDF2=' "$conf_file" 2>/dev/null || true)"
+        
+        # Write config (which will update all settings)
+        write_qbt_config
+        
+        # If there was a password hash and we're not changing password, restore it
+        if [[ -n "$existing_password_line" && "$desired_pass" != "adminadmin" ]]; then
+          # Config already has correct password from write_qbt_config
+          :
+        fi
+      fi
+      return 0
     fi
   fi
 
+  # Credentials don't work via API, need to apply them
+  # If user configured custom credentials, try applying via API first
+  if [[ "$desired_user" != "admin" || "$desired_pass" != "adminadmin" ]]; then
+    if declare -f apply_qbt_credentials_from_config >/dev/null 2>&1; then
+      if apply_qbt_credentials_from_config "$desired_user" "$desired_pass" 2>/dev/null; then
+        msg "Successfully applied qBittorrent credentials via API"
+        return 0
+      fi
+    elif declare -f apply_qbt_password_from_config >/dev/null 2>&1; then
+      if apply_qbt_password_from_config "$desired_pass" 2>/dev/null; then
+        msg "Successfully applied qBittorrent password via API"
+        return 0
+      fi
+    fi
+  fi
+
+  # API method failed or not available, restart container with new config
+  msg "Restarting qBittorrent to apply configuration changes"
   docker stop qbittorrent >/dev/null 2>&1 || true
   sleep "${QBT_CONFIG_SLEEP:-5}"
 
