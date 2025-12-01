@@ -106,7 +106,7 @@ fi
 # Repair unwritable status file before runtime operations
 if declare -f arr_repair_port_guard_status_file >/dev/null 2>&1; then
   if ! arr_repair_port_guard_status_file; then
-    log "WARN" "Failed to repair status file; status updates may fail (continuing anyway)"
+    log "WARN: Failed to repair status file; status updates may fail (continuing anyway)"
   fi
 fi
 
