@@ -13,7 +13,7 @@ This guide covers installation, configuration, and daily operation of the arrbas
 Before installing, ensure your system has:
 
 1. **Docker** and **Docker Compose v2** (the `docker compose` subcommand, not the legacy `docker-compose`)
-2. **Git**, **curl**, **jq**, **openssl**, **yq**, **envsubst** (from `gettext-base`), and **python3**
+2. **Git**, **curl**, **jq**, **openssl**, **envsubst** (from `gettext-base`), and **python3**. Optionally install **yq** for YAML normalization (recommended but not required)
 
 Install on Debian/Ubuntu:
 

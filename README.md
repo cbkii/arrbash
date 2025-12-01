@@ -13,7 +13,7 @@
 
 - **Operating System**: 64-bit Debian 12 (Bookworm), Ubuntu 22.04+, or equivalent. A static/reserved LAN IP is strongly recommended.
 - **Hardware**: Minimum 4 CPU cores and 4 GB RAM.
-- **Software**: Docker, Docker Compose v2 plugin, Git, `curl`, `jq`, `openssl`, `yq`, `envsubst` (from `gettext-base`), and `python3`.
+- **Software**: Docker, Docker Compose v2 plugin, Git, `curl`, `jq`, `openssl`, `envsubst` (from `gettext-base`), and `python3`. Optionally install `yq` for YAML normalization (recommended but not required).
 - **VPN**: ProtonVPN Plus or Unlimited subscription (required for port forwarding support).
 
 ## Quick start
