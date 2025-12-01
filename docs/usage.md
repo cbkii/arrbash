@@ -5,7 +5,7 @@
 How to install, configure, and operate the stack.
 
 ## Install and run
-1. Ensure Docker, the Compose plugin, Git, `curl`, `jq`, `openssl`, and `envsubst` are present on the host.
+1. Ensure Docker, the Compose plugin, Git, `curl`, `jq`, `openssl`, `envsubst`, and `python3` are present on the host.
 2. Clone the repo into your working directory (defaults assume `~/srv/arrbash`).
 3. Copy `arrconf/proton.auth.example` and `arrconf/userr.conf.example` outside the repo (for example `../arrconfigs/`), set ownership to your user, and chmod the files to `600`.
 4. Populate Proton credentials plus your LAN IP and storage paths in `userr.conf`.

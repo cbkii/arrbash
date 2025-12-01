@@ -16,6 +16,91 @@ if [[ -f "${_lifecycle_script_dir}/qbt-api.sh" ]]; then
 fi
 unset _lifecycle_script_dir
 
+# Generates a PBKDF2-SHA512 hash for qBittorrent WebUI password.
+# qBittorrent uses: PBKDF2-HMAC-SHA512, 100,000 iterations, 16-byte salt.
+# Format: @ByteArray(<base64_salt>:<base64_hash>)
+# Returns: The hash string to write to WebUI\Password_PBKDF2 in qBittorrent.conf
+# Requires: python3 with hashlib (standard library)
+qbt_generate_pbkdf2_hash() {
+  local password="$1"
+
+  if [[ -z "$password" ]]; then
+    return 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 1
+  fi
+
+  # Generate PBKDF2 hash using Python (hashlib is standard library)
+  python3 -c "
+import hashlib
+import os
+import base64
+import sys
+
+password = sys.argv[1]
+salt = os.urandom(16)
+iterations = 100000
+dk = hashlib.pbkdf2_hmac('sha512', password.encode('utf-8'), salt, iterations)
+print('@ByteArray(' + base64.b64encode(salt).decode() + ':' + base64.b64encode(dk).decode() + ')')
+" "$password" 2>/dev/null
+}
+
+# Applies password directly to qBittorrent.conf by generating PBKDF2 hash.
+# This is more reliable than waiting for temp password from logs.
+# Returns 0 on success, 1 on failure.
+qbt_apply_password_to_config() {
+  local password="$1"
+  local conf_file="$2"
+
+  if [[ -z "$password" || -z "$conf_file" ]]; then
+    return 1
+  fi
+
+  if [[ ! -f "$conf_file" ]]; then
+    return 1
+  fi
+
+  local pbkdf2_hash=""
+  if ! pbkdf2_hash="$(qbt_generate_pbkdf2_hash "$password")"; then
+    return 1
+  fi
+
+  if [[ -z "$pbkdf2_hash" ]]; then
+    return 1
+  fi
+
+  # Remove existing password hash line and add new one
+  # Use atomic approach: read, modify, write
+  local conf_content=""
+  if ! conf_content="$(cat "$conf_file" 2>/dev/null)"; then
+    return 1
+  fi
+
+  # Remove any existing Password_PBKDF2 line
+  conf_content="$(printf '%s\n' "$conf_content" | grep -v 'WebUI\\Password_PBKDF2' || true)"
+
+  # Find [Preferences] section and add password after it, or append at end
+  if printf '%s' "$conf_content" | grep -q '^\[Preferences\]'; then
+    # Insert after [Preferences] line
+    conf_content="$(printf '%s\n' "$conf_content" | awk -v hash="$pbkdf2_hash" '
+      /^\[Preferences\]/ { print; print "WebUI\\Password_PBKDF2=\"" hash "\""; next }
+      { print }
+    ')"
+  else
+    # Append to end with [Preferences] section
+    conf_content="${conf_content}"$'\n'"[Preferences]"$'\n'"WebUI\\Password_PBKDF2=\"${pbkdf2_hash}\""
+  fi
+
+  # Write back to config file
+  if ! printf '%s\n' "$conf_content" > "$conf_file"; then
+    return 1
+  fi
+
+  return 0
+}
+
 arr_effective_project_name() {
   local project="${COMPOSE_PROJECT_NAME:-}"
 
@@ -289,9 +374,63 @@ apply_qbt_credentials_from_config() {
       qbt_api_cleanup 2>/dev/null || true
       return 0
     fi
-    # If that fails, we can't determine the current credentials
-    warn "Cannot apply credentials from config: no temp password found and current credentials unknown"
-    return 1
+    # If that fails, we can't determine the current credentials - apply password directly via PBKDF2 hash
+    msg "Cannot determine current credentials - applying password directly to config..."
+
+    # Get the config file path using helper function
+    local qbt_conf=""
+    if declare -f arr_qbt_conf_path >/dev/null 2>&1; then
+      qbt_conf="$(arr_qbt_conf_path)"
+    elif [[ -n "${ARR_DOCKER_DIR:-}" ]]; then
+      qbt_conf="${ARR_DOCKER_DIR%/}/qbittorrent/qBittorrent/qBittorrent.conf"
+    else
+      warn "Cannot determine qBittorrent config path, cannot apply password"
+      return 1
+    fi
+
+    if [[ ! -f "$qbt_conf" ]]; then
+      warn "qBittorrent config file not found at $qbt_conf"
+      return 1
+    fi
+
+    # Generate PBKDF2 hash and write directly to config (more reliable than temp password approach)
+    if qbt_apply_password_to_config "$desired_pass" "$qbt_conf"; then
+      msg "Password hash written to qBittorrent config"
+
+      # Restart qBittorrent to apply the new password
+      msg "Restarting qBittorrent to apply new password..."
+      docker restart qbittorrent >/dev/null 2>&1 || true
+      sleep 5
+
+      # Verify the new password works
+      local verify_attempts=0
+      while ((verify_attempts < 10)); do
+        if QBT_USER="$default_user" QBT_PASS="$desired_pass" qbt_api_login 2>/dev/null; then
+          msg "Password successfully applied from userr.conf"
+          persist_env_var QBT_PASS "$desired_pass"
+          # Now apply username if needed
+          if ((need_user_change)) && declare -f qbt_set_username >/dev/null 2>&1; then
+            if qbt_set_username "$desired_user" 2>/dev/null; then
+              msg "Successfully set qBittorrent username from userr.conf"
+              persist_env_var QBT_USER "$desired_user"
+            else
+              warn "Failed to set qBittorrent username via API"
+            fi
+          fi
+          qbt_api_cleanup 2>/dev/null || true
+          return 0
+        fi
+        sleep 1
+        ((verify_attempts++))
+      done
+
+      warn "Password was written but verification failed - qBittorrent may need manual restart"
+      persist_env_var QBT_PASS "$desired_pass"
+      return 0
+    else
+      warn "Failed to generate PBKDF2 hash (python3 required) - cannot apply password"
+      return 1
+    fi
   fi
 
   # If temp password matches desired password and no username change needed, just save

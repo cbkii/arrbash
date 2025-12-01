@@ -9,13 +9,13 @@ Set up the *arr media stack with Proton VPN support on a Debian-based host.
 
 ## Prerequisites
 - 64-bit Debian 12 (Bookworm) or equivalent with a static LAN IP, 4 CPU cores, and 4 GB RAM.
-- Docker, Docker Compose plugin, Git, `curl`, `jq`, `openssl`, and `envsubst` available on the host.
+- Docker, Docker Compose plugin, Git, `curl`, `jq`, `openssl`, `envsubst`, and `python3` available on the host.
 - Proton VPN Plus or Unlimited subscription for port forwarding support.
 
 ## Quickstart
 1. Install dependencies:
    ```bash
-   sudo apt update && sudo apt install docker.io docker-compose-plugin git curl jq openssl gettext-base
+   sudo apt update && sudo apt install docker.io docker-compose-plugin git curl jq openssl gettext-base python3
    ```
 
 2. Clone the repo and enter it:
