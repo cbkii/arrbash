@@ -728,10 +728,11 @@ arr_repair_port_guard_status_file() {
   state_dir="$(dirname "$status_file")"
 
   # Ensure the parent directory exists and is writable
-  if ! mkdir -p "$state_dir" 2>/dev/null; then
-    warn "Unable to create ${state_dir}; verify filesystem permissions"
+  if ! mkdir -p "$state_dir" 2>/dev/null || ! touch "${state_dir}/.probe" 2>/dev/null; then
+    warn "Unable to create or write to ${state_dir}; verify filesystem permissions"
     return 1
   fi
+  rm -f "${state_dir}/.probe" 2>/dev/null
 
   # If file doesn't exist, nothing to repair
   if [[ ! -e "$status_file" ]]; then
