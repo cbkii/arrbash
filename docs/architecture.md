@@ -2,41 +2,212 @@
 
 [← Back to README](../README.md)
 
-The installer renders configuration from Bash templates, writes stack files, and launches Docker containers for media automation and VPN routing.
+This document explains how arrbash works internally: how the installer processes configuration, generates files, and launches the Docker stack.
 
-## Core containers
-| Service | Purpose | Default access |
-| --- | --- | --- |
-| Gluetun | Proton VPN tunnel and optional port forwarding worker. | Control API on `http://127.0.0.1:${GLUETUN_CONTROL_PORT}` (API key required). |
-| qBittorrent | Torrent client routed through Gluetun. | `http://LAN_IP:${QBT_PORT}` (VueTorrent optional). |
-| Sonarr / Radarr / Lidarr / Prowlarr / Bazarr | Media automation apps on the LAN bridge. | `http://LAN_IP:${SONARR_PORT}`, `:${RADARR_PORT}`, `:${LIDARR_PORT}`, etc. |
-| FlareSolverr | Captcha solver used by indexers. | `http://LAN_IP:${FLARR_PORT}`. |
-| Configarr (optional) | Keeps Sonarr/Radarr configuration in sync. | Headless; uses stored API keys. |
-| SABnzbd (optional) | Usenet downloader. | Placement controlled by `SABNZBD_USE_VPN`; ports governed by `EXPOSE_DIRECT_PORTS`. |
+---
 
-arrbash no longer ships LAN DNS or HTTPS helpers. Services publish directly on LAN ports or through Gluetun when applicable.
+## Overview
+
+The `arr.sh` script is the main entry point. When you run it:
+
+1. Loads configuration from defaults, user overrides, environment, and CLI flags
+2. Validates dependencies and prerequisites
+3. Generates `.env` and `docker-compose.yml` files
+4. Creates directories with proper permissions
+5. Starts Docker containers in the correct order
+
+---
+
+## Container services
+
+The stack consists of these containers:
+
+| Service | Image | Purpose | Network |
+|---------|-------|---------|---------|
+| **gluetun** | `qmcgaw/gluetun` | VPN tunnel using ProtonVPN. Provides network namespace for qBittorrent. | Host network for control API |
+| **vpn-port-guard** | Uses gluetun's namespace | Monitors Gluetun's forwarded port and updates qBittorrent's listening port. | Shares gluetun |
+| **qbittorrent** | `linuxserver/qbittorrent` | Torrent client. All traffic routed through Gluetun. | Shares gluetun |
+| **sonarr** | `linuxserver/sonarr` | TV show automation. | `arr_net` bridge |
+| **radarr** | `linuxserver/radarr` | Movie automation. | `arr_net` bridge |
+| **lidarr** | `linuxserver/lidarr` | Music automation. | `arr_net` bridge |
+| **prowlarr** | `linuxserver/prowlarr` | Indexer management for all *arr apps. | `arr_net` bridge |
+| **bazarr** | `linuxserver/bazarr` | Subtitle automation. | `arr_net` bridge |
+| **flaresolverr** | `flaresolverr/flaresolverr` | Cloudflare captcha solver for indexers. | `arr_net` bridge |
+| **sabnzbd** (optional) | `linuxserver/sabnzbd` | Usenet downloader. Placement controlled by `SABNZBD_USE_VPN`. | `arr_net` or shares gluetun |
+| **configarr** (optional) | `raydak-labs/configarr` | Syncs TRaSH-Guides profiles to Sonarr/Radarr. | `arr_net` bridge |
+
+### Service access
+
+When `EXPOSE_DIRECT_PORTS=1` (default), services publish their WebUI ports on the host:
+
+| Service | Default URL |
+|---------|-------------|
+| Gluetun Control API | `http://127.0.0.1:8000` (localhost only, requires API key) |
+| qBittorrent | `http://LAN_IP:8082` |
+| Sonarr | `http://LAN_IP:8989` |
+| Radarr | `http://LAN_IP:7878` |
+| Lidarr | `http://LAN_IP:8686` |
+| Prowlarr | `http://LAN_IP:9696` |
+| Bazarr | `http://LAN_IP:6767` |
+| FlareSolverr | `http://LAN_IP:8191` |
+| SABnzbd | `http://LAN_IP:8080` (when enabled) |
+
+**Note**: arrbash does not provide DNS or HTTPS. Configure those separately with a reverse proxy if needed.
+
+---
 
 ## Generated files
-`./arr.sh` writes artifacts into `${ARR_STACK_DIR}` and `${ARR_DOCKER_DIR}`:
-- `.env` – rendered by `scripts/gen-env.sh` using `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh`, then persisted for reuse.
-- `docker-compose.yml` – service definitions, networks, health checks, and optional features keyed off `.env`.
-- `.aliasarr` – helper alias definitions sourced in your shell.
-- `${ARR_DOCKER_DIR}` – persistent application data, credentials, and Gluetun hooks.
 
-Do not edit generated files directly; adjust `userr.conf` and rerun the installer instead.
+Running `./arr.sh` creates these files in `${ARR_STACK_DIR}` (default: `~/srv/arr`):
 
-### Template rendering rules
-- `scripts/.env.template` is filtered through `# @if VAR` / `# @endif` guards so optional blocks (for example VPN helpers or SABnzbd) only emit when their controlling variables are truthy. `scripts/gen-env.sh` substitutes placeholders that survive filtering, writing `KEY=value` lines without wrapping quotes.
-- `docker-compose.yml` is assembled from Bash templates that double-quote scalar values. Helper functions escape backslashes, quotes, and newlines so YAML stays valid even when credentials contain special characters. Optional services are feature-gated—when Configarr, SABnzbd, or VPN helpers are disabled, their sections and dependent environment variables are omitted.
+| File | Purpose | Editable? |
+|------|---------|-----------|
+| `.env` | Environment variables for Docker Compose | **No** – regenerated on each run |
+| `docker-compose.yml` | Service definitions, networks, volumes | **No** – regenerated on each run |
+| `.aliasarr` | Shell alias definitions | **No** – regenerated on each run |
 
-## Installer flow
-1. **Preflight** – checks dependencies, confirms Docker availability, validates Proton credentials, and ensures required ports are free before writing files.
-2. **Defaults and overrides** – layers configuration as `CLI flags > exported environment > ${ARRCONF_DIR}/userr.conf > arrconf/userr.conf.defaults.sh` before rendering.
-3. **File rendering** – creates directories with safe permissions, hydrates preserved secrets from existing `.env`, and writes compose/env files in atomic steps.
-4. **Service start** – launches Gluetun first, waits for it to become healthy, then starts the optional Proton port-forwarding worker and brings up the remaining containers and extras.
-5. **Summary** – prints URLs, credentials, and reminders such as updating *Arr download client hosts when split tunnel is active.
+Additionally, in `${ARR_DOCKER_DIR}` (default: `~/srv/arr/dockarr`):
 
-## Related topics
-- [Usage](usage.md) – adjust installer inputs and flags.
-- [Networking](networking.md) – VPN modes and port forwarding details.
-- [Troubleshooting](troubleshooting.md) – diagnose startup issues.
+| Directory | Contents |
+|-----------|----------|
+| `gluetun/` | VPN config, state files, port-guard status |
+| `qbittorrent/` | qBittorrent config and data |
+| `sonarr/`, `radarr/`, etc. | Application configs and databases |
+| `configarr/` | Configarr secrets and generated profiles |
+
+**Important**: Never edit generated files directly. Change `userr.conf` and re-run the installer.
+
+---
+
+## How the installer works
+
+### Step 1: Configuration loading
+
+The `main()` function in `arr.sh` processes configuration in this order:
+
+1. **Defaults** (`arrconf/userr.conf.defaults.sh`) – Loaded first, provides all default values
+2. **User config** (`${ARRCONF_DIR}/userr.conf`) – Overrides defaults
+3. **Environment variables** – Exported vars override user config
+4. **CLI flags** – Highest precedence (e.g., `--enable-sab` sets `SABNZBD_ENABLED=1`)
+
+The precedence ensures you can always override any setting at runtime.
+
+### Step 2: Preflight checks
+
+Before generating files, the installer validates:
+
+- Required commands are available (`docker`, `curl`, `jq`, `openssl`, `yq`, `python3`)
+- Docker daemon is running
+- Proton VPN credentials are present (in `proton.auth`)
+- Required ports are available (or handles conflicts based on `ARR_PORT_CHECK_MODE`)
+- Write permissions for target directories
+
+### Step 3: File generation
+
+#### `.env` generation
+
+The `scripts/gen-env.sh` script:
+
+1. Sources the configuration (defaults + user overrides)
+2. Applies derived logic (port fallbacks, boolean normalization)
+3. Reads `scripts/.env.template`
+4. Processes conditional blocks (`# @if VAR` ... `# @endif`)
+5. Runs `envsubst` to replace `${VAR}` placeholders
+6. Writes the result to `${ARR_ENV_FILE}` with mode `0600`
+
+**Template guards**: The template uses `# @if VAR` blocks to conditionally include sections:
+
+```bash
+# @if SABNZBD_ENABLED
+SABNZBD_HOST=${SABNZBD_HOST}
+SABNZBD_PORT=${SABNZBD_PORT}
+# @endif
+```
+
+When `SABNZBD_ENABLED` is false/empty, these lines are omitted entirely.
+
+#### `docker-compose.yml` generation
+
+The compose file is assembled from Bash templates in `scripts/stack-compose.sh`:
+
+- Service definitions are built dynamically based on enabled features
+- YAML values are properly escaped (quotes, backslashes, newlines)
+- Optional services (SABnzbd, Configarr) are gated by their enable flags
+- Health checks and dependencies ensure correct startup order
+
+### Step 4: Directory creation
+
+The `mkdirs` function creates:
+
+- `${ARR_STACK_DIR}` – Where compose files live
+- `${ARR_DOCKER_DIR}` – Persistent container data
+- `${ARR_LOG_DIR}` – Runtime logs
+- Service-specific directories with appropriate permissions
+
+Permissions follow `ARR_PERMISSION_PROFILE`:
+- `strict` (default): secrets `600`, directories `700`
+- `collab`: shared files `660`, directories `770`
+
+### Step 5: Service startup
+
+The `start_stack` function:
+
+1. Starts **gluetun** first and waits for it to become healthy
+2. Starts **vpn-port-guard** (monitors forwarded port)
+3. Starts **qbittorrent** (waits for port-guard health)
+4. Starts remaining services in parallel
+5. Runs optional post-start tasks (API key sync, etc.)
+
+Health checks ensure services don't start before their dependencies are ready.
+
+---
+
+## Key helper scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/gen-env.sh` | Generates `.env` from template |
+| `scripts/stack-compose.sh` | Generates `docker-compose.yml` |
+| `scripts/vpn-port-guard.sh` | Polls Gluetun, syncs port to qBittorrent |
+| `scripts/gluetun-api.sh` | Gluetun control API wrapper |
+| `scripts/qbt-api.sh` | qBittorrent WebUI API wrapper |
+| `scripts/stack-preflight.sh` | Pre-installation validation |
+| `scripts/stack-apikeys.sh` | API key sync for Configarr |
+| `scripts/gen-aliasarr.sh` | Generates shell aliases |
+
+---
+
+## Network architecture
+
+### Default mode (`SPLIT_VPN=0`)
+
+All services share Gluetun's network namespace. Traffic flows:
+
+```
+Internet ← VPN tunnel ← Gluetun ← all services
+```
+
+### Split tunnel mode (`SPLIT_VPN=1`)
+
+Only qBittorrent (and optionally SABnzbd) use the VPN:
+
+```
+Internet ← VPN tunnel ← Gluetun ← qbittorrent
+                                ↖ sabnzbd (if SABNZBD_USE_VPN=1)
+
+Internet ← arr_net bridge ← sonarr, radarr, prowlarr, etc.
+                          ↖ sabnzbd (if SABNZBD_USE_VPN=0)
+```
+
+Split mode is recommended because:
+- *arr apps can access metadata servers directly (faster)
+- Troubleshooting is easier
+- Only torrent/usenet traffic is VPN-protected
+
+---
+
+## Related documentation
+
+- [Usage](usage.md) – Configuration options and CLI flags
+- [Networking](networking.md) – VPN modes and port forwarding details
+- [Troubleshooting](troubleshooting.md) – Common issues and fixes
