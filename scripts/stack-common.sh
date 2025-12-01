@@ -753,7 +753,7 @@ arr_repair_port_guard_status_file() {
     return 0
   fi
 
-  warn "Existing ${status_file} is not writable; fix permissions before continuing"
+  warn "Failed to repair ${status_file}; could not chmod or recreate file (check parent directory permissions)"
   return 1
 }
 

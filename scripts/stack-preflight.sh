@@ -87,10 +87,10 @@ verify_vpn_port_guard_prereqs() {
 
   if declare -f arr_repair_port_guard_status_file >/dev/null 2>&1; then
     if ! arr_repair_port_guard_status_file; then
-      die "Failed to repair port-guard status file; fix permissions before continuing"
+      die "Auto-repair of port-guard status file failed; check parent directory permissions"
     fi
   elif [[ -f "$status_file" && ! -w "$status_file" ]]; then
-    die "Existing ${status_file} is not writable; fix permissions before continuing"
+    die "Existing ${status_file} is not writable; manually fix permissions or delete file"
   fi
 
   if [[ -z "${GLUETUN_API_KEY:-}" ]]; then
