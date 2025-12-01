@@ -166,6 +166,7 @@ check_dependencies() {
   _check_command "jq" "jq (JSON processor)" || true
   _check_command "openssl" "openssl (cryptography)" || true
   _check_command "git" "git (version control)" || true
+  _check_command "python3" "python3 (PBKDF2 password hashing)" || true
 
   # Check Docker Compose (plugin or standalone)
   if docker compose version >/dev/null 2>&1; then

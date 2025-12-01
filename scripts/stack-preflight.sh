@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
-# Verifies required tooling (docker/compose/curl/jq) and records versions for logs
+# Verifies required tooling (docker/compose/curl/jq/python3) and records versions for logs
 install_missing() {
   msg "🔧 Checking dependencies"
 
@@ -21,7 +21,7 @@ install_missing() {
     die "Docker Compose v2+ is required but not found"
   fi
 
-  require_dependencies curl jq openssl yq
+  require_dependencies curl jq openssl yq python3
 
   msg "Docker: $(docker version --format '{{.Server.Version}}')"
   local compose_cmd_display="${DOCKER_COMPOSE_CMD[*]}"
