@@ -318,12 +318,23 @@ apply_qbt_credentials_from_config() {
 
     # Wait for qBittorrent to be ready and capture the new temp password
     local reset_attempts=0
+    local reset_logs=""
     temp_pass=""
     while ((reset_attempts < 30)); do
-      temp_pass="$(docker logs qbittorrent 2>&1 | grep -i "temporary password" | tail -1 | sed 's/.*temporary password[^:]*: *//' | awk '{print $1}' || true)"
-      if [[ -n "$temp_pass" ]]; then
+      reset_logs="$(LC_ALL=C docker logs --tail 200 qbittorrent 2>&1 || true)"
+      temp_pass="$(printf '%s' "$reset_logs" | LC_ALL=C sed -n 's/.*[Tt]emporary [Pp]assword[^:]*:[[:space:]]*\([^[:space:]]*\).*/\1/p' | tail -1)"
+
+      # Strip any surrounding quotes if present
+      temp_pass="${temp_pass#\"}"
+      temp_pass="${temp_pass%\"}"
+      temp_pass="${temp_pass#\'}"
+      temp_pass="${temp_pass%\'}"
+
+      # Validate: password should be 6-20 alphanumeric characters
+      if [[ -n "$temp_pass" && "$temp_pass" =~ ^[A-Za-z0-9]{6,20}$ ]]; then
         break
       fi
+      temp_pass=""
       sleep 1
       ((reset_attempts++))
     done
