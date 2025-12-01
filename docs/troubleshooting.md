@@ -219,14 +219,14 @@ grep LAN_IP ~/srv/arrconfigs/userr.conf
 
 **Symptom**: LAN whitelist is configured, but login is still required.
 
-**Explanation**: When qBittorrent runs behind Gluetun (`network_mode: service:gluetun`), connections to its WebUI arrive from Docker's internal bridge network (172.x.x.x), not from your actual LAN IP. This means the client's true IP is masked.
+**Explanation**: When qBittorrent runs behind Gluetun (`network_mode: service:gluetun`), connections to its WebUI arrive from Docker's bridge network (by default `172.17.0.0/16`, or another subnet within `172.16.0.0/12`), not from your actual LAN IP. This means the client's true IP is masked.
 
-**Solution**: The default `QBT_AUTH_WHITELIST` now includes `172.16.0.0/12` to cover Docker internal traffic. Additionally, `LocalHostAuth` is set to `false` so the whitelist bypass works correctly.
+**Solution**: The default `QBT_AUTH_WHITELIST` now includes `172.17.0.0/16,::ffff:172.28.0.1/128` to cover Docker's default bridge network internal traffic. Additionally, `LocalHostAuth` is set to `false` so the whitelist bypass works correctly. If you use custom Docker networks, add their subnets explicitly.
 
 If you're running an older configuration:
-1. Update `userr.conf` to include Docker subnet in the whitelist:
+1. Update `userr.conf` to include Docker's default bridge subnet in the whitelist:
    ```bash
-   QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128,172.16.0.0/12"
+   QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128"
    ```
 2. Re-run the installer to apply changes:
    ```bash
