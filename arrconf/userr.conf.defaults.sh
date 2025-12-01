@@ -319,8 +319,7 @@ fi
 
 # Comma-separated CIDR list that can bypass the qBittorrent WebUI login.
 # LAN_IP/24 is automatically added if LAN_IP is set.
-# Docker bridge subnet (172.16.0.0/12) is included by default because qBittorrent
-# runs behind Gluetun (network_mode: service:gluetun), which masks client IPs.
+# Docker bridge subnet (172.17.0.0/16,::ffff:172.28.0.1/128) is included by default because qBittorrent runs behind Gluetun (network_mode: service:gluetun), which masks client IPs.
 QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128,172.16.0.0/12}"
 
 # Images
@@ -645,7 +644,7 @@ QBT_USER="admin"                       # Initial qBittorrent username (change af
 QBT_PASS="adminadmin"                  # qBittorrent password (applied via API on first install; update here after changing in WebUI)
 GLUETUN_API_KEY=""                     # Pre-seed a Gluetun API key or leave empty to auto-generate
 QBT_DOCKER_MODS="${QBT_DOCKER_MODS}"  # Vuetorrent WebUI mod (set empty to disable)
-QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBittorrent login prompt (+LAN/24 auto-added when LAN_IP set; Docker bridge 172.16.0.0/12 included for Gluetun)
+QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBittorrent login prompt (+LAN/24 auto-added when LAN_IP set; included Docker's default bridge is 172.17.0.0/16 --note RFC1918 private range 172.16.0.0/12)
 
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="${SABNZBD_ENABLED}"             # 1 enables SABnzbd container/helper integration (default: ${SABNZBD_ENABLED})
