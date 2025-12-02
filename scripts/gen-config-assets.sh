@@ -232,10 +232,13 @@ write_qbt_config() {
   else
     # Fallback if helper not available
     auth_whitelist="${QBT_AUTH_WHITELIST:-${LOCALHOST_IP}/32,::1/128}"
-    local qb_lan_whitelist=""
-    if qb_lan_whitelist="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
-      if [[ ",${auth_whitelist}," != *",${qb_lan_whitelist},"* ]]; then
-        auth_whitelist="${qb_lan_whitelist},${auth_whitelist}"
+    # Only add LAN CIDR if explicitly enabled via QBT_AUTH_WHITELIST_INCLUDE_LAN
+    if [[ "${QBT_AUTH_WHITELIST_INCLUDE_LAN:-0}" == "1" ]]; then
+      local qb_lan_whitelist=""
+      if qb_lan_whitelist="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
+        if [[ ",${auth_whitelist}," != *",${qb_lan_whitelist},"* ]]; then
+          auth_whitelist="${qb_lan_whitelist},${auth_whitelist}"
+        fi
       fi
     fi
     auth_whitelist="$(normalize_csv "$auth_whitelist")"

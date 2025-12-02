@@ -318,9 +318,12 @@ if [[ -z "${QBT_DOCKER_MODS+x}" ]]; then
 fi
 
 # Comma-separated CIDR list that can bypass the qBittorrent WebUI login.
-# LAN_IP/24 is automatically added if LAN_IP is set.
 # Docker bridge subnet (172.17.0.0/16,::ffff:172.28.0.1/128) is included by default because qBittorrent runs behind Gluetun (network_mode: service:gluetun), which masks client IPs.
 QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128}"
+
+# Security: set to 1 to include LAN_IP/24 CIDR in qBittorrent WebUI auth whitelist
+# WARNING: This allows any host on your LAN to access qBittorrent WebUI without credentials
+QBT_AUTH_WHITELIST_INCLUDE_LAN="${QBT_AUTH_WHITELIST_INCLUDE_LAN:-0}"
 
 # Images
 GLUETUN_IMAGE="${GLUETUN_IMAGE:-qmcgaw/gluetun:v3.40.0}"
@@ -398,6 +401,7 @@ ARR_USERCONF_TEMPLATE_VARS=(
   CONTROLLER_REQUIRE_PF
   QBT_DOCKER_MODS
   QBT_AUTH_WHITELIST
+  QBT_AUTH_WHITELIST_INCLUDE_LAN
   QBT_INT_PORT
   QBT_PORT
   QBT_WEB_PORT
@@ -644,7 +648,8 @@ QBT_USER="admin"                       # Initial qBittorrent username (change af
 QBT_PASS="adminadmin"                  # qBittorrent password (applied via API on first install; update here after changing in WebUI)
 GLUETUN_API_KEY=""                     # Pre-seed a Gluetun API key or leave empty to auto-generate
 QBT_DOCKER_MODS="${QBT_DOCKER_MODS}"  # Vuetorrent WebUI mod (set empty to disable)
-QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBittorrent login prompt (+LAN/24 auto-added when LAN_IP set; included Docker's default bridge is 172.17.0.0/16 --note RFC1918 private range 172.16.0.0/12)
+QBT_AUTH_WHITELIST="${QBT_AUTH_WHITELIST}"  # CIDRs allowed to bypass the qBittorrent login prompt (included Docker's default bridge is 172.17.0.0/16 --note RFC1918 private range 172.16.0.0/12)
+QBT_AUTH_WHITELIST_INCLUDE_LAN="${QBT_AUTH_WHITELIST_INCLUDE_LAN}"  # Set to 1 to auto-add LAN_IP/24 to whitelist (SECURITY WARNING: allows any LAN host to access qBittorrent without credentials)
 
 # --- SABnzbd (Usenet downloader) ---
 SABNZBD_ENABLED="${SABNZBD_ENABLED}"             # 1 enables SABnzbd container/helper integration (default: ${SABNZBD_ENABLED})

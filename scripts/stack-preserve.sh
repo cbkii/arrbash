@@ -174,18 +174,47 @@ hydrate_user_credentials_from_env_file() {
   fi
 }
 
+# Generic hydration function for values from .env file
+# Takes an associative array of variable names and their defaults
+# Centralizes the common logic used by all hydration functions
+hydrate_values_from_env_file() {
+  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
+    return 0
+  fi
+
+  local -n vars_ref="$1"
+  local var_name default_value current_value existing_value
+
+  for var_name in "${!vars_ref[@]}"; do
+    default_value="${vars_ref[$var_name]}"
+    current_value="${!var_name:-}"
+    
+    # Skip if user has already set a non-default value in userr.conf
+    # This checks if the current value is explicitly set and differs from default
+    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
+      continue
+    fi
+
+    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+    
+    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
+      printf -v "$var_name" '%s' "$existing_value"
+      arr_record_preserve_note "Preserved ${var_name} from existing .env"
+    fi
+  done
+}
+
 # Pulls existing qBittorrent WebUI auth whitelist from .env to preserve user settings
 hydrate_qbt_auth_whitelist_from_env_file() {
   if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
     return 0
   fi
 
-  # Skip if user has already set a non-default whitelist in userr.conf
+  # Use static literal default for precedence check
+  local default_whitelist="127.0.0.1/32,::1/128"
   local current_whitelist="${QBT_AUTH_WHITELIST:-}"
-  local localhost_ip="${LOCALHOST_IP:-127.0.0.1}"
-  local default_whitelist="${localhost_ip}/32,::1/128"
   
-  # If already set to non-default, don't override
+  # Skip if user has already set a non-default whitelist in userr.conf
   if [[ -n "$current_whitelist" && "$current_whitelist" != "$default_whitelist" ]]; then
     return 0
   fi
@@ -226,316 +255,136 @@ hydrate_gluetun_api_key_from_env_file() {
 
 # Hydrates service ports from .env to preserve user customizations
 hydrate_service_ports_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A port_vars=(
-    ["SONARR_PORT"]="${SONARR_PORT:-8989}"
-    ["RADARR_PORT"]="${RADARR_PORT:-7878}"
-    ["LIDARR_PORT"]="${LIDARR_PORT:-8686}"
-    ["PROWLARR_PORT"]="${PROWLARR_PORT:-9696}"
-    ["BAZARR_PORT"]="${BAZARR_PORT:-6767}"
-    ["FLARR_PORT"]="${FLARR_PORT:-8191}"
-    ["SABNZBD_PORT"]="${SABNZBD_PORT:-8080}"
+    ["SONARR_PORT"]="8989"
+    ["RADARR_PORT"]="7878"
+    ["LIDARR_PORT"]="8686"
+    ["PROWLARR_PORT"]="9696"
+    ["BAZARR_PORT"]="6767"
+    ["FLARR_PORT"]="8191"
+    ["SABNZBD_PORT"]="8080"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!port_vars[@]}"; do
-    default_value="${port_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name}=${existing_value} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file port_vars
 }
 
 # Hydrates VPN settings from .env to preserve user's server selections
 hydrate_vpn_settings_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A vpn_vars=(
-    ["SERVER_COUNTRIES"]="${SERVER_COUNTRIES:-Netherlands,Singapore}"
-    ["SERVER_NAMES"]="${SERVER_NAMES:-}"
-    ["PVPN_ROTATE_COUNTRIES"]="${PVPN_ROTATE_COUNTRIES:-}"
+    ["SERVER_COUNTRIES"]="Netherlands,Singapore"
+    ["SERVER_NAMES"]=""
+    ["PVPN_ROTATE_COUNTRIES"]=""
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!vpn_vars[@]}"; do
-    default_value="${vpn_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file vpn_vars
 }
 
 # Hydrates network settings from .env to preserve custom network configs
 hydrate_network_settings_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A network_vars=(
-    ["LAN_IP"]="${LAN_IP:-}"
-    ["GLUETUN_CONTROL_PORT"]="${GLUETUN_CONTROL_PORT:-8000}"
-    ["GLUETUN_CONTROL_BIND"]="${GLUETUN_CONTROL_BIND:-all}"
+    ["LAN_IP"]=""
+    ["GLUETUN_CONTROL_PORT"]="8000"
+    ["GLUETUN_CONTROL_BIND"]="all"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!network_vars[@]}"; do
-    default_value="${network_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file network_vars
 }
 
 # Hydrates container image versions from .env to prevent unwanted upgrades
 hydrate_image_versions_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A image_vars=(
-    ["GLUETUN_IMAGE"]="${GLUETUN_IMAGE:-qmcgaw/gluetun:v3.40.0}"
-    ["QBITTORRENT_IMAGE"]="${QBITTORRENT_IMAGE:-lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415}"
-    ["SONARR_IMAGE"]="${SONARR_IMAGE:-lscr.io/linuxserver/sonarr:4.0.15.2941-ls291}"
-    ["RADARR_IMAGE"]="${RADARR_IMAGE:-lscr.io/linuxserver/radarr:5.27.5.10198-ls283}"
-    ["LIDARR_IMAGE"]="${LIDARR_IMAGE:-lscr.io/linuxserver/lidarr:latest}"
-    ["PROWLARR_IMAGE"]="${PROWLARR_IMAGE:-lscr.io/linuxserver/prowlarr:latest}"
-    ["BAZARR_IMAGE"]="${BAZARR_IMAGE:-lscr.io/linuxserver/bazarr:latest}"
-    ["FLARR_IMAGE"]="${FLARR_IMAGE:-ghcr.io/flaresolverr/flaresolverr:v3.3.21}"
-    ["SABNZBD_IMAGE"]="${SABNZBD_IMAGE:-lscr.io/linuxserver/sabnzbd:latest}"
-    ["CONFIGARR_IMAGE"]="${CONFIGARR_IMAGE:-ghcr.io/raydak-labs/configarr:latest}"
+    ["GLUETUN_IMAGE"]="qmcgaw/gluetun:v3.40.0"
+    ["QBITTORRENT_IMAGE"]="lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415"
+    ["SONARR_IMAGE"]="lscr.io/linuxserver/sonarr:4.0.15.2941-ls291"
+    ["RADARR_IMAGE"]="lscr.io/linuxserver/radarr:5.27.5.10198-ls283"
+    ["LIDARR_IMAGE"]="lscr.io/linuxserver/lidarr:latest"
+    ["PROWLARR_IMAGE"]="lscr.io/linuxserver/prowlarr:latest"
+    ["BAZARR_IMAGE"]="lscr.io/linuxserver/bazarr:latest"
+    ["FLARR_IMAGE"]="ghcr.io/flaresolverr/flaresolverr:v3.3.21"
+    ["SABNZBD_IMAGE"]="lscr.io/linuxserver/sabnzbd:latest"
+    ["CONFIGARR_IMAGE"]="ghcr.io/raydak-labs/configarr:latest"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!image_vars[@]}"; do
-    default_value="${image_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file image_vars
 }
 
 # Hydrates ConfigArr quality/profile settings from .env to preserve user preferences
 hydrate_configarr_settings_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A configarr_vars=(
-    ["ARR_VIDEO_MIN_RES"]="${ARR_VIDEO_MIN_RES:-720p}"
-    ["ARR_VIDEO_MAX_RES"]="${ARR_VIDEO_MAX_RES:-1080p}"
-    ["ARR_EP_MIN_MB"]="${ARR_EP_MIN_MB:-250}"
-    ["ARR_EP_MAX_GB"]="${ARR_EP_MAX_GB:-5}"
-    ["ARR_TV_RUNTIME_MIN"]="${ARR_TV_RUNTIME_MIN:-45}"
-    ["ARR_SEASON_MAX_GB"]="${ARR_SEASON_MAX_GB:-30}"
-    ["ARR_LANG_PRIMARY"]="${ARR_LANG_PRIMARY:-en}"
-    ["ARR_ENGLISH_ONLY"]="${ARR_ENGLISH_ONLY:-1}"
-    ["ARR_DISCOURAGE_MULTI"]="${ARR_DISCOURAGE_MULTI:-1}"
-    ["ARR_PENALIZE_HD_X265"]="${ARR_PENALIZE_HD_X265:-1}"
-    ["ARR_STRICT_JUNK_BLOCK"]="${ARR_STRICT_JUNK_BLOCK:-1}"
-    ["ARR_JUNK_NEGATIVE_SCORE"]="${ARR_JUNK_NEGATIVE_SCORE:--1000}"
-    ["ARR_X265_HD_NEGATIVE_SCORE"]="${ARR_X265_HD_NEGATIVE_SCORE:--200}"
-    ["ARR_MULTI_NEGATIVE_SCORE"]="${ARR_MULTI_NEGATIVE_SCORE:--50}"
-    ["ARR_ENGLISH_POSITIVE_SCORE"]="${ARR_ENGLISH_POSITIVE_SCORE:-50}"
-    ["SONARR_TRASH_TEMPLATE"]="${SONARR_TRASH_TEMPLATE:-sonarr-v4-quality-profile-web-1080p}"
-    ["RADARR_TRASH_TEMPLATE"]="${RADARR_TRASH_TEMPLATE:-radarr-v5-quality-profile-hd-bluray-web}"
-    ["ARR_MBMIN_DECIMALS"]="${ARR_MBMIN_DECIMALS:-1}"
+    ["ARR_VIDEO_MIN_RES"]="720p"
+    ["ARR_VIDEO_MAX_RES"]="1080p"
+    ["ARR_EP_MIN_MB"]="250"
+    ["ARR_EP_MAX_GB"]="5"
+    ["ARR_TV_RUNTIME_MIN"]="45"
+    ["ARR_SEASON_MAX_GB"]="30"
+    ["ARR_LANG_PRIMARY"]="en"
+    ["ARR_ENGLISH_ONLY"]="1"
+    ["ARR_DISCOURAGE_MULTI"]="1"
+    ["ARR_PENALIZE_HD_X265"]="1"
+    ["ARR_STRICT_JUNK_BLOCK"]="1"
+    ["ARR_JUNK_NEGATIVE_SCORE"]="-1000"
+    ["ARR_X265_HD_NEGATIVE_SCORE"]="-200"
+    ["ARR_MULTI_NEGATIVE_SCORE"]="-50"
+    ["ARR_ENGLISH_POSITIVE_SCORE"]="50"
+    ["SONARR_TRASH_TEMPLATE"]="sonarr-v4-quality-profile-web-1080p"
+    ["RADARR_TRASH_TEMPLATE"]="radarr-v5-quality-profile-hd-bluray-web"
+    ["ARR_MBMIN_DECIMALS"]="1"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!configarr_vars[@]}"; do
-    default_value="${configarr_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file configarr_vars
 }
 
 # Hydrates VPN auto-reconnect settings from .env to preserve tuning
 hydrate_vpn_auto_reconnect_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A vpn_auto_vars=(
-    ["VPN_AUTO_RECONNECT_ENABLED"]="${VPN_AUTO_RECONNECT_ENABLED:-0}"
-    ["VPN_SPEED_THRESHOLD_KBPS"]="${VPN_SPEED_THRESHOLD_KBPS:-12}"
-    ["VPN_CHECK_INTERVAL_MINUTES"]="${VPN_CHECK_INTERVAL_MINUTES:-20}"
-    ["VPN_CONSECUTIVE_CHECKS"]="${VPN_CONSECUTIVE_CHECKS:-3}"
-    ["VPN_ALLOWED_HOURS_START"]="${VPN_ALLOWED_HOURS_START:-}"
-    ["VPN_ALLOWED_HOURS_END"]="${VPN_ALLOWED_HOURS_END:-}"
-    ["VPN_COOLDOWN_MINUTES"]="${VPN_COOLDOWN_MINUTES:-60}"
-    ["VPN_MAX_RETRY_MINUTES"]="${VPN_MAX_RETRY_MINUTES:-20}"
-    ["VPN_ROTATION_MAX_PER_DAY"]="${VPN_ROTATION_MAX_PER_DAY:-6}"
-    ["VPN_ROTATION_JITTER_SECONDS"]="${VPN_ROTATION_JITTER_SECONDS:-0}"
+    ["VPN_AUTO_RECONNECT_ENABLED"]="0"
+    ["VPN_SPEED_THRESHOLD_KBPS"]="12"
+    ["VPN_CHECK_INTERVAL_MINUTES"]="20"
+    ["VPN_CONSECUTIVE_CHECKS"]="3"
+    ["VPN_ALLOWED_HOURS_START"]=""
+    ["VPN_ALLOWED_HOURS_END"]=""
+    ["VPN_COOLDOWN_MINUTES"]="60"
+    ["VPN_MAX_RETRY_MINUTES"]="20"
+    ["VPN_ROTATION_MAX_PER_DAY"]="6"
+    ["VPN_ROTATION_JITTER_SECONDS"]="0"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!vpn_auto_vars[@]}"; do
-    default_value="${vpn_auto_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file vpn_auto_vars
 }
 
 # Hydrates Gluetun API settings from .env to preserve custom timeouts and retry configs
 hydrate_gluetun_api_settings_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A gluetun_api_vars=(
-    ["GLUETUN_API_TIMEOUT"]="${GLUETUN_API_TIMEOUT:-10}"
-    ["GLUETUN_API_RETRY_COUNT"]="${GLUETUN_API_RETRY_COUNT:-3}"
-    ["GLUETUN_API_RETRY_DELAY"]="${GLUETUN_API_RETRY_DELAY:-2}"
-    ["GLUETUN_API_MAX_RETRY_DELAY"]="${GLUETUN_API_MAX_RETRY_DELAY:-8}"
-    ["GLUETUN_CONNECTIVITY_PROBE_URLS"]="${GLUETUN_CONNECTIVITY_PROBE_URLS:-https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace}"
+    ["GLUETUN_API_TIMEOUT"]="10"
+    ["GLUETUN_API_RETRY_COUNT"]="3"
+    ["GLUETUN_API_RETRY_DELAY"]="2"
+    ["GLUETUN_API_MAX_RETRY_DELAY"]="8"
+    ["GLUETUN_CONNECTIVITY_PROBE_URLS"]="https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!gluetun_api_vars[@]}"; do
-    default_value="${gluetun_api_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file gluetun_api_vars
 }
 
 # Hydrates qBittorrent API settings from .env to preserve custom timeouts and retry configs
 hydrate_qbt_api_settings_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A qbt_api_vars=(
-    ["QBT_API_TIMEOUT"]="${QBT_API_TIMEOUT:-10}"
-    ["QBT_API_RETRY_COUNT"]="${QBT_API_RETRY_COUNT:-3}"
-    ["QBT_API_RETRY_DELAY"]="${QBT_API_RETRY_DELAY:-2}"
+    ["QBT_API_TIMEOUT"]="10"
+    ["QBT_API_RETRY_COUNT"]="3"
+    ["QBT_API_RETRY_DELAY"]="2"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!qbt_api_vars[@]}"; do
-    default_value="${qbt_api_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file qbt_api_vars
 }
 
 # Hydrates SABnzbd settings from .env to preserve user configurations
 hydrate_sabnzbd_settings_from_env_file() {
-  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
-    return 0
-  fi
-
   local -A sab_vars=(
-    ["SABNZBD_ENABLED"]="${SABNZBD_ENABLED:-0}"
-    ["SABNZBD_USE_VPN"]="${SABNZBD_USE_VPN:-0}"
-    ["SABNZBD_HOST"]="${SABNZBD_HOST:-${LOCALHOST_IP:-127.0.0.1}}"
-    ["SABNZBD_CATEGORY"]="${SABNZBD_CATEGORY:-${STACK:-arr}}"
-    ["SABNZBD_TIMEOUT"]="${SABNZBD_TIMEOUT:-15}"
+    ["SABNZBD_ENABLED"]="0"
+    ["SABNZBD_USE_VPN"]="0"
+    ["SABNZBD_HOST"]="127.0.0.1"
+    ["SABNZBD_CATEGORY"]="arr"
+    ["SABNZBD_TIMEOUT"]="15"
   )
 
-  local var_name default_value current_value existing_value
-  for var_name in "${!sab_vars[@]}"; do
-    default_value="${sab_vars[$var_name]}"
-    current_value="${!var_name:-}"
-    
-    # Skip if user has already set a non-default value in userr.conf
-    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
-      continue
-    fi
-
-    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
-      printf -v "$var_name" '%s' "$existing_value"
-      arr_record_preserve_note "Preserved ${var_name} from existing .env"
-    fi
-  done
+  hydrate_values_from_env_file sab_vars
 }

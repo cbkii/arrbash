@@ -191,12 +191,15 @@ else
   if [[ -z "${QBT_AUTH_WHITELIST:-}" ]]; then
     QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"
   fi
-  if declare -f lan_ipv4_host_cidr >/dev/null 2>&1; then
-    if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
-      if [[ -n "$lan_host_cidr" ]]; then
-        # Prepend LAN CIDR if not already present in the whitelist
-        if [[ ",${QBT_AUTH_WHITELIST}," != *",${lan_host_cidr},"* ]]; then
-          QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+  # Only add LAN CIDR if explicitly enabled via QBT_AUTH_WHITELIST_INCLUDE_LAN
+  if [[ "${QBT_AUTH_WHITELIST_INCLUDE_LAN:-0}" == "1" ]]; then
+    if declare -f lan_ipv4_host_cidr >/dev/null 2>&1; then
+      if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
+        if [[ -n "$lan_host_cidr" ]]; then
+          # Prepend LAN CIDR if not already present in the whitelist
+          if [[ ",${QBT_AUTH_WHITELIST}," != *",${lan_host_cidr},"* ]]; then
+            QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+          fi
         fi
       fi
     fi
