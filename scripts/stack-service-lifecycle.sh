@@ -1061,7 +1061,6 @@ stop_existing_qbt_tracker_updater_workers() {
   fi
 
   # Kill by process name/path
-  local pids=""
   if command -v pgrep >/dev/null 2>&1; then
     while IFS= read -r pid; do
       [[ -z "$pid" ]] && continue
