@@ -58,6 +58,7 @@ arr_prompt_direct_port_exposure() {
 
 prepare_env_context() {
   hydrate_user_credentials_from_env_file
+  hydrate_qbt_auth_whitelist_from_env_file
   hydrate_sab_api_key_from_config
   hydrate_qbt_host_port_from_env_file
   hydrate_qbt_webui_port_from_config

@@ -184,21 +184,26 @@ if [[ -z "${PROWLARR_PORT:-}" ]]; then PROWLARR_PORT="$PROWLARR_INT_PORT"; fi
 if [[ -z "${BAZARR_PORT:-}" ]]; then BAZARR_PORT="$BAZARR_INT_PORT"; fi
 if [[ -z "${FLARR_PORT:-}" ]]; then FLARR_PORT="$FLARR_INT_PORT"; fi
 
-if [[ -z "${QBT_AUTH_WHITELIST:-}" ]]; then
-  QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"
-fi
-if declare -f lan_ipv4_host_cidr >/dev/null 2>&1; then
-  if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
-    if [[ -n "$lan_host_cidr" ]]; then
-      # Prepend LAN CIDR if not already present in the whitelist
-      if [[ ",${QBT_AUTH_WHITELIST}," != *",${lan_host_cidr},"* ]]; then
-        QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+if declare -f arr_compute_qbt_auth_whitelist >/dev/null 2>&1; then
+  QBT_AUTH_WHITELIST="$(arr_compute_qbt_auth_whitelist "${QBT_AUTH_WHITELIST:-}")"
+else
+  # Fallback if helper not available
+  if [[ -z "${QBT_AUTH_WHITELIST:-}" ]]; then
+    QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"
+  fi
+  if declare -f lan_ipv4_host_cidr >/dev/null 2>&1; then
+    if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
+      if [[ -n "$lan_host_cidr" ]]; then
+        # Prepend LAN CIDR if not already present in the whitelist
+        if [[ ",${QBT_AUTH_WHITELIST}," != *",${lan_host_cidr},"* ]]; then
+          QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+        fi
       fi
     fi
   fi
-fi
-if declare -f normalize_csv >/dev/null 2>&1; then
-  QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
+  if declare -f normalize_csv >/dev/null 2>&1; then
+    QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
+  fi
 fi
 
 dns_candidates=()

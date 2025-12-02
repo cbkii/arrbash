@@ -173,3 +173,28 @@ hydrate_user_credentials_from_env_file() {
     fi
   fi
 }
+
+# Pulls existing qBittorrent WebUI auth whitelist from .env to preserve user settings
+hydrate_qbt_auth_whitelist_from_env_file() {
+  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
+    return 0
+  fi
+
+  # Skip if user has already set a non-default whitelist in userr.conf
+  local current_whitelist="${QBT_AUTH_WHITELIST:-}"
+  local localhost_ip="${LOCALHOST_IP:-127.0.0.1}"
+  local default_whitelist="${localhost_ip}/32,::1/128"
+  
+  # If already set to non-default, don't override
+  if [[ -n "$current_whitelist" && "$current_whitelist" != "$default_whitelist" ]]; then
+    return 0
+  fi
+
+  local existing_whitelist=""
+  existing_whitelist="$(get_env_kv "QBT_AUTH_WHITELIST" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+
+  if [[ -n "$existing_whitelist" && "$existing_whitelist" != "$default_whitelist" ]]; then
+    QBT_AUTH_WHITELIST="$existing_whitelist"
+    arr_record_preserve_note "Preserved qBittorrent WebUI whitelist from existing .env"
+  fi
+}
