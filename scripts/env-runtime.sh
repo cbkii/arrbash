@@ -206,8 +206,8 @@ prepare_env_context() {
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
   local sab_internal_port_raw
-  arr_resolve_port sab_internal_port_raw "${SABNZBD_INT_PORT:-}" 8080 \
-    "  Invalid SABNZBD_INT_PORT=${SABNZBD_INT_PORT:-}; defaulting to 8080."
+  arr_resolve_port sab_internal_port_raw "${SABNZBD_INT_PORT:-}" 8081 \
+    "  Invalid SABNZBD_INT_PORT=${SABNZBD_INT_PORT:-}; defaulting to 8081."
   SABNZBD_INT_PORT="$sab_internal_port_raw"
 
   local sab_port_raw
@@ -246,7 +246,7 @@ prepare_env_context() {
   export ARR_SAB_HOST_AUTO="$sab_host_auto"
   export SABNZBD_INT_PORT SABNZBD_PORT SABNZBD_HOST
 
-  local qbt_webui_default="${QBT_INT_PORT:-8082}"
+  local qbt_webui_default="${QBT_INT_PORT:-8080}"
   local qbt_host_default="$qbt_webui_default"
   local qbt_webui_port="$qbt_webui_default"
   local qbt_host_port="$qbt_host_default"
@@ -379,7 +379,7 @@ prepare_env_context() {
   fi
   local publish_qbt_via_gluetun=0
   local qbt_publish_port_candidate
-  qbt_publish_port_candidate="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+  qbt_publish_port_candidate="${QBT_PORT:-${QBT_INT_PORT:-8080}}"
   if [[ -n "$qbt_publish_port_candidate" ]]; then
     publish_qbt_via_gluetun=1
   fi

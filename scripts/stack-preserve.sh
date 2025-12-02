@@ -156,17 +156,20 @@ hydrate_user_credentials_from_env_file() {
   local existing_user=""
   local existing_pass=""
 
+  # Read from .env first
   existing_user="$(get_env_kv "QBT_USER" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
   existing_pass="$(get_env_kv "QBT_PASS" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
 
-  if [[ -n "$existing_user" && "$existing_user" != "$default_user" ]]; then
+  # Hydrate username if .env has a value and userr.conf hasn't overridden it
+  if [[ -n "$existing_user" ]]; then
     if [[ -z "${QBT_USER:-}" || "${QBT_USER}" == "$default_user" ]]; then
       QBT_USER="$existing_user"
       arr_record_preserve_note "Preserved qBittorrent username from existing .env"
     fi
   fi
 
-  if [[ -n "$existing_pass" && "$existing_pass" != "$default_pass" ]]; then
+  # Hydrate password if .env has a value and userr.conf hasn't overridden it
+  if [[ -n "$existing_pass" ]]; then
     if [[ -z "${QBT_PASS:-}" || "${QBT_PASS}" == "$default_pass" ]]; then
       QBT_PASS="$existing_pass"
       arr_record_preserve_note "Preserved qBittorrent password from existing .env"
@@ -195,9 +198,11 @@ hydrate_values_from_env_file() {
       continue
     fi
 
+    # Read from .env first
     existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
     
-    if [[ -n "$existing_value" && "$existing_value" != "$default_value" ]]; then
+    # If .env has a value, use it (regardless of whether it matches the default)
+    if [[ -n "$existing_value" ]]; then
       printf -v "$var_name" '%s' "$existing_value"
       arr_record_preserve_note "Preserved ${var_name} from existing .env"
     fi
@@ -210,8 +215,8 @@ hydrate_qbt_auth_whitelist_from_env_file() {
     return 0
   fi
 
-  # Use static literal default for precedence check
-  local default_whitelist="127.0.0.1/32,::1/128"
+  # Use evaluated default that matches userr.conf.defaults.sh
+  local default_whitelist="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128}"
   local current_whitelist="${QBT_AUTH_WHITELIST:-}"
   
   # Skip if user has already set a non-default whitelist in userr.conf
@@ -219,10 +224,12 @@ hydrate_qbt_auth_whitelist_from_env_file() {
     return 0
   fi
 
+  # Read from .env first
   local existing_whitelist=""
   existing_whitelist="$(get_env_kv "QBT_AUTH_WHITELIST" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
 
-  if [[ -n "$existing_whitelist" && "$existing_whitelist" != "$default_whitelist" ]]; then
+  # If .env has a value, use it (regardless of whether it matches the default)
+  if [[ -n "$existing_whitelist" ]]; then
     QBT_AUTH_WHITELIST="$existing_whitelist"
     arr_record_preserve_note "Preserved qBittorrent WebUI whitelist from existing .env"
   fi
@@ -256,13 +263,13 @@ hydrate_gluetun_api_key_from_env_file() {
 # Hydrates service ports from .env to preserve user customizations
 hydrate_service_ports_from_env_file() {
   local -A port_vars=(
-    ["SONARR_PORT"]="8989"
-    ["RADARR_PORT"]="7878"
-    ["LIDARR_PORT"]="8686"
-    ["PROWLARR_PORT"]="9696"
-    ["BAZARR_PORT"]="6767"
-    ["FLARR_PORT"]="8191"
-    ["SABNZBD_PORT"]="8080"
+    ["SONARR_PORT"]="${SONARR_INT_PORT:-8989}"
+    ["RADARR_PORT"]="${RADARR_INT_PORT:-7878}"
+    ["LIDARR_PORT"]="${LIDARR_INT_PORT:-8686}"
+    ["PROWLARR_PORT"]="${PROWLARR_INT_PORT:-9696}"
+    ["BAZARR_PORT"]="${BAZARR_INT_PORT:-6767}"
+    ["FLARR_PORT"]="${FLARR_INT_PORT:-8191}"
+    ["SABNZBD_PORT"]="${SABNZBD_INT_PORT:-8081}"
   )
 
   hydrate_values_from_env_file port_vars
@@ -381,8 +388,8 @@ hydrate_sabnzbd_settings_from_env_file() {
   local -A sab_vars=(
     ["SABNZBD_ENABLED"]="0"
     ["SABNZBD_USE_VPN"]="0"
-    ["SABNZBD_HOST"]="127.0.0.1"
-    ["SABNZBD_CATEGORY"]="arr"
+    ["SABNZBD_HOST"]="${LOCALHOST_IP}"
+    ["SABNZBD_CATEGORY"]="${STACK}"
     ["SABNZBD_TIMEOUT"]="15"
   )
 

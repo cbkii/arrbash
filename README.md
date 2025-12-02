@@ -94,7 +94,7 @@ Once the installer completes, it prints a summary with URLs for each service. Ty
 
 | Service | URL |
 |---------|-----|
-| qBittorrent | `http://LAN_IP:8082` |
+| qBittorrent | `http://LAN_IP:8080` |
 | Sonarr | `http://LAN_IP:8989` |
 | Radarr | `http://LAN_IP:7878` |
 | Lidarr | `http://LAN_IP:8686` |

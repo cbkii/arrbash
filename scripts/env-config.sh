@@ -181,7 +181,7 @@ show_configuration_preview() {
   fi
 
   local sab_host_display="${SABNZBD_HOST:-${LOCALHOST_IP:-127.0.0.1}}"
-  local sab_port_display="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8080}}"
+  local sab_port_display="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8081}}"
   local sab_vpn_display="LAN"
   if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
     sab_vpn_display="VPN"

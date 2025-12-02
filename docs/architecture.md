@@ -43,7 +43,7 @@ When `EXPOSE_DIRECT_PORTS=1` (default), services publish their WebUI ports on th
 | Service | Default URL |
 |---------|-------------|
 | Gluetun Control API | `http://127.0.0.1:8000` (localhost only, requires API key) |
-| qBittorrent | `http://LAN_IP:8082` |
+| qBittorrent | `http://LAN_IP:8080` |
 | Sonarr | `http://LAN_IP:8989` |
 | Radarr | `http://LAN_IP:7878` |
 | Lidarr | `http://LAN_IP:8686` |

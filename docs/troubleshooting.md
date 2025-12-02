@@ -46,8 +46,8 @@ This rebuilds `.env`, `docker-compose.yml`, and restarts services.
 
 **Solutions**:
 1. Ensure `EXPOSE_DIRECT_PORTS=1` is set in `userr.conf`
-2. Access qBittorrent using your LAN IP: `http://LAN_IP:8082`
-3. In Sonarr/Radarr download client settings, use `http://LAN_IP:8082` (not `localhost`)
+2. Access qBittorrent using your LAN IP: `http://LAN_IP:8080`
+3. In Sonarr/Radarr download client settings, use `http://LAN_IP:8080` (not `localhost`)
 
 ### qBittorrent can't download anything
 
@@ -157,7 +157,7 @@ grep QBT_DOCKER_MODS ~/srv/arr/.env
 ```
 
 **If using LSIO mod** (default):
-- VueTorrent should be at `http://LAN_IP:8082/vuetorrent/`
+- VueTorrent should be at `http://LAN_IP:8080/vuetorrent/`
 - The mod auto-installs VueTorrent on container start
 
 **If blank after fresh install**: Wait for container to fully start, then refresh:
@@ -293,13 +293,13 @@ Files should be owned by your user (matching `PUID`/`PGID` in config).
 
 **Find what's using the port**:
 ```bash
-sudo ss -tulpn | grep :8082
-sudo lsof -i :8082
+sudo ss -tulpn | grep :8080
+sudo lsof -i :8080
 ```
 
 **Options**:
 1. Stop the conflicting service
-2. Change the port in `userr.conf` (e.g., `QBT_PORT=8083`)
+2. Change the port in `userr.conf` (e.g., `QBT_PORT=8082`)
 3. Set `ARR_PORT_CHECK_MODE=warn` to continue anyway
 
 ### Verify exposed ports
@@ -307,7 +307,7 @@ sudo lsof -i :8082
 After installation, check what's actually listening:
 
 ```bash
-sudo ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191|:8080'
+sudo ss -tulpn | grep -E ':8080|:8989|:7878|:9696|:6767|:8191|:8081'
 ```
 
 You should see only the services you've enabled.
@@ -321,7 +321,7 @@ sudo ufw status
 
 **Allow a port**:
 ```bash
-sudo ufw allow 8082/tcp comment "qBittorrent"
+sudo ufw allow 8080/tcp comment "qBittorrent"
 ```
 
 ---

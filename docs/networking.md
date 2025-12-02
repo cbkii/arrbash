@@ -28,7 +28,7 @@ arrbash supports two network configurations controlled by `SPLIT_VPN`:
 
 When using split tunnel mode (`SPLIT_VPN=1`):
 
-- **Download client configuration**: In Sonarr, Radarr, and Lidarr, configure the download client host as `http://LAN_IP:8082` (your machine's LAN IP, not `localhost`). qBittorrent is only reachable via the LAN address when split.
+- **Download client configuration**: In Sonarr, Radarr, and Lidarr, configure the download client host as `http://LAN_IP:8080` (your machine's LAN IP, not `localhost`). qBittorrent is only reachable via the LAN address when split.
 
 - **Port exposure**: Set `EXPOSE_DIRECT_PORTS=1` to publish service ports on the host. Without this, services only listen on their internal Docker network.
 
@@ -146,16 +146,16 @@ SABNZBD_USE_VPN=1
 - SABnzbd shares Gluetun's network namespace (like qBittorrent)
 - All Usenet traffic goes through the VPN tunnel
 - Not directly accessible on a host port; *arr apps connect through Docker networking
-- Uses port `8080` inside Gluetun (doesn't conflict with qBittorrent's `8082`)
+- Uses port `8081` inside Gluetun (doesn't conflict with qBittorrent's `8080`)
 
 ### Port configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SABNZBD_INT_PORT` | `8080` | SABnzbd's internal listening port |
-| `SABNZBD_PORT` | `8080` | Host port when `EXPOSE_DIRECT_PORTS=1` |
+| `SABNZBD_INT_PORT` | `8081` | SABnzbd's internal listening port |
+| `SABNZBD_PORT` | `8081` | Host port when `EXPOSE_DIRECT_PORTS=1` |
 
-If SABnzbd shares Gluetun (`SABNZBD_USE_VPN=1`), keep `SABNZBD_INT_PORT=8080` to avoid conflicts with qBittorrent (`8082`).
+If SABnzbd shares Gluetun (`SABNZBD_USE_VPN=1`), keep `SABNZBD_INT_PORT=8081` to avoid conflicts with qBittorrent (`8080`).
 
 ---
 

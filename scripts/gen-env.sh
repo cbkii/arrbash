@@ -154,7 +154,7 @@ filter_conditionals() {
 : "${ARR_USERCONF_PATH:=${ARRCONF_DIR}/userr.conf}"
 : "${MUSIC_DIR:=${MEDIA_DIR}/Music}"
 
-: "${QBT_INT_PORT:=8082}"
+: "${QBT_INT_PORT:=8080}"
 : "${QBT_PORT:=${QBT_INT_PORT}}"
 : "${QBT_WEB_PORT:=8080}"
 : "${SONARR_INT_PORT:=8989}"
@@ -163,7 +163,7 @@ filter_conditionals() {
 : "${PROWLARR_INT_PORT:=9696}"
 : "${BAZARR_INT_PORT:=6767}"
 : "${FLARR_INT_PORT:=8191}"
-: "${SABNZBD_INT_PORT:=8080}"
+: "${SABNZBD_INT_PORT:=8081}"
 : "${SABNZBD_PORT:=${SABNZBD_INT_PORT}}"
 EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "${EXPOSE_DIRECT_PORTS:-0}")"
 SABNZBD_ENABLED="$(arr_normalize_bool "${SABNZBD_ENABLED:-0}")"

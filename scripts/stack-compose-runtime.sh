@@ -1976,7 +1976,7 @@ arr_validate_compose_prerequisites() {
 append_sabnzbd_service_body() {
   local target="$1"
   local sab_expose_lan="${2:-0}"
-  local sab_internal_fallback="${SABNZBD_INT_PORT:-8080}"
+  local sab_internal_fallback="${SABNZBD_INT_PORT:-8081}"
   local internal_port="${3:-${sab_internal_fallback}}"
 
   local sab_timeout_for_health
@@ -2039,7 +2039,7 @@ write_compose_split_mode() {
   local compose_path="${ARR_STACK_DIR}/docker-compose.yml"
   local tmp
   local sab_internal_port
-  arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
+  arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8081
   local qbt_expose_lan=0
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     qbt_expose_lan=1
@@ -2181,7 +2181,7 @@ YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
-    arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
+    arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8081
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: "${SABNZBD_IMAGE}"
@@ -2430,7 +2430,7 @@ YAML
 
   if [[ "${SABNZBD_ENABLED}" == "1" ]]; then
     local sab_internal_port
-    arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8080
+    arr_resolve_port sab_internal_port "${SABNZBD_INT_PORT:-}" 8081
     cat <<'YAML' >>"$tmp"
   sabnzbd:
     image: "${SABNZBD_IMAGE}"

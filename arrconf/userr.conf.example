@@ -39,7 +39,7 @@ EXPOSE_DIRECT_PORTS="1"      # default: 1; publish WebUIs on http://${LAN_IP}:PO
 ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (enforce/warn/skip/fix with warn fallback)
 
 # --- Ports (user-facing) ---
-# QBT_INT_PORT="8082"      # default: 8082; internal qBittorrent WebUI port
+# QBT_INT_PORT="8080"      # default: 8080; internal qBittorrent WebUI port
 # QBT_PORT="${QBT_INT_PORT}"      # default: ${QBT_INT_PORT}; qBittorrent WebUI LAN port
 # QBT_WEB_PORT="8080"      # default: 8080; qBittorrent Web API port exposed to helpers
 # QBT_BIND_ADDR="0.0.0.0"      # default: 0.0.0.0; qBittorrent WebUI bind address inside the container
@@ -59,7 +59,7 @@ ARR_PORT_CHECK_MODE="enforce"      # default: enforce; port conflict handling (e
 # BAZARR_PORT="${BAZARR_INT_PORT}"      # default: ${BAZARR_INT_PORT}; Bazarr WebUI LAN port
 # FLARR_INT_PORT="8191"      # default: 8191; internal FlareSolverr port
 # FLARR_PORT="${FLARR_INT_PORT}"      # default: ${FLARR_INT_PORT}; FlareSolverr LAN port
-# SABNZBD_INT_PORT="8080"      # default: 8080; internal SABnzbd WebUI port
+# SABNZBD_INT_PORT="8081"      # default: 8081; internal SABnzbd WebUI port
 # SABNZBD_PORT="${SABNZBD_INT_PORT}"      # default: ${SABNZBD_INT_PORT}; SABnzbd LAN port
 # GLUETUN_CONTROL_PORT="8000"      # default: 8000; Gluetun control API port
 # GLUETUN_CONTROL_BIND="all"      # default: all; set loopback to restrict the control API to 127.0.0.1
