@@ -2092,7 +2092,7 @@ YAML
       - "${ARR_DOCKER_DIR}/gluetun/state:/gluetun_state"
       - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     ports:
-      - ":${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
+      - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
 YAML
 
   if ((qbt_expose_lan)); then
@@ -2332,7 +2332,7 @@ YAML
       - "${ARR_DOCKER_DIR}/gluetun/state:/gluetun_state"
     ports:
       # split-mode off: Gluetun publishes shared service ports for the namespace
-      - ":${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
+      - "${LOCALHOST_IP}:${GLUETUN_CONTROL_PORT}:${GLUETUN_CONTROL_PORT}"
 YAML
 
   if ((qbt_expose_lan)); then
