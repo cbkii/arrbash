@@ -60,7 +60,7 @@ bool_true() {
 
 # qBittorrent API settings (inherited from qbt-api.sh)
 : "${QBT_HOST:=127.0.0.1}"
-: "${QBT_PORT:=8082}"
+: "${QBT_PORT:=8080}"
 : "${QBT_USER:=admin}"
 : "${QBT_PASS:=adminadmin}"
 

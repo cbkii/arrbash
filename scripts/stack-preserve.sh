@@ -156,20 +156,242 @@ hydrate_user_credentials_from_env_file() {
   local existing_user=""
   local existing_pass=""
 
+  # Read from .env first
   existing_user="$(get_env_kv "QBT_USER" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
   existing_pass="$(get_env_kv "QBT_PASS" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
 
-  if [[ -n "$existing_user" && "$existing_user" != "$default_user" ]]; then
+  # Hydrate username if .env has a value and userr.conf hasn't overridden it
+  if [[ -n "$existing_user" ]]; then
     if [[ -z "${QBT_USER:-}" || "${QBT_USER}" == "$default_user" ]]; then
       QBT_USER="$existing_user"
       arr_record_preserve_note "Preserved qBittorrent username from existing .env"
     fi
   fi
 
-  if [[ -n "$existing_pass" && "$existing_pass" != "$default_pass" ]]; then
+  # Hydrate password if .env has a value and userr.conf hasn't overridden it
+  if [[ -n "$existing_pass" ]]; then
     if [[ -z "${QBT_PASS:-}" || "${QBT_PASS}" == "$default_pass" ]]; then
       QBT_PASS="$existing_pass"
       arr_record_preserve_note "Preserved qBittorrent password from existing .env"
     fi
   fi
+}
+
+# Generic hydration function for values from .env file
+# Takes an associative array of variable names and their defaults
+# Centralizes the common logic used by all hydration functions
+hydrate_values_from_env_file() {
+  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
+    return 0
+  fi
+
+  local -n vars_ref="$1"
+  local var_name default_value current_value existing_value
+
+  for var_name in "${!vars_ref[@]}"; do
+    default_value="${vars_ref[$var_name]}"
+    current_value="${!var_name:-}"
+    
+    # Skip if user has already set a non-default value in userr.conf
+    # This checks if the current value is explicitly set and differs from default
+    if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
+      continue
+    fi
+
+    # Read from .env first
+    existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+    
+    # If .env has a value, use it (regardless of whether it matches the default)
+    if [[ -n "$existing_value" ]]; then
+      printf -v "$var_name" '%s' "$existing_value"
+      arr_record_preserve_note "Preserved ${var_name} from existing .env"
+    fi
+  done
+}
+
+# Pulls existing qBittorrent WebUI auth whitelist from .env to preserve user settings
+hydrate_qbt_auth_whitelist_from_env_file() {
+  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
+    return 0
+  fi
+
+  # Use evaluated default that matches userr.conf.defaults.sh
+  local default_whitelist="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128}"
+  local current_whitelist="${QBT_AUTH_WHITELIST:-}"
+  
+  # Skip if user has already set a non-default whitelist in userr.conf
+  if [[ -n "$current_whitelist" && "$current_whitelist" != "$default_whitelist" ]]; then
+    return 0
+  fi
+
+  # Read from .env first
+  local existing_whitelist=""
+  existing_whitelist="$(get_env_kv "QBT_AUTH_WHITELIST" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+
+  # If .env has a value, use it (regardless of whether it matches the default)
+  if [[ -n "$existing_whitelist" ]]; then
+    QBT_AUTH_WHITELIST="$existing_whitelist"
+    arr_record_preserve_note "Preserved qBittorrent WebUI whitelist from existing .env"
+  fi
+}
+
+# Hydrates GLUETUN_API_KEY from .env when available so reruns preserve API access
+hydrate_gluetun_api_key_from_env_file() {
+  if [[ -z "${ARR_ENV_FILE:-}" || ! -f "$ARR_ENV_FILE" ]]; then
+    return 0
+  fi
+
+  # Skip if FORCE_ROTATE_API_KEY is set
+  if [[ "${FORCE_ROTATE_API_KEY:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  # Skip if user has already set a non-empty key in userr.conf
+  if [[ -n "${GLUETUN_API_KEY:-}" ]]; then
+    return 0
+  fi
+
+  local existing_key=""
+  existing_key="$(get_env_kv "GLUETUN_API_KEY" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
+
+  if [[ -n "$existing_key" ]]; then
+    GLUETUN_API_KEY="$existing_key"
+    arr_record_preserve_note "Preserved Gluetun API key from existing .env"
+  fi
+}
+
+# Hydrates service ports from .env to preserve user customizations
+hydrate_service_ports_from_env_file() {
+  local -A port_vars=(
+    ["SONARR_PORT"]="${SONARR_INT_PORT:-8989}"
+    ["RADARR_PORT"]="${RADARR_INT_PORT:-7878}"
+    ["LIDARR_PORT"]="${LIDARR_INT_PORT:-8686}"
+    ["PROWLARR_PORT"]="${PROWLARR_INT_PORT:-9696}"
+    ["BAZARR_PORT"]="${BAZARR_INT_PORT:-6767}"
+    ["FLARR_PORT"]="${FLARR_INT_PORT:-8191}"
+    ["SABNZBD_PORT"]="${SABNZBD_INT_PORT:-8081}"
+  )
+
+  hydrate_values_from_env_file port_vars
+}
+
+# Hydrates VPN settings from .env to preserve user's server selections
+hydrate_vpn_settings_from_env_file() {
+  local -A vpn_vars=(
+    ["SERVER_COUNTRIES"]="Netherlands,Singapore"
+    ["SERVER_NAMES"]=""
+    ["PVPN_ROTATE_COUNTRIES"]=""
+  )
+
+  hydrate_values_from_env_file vpn_vars
+}
+
+# Hydrates network settings from .env to preserve custom network configs
+hydrate_network_settings_from_env_file() {
+  local -A network_vars=(
+    ["LAN_IP"]=""
+    ["GLUETUN_CONTROL_PORT"]="8000"
+    ["GLUETUN_CONTROL_BIND"]="all"
+  )
+
+  hydrate_values_from_env_file network_vars
+}
+
+# Hydrates container image versions from .env to prevent unwanted upgrades
+hydrate_image_versions_from_env_file() {
+  local -A image_vars=(
+    ["GLUETUN_IMAGE"]="qmcgaw/gluetun:v3.40.0"
+    ["QBITTORRENT_IMAGE"]="lscr.io/linuxserver/qbittorrent:5.1.2-r2-ls415"
+    ["SONARR_IMAGE"]="lscr.io/linuxserver/sonarr:4.0.15.2941-ls291"
+    ["RADARR_IMAGE"]="lscr.io/linuxserver/radarr:5.27.5.10198-ls283"
+    ["LIDARR_IMAGE"]="lscr.io/linuxserver/lidarr:latest"
+    ["PROWLARR_IMAGE"]="lscr.io/linuxserver/prowlarr:latest"
+    ["BAZARR_IMAGE"]="lscr.io/linuxserver/bazarr:latest"
+    ["FLARR_IMAGE"]="ghcr.io/flaresolverr/flaresolverr:v3.3.21"
+    ["SABNZBD_IMAGE"]="lscr.io/linuxserver/sabnzbd:latest"
+    ["CONFIGARR_IMAGE"]="ghcr.io/raydak-labs/configarr:latest"
+  )
+
+  hydrate_values_from_env_file image_vars
+}
+
+# Hydrates ConfigArr quality/profile settings from .env to preserve user preferences
+hydrate_configarr_settings_from_env_file() {
+  local -A configarr_vars=(
+    ["ARR_VIDEO_MIN_RES"]="720p"
+    ["ARR_VIDEO_MAX_RES"]="1080p"
+    ["ARR_EP_MIN_MB"]="250"
+    ["ARR_EP_MAX_GB"]="5"
+    ["ARR_TV_RUNTIME_MIN"]="45"
+    ["ARR_SEASON_MAX_GB"]="30"
+    ["ARR_LANG_PRIMARY"]="en"
+    ["ARR_ENGLISH_ONLY"]="1"
+    ["ARR_DISCOURAGE_MULTI"]="1"
+    ["ARR_PENALIZE_HD_X265"]="1"
+    ["ARR_STRICT_JUNK_BLOCK"]="1"
+    ["ARR_JUNK_NEGATIVE_SCORE"]="-1000"
+    ["ARR_X265_HD_NEGATIVE_SCORE"]="-200"
+    ["ARR_MULTI_NEGATIVE_SCORE"]="-50"
+    ["ARR_ENGLISH_POSITIVE_SCORE"]="50"
+    ["SONARR_TRASH_TEMPLATE"]="sonarr-v4-quality-profile-web-1080p"
+    ["RADARR_TRASH_TEMPLATE"]="radarr-v5-quality-profile-hd-bluray-web"
+    ["ARR_MBMIN_DECIMALS"]="1"
+  )
+
+  hydrate_values_from_env_file configarr_vars
+}
+
+# Hydrates VPN auto-reconnect settings from .env to preserve tuning
+hydrate_vpn_auto_reconnect_from_env_file() {
+  local -A vpn_auto_vars=(
+    ["VPN_AUTO_RECONNECT_ENABLED"]="0"
+    ["VPN_SPEED_THRESHOLD_KBPS"]="12"
+    ["VPN_CHECK_INTERVAL_MINUTES"]="20"
+    ["VPN_CONSECUTIVE_CHECKS"]="3"
+    ["VPN_ALLOWED_HOURS_START"]=""
+    ["VPN_ALLOWED_HOURS_END"]=""
+    ["VPN_COOLDOWN_MINUTES"]="60"
+    ["VPN_MAX_RETRY_MINUTES"]="20"
+    ["VPN_ROTATION_MAX_PER_DAY"]="6"
+    ["VPN_ROTATION_JITTER_SECONDS"]="0"
+  )
+
+  hydrate_values_from_env_file vpn_auto_vars
+}
+
+# Hydrates Gluetun API settings from .env to preserve custom timeouts and retry configs
+hydrate_gluetun_api_settings_from_env_file() {
+  local -A gluetun_api_vars=(
+    ["GLUETUN_API_TIMEOUT"]="10"
+    ["GLUETUN_API_RETRY_COUNT"]="3"
+    ["GLUETUN_API_RETRY_DELAY"]="2"
+    ["GLUETUN_API_MAX_RETRY_DELAY"]="8"
+    ["GLUETUN_CONNECTIVITY_PROBE_URLS"]="https://api.ipify.org,https://ipconfig.io/ip,https://1.1.1.1/cdn-cgi/trace"
+  )
+
+  hydrate_values_from_env_file gluetun_api_vars
+}
+
+# Hydrates qBittorrent API settings from .env to preserve custom timeouts and retry configs
+hydrate_qbt_api_settings_from_env_file() {
+  local -A qbt_api_vars=(
+    ["QBT_API_TIMEOUT"]="10"
+    ["QBT_API_RETRY_COUNT"]="3"
+    ["QBT_API_RETRY_DELAY"]="2"
+  )
+
+  hydrate_values_from_env_file qbt_api_vars
+}
+
+# Hydrates SABnzbd settings from .env to preserve user configurations
+hydrate_sabnzbd_settings_from_env_file() {
+  local -A sab_vars=(
+    ["SABNZBD_ENABLED"]="0"
+    ["SABNZBD_USE_VPN"]="0"
+    ["SABNZBD_HOST"]="${LOCALHOST_IP}"
+    ["SABNZBD_CATEGORY"]="${STACK}"
+    ["SABNZBD_TIMEOUT"]="15"
+  )
+
+  hydrate_values_from_env_file sab_vars
 }

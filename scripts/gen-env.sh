@@ -154,7 +154,7 @@ filter_conditionals() {
 : "${ARR_USERCONF_PATH:=${ARRCONF_DIR}/userr.conf}"
 : "${MUSIC_DIR:=${MEDIA_DIR}/Music}"
 
-: "${QBT_INT_PORT:=8082}"
+: "${QBT_INT_PORT:=8080}"
 : "${QBT_PORT:=${QBT_INT_PORT}}"
 : "${QBT_WEB_PORT:=8080}"
 : "${SONARR_INT_PORT:=8989}"
@@ -163,7 +163,7 @@ filter_conditionals() {
 : "${PROWLARR_INT_PORT:=9696}"
 : "${BAZARR_INT_PORT:=6767}"
 : "${FLARR_INT_PORT:=8191}"
-: "${SABNZBD_INT_PORT:=8080}"
+: "${SABNZBD_INT_PORT:=8081}"
 : "${SABNZBD_PORT:=${SABNZBD_INT_PORT}}"
 EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "${EXPOSE_DIRECT_PORTS:-0}")"
 SABNZBD_ENABLED="$(arr_normalize_bool "${SABNZBD_ENABLED:-0}")"
@@ -184,21 +184,29 @@ if [[ -z "${PROWLARR_PORT:-}" ]]; then PROWLARR_PORT="$PROWLARR_INT_PORT"; fi
 if [[ -z "${BAZARR_PORT:-}" ]]; then BAZARR_PORT="$BAZARR_INT_PORT"; fi
 if [[ -z "${FLARR_PORT:-}" ]]; then FLARR_PORT="$FLARR_INT_PORT"; fi
 
-if [[ -z "${QBT_AUTH_WHITELIST:-}" ]]; then
-  QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"
-fi
-if declare -f lan_ipv4_host_cidr >/dev/null 2>&1; then
-  if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
-    if [[ -n "$lan_host_cidr" ]]; then
-      # Prepend LAN CIDR if not already present in the whitelist
-      if [[ ",${QBT_AUTH_WHITELIST}," != *",${lan_host_cidr},"* ]]; then
-        QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+if declare -f arr_compute_qbt_auth_whitelist >/dev/null 2>&1; then
+  QBT_AUTH_WHITELIST="$(arr_compute_qbt_auth_whitelist "${QBT_AUTH_WHITELIST:-}")"
+else
+  # Fallback if helper not available
+  if [[ -z "${QBT_AUTH_WHITELIST:-}" ]]; then
+    QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128"
+  fi
+  # Only add LAN CIDR if explicitly enabled via QBT_AUTH_WHITELIST_INCLUDE_LAN
+  if [[ "${QBT_AUTH_WHITELIST_INCLUDE_LAN:-0}" == "1" ]]; then
+    if declare -f lan_ipv4_host_cidr >/dev/null 2>&1; then
+      if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)"; then
+        if [[ -n "$lan_host_cidr" ]]; then
+          # Prepend LAN CIDR if not already present in the whitelist
+          if [[ ",${QBT_AUTH_WHITELIST}," != *",${lan_host_cidr},"* ]]; then
+            QBT_AUTH_WHITELIST="${lan_host_cidr}${QBT_AUTH_WHITELIST:+,}${QBT_AUTH_WHITELIST}"
+          fi
+        fi
       fi
     fi
   fi
-fi
-if declare -f normalize_csv >/dev/null 2>&1; then
-  QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
+  if declare -f normalize_csv >/dev/null 2>&1; then
+    QBT_AUTH_WHITELIST="$(normalize_csv "$QBT_AUTH_WHITELIST")"
+  fi
 fi
 
 dns_candidates=()
@@ -248,6 +256,15 @@ if [[ -z "${OPENVPN_PASSWORD:-}" ]] && declare -f arr_derive_openvpn_password >/
   OPENVPN_PASSWORD="$(arr_derive_openvpn_password)"
 fi
 : "${OPENVPN_USER_ENFORCED:=${OPENVPN_USER:+1}}"
+
+# Preserve GLUETUN_API_KEY from existing .env unless FORCE_ROTATE_API_KEY is set
+if [[ "${FORCE_ROTATE_API_KEY:-0}" != "1" && -z "${GLUETUN_API_KEY:-}" ]]; then
+  if [[ -f "${ARR_ENV_FILE}" ]]; then
+    if existing_key="$(get_env_kv "GLUETUN_API_KEY" "${ARR_ENV_FILE}" 2>/dev/null)" && [[ -n "$existing_key" ]]; then
+      GLUETUN_API_KEY="$existing_key"
+    fi
+  fi
+fi
 
 if [[ ! -v GLUETUN_API_KEY || -z "${GLUETUN_API_KEY}" || "${FORCE_ROTATE_API_KEY:-0}" == "1" ]]; then
   if declare -f generate_api_key >/dev/null 2>&1; then

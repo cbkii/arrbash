@@ -168,7 +168,7 @@ arr_setup_defaults() {
     arr_set_docker_services_list
   fi
 
-  : "${QBT_INT_PORT:=8082}"
+  : "${QBT_INT_PORT:=8080}"
   : "${QBT_BIND_ADDR:=0.0.0.0}"
   : "${QBT_ENFORCE_WEBUI:=1}"
   : "${SONARR_INT_PORT:=8989}"
@@ -177,7 +177,7 @@ arr_setup_defaults() {
   : "${PROWLARR_INT_PORT:=9696}"
   : "${BAZARR_INT_PORT:=6767}"
   : "${FLARR_INT_PORT:=8191}"
-  : "${SABNZBD_INT_PORT:=8080}"
+  : "${SABNZBD_INT_PORT:=8081}"
 
   BLUE='\033[0;36m'
   CYAN='\033[1;36m'

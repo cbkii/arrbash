@@ -88,7 +88,7 @@ sab_check_env() {
   SABNZBD_TIMEOUT="$timeout"
 
   local sab_port
-  arr_resolve_port sab_port "${SABNZBD_PORT:-}" "${SABNZBD_INT_PORT:-8080}" "" log_warn
+  arr_resolve_port sab_port "${SABNZBD_PORT:-}" "${SABNZBD_INT_PORT:-8081}" "" log_warn
   SABNZBD_PORT="$sab_port"
 
   local sab_host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
@@ -111,7 +111,7 @@ sab_base_url() {
   sab_check_env || return 1
   local scheme="${SABNZBD_HELPER_SCHEME:-http}"
   local host="${SABNZBD_HOST:-${LOCALHOST_IP:-localhost}}"
-  local port="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8080}}"
+  local port="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8081}}"
   printf '%s://%s:%s' "$scheme" "$host" "$port" | sed 's#[[:space:]]##g' | sed 's#/*$##'
 }
 

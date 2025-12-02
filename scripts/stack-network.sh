@@ -137,3 +137,34 @@ check_network_requirements() {
 
   msg "Skipping legacy NAT-PMP probe; using Gluetun control API"
 }
+
+# Computes normalized qBittorrent WebUI auth whitelist with sensible defaults
+# Takes optional existing whitelist as parameter to preserve user settings
+# Only includes LAN CIDR when QBT_AUTH_WHITELIST_INCLUDE_LAN is explicitly enabled
+# Returns normalized CSV
+arr_compute_qbt_auth_whitelist() {
+  local existing_whitelist="${1:-}"
+  local lan_ip="${LAN_IP:-}"
+  local localhost_ip="${LOCALHOST_IP:-127.0.0.1}"
+  
+  # Start with existing whitelist or sensible defaults
+  local auth_whitelist="${existing_whitelist:-${localhost_ip}/32,::1/128}"
+  
+  # Only add LAN CIDR if explicitly enabled via QBT_AUTH_WHITELIST_INCLUDE_LAN
+  if [[ "${QBT_AUTH_WHITELIST_INCLUDE_LAN:-0}" == "1" ]]; then
+    local qb_lan_whitelist=""
+    if qb_lan_whitelist="$(lan_ipv4_host_cidr "${lan_ip}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
+      # Prepend LAN CIDR if not already present in the whitelist
+      if [[ ",${auth_whitelist}," != *",${qb_lan_whitelist},"* ]]; then
+        auth_whitelist="${qb_lan_whitelist},${auth_whitelist}"
+      fi
+    fi
+  fi
+  
+  # Normalize and return
+  if declare -f normalize_csv >/dev/null 2>&1; then
+    normalize_csv "$auth_whitelist"
+  else
+    printf '%s' "$auth_whitelist"
+  fi
+}
