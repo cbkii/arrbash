@@ -254,6 +254,15 @@ if [[ -z "${OPENVPN_PASSWORD:-}" ]] && declare -f arr_derive_openvpn_password >/
 fi
 : "${OPENVPN_USER_ENFORCED:=${OPENVPN_USER:+1}}"
 
+# Preserve GLUETUN_API_KEY from existing .env unless FORCE_ROTATE_API_KEY is set
+if [[ "${FORCE_ROTATE_API_KEY:-0}" != "1" && -z "${GLUETUN_API_KEY:-}" ]]; then
+  if [[ -f "${ARR_ENV_FILE}" ]]; then
+    if existing_key="$(get_env_kv "GLUETUN_API_KEY" "${ARR_ENV_FILE}" 2>/dev/null)" && [[ -n "$existing_key" ]]; then
+      GLUETUN_API_KEY="$existing_key"
+    fi
+  fi
+fi
+
 if [[ ! -v GLUETUN_API_KEY || -z "${GLUETUN_API_KEY}" || "${FORCE_ROTATE_API_KEY:-0}" == "1" ]]; then
   if declare -f generate_api_key >/dev/null 2>&1; then
     generate_api_key
