@@ -130,13 +130,13 @@ check_network_security() {
     EXPOSE_DIRECT_PORTS=0
   fi
 
-  local qbt_http_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+  local qbt_http_port="${QBT_PORT:-${QBT_INT_PORT:-8080}}"
 
   local -a direct_ports=("${qbt_http_port}" "${SONARR_PORT}" "${RADARR_PORT}" "${PROWLARR_PORT}" "${BAZARR_PORT}" "${FLARR_PORT}")
   if [[ "${SABNZBD_ENABLED:-0}" == "1" ]]; then
     local sab_port_value="${SABNZBD_PORT:-}"
     if [[ -z "$sab_port_value" ]]; then
-      sab_port_value="${SABNZBD_INT_PORT:-8080}"
+      sab_port_value="${SABNZBD_INT_PORT:-8081}"
     fi
     direct_ports+=("${sab_port_value}")
   fi
@@ -205,7 +205,7 @@ check_network_security() {
     if [[ -n "$qbt_conf" && -f "$qbt_conf" ]]; then
       local ui_port
       ui_port="$(arr_read_sensitive_file "$qbt_conf" | grep '^WebUI\\Port=' | cut -d= -f2- | tr -d '\r' || true)"
-      local host_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+      local host_port="${QBT_PORT:-${QBT_INT_PORT:-8080}}"
       if [[ -n "$ui_port" && "$ui_port" != "$host_port" ]]; then
         doctor_warn "qBittorrent WebUI internal port is ${ui_port} but host mapping expects ${host_port}"
       fi
@@ -411,7 +411,7 @@ LAN_IP="${LAN_IP:-}"
 EXPOSE_DIRECT_PORTS="${EXPOSE_DIRECT_PORTS:-0}"
 LOCALHOST_IP="${LOCALHOST_IP:-127.0.0.1}"
 GLUETUN_CONTROL_PORT="${GLUETUN_CONTROL_PORT:-8000}"
-QBT_INT_PORT="${QBT_INT_PORT:-8082}"
+QBT_INT_PORT="${QBT_INT_PORT:-8080}"
 QBT_PORT="${QBT_PORT:-${QBT_INT_PORT}}"
 SONARR_INT_PORT="${SONARR_INT_PORT:-8989}"
 SONARR_PORT="${SONARR_PORT:-${SONARR_INT_PORT}}"
@@ -423,7 +423,7 @@ BAZARR_INT_PORT="${BAZARR_INT_PORT:-6767}"
 BAZARR_PORT="${BAZARR_PORT:-${BAZARR_INT_PORT}}"
 FLARR_INT_PORT="${FLARR_INT_PORT:-8191}"
 FLARR_PORT="${FLARR_PORT:-${FLARR_INT_PORT}}"
-SABNZBD_INT_PORT="${SABNZBD_INT_PORT:-8080}"
+SABNZBD_INT_PORT="${SABNZBD_INT_PORT:-8081}"
 
 if [[ "${ARR_INTERNAL_PORT_CONFLICTS:-0}" == "1" ]]; then
   doctor_warn "Duplicate host port assignments detected in configuration:"

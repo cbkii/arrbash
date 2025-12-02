@@ -165,7 +165,7 @@ collect_port_requirements() {
 
   _requirements_ref+=("tcp|${GLUETUN_CONTROL_PORT}|Gluetun control API|${LOCALHOST_IP:-127.0.0.1}")
 
-  local qbt_http_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+  local qbt_http_port="${QBT_PORT:-${QBT_INT_PORT:-8080}}"
 
   if [[ "${EXPOSE_DIRECT_PORTS:-0}" == "1" ]]; then
     if ((lan_ip_known == 0)); then
@@ -185,7 +185,7 @@ collect_port_requirements() {
     if [[ "${SABNZBD_ENABLED:-0}" == "1" && "${SABNZBD_USE_VPN:-0}" != "1" ]]; then
       local sab_port_check="${SABNZBD_PORT:-}"
       if [[ -z "$sab_port_check" || ! "$sab_port_check" =~ ^[0-9]+$ ]]; then
-        sab_port_check="${SABNZBD_INT_PORT:-8080}"
+        sab_port_check="${SABNZBD_INT_PORT:-8081}"
       fi
       _requirements_ref+=("tcp|${sab_port_check}|SABnzbd WebUI|${expected}")
     fi

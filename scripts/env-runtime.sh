@@ -57,10 +57,32 @@ arr_prompt_direct_port_exposure() {
 }
 
 prepare_env_context() {
+  # Hydrate credentials and secrets
   hydrate_user_credentials_from_env_file
+  hydrate_gluetun_api_key_from_env_file
   hydrate_sab_api_key_from_config
+  
+  # Hydrate network and service configuration
+  hydrate_qbt_auth_whitelist_from_env_file
   hydrate_qbt_host_port_from_env_file
   hydrate_qbt_webui_port_from_config
+  hydrate_network_settings_from_env_file
+  hydrate_service_ports_from_env_file
+  
+  # Hydrate VPN settings
+  hydrate_vpn_settings_from_env_file
+  hydrate_vpn_auto_reconnect_from_env_file
+  
+  # Hydrate API settings
+  hydrate_gluetun_api_settings_from_env_file
+  hydrate_qbt_api_settings_from_env_file
+  
+  # Hydrate service-specific settings
+  hydrate_sabnzbd_settings_from_env_file
+  hydrate_configarr_settings_from_env_file
+  
+  # Hydrate container image versions
+  hydrate_image_versions_from_env_file
 
   local direct_ports_raw="${EXPOSE_DIRECT_PORTS:-0}"
   EXPOSE_DIRECT_PORTS="$(arr_normalize_bool "$direct_ports_raw")"
@@ -184,8 +206,8 @@ prepare_env_context() {
   SABNZBD_TIMEOUT="$sab_timeout_raw"
 
   local sab_internal_port_raw
-  arr_resolve_port sab_internal_port_raw "${SABNZBD_INT_PORT:-}" 8080 \
-    "  Invalid SABNZBD_INT_PORT=${SABNZBD_INT_PORT:-}; defaulting to 8080."
+  arr_resolve_port sab_internal_port_raw "${SABNZBD_INT_PORT:-}" 8081 \
+    "  Invalid SABNZBD_INT_PORT=${SABNZBD_INT_PORT:-}; defaulting to 8081."
   SABNZBD_INT_PORT="$sab_internal_port_raw"
 
   local sab_port_raw
@@ -224,7 +246,7 @@ prepare_env_context() {
   export ARR_SAB_HOST_AUTO="$sab_host_auto"
   export SABNZBD_INT_PORT SABNZBD_PORT SABNZBD_HOST
 
-  local qbt_webui_default="${QBT_INT_PORT:-8082}"
+  local qbt_webui_default="${QBT_INT_PORT:-8080}"
   local qbt_host_default="$qbt_webui_default"
   local qbt_webui_port="$qbt_webui_default"
   local qbt_host_port="$qbt_host_default"
@@ -357,7 +379,7 @@ prepare_env_context() {
   fi
   local publish_qbt_via_gluetun=0
   local qbt_publish_port_candidate
-  qbt_publish_port_candidate="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+  qbt_publish_port_candidate="${QBT_PORT:-${QBT_INT_PORT:-8080}}"
   if [[ -n "$qbt_publish_port_candidate" ]]; then
     publish_qbt_via_gluetun=1
   fi

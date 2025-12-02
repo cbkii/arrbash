@@ -208,7 +208,7 @@ qbt_webui_pref_equals() {
 qbt_webui_enforce() {
   local conf="${1:-${QBT_CONF_PATH:-${qbt_webui_conf_path_default}}}"
   local address="${2:-${QBT_BIND_ADDR:-0.0.0.0}}"
-  local port="${3:-${QBT_INT_PORT:-8082}}"
+  local port="${3:-${QBT_INT_PORT:-8080}}"
   local old_umask
 
   if ! old_umask=$(umask); then
@@ -278,7 +278,7 @@ qbt_webui_rate_limited_restart() {
 qbt_webui_repair() {
   local conf="${QBT_CONF_PATH:-${qbt_webui_conf_path_default}}"
   local address="${QBT_BIND_ADDR:-0.0.0.0}"
-  local port="${QBT_INT_PORT:-8082}"
+  local port="${QBT_INT_PORT:-8080}"
 
   if qbt_webui_enforce "$conf" "$address" "$port"; then
     qbt_webui_rate_limited_restart
@@ -292,7 +292,7 @@ qbt_webui_healthcheck() {
   local enforce="${QBT_ENFORCE_WEBUI:-1}"
   local conf="${QBT_CONF_PATH:-${qbt_webui_conf_path_default}}"
   local address="${QBT_BIND_ADDR:-0.0.0.0}"
-  local port="${QBT_INT_PORT:-8082}"
+  local port="${QBT_INT_PORT:-8080}"
   local localhost="${LOCALHOST_IP:-127.0.0.1}"
   local repaired=0
 
@@ -435,7 +435,7 @@ webui_host() {
 
 # Returns exposed qBittorrent WebUI host port
 webui_port() {
-  local port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
+  local port="${QBT_PORT:-${QBT_INT_PORT:-8080}}"
   printf '%s' "$port"
 }
 
@@ -593,8 +593,8 @@ update_whitelist() {
 diagnose_config() {
   local cfg
   cfg="$(config_file_path)"
-  local host_port="${QBT_PORT:-${QBT_INT_PORT:-8082}}"
-  local expected_container_port="${QBT_INT_PORT:-8082}"
+  local host_port="${QBT_PORT:-${QBT_INT_PORT:-8080}}"
+  local expected_container_port="${QBT_INT_PORT:-8080}"
   local expected_bind="${QBT_BIND_ADDR:-0.0.0.0}"
 
   if [[ ! -f "$cfg" ]]; then
@@ -637,7 +637,7 @@ diagnose_config() {
 
 # Forces WebUI port back to container default and restarts service
 fix_webui_port() {
-  local desired_port="${QBT_INT_PORT:-8082}"
+  local desired_port="${QBT_INT_PORT:-8080}"
   force_webui_bindings "Restoring qBittorrent WebUI port to ${desired_port}"
 }
 
@@ -654,7 +654,7 @@ force_webui_bindings() {
   hook="$(qbt_webui_hook_path)"
 
   local -a exec_env=(
-    -e "QBT_INT_PORT=${QBT_INT_PORT:-8082}"
+    -e "QBT_INT_PORT=${QBT_INT_PORT:-8080}"
     -e "QBT_BIND_ADDR=${QBT_BIND_ADDR:-0.0.0.0}"
     -e "QBT_ENFORCE_WEBUI=1"
     -e "QBT_WEBUI_INIT_HOOK=1"
@@ -693,7 +693,7 @@ force_webui_bindings() {
 
 # Prints helper usage menu
 usage() {
-  local default_port="${QBT_INT_PORT:-8082}"
+  local default_port="${QBT_INT_PORT:-8080}"
   local default_addr="${QBT_BIND_ADDR:-0.0.0.0}"
   cat <<USAGE
 Usage: qbt-helper.sh {show|reset|whitelist|diagnose|fix-port|fix-addr|force|repair}

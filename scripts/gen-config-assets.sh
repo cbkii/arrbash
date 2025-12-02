@@ -225,16 +225,24 @@ write_qbt_config() {
   ensure_dir "$config_dir"
   ensure_dir "$runtime_dir"
 
-  # Build auth whitelist: always include LAN_IP/24 if LAN_IP is set
-  local auth_whitelist="${QBT_AUTH_WHITELIST:-${LOCALHOST_IP}/32,::1/128}"
-  local qb_lan_whitelist=""
-  if qb_lan_whitelist="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
-    # Prepend LAN CIDR if not already present in the whitelist
-    if [[ ",${auth_whitelist}," != *",${qb_lan_whitelist},"* ]]; then
-      auth_whitelist="${qb_lan_whitelist},${auth_whitelist}"
+  # Build auth whitelist using shared helper
+  local auth_whitelist
+  if declare -f arr_compute_qbt_auth_whitelist >/dev/null 2>&1; then
+    auth_whitelist="$(arr_compute_qbt_auth_whitelist "${QBT_AUTH_WHITELIST:-}")"
+  else
+    # Fallback if helper not available
+    auth_whitelist="${QBT_AUTH_WHITELIST:-${LOCALHOST_IP}/32,::1/128}"
+    # Only add LAN CIDR if explicitly enabled via QBT_AUTH_WHITELIST_INCLUDE_LAN
+    if [[ "${QBT_AUTH_WHITELIST_INCLUDE_LAN:-0}" == "1" ]]; then
+      local qb_lan_whitelist=""
+      if qb_lan_whitelist="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$qb_lan_whitelist" ]]; then
+        if [[ ",${auth_whitelist}," != *",${qb_lan_whitelist},"* ]]; then
+          auth_whitelist="${qb_lan_whitelist},${auth_whitelist}"
+        fi
+      fi
     fi
+    auth_whitelist="$(normalize_csv "$auth_whitelist")"
   fi
-  auth_whitelist="$(normalize_csv "$auth_whitelist")"
   QBT_AUTH_WHITELIST="$auth_whitelist"
   msg "Stored WebUI auth whitelist entries: ${auth_whitelist}"
 

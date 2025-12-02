@@ -139,14 +139,14 @@ Edit these in your `userr.conf`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `QBT_PORT` | `8082` | qBittorrent WebUI port |
+| `QBT_PORT` | `8080` | qBittorrent WebUI port |
 | `SONARR_PORT` | `8989` | Sonarr WebUI port |
 | `RADARR_PORT` | `7878` | Radarr WebUI port |
 | `LIDARR_PORT` | `8686` | Lidarr WebUI port |
 | `PROWLARR_PORT` | `9696` | Prowlarr WebUI port |
 | `BAZARR_PORT` | `6767` | Bazarr WebUI port |
 | `FLARR_PORT` | `8191` | FlareSolverr port |
-| `SABNZBD_PORT` | `8080` | SABnzbd WebUI port (when enabled) |
+| `SABNZBD_PORT` | `8081` | SABnzbd WebUI port (when enabled) |
 
 ### VPN port guard settings
 
@@ -253,7 +253,7 @@ The modern VueTorrent interface for qBittorrent is included by default via the L
 - `QBT_DOCKER_MODS="ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest"` – default, auto-installs VueTorrent
 - Clear `QBT_DOCKER_MODS=""` to disable the mod
 
-Access VueTorrent at `http://LAN_IP:8082/vuetorrent/` (note the trailing slash).
+Access VueTorrent at `http://LAN_IP:8080/vuetorrent/` (note the trailing slash).
 
 ---
 
@@ -320,7 +320,7 @@ Run these to verify your installation:
 Check which ports are listening on your host:
 
 ```bash
-sudo ss -tulpn | grep -E ':8082|:8989|:7878|:9696|:6767|:8191'
+sudo ss -tulpn | grep -E ':8080|:8989|:7878|:9696|:6767|:8191'
 ```
 
 ---

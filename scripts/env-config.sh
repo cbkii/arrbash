@@ -126,15 +126,20 @@ show_configuration_preview() {
     vpn_auto_summary="enabled (threshold ${threshold_display} KB/s; interval ${interval_display}m; window ${window_display}; ${cap_fragment}${jitter_fragment})"
   fi
 
-  local qbt_whitelist_final="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
-  local lan_host_cidr
-  if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$lan_host_cidr" ]]; then
-    # Prepend LAN CIDR if not already present in the whitelist
-    if [[ ",${qbt_whitelist_final}," != *",${lan_host_cidr},"* ]]; then
-      qbt_whitelist_final="${lan_host_cidr}${qbt_whitelist_final:+,}${qbt_whitelist_final}"
+  local qbt_whitelist_final
+  if declare -f arr_compute_qbt_auth_whitelist >/dev/null 2>&1; then
+    qbt_whitelist_final="$(arr_compute_qbt_auth_whitelist "${QBT_AUTH_WHITELIST:-}")"
+  else
+    # Fallback if helper not available
+    qbt_whitelist_final="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128}"
+    local lan_host_cidr
+    if lan_host_cidr="$(lan_ipv4_host_cidr "${LAN_IP:-}" 2>/dev/null)" && [[ -n "$lan_host_cidr" ]]; then
+      if [[ ",${qbt_whitelist_final}," != *",${lan_host_cidr},"* ]]; then
+        qbt_whitelist_final="${lan_host_cidr}${qbt_whitelist_final:+,}${qbt_whitelist_final}"
+      fi
     fi
+    qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_final")"
   fi
-  qbt_whitelist_final="$(normalize_csv "$qbt_whitelist_final")"
 
   local server_names_display="${SERVER_NAMES:-}"
   if [[ -z "$server_names_display" ]]; then
@@ -176,7 +181,7 @@ show_configuration_preview() {
   fi
 
   local sab_host_display="${SABNZBD_HOST:-${LOCALHOST_IP:-127.0.0.1}}"
-  local sab_port_display="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8080}}"
+  local sab_port_display="${SABNZBD_PORT:-${SABNZBD_INT_PORT:-8081}}"
   local sab_vpn_display="LAN"
   if [[ "${SABNZBD_USE_VPN:-0}" == "1" ]]; then
     sab_vpn_display="VPN"
