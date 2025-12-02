@@ -426,6 +426,51 @@ qbt_set_credentials() {
   return 0
 }
 
+# Gets the current list of additional trackers from qBittorrent preferences
+qbt_get_additional_trackers() {
+  local body
+  if ! body="$(_qbt_api_curl_json "/api/v2/app/preferences" 2>/dev/null)"; then
+    return 1
+  fi
+
+  local trackers
+  trackers="$(printf '%s' "$body" | jq -r '.add_trackers // ""' 2>/dev/null || printf '')"
+  printf '%s' "$trackers"
+  return 0
+}
+
+# Sets the additional trackers list in qBittorrent preferences
+# Takes a newline-separated list of tracker URLs
+qbt_set_additional_trackers() {
+  local trackers="$1"
+
+  if ! _qbt_api_ensure_cookie; then
+    return 1
+  fi
+
+  local payload
+  if ! payload="$(jq -cn --arg trackers "$trackers" '{add_trackers: $trackers}' 2>/dev/null)"; then
+    if declare -f arr_error >/dev/null 2>&1; then
+      arr_error "Failed to generate qBittorrent tracker update JSON"
+    fi
+    return 1
+  fi
+
+  local url
+  url="$(_qbt_api_base_url)/api/v2/app/setPreferences"
+
+  if ! curl -fsS \
+    --connect-timeout "${QBT_API_TIMEOUT}" \
+    --max-time "${QBT_API_TIMEOUT}" \
+    -b "${_qbt_api_cookie_file}" \
+    --data-urlencode "json=${payload}" \
+    "${url}" >/dev/null; then
+    return 1
+  fi
+
+  return 0
+}
+
 # Allow callers to clean up cookie files on exit.
 qbt_api_cleanup() {
   _qbt_api_cleanup_cookie

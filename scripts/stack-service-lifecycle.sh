@@ -1025,6 +1025,106 @@ start_vpn_auto_reconnect_if_enabled() {
   fi
 }
 
+# Checks if qBittorrent tracker updater is enabled via configuration
+qbt_tracker_update_is_enabled() {
+  local enabled="${QBT_TRACKER_UPDATE_ENABLED:-0}"
+  [[ "$enabled" == "1" ]]
+}
+
+# Returns the state directory for tracker updater daemon
+qbt_tracker_update_state_dir() {
+  local state_dir="${ARR_DOCKER_DIR}/qbittorrent/tracker-updater"
+  printf '%s' "$state_dir"
+}
+
+# Stops any existing tracker updater daemon processes
+stop_existing_qbt_tracker_updater_workers() {
+  local daemon_path="$1"
+  local pid_file="$2"
+
+  if [[ -z "$daemon_path" ]]; then
+    return 0
+  fi
+
+  # Kill by PID file first
+  if [[ -f "$pid_file" ]]; then
+    local old_pid
+    old_pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+      if safe_kill "$old_pid" "qbt-tracker-updater daemon (from pid file)" 5; then
+        msg "Stopped existing tracker updater daemon (pid ${old_pid})"
+      else
+        warn "Failed to stop daemon at pid ${old_pid}"
+      fi
+    fi
+    rm -f "$pid_file" 2>/dev/null || true
+  fi
+
+  # Kill by process name/path
+  local pids=""
+  if command -v pgrep >/dev/null 2>&1; then
+    while IFS= read -r pid; do
+      [[ -z "$pid" ]] && continue
+      if kill -0 "$pid" 2>/dev/null; then
+        if safe_kill "$pid" "qbt-tracker-updater daemon (by pgrep)" 5; then
+          msg "Stopped orphaned tracker updater daemon (pid ${pid})"
+        fi
+      fi
+    done < <(pgrep -f -- "$daemon_path" 2>/dev/null || true)
+  else
+    while IFS= read -r pid; do
+      [[ -z "$pid" ]] && continue
+      if kill -0 "$pid" 2>/dev/null; then
+        if safe_kill "$pid" "qbt-tracker-updater daemon (by ps)" 5; then
+          msg "Stopped orphaned tracker updater daemon (pid ${pid})"
+        fi
+      fi
+    done < <(ps -eo pid,command 2>/dev/null | awk -v path="$daemon_path" 'index($0, path) {print $1}' || true)
+  fi
+
+  if [[ -f "$pid_file" ]]; then
+    rm -f "$pid_file" 2>/dev/null || true
+  fi
+
+  return 0
+}
+
+# Starts the qBittorrent tracker updater daemon if enabled
+start_qbt_tracker_updater_if_enabled() {
+  if ! qbt_tracker_update_is_enabled; then
+    msg "qBittorrent tracker updater disabled (QBT_TRACKER_UPDATE_ENABLED=${QBT_TRACKER_UPDATE_ENABLED:-0})"
+    return 0
+  fi
+
+  local daemon_path="${ARR_STACK_DIR}/scripts/qbt-tracker-updater-daemon.sh"
+  if [[ ! -x "$daemon_path" ]]; then
+    warn "Tracker updater daemon missing at ${daemon_path}"
+    return 1
+  fi
+
+  local state_dir pid_file log_file
+  state_dir="$(qbt_tracker_update_state_dir)"
+  ensure_dir_mode "$state_dir" "$DATA_DIR_MODE"
+  pid_file="${state_dir}/daemon.pid"
+  log_file="${state_dir}/daemon.log"
+
+  stop_existing_qbt_tracker_updater_workers "$daemon_path" "$pid_file"
+
+  msg "Launching qBittorrent tracker updater daemon"
+
+  touch "$log_file" 2>/dev/null || true
+  ensure_nonsecret_file_mode "$log_file"
+
+  if nohup "$daemon_path" >>"$log_file" 2>&1 & then
+    local pid=$!
+    printf '%s\n' "$pid" >"$pid_file"
+    ensure_secret_file_mode "$pid_file"
+    msg "Tracker updater daemon started (pid ${pid})"
+  else
+    warn "Failed to start tracker updater daemon"
+  fi
+}
+
 # Prints container runtime status and port-forward summary for quick health glance
 show_service_status() {
   msg "Service status summary:"
@@ -1110,6 +1210,7 @@ start_stack() {
   fi
 
   start_vpn_auto_reconnect_if_enabled
+  start_qbt_tracker_updater_if_enabled
   service_start_sabnzbd
 
   msg "Starting vpn-port-guard..."

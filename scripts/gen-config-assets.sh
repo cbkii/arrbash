@@ -163,6 +163,9 @@ sync_vpn_auto_reconnect_assets() {
 
   cp "${REPO_ROOT}/scripts/vpn-auto-reconnect-daemon.sh" "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh" 755
+  
+  cp "${REPO_ROOT}/scripts/qbt-tracker-updater-daemon.sh" "$ARR_STACK_DIR/scripts/qbt-tracker-updater-daemon.sh"
+  ensure_file_mode "$ARR_STACK_DIR/scripts/qbt-tracker-updater-daemon.sh" 755
 }
 
 # Copies vpn-port-guard controller assets into the stack scripts directory
