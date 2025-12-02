@@ -123,11 +123,11 @@ run_once() {
   arr_info "Downloading tracker list from ${url}..."
   
   local temp_download temp_clean
-  temp_download="$(arr_mktemp_file "tracker-download.XXXXXX" 600)" || {
+  temp_download="$(arr_mktemp_file "tracker-download.XXXXXX")" || {
     arr_error "Failed to create temporary file"
     return 1
   }
-  temp_clean="$(arr_mktemp_file "tracker-clean.XXXXXX" 600)" || {
+  temp_clean="$(arr_mktemp_file "tracker-clean.XXXXXX")" || {
     arr_cleanup_temp_path "$temp_download"
     arr_error "Failed to create temporary file"
     return 1
