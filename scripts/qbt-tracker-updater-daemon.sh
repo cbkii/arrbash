@@ -215,6 +215,8 @@ main() {
     max_loops="${QBT_TRACKER_UPDATE_MAX_LOOPS}"
   fi
   
+  local -i is_retry_attempt=0
+  
   while true; do
     if ((max_loops > 0 && loop_count >= max_loops)); then
       arr_info "Tracker updater daemon stopping after ${loop_count} iteration(s)"
@@ -235,9 +237,17 @@ main() {
     if run_once; then
       arr_info "Tracker update successful, sleeping ${interval_hours}h until next update"
       next_sleep="$interval_seconds"
+      is_retry_attempt=0
     else
-      arr_warn "Tracker update failed, will retry in ${retry_hours}h"
-      next_sleep="$retry_seconds"
+      if ((is_retry_attempt == 0)); then
+        arr_warn "Tracker update failed, will retry once in ${retry_hours}h"
+        next_sleep="$retry_seconds"
+        is_retry_attempt=1
+      else
+        arr_warn "Tracker update failed after retry, waiting ${interval_hours}h for next regular cycle"
+        next_sleep="$interval_seconds"
+        is_retry_attempt=0
+      fi
     fi
     
     # Sleep in small chunks to allow for early termination
