@@ -441,6 +441,7 @@ qbt_get_additional_trackers() {
 
 # Sets the additional trackers list in qBittorrent preferences
 # Takes a newline-separated list of tracker URLs
+# Returns 0 on success, 1 on failure (authentication or API error)
 qbt_set_additional_trackers() {
   local trackers="$1"
 
