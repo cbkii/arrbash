@@ -95,7 +95,11 @@ update_qbt_trackers() {
   fi
   
   # Check if update is needed
-  if [[ "$current_trackers" == "$new_trackers" ]]; then
+  local sorted_current sorted_new
+  sorted_current="$(printf '%s' "$current_trackers" | grep -v '^[[:space:]]*$' | sort -u)"
+  sorted_new="$(printf '%s' "$new_trackers" | grep -v '^[[:space:]]*$' | sort -u)"
+
+  if [[ "$sorted_current" == "$sorted_new" ]]; then
     arr_info "Tracker list is already up to date"
     return 0
   fi
