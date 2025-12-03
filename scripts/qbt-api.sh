@@ -427,6 +427,8 @@ qbt_set_credentials() {
 }
 
 # Gets the current list of additional trackers from qBittorrent preferences
+# Returns the tracker list (newline-separated) on stdout, empty string if no trackers configured
+# Returns 0 on success, 1 on failure (authentication or API error)
 qbt_get_additional_trackers() {
   local body
   if ! body="$(_qbt_api_curl_json "/api/v2/app/preferences" 2>/dev/null)"; then
