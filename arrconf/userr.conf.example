@@ -99,6 +99,12 @@ VPN_MAX_RETRY_MINUTES="20"      # default: 20; retry budget before disabling
 VPN_ROTATION_MAX_PER_DAY="6"      # default: 6; max automatic reconnects per day (0=unlimited)
 VPN_ROTATION_JITTER_SECONDS="0"      # default: 0; random jitter added to reconnect timing
 
+# --- qBittorrent tracker list auto-updater ---
+# QBT_TRACKER_UPDATE_ENABLED="0"      # default: 0; enable automatic tracker list updates
+# QBT_TRACKER_UPDATE_INTERVAL_HOURS="48"      # default: 48; hours between successful updates
+# QBT_TRACKER_UPDATE_RETRY_HOURS="12"      # default: 12; hours before retrying after failure
+# QBT_TRACKER_UPDATE_URL="https://cf.trackerslist.com/all.txt"      # default: https://cf.trackerslist.com/all.txt; tracker list source (from https://github.com/XIU2/TrackersListCollection)
+
 # --- SABnzbd (Usenet) ---
 SABNZBD_ENABLED="0"      # default: 0; enable SABnzbd container/helper
 SABNZBD_USE_VPN="0"      # default: 0; route SABnzbd through Gluetun
