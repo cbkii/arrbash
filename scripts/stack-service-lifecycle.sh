@@ -1062,6 +1062,7 @@ stop_existing_qbt_tracker_updater_workers() {
 
   # Kill by process name/path
   if command -v pgrep >/dev/null 2>&1; then
+    # Match processes running the exact daemon path
     while IFS= read -r pid; do
       [[ -z "$pid" ]] && continue
       if kill -0 "$pid" 2>/dev/null; then
@@ -1069,7 +1070,7 @@ stop_existing_qbt_tracker_updater_workers() {
           msg "Stopped orphaned tracker updater daemon (pid ${pid})"
         fi
       fi
-    done < <(pgrep -f -- "$daemon_path" 2>/dev/null || true)
+    done < <(pgrep -f "^(bash|/bin/sh|/usr/bin/env bash) ${daemon_path}" 2>/dev/null || true)
   else
     while IFS= read -r pid; do
       [[ -z "$pid" ]] && continue
@@ -1078,7 +1079,7 @@ stop_existing_qbt_tracker_updater_workers() {
           msg "Stopped orphaned tracker updater daemon (pid ${pid})"
         fi
       fi
-    done < <(ps -eo pid,command 2>/dev/null | awk -v path="$daemon_path" 'index($0, path) {print $1}' || true)
+    done < <(ps -eo pid,command 2>/dev/null | awk -v path="$daemon_path" '$2 == "bash" && $3 == path {print $1}' || true)
   fi
 
   if [[ -f "$pid_file" ]]; then
