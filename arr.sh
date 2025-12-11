@@ -840,7 +840,11 @@ main() {
     export ARR_PRESERVE_CONFIG
     
     # Create backup of critical files before any modifications
-    if declare -f arr_backup_critical_files >/dev/null 2>&1; then
+    # stack-preserve.sh is loaded in the modules array, so this should always be available
+    if ! declare -f arr_backup_critical_files >/dev/null 2>&1; then
+      warn "Backup function not available (stack-preserve.sh failed to load)"
+      warn "Continuing with --preserve-config mode without backup"
+    else
       step "📦 Creating backup of critical files"
       if ! arr_backup_critical_files; then
         warn "Backup creation failed, but continuing with --preserve-config mode"

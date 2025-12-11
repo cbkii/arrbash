@@ -479,8 +479,8 @@ arr_backup_critical_files() {
     return 0
   else
     warn "No files were backed up"
-    # Clean up empty backup directory
-    rmdir "${backup_dir}" 2>/dev/null || true
+    # Clean up empty backup directory tree (may have subdirectories)
+    rm -rf "${backup_dir}" 2>/dev/null || true
     return 1
   fi
 }

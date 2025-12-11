@@ -129,11 +129,14 @@ if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
   fi
   
   if [[ -f "$_preserve_env_file" ]]; then
-    while IFS='=' read -r key value; do
+    while IFS= read -r line; do
       # Skip comments and empty lines
-      [[ "$key" =~ ^[[:space:]]*# ]] && continue
-      [[ -z "$key" ]] && continue
-      # Store the value (which may contain = signs)
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "$line" ]] && continue
+      [[ "$line" != *"="* ]] && continue
+      # Split on first = only, preserving any = in the value
+      key="${line%%=*}"
+      value="${line#*=}"
       _existing_env_values["$key"]="$value"
     done < "$_preserve_env_file"
   fi
