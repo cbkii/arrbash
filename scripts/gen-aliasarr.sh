@@ -1396,14 +1396,91 @@ arr.vpn.restart() {
   printf 'VPN restart initiated\n'
 }
 
+arr.vpn.port() {
+  local vpn_type="${VPN_TYPE:-openvpn}"
+  vpn_type="$(_arr_lowercase "$vpn_type")"
+  
+  local payload
+  if ! payload="$(_arr_gluetun_api "/v1/${vpn_type}/portforwarded" 2>/dev/null)"; then
+    printf 'Unable to query forwarded port\n' >&2
+    return 1
+  fi
+  
+  printf '%s\n' "$payload" | _arr_pretty_json
+}
+
 arr.vpn.help() {
   cat <<'EOF'
 Gluetun VPN helpers:
   arr.vpn.status             GET /v1/{vpn_type}/status
   arr.vpn.ip                 GET /v1/publicip/ip
+  arr.vpn.port               GET /v1/{vpn_type}/portforwarded
   arr.vpn.restart            PUT /v1/openvpn/actions/restart
 
 Smoke test: arr.vpn.status
+
+Port forwarding helpers:
+  arr.pf.port                Show current forwarded port
+  arr.pf.sync                Sync forwarded port to qBittorrent
+EOF
+}
+
+# --- Port Forward helpers ---
+arr.pf.port() {
+  local vpn_type="${VPN_TYPE:-openvpn}"
+  vpn_type="$(_arr_lowercase "$vpn_type")"
+  
+  local payload port
+  if ! payload="$(_arr_gluetun_api "/v1/${vpn_type}/portforwarded" 2>/dev/null)"; then
+    printf 'Unable to query forwarded port\n' >&2
+    return 1
+  fi
+  
+  # Extract port from JSON
+  if command -v jq >/dev/null 2>&1; then
+    port="$(printf '%s' "$payload" | jq -r '.port // empty' 2>/dev/null || true)"
+  fi
+  
+  if [ -z "$port" ]; then
+    # Fallback: extract first number
+    port="$(printf '%s' "$payload" | grep -oE '[0-9]+' | head -n1 || true)"
+  fi
+  
+  if [ -n "$port" ] && [ "$port" != "0" ]; then
+    printf '%s\n' "$port"
+    return 0
+  fi
+  
+  printf 'No forwarded port available\n' >&2
+  return 1
+}
+
+arr.pf.sync() {
+  local port
+  if ! port="$(arr.pf.port 2>/dev/null)"; then
+    printf 'Error: Unable to get forwarded port from Gluetun\n' >&2
+    return 1
+  fi
+  
+  printf 'Syncing port %s to qBittorrent...\n' "$port" >&2
+  if arr.qbt.port.set "$port" >/dev/null 2>&1; then
+    printf '✅ Port %s set successfully\n' "$port"
+    return 0
+  else
+    printf 'Error: Failed to set qBittorrent port\n' >&2
+    return 1
+  fi
+}
+
+arr.pf.help() {
+  cat <<'EOF'
+Port forwarding helpers:
+  arr.pf.port                Show current Gluetun forwarded port
+  arr.pf.sync                Sync Gluetun port to qBittorrent
+
+Usage:
+  arr.pf.port                # Display forwarded port
+  arr.pf.sync                # Sync to qBittorrent listen port
 EOF
 }
 
@@ -1421,9 +1498,103 @@ FlareSolverr helpers:
 EOF
 }
 
-# --- SABnzbd (if enabled) ---
-# Note: SABnzbd uses API key as URL parameter, not header
-# Implementation requires SABnzbd-specific handling
+# --- SABnzbd ---
+# SABnzbd uses API key as URL parameter, not header
+# API format: /api?mode=<mode>&apikey=<key>&output=json
+
+_arr_sab_api_key() {
+  local key
+  # Try environment variable first
+  key="${SABNZBD_API_KEY:-$(_arr_env_get SABNZBD_API_KEY 2>/dev/null || true)}"
+  if [ -n "$key" ]; then
+    printf '%s' "$key"
+    return 0
+  fi
+  
+  # Try config file
+  local config_file="${ARR_DOCKER_DIR}/sabnzbd/sabnzbd.ini"
+  if [ -f "$config_file" ]; then
+    key="$(awk -F= '/^api_key[[:space:]]*=/ {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)
+      print $2
+      exit
+    }' "$config_file" 2>/dev/null || true)"
+  fi
+  
+  if [ -n "$key" ]; then
+    printf '%s' "$key"
+    return 0
+  fi
+  
+  return 1
+}
+
+_arr_sab_call() {
+  local mode="$1"
+  shift
+  
+  local base key
+  base="$(_arr_service_base sabnzbd)"
+  key="$(_arr_sab_api_key)"
+  
+  if [ -z "$base" ]; then
+    printf 'Error: Unable to resolve SABnzbd base URL\n' >&2
+    return 1
+  fi
+  
+  if [ -z "$key" ]; then
+    printf 'Error: SABnzbd API key not found\n' >&2
+    printf 'Set SABNZBD_API_KEY in .env or check %s/sabnzbd/sabnzbd.ini\n' "$ARR_DOCKER_DIR" >&2
+    return 1
+  fi
+  
+  local url="${base}/api?mode=${mode}&apikey=${key}&output=json"
+  
+  # Add any extra parameters
+  while [ $# -gt 0 ]; do
+    url="${url}&$1"
+    shift
+  done
+  
+  curl -fsS "$url"
+}
+
+arr.sab.url() { printf '%s\n' "$(_arr_service_base sabnzbd)"; }
+arr.sab.logs() { docker logs -f sabnzbd; }
+arr.sab.restart() { docker restart sabnzbd; }
+
+arr.sab.status() { _arr_sab_call server_stats | _arr_pretty_json; }
+arr.sab.version() { _arr_sab_call version | _arr_pretty_json; }
+arr.sab.queue() { _arr_sab_call queue | _arr_pretty_json; }
+arr.sab.history() { _arr_sab_call history | _arr_pretty_json; }
+
+arr.sab.pause() {
+  _arr_sab_call pause | _arr_pretty_json
+  printf 'SABnzbd paused\n' >&2
+}
+
+arr.sab.resume() {
+  _arr_sab_call resume | _arr_pretty_json
+  printf 'SABnzbd resumed\n' >&2
+}
+
+arr.sab.help() {
+  cat <<'EOF'
+SABnzbd API helpers:
+  arr.sab.url                Show base URL
+  arr.sab.status             GET server stats
+  arr.sab.version            GET version info
+  arr.sab.queue              GET current queue
+  arr.sab.history            GET download history
+  arr.sab.pause              Pause downloads
+  arr.sab.resume             Resume downloads
+  arr.sab.logs               Docker logs -f
+  arr.sab.restart            Docker restart
+
+Smoke test: arr.sab.version
+Note: Requires SABNZBD_API_KEY in .env or sabnzbd.ini
+EOF
+}
 
 # --- General helpers ---
 arr.logs() {
@@ -1463,7 +1634,9 @@ Service-specific helpers:
   arr.prow.help              Prowlarr helpers
   arr.baz.help               Bazarr helpers
   arr.qbt.help               qBittorrent helpers
+  arr.sab.help               SABnzbd helpers
   arr.vpn.help               VPN/Gluetun helpers
+  arr.pf.help                Port forwarding helpers
   arr.flarr.help             FlareSolverr helpers
 
 Generic helpers:
@@ -1472,10 +1645,22 @@ Generic helpers:
   arr.shell <service>        Interactive shell
 
 Quick tests:
-  arr.rad.status
-  arr.son.status
-  arr.qbt.version
-  arr.vpn.status
+  arr.rad.status             # Radarr system status
+  arr.son.status             # Sonarr system status
+  arr.qbt.version            # qBittorrent version
+  arr.vpn.status             # VPN tunnel status
+  arr.pf.port                # Current forwarded port
+
+Configuration discovery:
+  This alias file automatically discovers:
+  - Stack directory from source location
+  - .env file at \$ARR_STACK_DIR/.env
+  - Service configs at \$ARR_DOCKER_DIR/<service>/config.xml
+  - API keys from config files
+  - UrlBase from service configs
+  
+  Override with environment variables if needed:
+    ARR_STACK_DIR=/path/to/stack source .aliasarr
 EOF
 }
 
