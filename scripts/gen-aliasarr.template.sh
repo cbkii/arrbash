@@ -1,5 +1,14 @@
-# shellcheck shell=bash
-# shellcheck disable=SC1090,SC2119,SC2120,SC2154,SC2155
+# shellcheck shell=sh
+# shellcheck disable=SC1090,SC2119,SC2120,SC2154,SC2155,SC3043,SC3054
+# POSIX-safe alias template with bash/zsh-compatible function names
+# 
+# Shell compatibility:
+# - Core syntax is POSIX-compliant and works with sh, dash, bash, zsh, ksh
+# - Function names use dots (e.g., arr.vpn.status) which work in bash, zsh, ksh
+#   but NOT in strict POSIX sh/dash. This is an intentional design choice.
+# - Users should source this file in bash or zsh for full compatibility
+# - The 'local' keyword is used throughout (not POSIX but universally supported)
+#
 # Alias sanity summary:
 # - arr.vpn.* helpers rely on Gluetun's control API via scripts/vpn-gluetun.sh.
 # - Template no longer references legacy .arraliases, proxy, or internal CA helpers.
@@ -183,8 +192,8 @@ _arr_vpn_type() {
 
 _arr_sanitize_error() {
   local value="$1"
-  value="${value//$'\r'/ }"
-  value="${value//$'\n'/ }"
+  # Replace carriage returns and newlines with spaces (POSIX-compliant)
+  value="$(printf '%s' "$value" | tr '\r\n' '  ')"
   value="$(_arr_trim "$value")"
   printf '%s' "$value"
 }
@@ -358,7 +367,7 @@ _arr_vpn_rotation_candidates() {
 
 _arr_env_get() {
   local key="$1"
-  [[ -f "$ARR_ENV_FILE" ]] || return 1
+  [ -f "$ARR_ENV_FILE" ] || return 1
   awk -F= -v k="$key" '$1==k{print substr($0, index($0,"=")+1); exit}' "$ARR_ENV_FILE"
 }
 
@@ -368,9 +377,8 @@ _arr_env_get_list() {
   raw="$(_arr_env_get "$key" 2>/dev/null || true)"
   [ -n "$raw" ] || return 1
 
-  raw="${raw//,/ }"
-  raw="${raw//$'\n'/ }"
-  raw="${raw//$'\t'/ }"
+  # Replace commas, newlines, and tabs with spaces (POSIX-compliant)
+  raw="$(printf '%s' "$raw" | tr ',\n\t' '   ')"
   local old_ifs="$IFS"
   IFS=' '
   set -f
@@ -391,100 +399,106 @@ _arr_loopback() {
   printf '%s' "$host"
 }
 
-_arr_services=()
+_arr_services=""
 _arr_services_cached=0
 
+_arr_services_append() {
+  if [ -z "$_arr_services" ]; then
+    _arr_services="$1"
+  else
+    _arr_services="$_arr_services
+$1"
+  fi
+}
+
 _arr_services_populate() {
-  if ((_arr_services_cached)); then
+  if [ "$_arr_services_cached" -eq 1 ]; then
     return 0
   fi
 
-  _arr_services=()
+  _arr_services=""
 
-  if declare -f arr_require_services_array >/dev/null 2>&1; then
+  if command -v arr_require_services_array >/dev/null 2>&1; then
     arr_require_services_array
   fi
 
-  if declare -p ARR_DOCKER_SERVICES >/dev/null 2>&1 \
-    && declare -p ARR_DOCKER_SERVICES 2>/dev/null | grep -q 'declare \-a'; then
+  # Check if ARR_DOCKER_SERVICES is set and non-empty
+  # In POSIX, we can't easily detect if it's an array, so we try to use it
+  if [ -n "${ARR_DOCKER_SERVICES:-}" ]; then
+    # If it's a Bash/Zsh array in the calling environment, this will fail gracefully
     # shellcheck disable=SC2154 # ARR_DOCKER_SERVICES may come from sourced config
-    if ((${#ARR_DOCKER_SERVICES[@]} > 0)); then
-      _arr_services=("${ARR_DOCKER_SERVICES[@]}")
+    # Check if it contains newlines or spaces using portable test
+    if printf '%s' "$ARR_DOCKER_SERVICES" | grep -q '[ 	]'; then
+      # Looks like a space or tab or newline-delimited list
+      _arr_services="$ARR_DOCKER_SERVICES"
     fi
   fi
 
-  if ((${#_arr_services[@]} == 0)); then
+  if [ -z "$_arr_services" ]; then
     while IFS= read -r svc; do
       [ -n "$svc" ] || continue
-      _arr_services+=("$svc")
+      _arr_services_append "$svc"
     done <<EOF
 $(_arr_env_get_list ARR_DOCKER_SERVICES 2>/dev/null || true)
 EOF
   fi
 
-  if ((${#_arr_services[@]} == 0)); then
+  if [ -z "$_arr_services" ]; then
     local services_output
     services_output="$(_arr_compose_services 2>/dev/null || true)"
     if [ -n "$services_output" ]; then
       while IFS= read -r svc; do
         [ -n "$svc" ] || continue
-        _arr_services+=("$svc")
+        _arr_services_append "$svc"
       done <<EOF
 $services_output
 EOF
     fi
   fi
 
-  if ((${#_arr_services[@]} == 0)) && _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
-    _arr_services+=(sabnzbd)
+  if [ -z "$_arr_services" ] && _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
+    _arr_services="sabnzbd"
   fi
 
   _arr_services_cached=1
 }
 
-_arr_compose_cmd_cache=()
+_arr_compose_cmd_cache=""
 _arr_compose_cmd_cached=0
 
 _arr_compose_cmd() {
-  if ((_arr_compose_cmd_cached)); then
-    if ((${#_arr_compose_cmd_cache[@]} > 0)); then
+  if [ "$_arr_compose_cmd_cached" -eq 1 ]; then
+    if [ -n "$_arr_compose_cmd_cache" ]; then
       return 0
     fi
     return 1
   fi
 
-  _arr_compose_cmd_cache=()
+  _arr_compose_cmd_cache=""
 
-  if ((${#DOCKER_COMPOSE_CMD[@]} > 0)) && [ -n "${DOCKER_COMPOSE_CMD[*]}" ]; then
-    _arr_compose_cmd_cache=("${DOCKER_COMPOSE_CMD[@]}")
+  # Check if DOCKER_COMPOSE_CMD is set (could be from environment)
+  if [ -n "${DOCKER_COMPOSE_CMD:-}" ]; then
+    # shellcheck disable=SC2086 # word-splitting is intentional
+    _arr_compose_cmd_cache="$DOCKER_COMPOSE_CMD"
     _arr_compose_cmd_cached=1
     return 0
   fi
 
-  if [ -n "${DOCKER_COMPOSE_CMD:-}" ]; then
-    # shellcheck disable=SC2206 # word-splitting is intentional to respect user-provided command
-    _arr_compose_cmd_cache=($DOCKER_COMPOSE_CMD)
-    if ((${#_arr_compose_cmd_cache[@]} > 0)); then
-      _arr_compose_cmd_cached=1
-      return 0
-    fi
-  fi
-
   if docker compose version >/dev/null 2>&1; then
-    _arr_compose_cmd_cache=(docker compose)
+    _arr_compose_cmd_cache="docker compose"
     _arr_compose_cmd_cached=1
     return 0
   fi
 
   if command -v docker-compose >/dev/null 2>&1; then
-    _arr_compose_cmd_cache=(docker-compose)
+    _arr_compose_cmd_cache="docker-compose"
     _arr_compose_cmd_cached=1
     return 0
   fi
 
   printf 'arr: docker compose command not found.\n' >&2
   _arr_compose_cmd_cached=0
-  _arr_compose_cmd_cache=()
+  _arr_compose_cmd_cache=""
   return 1
 }
 
@@ -493,7 +507,8 @@ _arr_compose() {
     return 1
   fi
 
-  (cd "$ARR_STACK_DIR" && "${_arr_compose_cmd_cache[@]}" "$@")
+  # shellcheck disable=SC2086 # word-splitting is intentional for compose command
+  (cd "$ARR_STACK_DIR" && $_arr_compose_cmd_cache "$@")
 }
 
 _arr_compose_services_cache=""
@@ -526,13 +541,11 @@ _arr_service_defined() {
     return $?
   fi
 
-  local fallback
   _arr_services_populate
-  for fallback in "${_arr_services[@]}"; do
-    if [ "$fallback" = "$svc" ]; then
-      return 0
-    fi
-  done
+  if [ -n "$_arr_services" ]; then
+    printf '%s\n' "$_arr_services" | grep -Fxq "$svc"
+    return $?
+  fi
   return 1
 }
 
@@ -599,25 +612,27 @@ _arr_wait_for_container_health() {
 }
 
 _arr_stack_restart_services() {
-  local -a order=()
+  local order=""
 
   _arr_services_populate
 
-  local svc
-  for svc in "${_arr_services[@]}"; do
+  if [ -z "$_arr_services" ]; then
+    return 0
+  fi
+
+  printf '%s\n' "$_arr_services" | while IFS= read -r svc; do
+    [ -n "$svc" ] || continue
     case "$svc" in
       sabnzbd)
         if _arr_bool "${SABNZBD_ENABLED:-$(_arr_env_get SABNZBD_ENABLED)}"; then
-          order+=(sabnzbd)
+          printf '%s\n' "sabnzbd"
         fi
         ;;
       qbittorrent | sonarr | radarr | lidarr | prowlarr | bazarr | flaresolverr)
-        order+=("$svc")
+        printf '%s\n' "$svc"
         ;;
     esac
   done
-
-  printf '%s\n' "${order[@]}"
 }
 
 _arr_is_tty() { [ -t 1 ]; }
@@ -726,11 +741,12 @@ _arr_url_host() {
 }
 
 _arr_is_ipv4() {
-  if [[ $1 =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    return 0 # valid shape
-  else
-    return 1 # invalid
-  fi
+  # Check if input matches IPv4 pattern using case and expr
+  case "$1" in
+    ''|*[!0-9.]*) return 1 ;;  # empty or contains non-digit/dot
+  esac
+  # Use expr to validate the pattern
+  expr "$1" : '\([0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\)$' >/dev/null 2>&1
 }
 
 _arr_curl_resolve_flags() {
@@ -1076,34 +1092,36 @@ _arr_container_id_for_service() {
 
   if [ -z "$service" ]; then
     if [ -n "$error_var" ]; then
-      printf -v "$error_var" 'Service name is required.'
+      eval "$error_var='Service name is required.'"
     fi
     return 1
   fi
 
   if ! _arr_docker_available; then
     if [ -n "$error_var" ]; then
-      printf -v "$error_var" 'Docker command not available in this shell.'
+      eval "$error_var='Docker command not available in this shell.'"
     fi
     return 1
   fi
 
-  local -a ps_flags=()
+  local ps_flags=""
   if [ "$include_stopped" = "1" ]; then
-    ps_flags=(-a)
+    ps_flags="-a"
   fi
 
   local id
-  id="$(docker ps "${ps_flags[@]}" --filter "label=com.docker.compose.service=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+  # shellcheck disable=SC2086 # ps_flags may be empty or -a
+  id="$(docker ps $ps_flags --filter "label=com.docker.compose.service=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
   if [ -z "$id" ]; then
-    id="$(docker ps "${ps_flags[@]}" --filter "name=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+    # shellcheck disable=SC2086
+    id="$(docker ps $ps_flags --filter "name=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
   fi
 
   if [ -z "$id" ] && [ "$include_stopped" != "1" ]; then
-    ps_flags=(-a)
-    id="$(docker ps "${ps_flags[@]}" --filter "label=com.docker.compose.service=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+    ps_flags="-a"
+    id="$(docker ps $ps_flags --filter "label=com.docker.compose.service=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
     if [ -z "$id" ]; then
-      id="$(docker ps "${ps_flags[@]}" --filter "name=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
+      id="$(docker ps $ps_flags --filter "name=${service}" --format '{{.ID}}' | head -n1 | tr -d '\r')"
     fi
   fi
 
@@ -1113,7 +1131,7 @@ _arr_container_id_for_service() {
   fi
 
   if [ -n "$error_var" ]; then
-    printf -v "$error_var" 'Unable to locate a container for service %s.' "$service"
+    eval "$error_var='Unable to locate a container for service $service.'"
   fi
 
   return 1
@@ -1174,17 +1192,19 @@ _arr_gluetun_api() {
   host="$(_arr_gluetun_host)"
   url="http://${host}:${port}${endpoint}"
 
-  local -a curl_cmd=(curl -fsS -H "X-API-Key: ${key}")
+  local curl_args
+  curl_args="-fsS -H \"X-API-Key: ${key}\""
   if [ "$method" != "GET" ]; then
-    curl_cmd+=(-X "$method")
+    curl_args="$curl_args -X \"$method\""
   fi
   if [ -n "$data" ]; then
-    curl_cmd+=(-H "Content-Type: application/json" --data "$data")
+    curl_args="$curl_args -H \"Content-Type: application/json\" --data \"$data\""
   fi
-  curl_cmd+=("$url")
+  curl_args="$curl_args \"$url\""
 
   local response result
-  response="$("${curl_cmd[@]}" 2>&1)"
+  # shellcheck disable=SC2086 # curl_args needs word splitting
+  response="$(eval curl $curl_args 2>&1)"
   result=$?
 
   if [ $result -eq 0 ]; then
@@ -1298,26 +1318,27 @@ _arr_qbt_login() {
   host="$(_arr_url_host "$base")"
   local cookie
   cookie="$(_arr_qbt_cookie_path)"
-  local -a curl_cmd=(curl -fsS -c "$cookie" -b "$cookie" -d "username=${user}&password=${pass}" "$base/api/v2/auth/login")
-  local -a resolve_flags=()
-  while IFS= read -r _arr_line; do
-    resolve_flags+=("$_arr_line")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  unset _arr_line
-  if [ ${#resolve_flags[@]} -gt 0 ]; then
-    local curl_prog=""
-    local -a curl_args=()
-    local _arr_arg
-    for _arr_arg in "${curl_cmd[@]}"; do
-      if [ -z "$curl_prog" ]; then
-        curl_prog="$_arr_arg"
-      else
-        curl_args+=("$_arr_arg")
-      fi
-    done
-    curl_cmd=("$curl_prog" "${resolve_flags[@]}" "${curl_args[@]}")
+  
+  local resolve_flags_file
+  resolve_flags_file="$(mktemp)"
+  _arr_curl_resolve_flags "$base" > "$resolve_flags_file" 2>/dev/null || true
+  
+  local curl_cmd_str
+  curl_cmd_str="curl -fsS -c \"$cookie\" -b \"$cookie\" -d \"username=${user}&password=${pass}\""
+  
+  # Add resolve flags if any
+  if [ -s "$resolve_flags_file" ]; then
+    while IFS= read -r flag; do
+      [ -n "$flag" ] || continue
+      curl_cmd_str="$curl_cmd_str $flag"
+    done < "$resolve_flags_file"
   fi
-  "${curl_cmd[@]}" >/dev/null
+  rm -f "$resolve_flags_file"
+  
+  curl_cmd_str="$curl_cmd_str \"$base/api/v2/auth/login\""
+  
+  # shellcheck disable=SC2086
+  eval $curl_cmd_str >/dev/null
 }
 
 _arr_qbt_extract_listen_port() {
@@ -1332,9 +1353,8 @@ _arr_qbt_extract_listen_port() {
   fi
 
   if [ -z "$port" ]; then
-    local sed_expr
-    sed_expr=$'s/.*"listen_port"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p'
-    port="$(printf '%s\n' "$payload" | LC_ALL=C sed -n "$sed_expr" | head -n1 2>/dev/null || printf '')"
+    # Use plain string for sed expression (POSIX-compliant)
+    port="$(printf '%s\n' "$payload" | LC_ALL=C sed -n 's/.*"listen_port"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1 2>/dev/null || printf '')"
   fi
 
   case "$port" in
@@ -1386,21 +1406,32 @@ _arr_service_call() {
     echo "Missing API key for $svc (check ${ARR_DOCKER_DIR}/$svc/config.xml)." >&2
     return 1
   fi
-  local -a curl_cmd=(curl -fsS -X "$method" -H "X-API-Key: ${key}")
+  local curl_cmd_str
+  curl_cmd_str="curl -fsS -X \"$method\" -H \"X-API-Key: ${key}\""
   if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
-    curl_cmd+=(-H 'Content-Type: application/json')
+    curl_cmd_str="$curl_cmd_str -H 'Content-Type: application/json'"
   fi
-  local -a resolve_flags=()
-  while IFS= read -r _arr_line; do
-    resolve_flags+=("$_arr_line")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  unset _arr_line
-  if [ ${#resolve_flags[@]} -gt 0 ]; then
-    curl_cmd+=("${resolve_flags[@]}")
+  
+  local resolve_flags_file
+  resolve_flags_file="$(mktemp)"
+  _arr_curl_resolve_flags "$base" > "$resolve_flags_file" 2>/dev/null || true
+  
+  if [ -s "$resolve_flags_file" ]; then
+    while IFS= read -r flag; do
+      [ -n "$flag" ] || continue
+      curl_cmd_str="$curl_cmd_str $flag"
+    done < "$resolve_flags_file"
   fi
-  curl_cmd+=("$@")
-  curl_cmd+=("${base}${path}")
-  "${curl_cmd[@]}"
+  rm -f "$resolve_flags_file"
+  
+  # Add remaining arguments
+  for arg in "$@"; do
+    curl_cmd_str="$curl_cmd_str \"$arg\""
+  done
+  curl_cmd_str="$curl_cmd_str \"${base}${path}\""
+  
+  # shellcheck disable=SC2086
+  eval $curl_cmd_str
 }
 
 _arr_bazarr_call() {
@@ -1419,17 +1450,29 @@ _arr_bazarr_call() {
     *\?*) url="${url}&apikey=${key}" ;;
     *) url="${url}?apikey=${key}" ;;
   esac
-  local -a curl_cmd=(curl -fsS -X "$method")
-  local -a resolve_flags=()
-  while IFS= read -r _arr_line; do
-    resolve_flags+=("$_arr_line")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  if [ ${#resolve_flags[@]} -gt 0 ]; then
-    curl_cmd+=("${resolve_flags[@]}")
+  local curl_cmd_str
+  curl_cmd_str="curl -fsS -X \"$method\""
+  
+  local resolve_flags_file
+  resolve_flags_file="$(mktemp)"
+  _arr_curl_resolve_flags "$base" > "$resolve_flags_file" 2>/dev/null || true
+  
+  if [ -s "$resolve_flags_file" ]; then
+    while IFS= read -r flag; do
+      [ -n "$flag" ] || continue
+      curl_cmd_str="$curl_cmd_str $flag"
+    done < "$resolve_flags_file"
   fi
-  curl_cmd+=("$@")
-  curl_cmd+=("$url")
-  "${curl_cmd[@]}"
+  rm -f "$resolve_flags_file"
+  
+  # Add remaining arguments
+  for arg in "$@"; do
+    curl_cmd_str="$curl_cmd_str \"$arg\""
+  done
+  curl_cmd_str="$curl_cmd_str \"$url\""
+  
+  # shellcheck disable=SC2086
+  eval $curl_cmd_str
 }
 
 _arr_gluetun_http() {
@@ -1539,7 +1582,10 @@ arr.down() { _arr_compose down "$@"; }
 arr.restart() {
   if [ $# -eq 0 ]; then
     _arr_services_populate
-    _arr_compose restart "${_arr_services[@]}"
+    if [ -n "$_arr_services" ]; then
+      # shellcheck disable=SC2086
+      _arr_compose restart $_arr_services
+    fi
   else
     _arr_compose restart "$@"
   fi
@@ -1583,54 +1629,59 @@ arr.restart.stack() {
     gluetun_healthy=0
   fi
 
-  local -a desired=()
+  local desired=""
+  local tmpfile
+  tmpfile="$(mktemp)"
+  _arr_stack_restart_services > "$tmpfile"
   while IFS= read -r svc; do
     [ -n "$svc" ] || continue
     if _arr_service_defined "$svc"; then
-      desired+=("$svc")
+      if [ -z "$desired" ]; then
+        desired="$svc"
+      else
+        desired="$desired
+$svc"
+      fi
     fi
-  done < <(_arr_stack_restart_services)
+  done < "$tmpfile"
+  rm -f "$tmpfile"
 
-  local svc
-  for svc in "${desired[@]}"; do
-    if _arr_bool "$split" && [ "$svc" = "qbittorrent" ] && [ $gluetun_healthy -ne 1 ]; then
-      printf '==> Skipping qbittorrent: Gluetun not healthy (required in split mode)\n'
-      continue
-    fi
-    printf '==> Starting %s\n' "$svc"
-    if ! _arr_compose up -d "$svc" >/dev/null 2>&1; then
-      printf 'arr: failed to start %s; check docker compose logs.\n' "$svc" >&2
-      continue
-    fi
-    sleep 3
-  done
+  if [ -n "$desired" ]; then
+    printf '%s\n' "$desired" | while IFS= read -r svc; do
+      [ -n "$svc" ] || continue
+      if _arr_bool "$split" && [ "$svc" = "qbittorrent" ] && [ $gluetun_healthy -ne 1 ]; then
+        printf '==> Skipping qbittorrent: Gluetun not healthy (required in split mode)\n'
+        continue
+      fi
+      printf '==> Starting %s\n' "$svc"
+      if ! _arr_compose up -d "$svc" >/dev/null 2>&1; then
+        printf 'arr: failed to start %s; check docker compose logs.\n' "$svc" >&2
+        continue
+      fi
+      sleep 3
+    done
+  fi
 
   sleep 5
 
-  local -a created_svcs=()
-  local -a created_ids=()
-  for svc in "${desired[@]}"; do
-    local container_id
-    container_id="$(_arr_service_container_id "$svc" 2>/dev/null || true)"
-    if [ -z "$container_id" ]; then
-      continue
-    fi
-    local status
-    status="$(docker inspect --format '{{.State.Status}}' "$container_id" 2>/dev/null || printf '')"
-    if [ "$status" = "created" ]; then
-      created_svcs+=("$svc")
-      created_ids+=("$container_id")
-    fi
-  done
-
-  if [ ${#created_svcs[@]} -gt 0 ]; then
-    printf 'arr: forcing start for services stuck in created state: %s\n' "${created_svcs[*]}" >&2
-    local idx
-    for idx in "${!created_svcs[@]}"; do
-      local svc_name="${created_svcs[$idx]}"
-      if ! _arr_compose start "$svc_name" >/dev/null 2>&1; then
-        local container_id="${created_ids[$idx]}"
-        docker start "$container_id" >/dev/null 2>&1 || true
+  # Check for services stuck in "created" state and force-start them
+  local created_svcs=""
+  local created_ids=""
+  if [ -n "$desired" ]; then
+    printf '%s\n' "$desired" | while IFS= read -r svc; do
+      [ -n "$svc" ] || continue
+      local container_id
+      container_id="$(_arr_service_container_id "$svc" 2>/dev/null || true)"
+      if [ -z "$container_id" ]; then
+        continue
+      fi
+      local status
+      status="$(docker inspect --format '{{.State.Status}}' "$container_id" 2>/dev/null || printf '')"
+      if [ "$status" = "created" ]; then
+        # Start the container directly
+        if ! _arr_compose start "$svc" >/dev/null 2>&1; then
+          docker start "$container_id" >/dev/null 2>&1 || true
+        fi
       fi
     done
   fi
@@ -1639,17 +1690,21 @@ arr.restart.stack() {
 }
 arr.pull() { _arr_compose pull "$@"; }
 arr.logs() {
-  local -a tail_args=()
+  local tail_args=""
   if [ $# -gt 0 ] && [ "${1#*[!0-9]}" = "$1" ]; then
-    tail_args=(--tail "$1")
+    tail_args="--tail $1"
     shift
   fi
-  _arr_compose logs "${tail_args[@]}" -f "$@"
+  # shellcheck disable=SC2086
+  _arr_compose logs $tail_args -f "$@"
 }
 arr.ps() { _arr_compose ps "$@"; }
 arr.stats() {
   _arr_services_populate
-  docker stats "${_arr_services[@]}" "$@"
+  if [ -n "$_arr_services" ]; then
+    # shellcheck disable=SC2086
+    docker stats $_arr_services "$@"
+  fi
 }
 arr.shell() {
   local svc="${1:-qbittorrent}"
@@ -1662,9 +1717,13 @@ arr.shell() {
 }
 arr.health() {
   _arr_services_populate
-  local svc container_id status label
-  for svc in "${_arr_services[@]}"; do
-    label="$svc"
+  if [ -z "$_arr_services" ]; then
+    return 0
+  fi
+  printf '%s\n' "$_arr_services" | while IFS= read -r svc; do
+    [ -n "$svc" ] || continue
+    local label="$svc"
+    local container_id status
     container_id="$(_arr_service_container_id "$svc" 2>/dev/null || true)"
     if [ -n "$container_id" ]; then
       status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || printf '')"
@@ -1682,8 +1741,12 @@ arr.backup() {
   local dest="${1:-${ARR_STACK_DIR}/backups/$(date +%Y%m%d-%H%M%S)}"
   mkdir -p "$dest"
   _arr_services_populate
-  local svc
-  for svc in "${_arr_services[@]}"; do
+  if [ -z "$_arr_services" ]; then
+    printf 'No services found to backup\n'
+    return 0
+  fi
+  printf '%s\n' "$_arr_services" | while IFS= read -r svc; do
+    [ -n "$svc" ] || continue
     if [ -d "${ARR_DOCKER_DIR}/${svc}" ]; then
       tar -czf "${dest}/${svc}.tgz" -C "${ARR_DOCKER_DIR}" "$svc"
     fi
@@ -1748,19 +1811,25 @@ arr.env.list() {
 }
 
 arr.data.usage() {
-  local dirs=()
   if [ ! -d "$ARR_DOCKER_DIR" ]; then
     printf 'Missing %s\n' "$ARR_DOCKER_DIR" >&2
     return 1
   fi
-  while IFS= read -r -d '' path; do
-    dirs+=("$path")
-  done < <(find "$ARR_DOCKER_DIR" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
-  if [ ${#dirs[@]} -eq 0 ]; then
+  
+  local dirs=""
+  local tmpfile
+  tmpfile="$(mktemp)"
+  find "$ARR_DOCKER_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null > "$tmpfile" || true
+  
+  if [ ! -s "$tmpfile" ]; then
+    rm -f "$tmpfile"
     printf 'No service data directories found in %s\n' "$ARR_DOCKER_DIR"
     return 0
   fi
-  du -sh "${dirs[@]}" 2>/dev/null | sort -h
+  
+  # Read directories and pass to du
+  xargs -a "$tmpfile" du -sh 2>/dev/null | sort -h
+  rm -f "$tmpfile"
 }
 
 arr.open() {
@@ -1782,26 +1851,24 @@ arr.open() {
   flaresolverr_port="${FLARR_PORT:-$(_arr_env_get FLARR_PORT)}"
 
   printf 'Direct service endpoints:\n'
-  local -a urls=(
-    "qBittorrent" "http://${host}:${qbt_port}"
-    "Sonarr" "http://${host}:${sonarr_port}"
-    "Radarr" "http://${host}:${radarr_port}"
-    "Lidarr" "http://${host}:${lidarr_port}"
-    "Prowlarr" "http://${host}:${prowlarr_port}"
-    "Bazarr" "http://${host}:${bazarr_port}"
-    "FlareSolverr" "http://${host}:${flaresolverr_port}"
-  )
-
-  local i=0
-  while [ $i -lt ${#urls[@]} ]; do
-    local name="${urls[$i]}"
-    local url="${urls[$((i + 1))]}"
+  
+  # Helper function to print and optionally open a URL
+  _arr_print_url() {
+    local name="$1"
+    local url="$2"
     printf '  %s -> %s\n' "$name" "$url"
     if [ -n "$opener" ]; then
       "$opener" "$url" >/dev/null 2>&1 &
     fi
-    i=$((i + 2))
-  done
+  }
+  
+  _arr_print_url "qBittorrent" "http://${host}:${qbt_port}"
+  _arr_print_url "Sonarr" "http://${host}:${sonarr_port}"
+  _arr_print_url "Radarr" "http://${host}:${radarr_port}"
+  _arr_print_url "Lidarr" "http://${host}:${lidarr_port}"
+  _arr_print_url "Prowlarr" "http://${host}:${prowlarr_port}"
+  _arr_print_url "Bazarr" "http://${host}:${bazarr_port}"
+  _arr_print_url "FlareSolverr" "http://${host}:${flaresolverr_port}"
 }
 
 arr.help() {
@@ -1926,10 +1993,8 @@ arr.vpn() {
 }
 
 arr.vpn.connect() {
-  local -a compose_args=("$@")
-
   if _arr_compose_cmd >/dev/null 2>&1; then
-    if _arr_compose up -d "${compose_args[@]}" gluetun qbittorrent; then
+    if _arr_compose up -d "$@" gluetun qbittorrent; then
       return 0
     fi
   fi
@@ -2221,12 +2286,11 @@ arr.vpn.logs() {
     return 1
   fi
 
-  local -a log_args=("$@")
-  if [ ${#log_args[@]} -eq 0 ]; then
-    log_args=(-f)
+  if [ $# -eq 0 ]; then
+    docker logs -f "$container"
+  else
+    docker logs "$@" "$container"
   fi
-
-  docker logs "${log_args[@]}" "$container"
 }
 arr.vpn.ip() {
   local payload
@@ -2570,11 +2634,14 @@ arr.vpn.switch() {
       candidate="$(_arr_trim "$candidate")"
       [ -n "$candidate" ] || continue
       if [ -n "$sanitized_candidates" ]; then
-        sanitized_candidates="${sanitized_candidates}"$'\n'"${candidate}"
+        sanitized_candidates="${sanitized_candidates}
+${candidate}"
       else
         sanitized_candidates="$candidate"
       fi
-    done <<<"$candidates_raw"
+    done <<EOF
+$candidates_raw
+EOF
   fi
 
   local target=""
@@ -2606,7 +2673,9 @@ arr.vpn.switch() {
         break
       fi
       idx=$((idx + 1))
-    done <<<"$sanitized_candidates"
+    done <<EOF
+$sanitized_candidates
+EOF
     if [ -z "$target" ]; then
       warn 'Region switching / fastest endpoint selection is not implemented for this provider in this build.'
       return 0
@@ -2627,7 +2696,9 @@ arr.vpn.switch() {
           break
         fi
         idx=$((idx + 1))
-      done <<<"$sanitized_candidates"
+      done <<EOF
+$sanitized_candidates
+EOF
     fi
     if [ -z "$target" ]; then
       target="$requested"
@@ -2724,45 +2795,56 @@ _arr_qbt_call() {
   local base="$(_arr_qbt_base)"
   local cookie
   cookie="$(_arr_qbt_cookie_path)"
-  local -a resolve_flags=()
-  while IFS= read -r _arr_flag; do
-    resolve_flags+=("$_arr_flag")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  unset _arr_flag
+  local resolve_flags_file
+  resolve_flags_file="$(mktemp)"
+  _arr_curl_resolve_flags "$base" > "$resolve_flags_file" 2>/dev/null || true
+  
   local attempt=0
   while [ $attempt -lt 2 ]; do
     if [ ! -s "$cookie" ]; then
-      _arr_qbt_login || return 1
+      _arr_qbt_login || { rm -f "$resolve_flags_file"; return 1; }
     fi
     local tmp_body http_code
-    tmp_body="$(mktemp)" || return 1
-    local -a curl_cmd=(curl -sS -X "$method" -o "$tmp_body" -w '%{http_code}' -c "$cookie" -b "$cookie")
-    if [ ${#resolve_flags[@]} -gt 0 ]; then
-      curl_cmd+=("${resolve_flags[@]}")
+    tmp_body="$(mktemp)" || { rm -f "$resolve_flags_file"; return 1; }
+    
+    local curl_cmd_str
+    curl_cmd_str="curl -sS -X \"$method\" -o \"$tmp_body\" -w '%{http_code}' -c \"$cookie\" -b \"$cookie\""
+    
+    if [ -s "$resolve_flags_file" ]; then
+      while IFS= read -r flag; do
+        [ -n "$flag" ] || continue
+        curl_cmd_str="$curl_cmd_str $flag"
+      done < "$resolve_flags_file"
     fi
-    curl_cmd+=("$@")
-    curl_cmd+=("${base}${endpoint}")
-    http_code="$("${curl_cmd[@]}")"
+    
+    for arg in "$@"; do
+      curl_cmd_str="$curl_cmd_str \"$arg\""
+    done
+    curl_cmd_str="$curl_cmd_str \"${base}${endpoint}\""
+    
+    # shellcheck disable=SC2086
+    http_code="$(eval $curl_cmd_str)"
     local rc=$?
     if [ $rc -ne 0 ]; then
-      rm -f "$tmp_body"
+      rm -f "$tmp_body" "$resolve_flags_file"
       return $rc
     fi
     if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
       : >"$cookie"
       rm -f "$tmp_body"
       attempt=$((attempt + 1))
-      _arr_qbt_login || return 1
+      _arr_qbt_login || { rm -f "$resolve_flags_file"; return 1; }
       continue
     fi
     cat "$tmp_body"
-    rm -f "$tmp_body"
+    rm -f "$tmp_body" "$resolve_flags_file"
     case "$http_code" in
       '' | 000) return 1 ;;
       2?? | 3??) return 0 ;;
       *) return 1 ;;
     esac
   done
+  rm -f "$resolve_flags_file"
   echo "qBittorrent request failed after reauthentication attempts." >&2
   return 1
 }
@@ -3285,17 +3367,25 @@ EOF
 
 arr.fsolv.health() {
   local base="$(_arr_service_base flaresolverr)"
-  local -a cmd=(curl -fsS)
-  local -a resolve=()
-  while IFS= read -r _arr_resolve; do
-    resolve+=("$_arr_resolve")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  unset _arr_resolve
-  if [ ${#resolve[@]} -gt 0 ]; then
-    cmd+=("${resolve[@]}")
+  local curl_cmd_str
+  curl_cmd_str="curl -fsS"
+  
+  local resolve_flags_file
+  resolve_flags_file="$(mktemp)"
+  _arr_curl_resolve_flags "$base" > "$resolve_flags_file" 2>/dev/null || true
+  
+  if [ -s "$resolve_flags_file" ]; then
+    while IFS= read -r flag; do
+      [ -n "$flag" ] || continue
+      curl_cmd_str="$curl_cmd_str $flag"
+    done < "$resolve_flags_file"
   fi
-  cmd+=("${base}/health")
-  "${cmd[@]}" | _arr_pretty_guess
+  rm -f "$resolve_flags_file"
+  
+  curl_cmd_str="$curl_cmd_str \"${base}/health\""
+  
+  # shellcheck disable=SC2086
+  eval $curl_cmd_str | _arr_pretty_guess
 }
 
 arr.fsolv.solve() {
@@ -3305,17 +3395,25 @@ arr.fsolv.solve() {
     return 1
   fi
   local base="$(_arr_service_base flaresolverr)"
-  local -a cmd=(curl -fsS -X POST -H 'Content-Type: application/json' --data "$payload")
-  local -a resolve=()
-  while IFS= read -r _arr_resolve; do
-    resolve+=("$_arr_resolve")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  unset _arr_resolve
-  if [ ${#resolve[@]} -gt 0 ]; then
-    cmd+=("${resolve[@]}")
+  local curl_cmd_str
+  curl_cmd_str="curl -fsS -X POST -H 'Content-Type: application/json' --data \"$payload\""
+  
+  local resolve_flags_file
+  resolve_flags_file="$(mktemp)"
+  _arr_curl_resolve_flags "$base" > "$resolve_flags_file" 2>/dev/null || true
+  
+  if [ -s "$resolve_flags_file" ]; then
+    while IFS= read -r flag; do
+      [ -n "$flag" ] || continue
+      curl_cmd_str="$curl_cmd_str $flag"
+    done < "$resolve_flags_file"
   fi
-  cmd+=("${base}/v1")
-  "${cmd[@]}" | _arr_pretty_guess
+  rm -f "$resolve_flags_file"
+  
+  curl_cmd_str="$curl_cmd_str \"${base}/v1\""
+  
+  # shellcheck disable=SC2086
+  eval $curl_cmd_str | _arr_pretty_guess
 }
 
 _arr_clone_alias_group() {
@@ -3325,11 +3423,26 @@ _arr_clone_alias_group() {
   local name
   for name in "$@"; do
     # Only allow valid function names: letters, numbers, underscores, dots
-    if [[ "$legacy_prefix" =~ ^[a-zA-Z0-9_.]+$ ]] && [[ "$new_prefix" =~ ^[a-zA-Z0-9_.]+$ ]] && [[ "$name" =~ ^[a-zA-Z0-9_.]+$ ]]; then
-      eval "arr.${legacy_prefix}.${name}(){ arr.${new_prefix}.${name} \"\$@\"; }"
-    else
-      printf 'Invalid function name or prefix: legacy_prefix="%s", new_prefix="%s", name="%s"\n' "$legacy_prefix" "$new_prefix" "$name" >&2
-    fi
+    # Use case for pattern matching (POSIX-compliant)
+    case "$legacy_prefix" in
+      *[!a-zA-Z0-9_.]*)
+        printf 'Invalid legacy_prefix: "%s"\n' "$legacy_prefix" >&2
+        continue
+        ;;
+    esac
+    case "$new_prefix" in
+      *[!a-zA-Z0-9_.]*)
+        printf 'Invalid new_prefix: "%s"\n' "$new_prefix" >&2
+        continue
+        ;;
+    esac
+    case "$name" in
+      *[!a-zA-Z0-9_.]*)
+        printf 'Invalid name: "%s"\n' "$name" >&2
+        continue
+        ;;
+    esac
+    eval "arr.${legacy_prefix}.${name}(){ arr.${new_prefix}.${name} \"\$@\"; }"
   done
 }
 
@@ -3406,17 +3519,25 @@ arr.check.ports() {
   local svc base http rc=0
   for svc in qbittorrent sonarr radarr lidarr prowlarr bazarr flaresolverr; do
     base="$(_arr_service_base "$svc")"
-    local -a cmd=(curl -sS -o /dev/null -w '%{http_code}' --max-time 5)
-    local -a resolve=()
-    while IFS= read -r _arr_resolve; do
-      resolve+=("$_arr_resolve")
-    done < <(_arr_curl_resolve_flags "$base") || true
-    unset _arr_resolve
-    if [ ${#resolve[@]} -gt 0 ]; then
-      cmd+=("${resolve[@]}")
+    local curl_cmd_str
+    curl_cmd_str="curl -sS -o /dev/null -w '%{http_code}' --max-time 5"
+    
+    local resolve_flags_file
+    resolve_flags_file="$(mktemp)"
+    _arr_curl_resolve_flags "$base" > "$resolve_flags_file" 2>/dev/null || true
+    
+    if [ -s "$resolve_flags_file" ]; then
+      while IFS= read -r flag; do
+        [ -n "$flag" ] || continue
+        curl_cmd_str="$curl_cmd_str $flag"
+      done < "$resolve_flags_file"
     fi
-    cmd+=("$base")
-    http="$("${cmd[@]}" 2>/dev/null || printf '000')"
+    rm -f "$resolve_flags_file"
+    
+    curl_cmd_str="$curl_cmd_str \"$base\""
+    
+    # shellcheck disable=SC2086
+    http="$(eval $curl_cmd_str 2>/dev/null || printf '000')"
     if [ "$http" = "000" ]; then
       printf '  %-13s unavailable\n' "$svc"
       rc=1
