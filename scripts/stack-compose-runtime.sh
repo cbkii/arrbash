@@ -1689,35 +1689,7 @@ arr_compose_emit_vpn_port_guard_service() {
       - "${ARR_STACK_DIR}/scripts:/scripts:ro"
     command: ["/scripts/vpn-port-guard.sh"]
     healthcheck:
-      test:
-        - "CMD"
-        - "/bin/bash"
-        - "-ec"
-        - |-
-          set -euo pipefail
-          HC_STATUS_FILE="/gluetun_state/port-guard-status.json"
-          HC_POLL_SECONDS="$(printenv CONTROLLER_POLL_INTERVAL 2>/dev/null || true)"
-          if [[ -z "$$HC_POLL_SECONDS" ]]; then
-            HC_POLL_SECONDS="$(printenv VPN_PORT_GUARD_POLL_SECONDS 2>/dev/null || true)"
-          fi
-          if [[ -z "$$HC_POLL_SECONDS" || ! "$$HC_POLL_SECONDS" =~ ^[0-9]+$ ]]; then
-            HC_POLL_SECONDS=60
-          fi
-          HC_FRESHNESS_WINDOW=$(( HC_POLL_SECONDS < 60 ? 60 : HC_POLL_SECONDS + 60 ))
-          test -s "$$HC_STATUS_FILE"
-          if ! HC_MTIME="$(stat -c %Y "$$HC_STATUS_FILE" 2>/dev/null)"; then
-            printf 'vpn-port-guard status timestamp unavailable\n' >&2
-            exit 1
-          fi
-          HC_NOW="$(date +%s)"
-          if (( HC_NOW - HC_MTIME > HC_FRESHNESS_WINDOW )); then
-            printf 'vpn-port-guard status stale (age=%ss, window=%ss)\n' $(( HC_NOW - HC_MTIME )) "$$HC_FRESHNESS_WINDOW" >&2
-            exit 1
-          fi
-          curl -fsS --connect-timeout 5 --max-time 5 -H "X-API-Key: ${GLUETUN_API_KEY}" \
-            "http://127.0.0.1:${GLUETUN_CONTROL_PORT}/v1/${VPN_TYPE:-openvpn}/status" >/dev/null
-          curl -fsS --connect-timeout 5 --max-time 5 \
-            "http://127.0.0.1:${QBT_INT_PORT}/api/v2/app/version" >/dev/null
+      test: ["CMD", "/scripts/vpn-port-guard.sh", "healthcheck"]
       interval: "15s"
       timeout: "10s"
       retries: "3"
