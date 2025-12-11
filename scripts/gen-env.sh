@@ -119,7 +119,7 @@ if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
   fi
   
   # Read existing .env file
-  local _preserve_env_file="${ARR_ENV_FILE:-}"
+  _preserve_env_file="${ARR_ENV_FILE:-}"
   if [[ -z "$_preserve_env_file" ]]; then
     # Compute it the same way as later in the script
     _preserve_env_file="${OUT_ARG}"
@@ -150,10 +150,10 @@ fi
 if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" && ${#_existing_env_values[@]} -gt 0 ]]; then
   for key in "${!_existing_env_values[@]}"; do
     # Check if userr.conf explicitly set a different value from defaults
-    local _is_userr_override=0
+    _is_userr_override=0
     if [[ -v "$key" ]]; then
-      local _current_value="${!key}"
-      local _default_value="${_defaults_snapshot[$key]:-}"
+      _current_value="${!key}"
+      _default_value="${_defaults_snapshot[$key]:-}"
       # If the current value differs from the default, userr.conf overrode it
       if [[ "$_current_value" != "$_default_value" ]]; then
         _is_userr_override=1
