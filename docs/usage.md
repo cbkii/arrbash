@@ -195,6 +195,7 @@ Options:
   --refresh-aliases     Regenerate helper aliases and reload your shell
   --alias               Generate standalone .aliasarr file without stack updates
   --force-unlock        Remove an existing installer lock before continuing
+  --preserve-config     Preserve existing service configs during re-run (safe update mode)
   --uninstall           Remove the ARR stack and revert host changes
   --help                Show this help message
 ```
@@ -216,6 +217,9 @@ Options:
 
 # Temporarily enable SABnzbd
 ./arr.sh --enable-sab --yes
+
+# Safe update mode - preserve existing configs
+./arr.sh --preserve-config --yes
 
 # Sync API keys to Configarr after changing them in the apps
 ./arr.sh --sync-api-keys --yes
@@ -336,6 +340,43 @@ After editing `userr.conf`, re-run the installer to apply changes:
 ```
 
 This regenerates configuration files and restarts affected services.
+
+### Safe update mode (--preserve-config)
+
+When re-running the installer on an existing installation, use `--preserve-config` to avoid overwriting your service configurations:
+
+```bash
+./arr.sh --preserve-config
+```
+
+**What gets preserved:**
+- ✅ **Docker service configs** (`qBittorrent.conf`, arr settings xml) - completely untouched if it exists
+- ✅ **Environment variables** (`.env`) - existing values are kept, new keys added
+- ✅ **Timestamped backup** - critical files backed up to `${ARR_STACK_DIR}/.backups/YYYYMMDD-HHMMSS/`
+
+**What still gets updated:**
+- ✅ **Helper scripts** - bug fixes and improvements in `${ARR_STACK_DIR}/scripts/`
+- ✅ **docker-compose.yml** - new service definitions and features
+- ✅ **Aliases** (`.aliasarr`) - updated with new helpers
+
+**When to use this flag:**
+- You've made manual changes via qBittorrent WebUI (port, username, whitelist, etc.)
+- You want to update scripts without risking config overwrites
+- You're running on a production system and want minimal disruption
+- Default values have changed between versions, but you want to retain your settings
+
+**Example workflow:**
+```bash
+# Initial installation
+./arr.sh --yes
+
+# Make changes via qBittorrent WebUI...
+# (change port from 8080 to 8082, modify auth whitelist, etc.)
+
+# Update scripts/features without overwriting configs
+./arr.sh --preserve-config --yes
+# Output: 📦 Backup created at: /home/user/srv/arr/.backups/20251211-143022/
+```
 
 ### Rotating the Gluetun API key
 
