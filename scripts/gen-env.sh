@@ -117,7 +117,7 @@ if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
       fi
     done < <(arr_collect_all_expected_env_keys)
   fi
-  
+
   # Read existing .env file
   _preserve_env_file="${ARR_ENV_FILE:-}"
   if [[ -z "$_preserve_env_file" ]]; then
@@ -127,7 +127,7 @@ if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
       _preserve_env_file="${ARR_STACK_DIR}/.env"
     fi
   fi
-  
+
   if [[ -f "$_preserve_env_file" ]]; then
     while IFS= read -r line; do
       # Skip comments and empty lines
@@ -139,7 +139,7 @@ if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
       value="${line#*=}"
       value="$(unescape_env_value_from_compose "$value")"
       _existing_env_values["$key"]="$value"
-    done < "$_preserve_env_file"
+    done <"$_preserve_env_file"
   fi
 fi
 
@@ -163,9 +163,9 @@ if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" && ${#_existing_env_values[@]} -gt 0 ]]
         _is_userr_override=1
       fi
     fi
-    
+
     # Only restore preserved value if userr.conf didn't override it
-    if (( ! _is_userr_override )); then
+    if ((!_is_userr_override)); then
       printf -v "$key" '%s' "${_existing_env_values[$key]}"
     fi
   done

@@ -718,7 +718,7 @@ refresh_aliases() {
 # The generated file dynamically discovers configuration on each sourcing.
 write_standalone_alias_file() {
   local output_file="$1"
-  
+
   local tmp_file
   if ! tmp_file="$(arr_mktemp_file "${output_file}.XXXX" "${SECRET_FILE_MODE:-0600}")"; then
     warn "Failed to create temporary alias file"
@@ -1708,7 +1708,7 @@ install_standalone_alias() {
   if [[ -z "${ARR_STACK_DIR:-}" ]] && declare -f arr_stack_dir >/dev/null 2>&1; then
     ARR_STACK_DIR="$(arr_stack_dir)"
   fi
-  
+
   if [[ -z "${ARR_STACK_DIR:-}" ]]; then
     ARR_STACK_DIR="${HOME}/srv/arr"
   fi
@@ -1731,6 +1731,6 @@ install_standalone_alias() {
   msg "✅ Standalone alias file generated: ${alias_file}"
   msg " Source it with: source ${alias_file}"
   msg " Or add to your shell rc: echo 'source ${alias_file}' >> ~/.bashrc"
-  
+
   return 0
 }

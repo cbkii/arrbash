@@ -4,19 +4,19 @@
 
 This document explains how arrbash works internally: how the installer processes configuration, generates files, and launches the Docker stack.
 
----
+______________________________________________________________________
 
 ## Overview
 
 The `arr.sh` script is the main entry point. When you run it:
 
 1. Loads configuration from defaults, user overrides, environment, and CLI flags
-2. Validates dependencies and prerequisites
-3. Generates `.env` and `docker-compose.yml` files
-4. Creates directories with proper permissions
-5. Starts Docker containers in the correct order
+1. Validates dependencies and prerequisites
+1. Generates `.env` and `docker-compose.yml` files
+1. Creates directories with proper permissions
+1. Starts Docker containers in the correct order
 
----
+______________________________________________________________________
 
 ## Container services
 
@@ -30,7 +30,7 @@ The stack consists of these containers:
 | **sonarr** | `linuxserver/sonarr` | TV show automation. | `arr_net` bridge |
 | **radarr** | `linuxserver/radarr` | Movie automation. | `arr_net` bridge |
 | **lidarr** | `linuxserver/lidarr` | Music automation. | `arr_net` bridge |
-| **prowlarr** | `linuxserver/prowlarr` | Indexer management for all *arr apps. | `arr_net` bridge |
+| **prowlarr** | `linuxserver/prowlarr` | Indexer management for all \*arr apps. | `arr_net` bridge |
 | **bazarr** | `linuxserver/bazarr` | Subtitle automation. | `arr_net` bridge |
 | **flaresolverr** | `flaresolverr/flaresolverr` | Cloudflare captcha solver for indexers. | `arr_net` bridge |
 | **sabnzbd** (optional) | `linuxserver/sabnzbd` | Usenet downloader. Placement controlled by `SABNZBD_USE_VPN`. | `arr_net` or shares gluetun |
@@ -54,7 +54,7 @@ When `EXPOSE_DIRECT_PORTS=1` (default), services publish their WebUI ports on th
 
 **Note**: arrbash does not provide DNS or HTTPS. Configure those separately with a reverse proxy if needed.
 
----
+______________________________________________________________________
 
 ## Generated files
 
@@ -77,7 +77,7 @@ Additionally, in `${ARR_DOCKER_DIR}` (default: `~/srv/arr/dockarr`):
 
 **Important**: Never edit generated files directly. Change `userr.conf` and re-run the installer.
 
----
+______________________________________________________________________
 
 ## How the installer works
 
@@ -86,9 +86,9 @@ Additionally, in `${ARR_DOCKER_DIR}` (default: `~/srv/arr/dockarr`):
 The `main()` function in `arr.sh` processes configuration in this order:
 
 1. **Defaults** (`arrconf/userr.conf.defaults.sh`) – Loaded first, provides all default values
-2. **User config** (`${ARRCONF_DIR}/userr.conf`) – Overrides defaults
-3. **Environment variables** – Exported vars override user config
-4. **CLI flags** – Highest precedence (e.g., `--enable-sab` sets `SABNZBD_ENABLED=1`)
+1. **User config** (`${ARRCONF_DIR}/userr.conf`) – Overrides defaults
+1. **Environment variables** – Exported vars override user config
+1. **CLI flags** – Highest precedence (e.g., `--enable-sab` sets `SABNZBD_ENABLED=1`)
 
 The precedence ensures you can always override any setting at runtime.
 
@@ -109,11 +109,11 @@ Before generating files, the installer validates:
 The `scripts/gen-env.sh` script:
 
 1. Sources the configuration (defaults + user overrides)
-2. Applies derived logic (port fallbacks, boolean normalization)
-3. Reads `scripts/.env.template`
-4. Processes conditional blocks (`# @if VAR` ... `# @endif`)
-5. Runs `envsubst` to replace `${VAR}` placeholders
-6. Writes the result to `${ARR_ENV_FILE}` with mode `0600`
+1. Applies derived logic (port fallbacks, boolean normalization)
+1. Reads `scripts/.env.template`
+1. Processes conditional blocks (`# @if VAR` ... `# @endif`)
+1. Runs `envsubst` to replace `${VAR}` placeholders
+1. Writes the result to `${ARR_ENV_FILE}` with mode `0600`
 
 **Template guards**: The template uses `# @if VAR` blocks to conditionally include sections:
 
@@ -145,6 +145,7 @@ The `mkdirs` function creates:
 - Service-specific directories with appropriate permissions
 
 Permissions follow `ARR_PERMISSION_PROFILE`:
+
 - `strict` (default): secrets `600`, directories `700`
 - `collab`: shared files `660`, directories `770`
 
@@ -153,14 +154,14 @@ Permissions follow `ARR_PERMISSION_PROFILE`:
 The `start_stack` function:
 
 1. Starts **gluetun** first and waits for it to become healthy
-2. Starts **vpn-port-guard** (monitors forwarded port)
-3. Starts **qbittorrent** (waits for port-guard health)
-4. Starts remaining services in parallel
-5. Runs optional post-start tasks (API key sync, etc.)
+1. Starts **vpn-port-guard** (monitors forwarded port)
+1. Starts **qbittorrent** (waits for port-guard health)
+1. Starts remaining services in parallel
+1. Runs optional post-start tasks (API key sync, etc.)
 
 Health checks ensure services don't start before their dependencies are ready.
 
----
+______________________________________________________________________
 
 ## Key helper scripts
 
@@ -175,7 +176,7 @@ Health checks ensure services don't start before their dependencies are ready.
 | `scripts/stack-apikeys.sh` | API key sync for Configarr |
 | `scripts/gen-aliasarr.sh` | Generates shell aliases |
 
----
+______________________________________________________________________
 
 ## Network architecture
 
@@ -200,11 +201,12 @@ Internet ← arr_net bridge ← sonarr, radarr, prowlarr, etc.
 ```
 
 Split mode is recommended because:
-- *arr apps can access metadata servers directly (faster)
+
+- \*arr apps can access metadata servers directly (faster)
 - Troubleshooting is easier
 - Only torrent/usenet traffic is VPN-protected
 
----
+______________________________________________________________________
 
 ## Related documentation
 

@@ -4,7 +4,7 @@
 
 This document explains the VPN tunnel modes, ProtonVPN port forwarding, and SABnzbd placement options.
 
----
+______________________________________________________________________
 
 ## VPN modes
 
@@ -13,13 +13,13 @@ arrbash supports two network configurations controlled by `SPLIT_VPN`:
 | Mode | Setting | What happens | Best for |
 |------|---------|--------------|----------|
 | **Full tunnel** | `SPLIT_VPN=0` | All services share Gluetun's VPN network. Everything goes through the VPN tunnel. | Maximum privacy; all traffic protected. |
-| **Split tunnel** | `SPLIT_VPN=1` | Only qBittorrent (and optionally SABnzbd) use the VPN. The *arr apps connect directly to the internet. | **Recommended**. Faster metadata lookups, easier troubleshooting. |
+| **Split tunnel** | `SPLIT_VPN=1` | Only qBittorrent (and optionally SABnzbd) use the VPN. The \*arr apps connect directly to the internet. | **Recommended**. Faster metadata lookups, easier troubleshooting. |
 
 ### Changing modes
 
 1. Edit `userr.conf` and set `SPLIT_VPN=1` (or `0`)
-2. Optionally set `EXPOSE_DIRECT_PORTS=1` to publish WebUI ports on your LAN
-3. Re-run the installer:
+1. Optionally set `EXPOSE_DIRECT_PORTS=1` to publish WebUI ports on your LAN
+1. Re-run the installer:
    ```bash
    ./arr.sh --yes
    ```
@@ -32,7 +32,7 @@ When using split tunnel mode (`SPLIT_VPN=1`):
 
 - **Port exposure**: Set `EXPOSE_DIRECT_PORTS=1` to publish service ports on the host. Without this, services only listen on their internal Docker network.
 
----
+______________________________________________________________________
 
 ## ProtonVPN port forwarding
 
@@ -41,10 +41,10 @@ ProtonVPN supports NAT-PMP port forwarding on certain servers. This allows incom
 ### How it works
 
 1. **Gluetun** connects to ProtonVPN using your credentials.
-2. ProtonVPN assigns a **forwarded port** (this port can change between sessions).
-3. **vpn-port-guard** detects the forwarded port by polling Gluetun's control API.
-4. The guard updates qBittorrent's listening port to match.
-5. Status is written to `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`.
+1. ProtonVPN assigns a **forwarded port** (this port can change between sessions).
+1. **vpn-port-guard** detects the forwarded port by polling Gluetun's control API.
+1. The guard updates qBittorrent's listening port to match.
+1. Status is written to `${ARR_DOCKER_DIR}/gluetun/state/port-guard-status.json`.
 
 ### Requirements
 
@@ -67,11 +67,12 @@ Port forwarding is enabled automatically when using ProtonVPN. The relevant sett
 This sidecar container:
 
 1. Polls Gluetun's control API every `VPN_PORT_GUARD_POLL_SECONDS` seconds
-2. Reads the current forwarded port from `/tmp/gluetun/forwarded_port`
-3. If the port changed, updates qBittorrent via its WebUI API
-4. Writes atomic status to `port-guard-status.json`
+1. Reads the current forwarded port from `/tmp/gluetun/forwarded_port`
+1. If the port changed, updates qBittorrent via its WebUI API
+1. Writes atomic status to `port-guard-status.json`
 
 The service has its own health check that verifies:
+
 - The status file exists and was updated recently
 - Gluetun's control API is responding
 - qBittorrent's API is accessible
@@ -114,7 +115,7 @@ The API requires `GLUETUN_API_KEY` for authentication. Rotate it periodically:
 ./arr.sh --rotate-api-key --yes
 ```
 
----
+______________________________________________________________________
 
 ## SABnzbd placement
 
@@ -132,7 +133,7 @@ SABNZBD_ENABLED=1
 SABNZBD_USE_VPN=0
 ```
 
-- SABnzbd runs on the `arr_net` bridge like the *arr apps
+- SABnzbd runs on the `arr_net` bridge like the \*arr apps
 - Accessible at `http://LAN_IP:8080` when `EXPOSE_DIRECT_PORTS=1`
 - Sonarr/Radarr/Lidarr can connect using `localhost:8080` or the LAN IP
 
@@ -145,7 +146,7 @@ SABNZBD_USE_VPN=1
 
 - SABnzbd shares Gluetun's network namespace (like qBittorrent)
 - All Usenet traffic goes through the VPN tunnel
-- Not directly accessible on a host port; *arr apps connect through Docker networking
+- Not directly accessible on a host port; \*arr apps connect through Docker networking
 - Uses port `8081` inside Gluetun (doesn't conflict with qBittorrent's `8080`)
 
 ### Port configuration
@@ -157,7 +158,7 @@ SABNZBD_USE_VPN=1
 
 If SABnzbd shares Gluetun (`SABNZBD_USE_VPN=1`), keep `SABNZBD_INT_PORT=8081` to avoid conflicts with qBittorrent (`8080`).
 
----
+______________________________________________________________________
 
 ## Useful diagnostic commands
 
@@ -187,7 +188,7 @@ docker inspect vpn-port-guard --format '{{.State.Health.Status}}'
 docker logs vpn-port-guard --tail 50
 ```
 
----
+______________________________________________________________________
 
 ## Related documentation
 

@@ -238,7 +238,7 @@ port_guard_healthcheck() {
   fi
 
   local freshness_window
-  freshness_window=$(( poll_seconds < 60 ? 60 : poll_seconds + 60 ))
+  freshness_window=$((poll_seconds < 60 ? 60 : poll_seconds + 60))
 
   if [[ ! -s "${status_file}" ]]; then
     log_error "Healthcheck: status file missing or empty at ${status_file}"
@@ -252,8 +252,8 @@ port_guard_healthcheck() {
   fi
 
   now="$(date +%s 2>/dev/null || printf '0')"
-  if (( now - mtime > freshness_window )); then
-    log_error "Healthcheck: status stale (age=$(( now - mtime ))s, window=${freshness_window}s)"
+  if ((now - mtime > freshness_window)); then
+    log_error "Healthcheck: status stale (age=$((now - mtime))s, window=${freshness_window}s)"
     return 1
   fi
 

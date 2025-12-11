@@ -4,7 +4,7 @@
 
 This guide covers installation, configuration, and daily operation of the arrbash media stack.
 
----
+______________________________________________________________________
 
 ## Installation
 
@@ -13,7 +13,7 @@ This guide covers installation, configuration, and daily operation of the arrbas
 Before installing, ensure your system has:
 
 1. **Docker** and **Docker Compose v2** (the `docker compose` subcommand, not the legacy `docker-compose`)
-2. **Git**, **curl**, **jq**, **openssl**, **yq**, **envsubst** (from `gettext-base`), and **python3**
+1. **Git**, **curl**, **jq**, **openssl**, **yq**, **envsubst** (from `gettext-base`), and **python3**
 
 Install on Debian/Ubuntu:
 
@@ -38,13 +38,13 @@ sudo chmod +x /usr/local/bin/yq
    cd arrbash
    ```
 
-2. **Create your configuration directory** outside the repo to keep secrets separate:
+1. **Create your configuration directory** outside the repo to keep secrets separate:
 
    ```bash
    mkdir -p ~/srv/arrconfigs
    ```
 
-3. **Copy the example files** and set secure permissions:
+1. **Copy the example files** and set secure permissions:
 
    ```bash
    cp arrconf/proton.auth.example ~/srv/arrconfigs/proton.auth
@@ -52,7 +52,7 @@ sudo chmod +x /usr/local/bin/yq
    chmod 600 ~/srv/arrconfigs/proton.auth ~/srv/arrconfigs/userr.conf
    ```
 
-4. **Edit your VPN credentials** in `~/srv/arrconfigs/proton.auth`:
+1. **Edit your VPN credentials** in `~/srv/arrconfigs/proton.auth`:
 
    ```bash
    nano ~/srv/arrconfigs/proton.auth
@@ -60,24 +60,26 @@ sudo chmod +x /usr/local/bin/yq
 
    Replace the placeholder values with your ProtonVPN OpenVPN username and password (found in your ProtonVPN account settings).
 
-5. **Edit your configuration** in `~/srv/arrconfigs/userr.conf`:
+1. **Edit your configuration** in `~/srv/arrconfigs/userr.conf`:
 
    ```bash
    nano ~/srv/arrconfigs/userr.conf
    ```
 
    At minimum, set:
+
    - `LAN_IP` – Your machine's LAN IP address (find with `ip addr` or `hostname -I`)
    - `DOWNLOADS_DIR` – Where qBittorrent saves active downloads
    - `MEDIA_DIR` – Root of your media library
 
-6. **Run the installer**:
+1. **Run the installer**:
 
    ```bash
    ./arr.sh --yes
    ```
 
    This command:
+
    - Validates your configuration and dependencies
    - Generates `.env` and `docker-compose.yml` files
    - Creates necessary directories with proper permissions
@@ -85,7 +87,7 @@ sudo chmod +x /usr/local/bin/yq
 
    Omit `--yes` to see confirmation prompts before each major step.
 
----
+______________________________________________________________________
 
 ## Configuration
 
@@ -94,9 +96,9 @@ sudo chmod +x /usr/local/bin/yq
 arrbash reads configuration from multiple sources. When the same variable is set in multiple places, the highest-precedence source wins:
 
 1. **CLI flags** (highest) – e.g., `--enable-sab` sets `SABNZBD_ENABLED=1` for that run
-2. **Exported environment variables** – e.g., `export SPLIT_VPN=1 && ./arr.sh`
-3. **User config file** – `${ARRCONF_DIR}/userr.conf` (defaults to `~/srv/arrconfigs/userr.conf`)
-4. **Defaults file** (lowest) – `arrconf/userr.conf.defaults.sh` in the repo
+1. **Exported environment variables** – e.g., `export SPLIT_VPN=1 && ./arr.sh`
+1. **User config file** – `${ARRCONF_DIR}/userr.conf` (defaults to `~/srv/arrconfigs/userr.conf`)
+1. **Defaults file** (lowest) – `arrconf/userr.conf.defaults.sh` in the repo
 
 ### Default paths
 
@@ -176,7 +178,7 @@ Adjust these if you experience connectivity issues:
 | `QBT_API_TIMEOUT` | `10` | qBittorrent API timeout (seconds) |
 | `QBT_API_RETRY_COUNT` | `3` | Number of retry attempts |
 
----
+______________________________________________________________________
 
 ## CLI flags
 
@@ -228,7 +230,7 @@ Options:
 ./arr.sh --uninstall
 ```
 
----
+______________________________________________________________________
 
 ## Optional services
 
@@ -248,7 +250,7 @@ Configarr syncs TRaSH-Guides quality profiles to Sonarr and Radarr automatically
 - Enable with `SABNZBD_ENABLED=1` in `userr.conf`
 - Or temporarily with `./arr.sh --enable-sab`
 - Control VPN routing:
-  - `SABNZBD_USE_VPN=0` – SABnzbd on LAN bridge (reachable by *arr apps)
+  - `SABNZBD_USE_VPN=0` – SABnzbd on LAN bridge (reachable by \*arr apps)
   - `SABNZBD_USE_VPN=1` – SABnzbd shares Gluetun's VPN tunnel
 
 ### VueTorrent WebUI
@@ -260,7 +262,7 @@ The modern VueTorrent interface for qBittorrent is included by default via the L
 
 Access VueTorrent at `http://LAN_IP:8080/vuetorrent/` (note the trailing slash).
 
----
+______________________________________________________________________
 
 ## Daily operations
 
@@ -283,6 +285,7 @@ You can generate the `.aliasarr` file without running the full stack installer:
 ```
 
 This creates a runtime-config-aware alias file that:
+
 - Automatically discovers configuration from your stack directory
 - Reads `.env` and service config files on each sourcing
 - Extracts API keys from `config.xml` files
@@ -350,22 +353,26 @@ When re-running the installer on an existing installation, use `--preserve-confi
 ```
 
 **What gets preserved:**
+
 - ✅ **Docker service configs** (`qBittorrent.conf`, arr settings xml) - completely untouched if it exists
 - ✅ **Environment variables** (`.env`) - existing values are kept, new keys added
 - ✅ **Timestamped backup** - critical files backed up to `${ARR_STACK_DIR}/.backups/YYYYMMDD-HHMMSS/`
 
 **What still gets updated:**
+
 - ✅ **Helper scripts** - bug fixes and improvements in `${ARR_STACK_DIR}/scripts/`
 - ✅ **docker-compose.yml** - new service definitions and features
 - ✅ **Aliases** (`.aliasarr`) - updated with new helpers
 
 **When to use this flag:**
+
 - You've made manual changes via qBittorrent WebUI (port, username, whitelist, etc.)
 - You want to update scripts without risking config overwrites
 - You're running on a production system and want minimal disruption
 - Default values have changed between versions, but you want to retain your settings
 
 **Example workflow:**
+
 ```bash
 # Initial installation
 ./arr.sh --yes
@@ -386,7 +393,7 @@ For security, periodically rotate the API key:
 ./arr.sh --rotate-api-key --yes
 ```
 
----
+______________________________________________________________________
 
 ## Diagnostics
 
@@ -410,20 +417,21 @@ Check which ports are listening on your host:
 sudo ss -tulpn | grep -E ':8080|:8989|:7878|:9696|:6767|:8191'
 ```
 
----
+______________________________________________________________________
 
 ## Security best practices
 
 1. **Keep secrets outside the repo**: Store `proton.auth` and `userr.conf` in `~/srv/arrconfigs/` (not in the cloned repo).
 
-2. **File permissions**: The installer sets `.env` and credential files to mode `600` (owner read/write only).
+1. **File permissions**: The installer sets `.env` and credential files to mode `600` (owner read/write only).
 
-3. **qBittorrent password**:
+1. **qBittorrent password**:
+
    - Default is `adminadmin` – change it immediately in the WebUI.
    - After changing in WebUI, update `QBT_PASS` in `userr.conf` to match, then re-run the installer.
 
-4. **LAN whitelist**: When `LAN_IP` is set, the installer adds `LAN_IP/24` to `QBT_AUTH_WHITELIST`, allowing password-less access from your local network.
+1. **LAN whitelist**: When `LAN_IP` is set, the installer adds `LAN_IP/24` to `QBT_AUTH_WHITELIST`, allowing password-less access from your local network.
 
-5. **Rotate API keys**: Periodically run `./arr.sh --rotate-api-key --yes` to generate new Gluetun credentials.
+1. **Rotate API keys**: Periodically run `./arr.sh --rotate-api-key --yes` to generate new Gluetun credentials.
 
-6. **Never commit secrets**: Ensure `.env`, `proton.auth`, and `userr.conf` are in your `.gitignore`.
+1. **Never commit secrets**: Ensure `.env`, `proton.auth`, and `userr.conf` are in your `.gitignore`.

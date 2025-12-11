@@ -179,7 +179,7 @@ sync_vpn_port_guard_assets() {
     cp "${REPO_ROOT}/scripts/${asset}" "$ARR_STACK_DIR/scripts/${asset}"
     ensure_file_mode "$ARR_STACK_DIR/scripts/${asset}" 755
   done
-  
+
   # qBittorrent tracker updater daemon
   cp "${REPO_ROOT}/scripts/qbt-tracker-updater-daemon.sh" "$ARR_STACK_DIR/scripts/qbt-tracker-updater-daemon.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/qbt-tracker-updater-daemon.sh" 755

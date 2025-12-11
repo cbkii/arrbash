@@ -146,10 +146,10 @@ arr_compute_qbt_auth_whitelist() {
   local existing_whitelist="${1:-}"
   local lan_ip="${LAN_IP:-}"
   local localhost_ip="${LOCALHOST_IP:-127.0.0.1}"
-  
+
   # Start with existing whitelist or sensible defaults
   local auth_whitelist="${existing_whitelist:-${localhost_ip}/32,::1/128}"
-  
+
   # Only add LAN CIDR if explicitly enabled via QBT_AUTH_WHITELIST_INCLUDE_LAN
   if [[ "${QBT_AUTH_WHITELIST_INCLUDE_LAN:-0}" == "1" ]]; then
     local qb_lan_whitelist=""
@@ -160,7 +160,7 @@ arr_compute_qbt_auth_whitelist() {
       fi
     fi
   fi
-  
+
   # Normalize and return
   if declare -f normalize_csv >/dev/null 2>&1; then
     normalize_csv "$auth_whitelist"

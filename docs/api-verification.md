@@ -4,11 +4,11 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 
 **Last Verified**: December 11, 2024
 
----
+______________________________________________________________________
 
 ## 1. Radarr v3 API
 
-**Official Documentation**: https://radarr.video/docs/api/  
+**Official Documentation**: https://radarr.video/docs/api/\
 **Current LinuxServer.io Image**: Uses Radarr v4/v5 (maintains v3 API compatibility)
 
 ### Endpoints Used
@@ -22,14 +22,14 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | `/api/v3/queue` | Download queue | ✅ Valid |
 | `/api/v3/qualityprofile` | Quality profiles | ✅ Valid |
 
-**Authentication**: X-API-Key header  
+**Authentication**: X-API-Key header\
 **Result**: 6/6 endpoints correct
 
----
+______________________________________________________________________
 
 ## 2. Sonarr v3 API
 
-**Official Documentation**: https://sonarr.tv/docs/api/  
+**Official Documentation**: https://sonarr.tv/docs/api/\
 **Current LinuxServer.io Image**: Uses Sonarr v4 (maintains v3 API compatibility)
 
 ### Endpoints Used
@@ -43,14 +43,14 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | `/api/v3/queue` | Download queue | ✅ Valid |
 | `/api/v3/qualityprofile` | Quality profiles | ✅ Valid |
 
-**Authentication**: X-API-Key header  
+**Authentication**: X-API-Key header\
 **Result**: 6/6 endpoints correct
 
----
+______________________________________________________________________
 
 ## 3. Lidarr v1 API
 
-**Official Documentation**: https://lidarr.audio/docs/api/  
+**Official Documentation**: https://lidarr.audio/docs/api/\
 **Current LinuxServer.io Image**: Uses Lidarr v1.x
 
 ### Endpoints Used
@@ -60,14 +60,14 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | `/api/v1/system/status` | System status | ✅ Valid |
 | `/api/v1/health` | Health check | ✅ Valid |
 
-**Authentication**: X-API-Key header  
+**Authentication**: X-API-Key header\
 **Result**: 2/2 endpoints correct
 
----
+______________________________________________________________________
 
 ## 4. Prowlarr v1 API
 
-**Official Documentation**: https://prowlarr.com/docs/api/  
+**Official Documentation**: https://prowlarr.com/docs/api/\
 **Current LinuxServer.io Image**: Uses Prowlarr v1.x
 
 ### Endpoints Used
@@ -78,14 +78,14 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | `/api/v1/health` | Health check | ✅ Valid |
 | `/api/v1/indexer` | Indexer list | ✅ Valid |
 
-**Authentication**: X-API-Key header  
+**Authentication**: X-API-Key header\
 **Result**: 3/3 endpoints correct
 
----
+______________________________________________________________________
 
 ## 5. Bazarr API
 
-**Official Documentation**: https://wiki.bazarr.media/Additional-Configuration/API/  
+**Official Documentation**: https://wiki.bazarr.media/Additional-Configuration/API/\
 **Current LinuxServer.io Image**: Uses Bazarr v1.x
 
 ### Endpoints Used
@@ -94,16 +94,16 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 |----------|---------|--------|
 | `/api/system/status?apikey=xxx` | System status | ✅ Valid |
 
-**Authentication**: apikey query parameter  
+**Authentication**: apikey query parameter\
 **Result**: 1/1 endpoints correct
 
 **Note**: Bazarr uses an unversioned API with the API key passed as a query parameter, not in headers.
 
----
+______________________________________________________________________
 
 ## 6. qBittorrent Web API v2
 
-**Official Documentation**: https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)  
+**Official Documentation**: https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)\
 **Current LinuxServer.io Image**: Uses qBittorrent v4.5+
 
 ### Endpoints Used
@@ -119,14 +119,14 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | `/api/v2/torrents/pause` | Pause torrents | ✅ Valid |
 | `/api/v2/torrents/resume` | Resume torrents | ✅ Valid |
 
-**Authentication**: Cookie-based (SID)  
+**Authentication**: Cookie-based (SID)\
 **Result**: 8/8 endpoints correct
 
----
+______________________________________________________________________
 
 ## 7. SABnzbd API
 
-**Official Documentation**: https://sabnzbd.org/wiki/advanced/api  
+**Official Documentation**: https://sabnzbd.org/wiki/advanced/api\
 **Current LinuxServer.io Image**: Uses SABnzbd v3.x/v4.x
 
 ### API Modes Used
@@ -140,15 +140,15 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | `pause` | Pause downloads | ✅ Valid |
 | `resume` | Resume downloads | ✅ Valid |
 
-**API Format**: `/api?mode=<mode>&apikey=<key>&output=json`  
-**Authentication**: apikey query parameter  
+**API Format**: `/api?mode=<mode>&apikey=<key>&output=json`\
+**Authentication**: apikey query parameter\
 **Result**: 6/6 modes correct
 
----
+______________________________________________________________________
 
 ## 8. Gluetun Control API
 
-**Official Documentation**: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md  
+**Official Documentation**: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md\
 **Current Image**: Uses Gluetun latest (control server enabled)
 
 ### Endpoints Used
@@ -162,10 +162,10 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | `/v1/wireguard/portforwarded` | Port forwarding (WireGuard) | ✅ Valid |
 | `/v1/openvpn/actions/restart` | Restart tunnel (PUT) | ✅ Valid |
 
-**Authentication**: X-API-Key header  
+**Authentication**: X-API-Key header\
 **Result**: 6/6 endpoints correct
 
----
+______________________________________________________________________
 
 ## Overall Summary
 
@@ -183,13 +183,14 @@ This document verifies that all API endpoints used in the standalone `.aliasarr`
 | Gluetun | 6/6 | ✅ All correct |
 | **TOTAL** | **38/38** | **✅ 100% correct** |
 
----
+______________________________________________________________________
 
 ## Implementation Notes
 
 ### API Versioning Standards
 
-All *arr services follow Servarr API standards:
+All \*arr services follow Servarr API standards:
+
 - **Radarr/Sonarr**: Use v3 API (backward compatible with v4+ releases)
 - **Lidarr/Prowlarr**: Use v1 API
 - **Bazarr**: Uses unversioned API
@@ -203,16 +204,19 @@ The endpoint `/api/v3/qualityprofile` (singular form) is correct for both Radarr
 Different services use different authentication approaches:
 
 1. **X-API-Key Header** (Radarr, Sonarr, Lidarr, Prowlarr, Gluetun)
+
    ```bash
    curl -H "X-API-Key: <key>" <url>/api/v3/...
    ```
 
-2. **Query Parameter** (Bazarr, SABnzbd)
+1. **Query Parameter** (Bazarr, SABnzbd)
+
    ```bash
    curl <url>/api/...?apikey=<key>
    ```
 
-3. **Cookie-based** (qBittorrent)
+1. **Cookie-based** (qBittorrent)
+
    ```bash
    curl -c cookie.txt -b cookie.txt -d "username=x&password=y" <url>/api/v2/auth/login
    curl -b cookie.txt <url>/api/v2/...
@@ -220,18 +224,19 @@ Different services use different authentication approaches:
 
 ### UrlBase Support
 
-The implementation correctly prepends UrlBase (when present in `config.xml`) to all *arr service API calls:
+The implementation correctly prepends UrlBase (when present in `config.xml`) to all \*arr service API calls:
 
 ```bash
 # If config.xml has <UrlBase>/radarr</UrlBase>
 # API calls become: http://host:port/radarr/api/v3/...
 ```
 
----
+______________________________________________________________________
 
 ## Maintenance
 
 This document should be reviewed and updated when:
+
 - New API versions are released by any service
 - LinuxServer.io updates container images with breaking API changes
 - New endpoints are added to `.aliasarr`

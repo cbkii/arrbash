@@ -838,7 +838,7 @@ main() {
   # Export preserve config flag for use by child scripts
   if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
     export ARR_PRESERVE_CONFIG
-    
+
     # Create backup of critical files before any modifications
     # stack-preserve.sh is loaded in the modules array, so this should always be available
     if ! declare -f arr_backup_critical_files >/dev/null 2>&1; then

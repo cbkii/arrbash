@@ -191,7 +191,7 @@ hydrate_values_from_env_file() {
   for var_name in "${!vars_ref[@]}"; do
     default_value="${vars_ref[$var_name]}"
     current_value="${!var_name:-}"
-    
+
     # Skip if user has already set a non-default value in userr.conf
     # This checks if the current value is explicitly set and differs from default
     if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
@@ -200,7 +200,7 @@ hydrate_values_from_env_file() {
 
     # Read from .env first
     existing_value="$(get_env_kv "$var_name" "$ARR_ENV_FILE" 2>/dev/null || printf '')"
-    
+
     # If .env has a value, use it (regardless of whether it matches the default)
     if [[ -n "$existing_value" ]]; then
       printf -v "$var_name" '%s' "$existing_value"
@@ -218,7 +218,7 @@ hydrate_qbt_auth_whitelist_from_env_file() {
   # Use evaluated default that matches userr.conf.defaults.sh
   local default_whitelist="${QBT_AUTH_WHITELIST:-127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128}"
   local current_whitelist="${QBT_AUTH_WHITELIST:-}"
-  
+
   # Skip if user has already set a non-default whitelist in userr.conf
   if [[ -n "$current_whitelist" && "$current_whitelist" != "$default_whitelist" ]]; then
     return 0
@@ -402,23 +402,23 @@ hydrate_sabnzbd_settings_from_env_file() {
 arr_backup_critical_files() {
   local timestamp
   timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
-  
+
   local backup_root="${ARR_STACK_DIR}/.backups"
   local backup_dir="${backup_root}/${timestamp}"
-  
+
   # Create backup directory
   if ! mkdir -p "${backup_dir}" 2>/dev/null; then
     warn "Failed to create backup directory: ${backup_dir}"
     return 1
   fi
-  
+
   # Ensure backup directory has secure permissions
   chmod 700 "${backup_dir}" 2>/dev/null || true
-  
+
   local backed_up_count=0
   local docker_root
   docker_root="$(arr_docker_data_root)"
-  
+
   # Backup .env file
   local env_file="${ARR_STACK_DIR}/.env"
   if [[ -f "${env_file}" ]]; then
@@ -429,7 +429,7 @@ arr_backup_critical_files() {
       warn "Failed to backup .env file"
     fi
   fi
-  
+
   # Backup docker-compose.yml
   local compose_file="${ARR_STACK_DIR}/docker-compose.yml"
   if [[ -f "${compose_file}" ]]; then
@@ -440,7 +440,7 @@ arr_backup_critical_files() {
       warn "Failed to backup docker-compose.yml"
     fi
   fi
-  
+
   # Backup qBittorrent config
   local qbt_conf
   qbt_conf="$(arr_qbt_conf_path "${docker_root}")"
@@ -456,7 +456,7 @@ arr_backup_critical_files() {
       fi
     fi
   fi
-  
+
   # Backup Gluetun auth config
   local gluetun_auth_config="${docker_root}/gluetun/auth/config.toml"
   if [[ -f "${gluetun_auth_config}" ]]; then
@@ -471,7 +471,7 @@ arr_backup_critical_files() {
       fi
     fi
   fi
-  
+
   if ((backed_up_count > 0)); then
     ARR_BACKUP_DIR="${backup_dir}"
     export ARR_BACKUP_DIR

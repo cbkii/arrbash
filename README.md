@@ -1,6 +1,6 @@
 # arrbash
 
-**arrbash** is a Bash-based installer that sets up a complete media automation stack on a Debian-based Linux host. It configures **qBittorrent** behind a **Gluetun** VPN container (using ProtonVPN) alongside the *arr apps (Sonarr, Radarr, Lidarr, Prowlarr, Bazarr) for automated media management.
+**arrbash** is a Bash-based installer that sets up a complete media automation stack on a Debian-based Linux host. It configures **qBittorrent** behind a **Gluetun** VPN container (using ProtonVPN) alongside the \*arr apps (Sonarr, Radarr, Lidarr, Prowlarr, Bazarr) for automated media management.
 
 ## What you get
 
@@ -71,6 +71,7 @@ nano ~/srv/arrconfigs/userr.conf
 ```
 
 At minimum, set:
+
 - **`LAN_IP`**: Your machine's local IP address (e.g., `192.168.1.50`). Find it with `ip addr` or `hostname -I`.
 - **`DOWNLOADS_DIR`** and **`MEDIA_DIR`**: Paths to your download and media storage.
 
@@ -81,10 +82,11 @@ At minimum, set:
 ```
 
 This single command:
+
 1. Reads your configuration from `~/srv/arrconfigs/userr.conf`.
-2. Generates a `.env` file with all necessary settings.
-3. Creates a `docker-compose.yml` file.
-4. Starts all containers (Docker will download the images on first run).
+1. Generates a `.env` file with all necessary settings.
+1. Creates a `docker-compose.yml` file.
+1. Starts all containers (Docker will download the images on first run).
 
 **Note**: Omit `--yes` if you want interactive confirmation prompts.
 
@@ -109,9 +111,9 @@ Replace `LAN_IP` with the IP you configured.
 Configuration follows this precedence (highest to lowest):
 
 1. **CLI flags** (e.g., `--enable-sab`)
-2. **Exported environment variables** (e.g., `export SPLIT_VPN=1`)
-3. **User config file** (`~/srv/arrconfigs/userr.conf` by default)
-4. **Defaults** (`arrconf/userr.conf.defaults.sh`)
+1. **Exported environment variables** (e.g., `export SPLIT_VPN=1`)
+1. **User config file** (`~/srv/arrconfigs/userr.conf` by default)
+1. **Defaults** (`arrconf/userr.conf.defaults.sh`)
 
 ### Key settings to review
 
@@ -154,6 +156,7 @@ source ~/srv/arr/.aliasarr
 ```
 
 Common aliases:
+
 - `arr.vpn.status` – Check VPN connection status
 - `arr.vpn.port` – Show the current forwarded port
 - `arr.logs` – Tail container logs

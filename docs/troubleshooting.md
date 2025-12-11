@@ -4,7 +4,7 @@
 
 This guide helps diagnose and fix common issues with the arrbash media stack.
 
----
+______________________________________________________________________
 
 ## Quick fixes
 
@@ -36,7 +36,7 @@ Many issues can be fixed by regenerating configuration:
 
 This rebuilds `.env`, `docker-compose.yml`, and restarts services.
 
----
+______________________________________________________________________
 
 ## VPN and connectivity issues
 
@@ -45,15 +45,17 @@ This rebuilds `.env`, `docker-compose.yml`, and restarts services.
 **Symptom**: Can't access qBittorrent WebUI when using `SPLIT_VPN=1`.
 
 **Solutions**:
+
 1. Ensure `EXPOSE_DIRECT_PORTS=1` is set in `userr.conf`
-2. Access qBittorrent using your LAN IP: `http://LAN_IP:8080`
-3. In Sonarr/Radarr download client settings, use `http://LAN_IP:8080` (not `localhost`)
+1. Access qBittorrent using your LAN IP: `http://LAN_IP:8080`
+1. In Sonarr/Radarr download client settings, use `http://LAN_IP:8080` (not `localhost`)
 
 ### qBittorrent can't download anything
 
 **Symptom**: Torrents add but don't download; trackers show errors.
 
 **Check VPN connectivity**:
+
 ```bash
 # Test DNS resolution through the VPN
 docker exec gluetun nslookup github.com
@@ -66,6 +68,7 @@ docker logs qbittorrent 2>&1 | grep -i "tracker\|peer\|connection"
 ```
 
 **If DNS fails**: Gluetun might not have connected. Check its logs:
+
 ```bash
 docker logs gluetun --tail 100
 ```
@@ -75,6 +78,7 @@ docker logs gluetun --tail 100
 **Symptom**: qBittorrent or other services start before dependencies are ready.
 
 **Check health status**:
+
 ```bash
 # View container status with health
 docker ps --format "table {{.Names}}\t{{.Status}}"
@@ -91,6 +95,7 @@ Health checks should show `healthy` before dependent services start.
 **Symptom**: `arr.vpn.port` shows no port or an old port.
 
 **Diagnose**:
+
 ```bash
 # Check port-guard status
 arr.vpn.port.state
@@ -103,6 +108,7 @@ docker logs vpn-port-guard --tail 50
 ```
 
 **Fix**: Rotate the Gluetun API key and restart:
+
 ```bash
 ./arr.sh --rotate-api-key --yes
 ```
@@ -112,6 +118,7 @@ docker logs vpn-port-guard --tail 50
 **Symptom**: Gluetun logs show auth errors; VPN won't connect.
 
 **Check credentials**:
+
 ```bash
 # View Gluetun logs
 docker logs gluetun | tail -50
@@ -121,6 +128,7 @@ cat ~/srv/arrconfigs/proton.auth
 ```
 
 **Regenerate auth config**:
+
 ```bash
 rm -f ~/srv/arr/dockarr/gluetun/auth/config.toml
 ./arr.sh --yes
@@ -131,36 +139,42 @@ rm -f ~/srv/arr/dockarr/gluetun/auth/config.toml
 **Symptom**: VPN stays disconnected; auto-reconnect seems inactive.
 
 **Check if enabled**:
+
 ```bash
 grep VPN_AUTO_RECONNECT_ENABLED ~/srv/arrconfigs/userr.conf
 ```
 
 **Check status**:
+
 ```bash
 arr.vpn.auto.status
 ```
 
 **Resume if paused**:
+
 ```bash
 arr.vpn.auto.resume
 ```
 
----
+______________________________________________________________________
 
 ## WebUI and credential issues
 
 ### VueTorrent shows blank page or HTTP 500
 
 **Check mod configuration**:
+
 ```bash
 grep QBT_DOCKER_MODS ~/srv/arr/.env
 ```
 
 **If using LSIO mod** (default):
+
 - VueTorrent should be at `http://LAN_IP:8080/vuetorrent/`
 - The mod auto-installs VueTorrent on container start
 
 **If blank after fresh install**: Wait for container to fully start, then refresh:
+
 ```bash
 docker logs qbittorrent 2>&1 | grep -i vuetorrent
 ```
@@ -168,6 +182,7 @@ docker logs qbittorrent 2>&1 | grep -i vuetorrent
 ### Forgot qBittorrent password
 
 **View current credentials**:
+
 ```bash
 # From helper script
 ./scripts/stack-qbt-helper.sh show
@@ -177,6 +192,7 @@ grep QBT_PASS ~/srv/arr/.env
 ```
 
 **Reset to default**:
+
 ```bash
 ./scripts/stack-qbt-helper.sh reset
 ./arr.sh --yes
@@ -187,6 +203,7 @@ grep QBT_PASS ~/srv/arr/.env
 **Symptom**: Helper scripts fail with auth errors.
 
 **Verify password matches**:
+
 ```bash
 # Check what's in .env
 grep QBT_PASS ~/srv/arr/.env
@@ -204,12 +221,14 @@ nano ~/srv/arrconfigs/userr.conf
 **Symptom**: Always prompted for password from LAN machines.
 
 **Check whitelist configuration**:
+
 ```bash
 # View qBittorrent config
 grep AuthSubnetWhitelist ~/srv/arr/dockarr/qbittorrent/qBittorrent/qBittorrent.conf
 ```
 
 **Fix**: Ensure `LAN_IP` is set in `userr.conf`. The installer auto-adds `LAN_IP/24` to the whitelist:
+
 ```bash
 grep LAN_IP ~/srv/arrconfigs/userr.conf
 ./arr.sh --yes
@@ -224,11 +243,12 @@ grep LAN_IP ~/srv/arrconfigs/userr.conf
 **Solution**: The default `QBT_AUTH_WHITELIST` now includes `172.17.0.0/16,::ffff:172.28.0.1/128` to cover Docker's default bridge network internal traffic. Additionally, `LocalHostAuth` is set to `false` so the whitelist bypass works correctly. If you use custom Docker networks, add their subnets explicitly.
 
 If you're running an older configuration:
+
 1. Update `userr.conf` to include Docker's default bridge subnet in the whitelist:
    ```bash
    QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128,172.17.0.0/16,::ffff:172.28.0.1/128"
    ```
-2. Re-run the installer to apply changes:
+1. Re-run the installer to apply changes:
    ```bash
    ./arr.sh --yes
    ```
@@ -238,22 +258,25 @@ If you're running an older configuration:
 **Symptom**: Configarr fails with "invalid API key" errors.
 
 **Sync API keys**:
+
 ```bash
 ./arr.sh --sync-api-keys --yes
 ```
 
 Run this after:
+
 - First installation
 - Any Sonarr/Radarr/Prowlarr reinstall
 - Changing API keys in the apps
 
----
+______________________________________________________________________
 
 ## Container and Docker issues
 
 ### Container keeps restarting
 
 **View restart reason**:
+
 ```bash
 docker inspect <container> --format '{{.State.ExitCode}} {{.State.Error}}'
 docker logs <container> --tail 100
@@ -262,6 +285,7 @@ docker logs <container> --tail 100
 ### Out of disk space
 
 **Check Docker disk usage**:
+
 ```bash
 docker system df
 docker system prune -a  # WARNING: removes unused images/containers
@@ -270,6 +294,7 @@ docker system prune -a  # WARNING: removes unused images/containers
 ### Permission denied errors
 
 **Check ownership**:
+
 ```bash
 ls -la ~/srv/arr/
 ls -la ~/srv/arr/dockarr/
@@ -278,12 +303,13 @@ ls -la ~/srv/arr/dockarr/
 Files should be owned by your user (matching `PUID`/`PGID` in config).
 
 **Fix permissions**:
+
 ```bash
 ./scripts/fix-permissions.sh
 ./arr.sh --yes
 ```
 
----
+______________________________________________________________________
 
 ## Network and port issues
 
@@ -292,15 +318,17 @@ Files should be owned by your user (matching `PUID`/`PGID` in config).
 **Symptom**: Installer fails with "port in use" error.
 
 **Find what's using the port**:
+
 ```bash
 sudo ss -tulpn | grep :8080
 sudo lsof -i :8080
 ```
 
 **Options**:
+
 1. Stop the conflicting service
-2. Change the port in `userr.conf` (e.g., `QBT_PORT=8082`)
-3. Set `ARR_PORT_CHECK_MODE=warn` to continue anyway
+1. Change the port in `userr.conf` (e.g., `QBT_PORT=8082`)
+1. Set `ARR_PORT_CHECK_MODE=warn` to continue anyway
 
 ### Verify exposed ports
 
@@ -315,16 +343,18 @@ You should see only the services you've enabled.
 ### Firewall blocking access
 
 **Check UFW status**:
+
 ```bash
 sudo ufw status
 ```
 
 **Allow a port**:
+
 ```bash
 sudo ufw allow 8080/tcp comment "qBittorrent"
 ```
 
----
+______________________________________________________________________
 
 ## Diagnostic scripts
 
@@ -335,6 +365,7 @@ sudo ufw allow 8080/tcp comment "qBittorrent"
 ```
 
 This checks:
+
 - Required dependencies
 - Docker daemon status
 - API connectivity
@@ -348,7 +379,7 @@ For monitoring systems:
 ./scripts/stack-healthcheck.sh --format json
 ```
 
----
+______________________________________________________________________
 
 ## Getting more help
 
@@ -383,7 +414,7 @@ docker compose config
 
 If this shows errors, there's a problem with the generated `docker-compose.yml`.
 
----
+______________________________________________________________________
 
 ## Related documentation
 
