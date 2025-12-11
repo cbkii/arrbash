@@ -1342,6 +1342,11 @@ arr.qbt.port.set() {
     printf 'Usage: arr.qbt.port.set <port>\n' >&2
     return 1
   fi
+  # Validate port: must be integer between 1 and 65535
+  if ! [[ "$1" =~ ^[0-9]+$ ]] || [ "$1" -lt 1 ] || [ "$1" -gt 65535 ]; then
+    printf 'Error: Port must be an integer between 1 and 65535\n' >&2
+    return 1
+  fi
   _arr_qbt_call POST /api/v2/app/setPreferences --data "json={\"listen_port\":$1}"
   printf 'Port set to %s\n' "$1"
 }
