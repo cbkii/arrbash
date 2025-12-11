@@ -165,7 +165,7 @@ sync_vpn_auto_reconnect_assets() {
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-auto-reconnect-daemon.sh" 755
 }
 
-# Copies vpn-port-guard controller assets into the stack scripts directory
+# Copies vpn-port-guard and qBittorrent-related assets into the stack scripts directory
 sync_vpn_port_guard_assets() {
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
@@ -179,6 +179,10 @@ sync_vpn_port_guard_assets() {
     cp "${REPO_ROOT}/scripts/${asset}" "$ARR_STACK_DIR/scripts/${asset}"
     ensure_file_mode "$ARR_STACK_DIR/scripts/${asset}" 755
   done
+  
+  # qBittorrent tracker updater daemon
+  cp "${REPO_ROOT}/scripts/qbt-tracker-updater-daemon.sh" "$ARR_STACK_DIR/scripts/qbt-tracker-updater-daemon.sh"
+  ensure_file_mode "$ARR_STACK_DIR/scripts/qbt-tracker-updater-daemon.sh" 755
 
   msg "vpn-port-guard scripts: ${ARR_STACK_DIR}/scripts"
 }
@@ -219,6 +223,16 @@ write_qbt_config() {
   config_dir="$(arr_qbt_config_root "$docker_root")"
   runtime_dir="$(arr_qbt_runtime_dir "$docker_root")"
   conf_file="$(arr_qbt_conf_path "$docker_root")"
+
+  # Skip qBittorrent config modification when preserve flag is set
+  if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
+    if [[ -f "$conf_file" ]]; then
+      msg "Preserving existing qBittorrent config (--preserve-config)"
+      return 0
+    fi
+    # If config doesn't exist, proceed with creation even in preserve mode
+    msg "No existing qBittorrent config found, creating default config"
+  fi
 
   arr_qbt_migrate_legacy_conf "$docker_root"
 

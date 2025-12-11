@@ -226,6 +226,59 @@ EOF_JSON
   fi
 }
 
+# --- Health check entrypoint ---
+port_guard_healthcheck() {
+  local status_file
+  status_file="${STATUS_FILE:-/gluetun_state/port-guard-status.json}"
+
+  local poll_seconds
+  poll_seconds="${CONTROLLER_POLL_INTERVAL:-${VPN_PORT_GUARD_POLL_SECONDS:-}}"
+  if [[ -z "${poll_seconds}" || ! "${poll_seconds}" =~ ^[0-9]+$ ]]; then
+    poll_seconds=60
+  fi
+
+  local freshness_window
+  freshness_window=$(( poll_seconds < 60 ? 60 : poll_seconds + 60 ))
+
+  if [[ ! -s "${status_file}" ]]; then
+    log_error "Healthcheck: status file missing or empty at ${status_file}"
+    return 1
+  fi
+
+  local mtime now
+  if ! mtime="$(stat -c %Y "${status_file}" 2>/dev/null)"; then
+    log_error "Healthcheck: unable to read status timestamp from ${status_file}"
+    return 1
+  fi
+
+  now="$(date +%s 2>/dev/null || printf '0')"
+  if (( now - mtime > freshness_window )); then
+    log_error "Healthcheck: status stale (age=$(( now - mtime ))s, window=${freshness_window}s)"
+    return 1
+  fi
+
+  if declare -f gluetun_api_healthcheck >/dev/null 2>&1; then
+    if ! gluetun_api_healthcheck; then
+      log_error "Healthcheck: Gluetun control API unreachable"
+      return 1
+    fi
+  fi
+
+  if declare -f qbt_api_healthcheck >/dev/null 2>&1; then
+    if ! qbt_api_healthcheck; then
+      log_error "Healthcheck: qBittorrent API unreachable"
+      return 1
+    fi
+  else
+    if ! curl -fsS --connect-timeout 5 --max-time 5 "http://${QBT_HOST}:${QBT_PORT}/api/v2/app/version" >/dev/null; then
+      log_error "Healthcheck: qBittorrent API probe failed"
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
 # --- Port fetching ---
 # Fetches the forwarded port from Gluetun API (primary) or status file (deprecated fallback)
 fetch_forwarded_port() {
@@ -464,6 +517,13 @@ main_loop() {
 }
 
 # --- Entry point ---
+if [[ "${1:-}" == "healthcheck" ]]; then
+  if port_guard_healthcheck; then
+    exit 0
+  fi
+  exit 1
+fi
+
 log "Starting vpn-port-guard v2.0 (optimized for Gluetun v3.40+)"
 log "Poll interval: ${CONTROLLER_POLL_INTERVAL}s, Strict mode: ${CONTROLLER_REQUIRE_PF}"
 initialise

@@ -395,3 +395,93 @@ hydrate_sabnzbd_settings_from_env_file() {
 
   hydrate_values_from_env_file sab_vars
 }
+
+# Creates timestamped backup of critical configuration files before modifications
+# Returns 0 on success, non-zero if backup fails
+# Exports ARR_BACKUP_DIR with the backup location
+arr_backup_critical_files() {
+  local timestamp
+  timestamp="$(arr_date_local '+%Y%m%d-%H%M%S')"
+  
+  local backup_root="${ARR_STACK_DIR}/.backups"
+  local backup_dir="${backup_root}/${timestamp}"
+  
+  # Create backup directory
+  if ! mkdir -p "${backup_dir}" 2>/dev/null; then
+    warn "Failed to create backup directory: ${backup_dir}"
+    return 1
+  fi
+  
+  # Ensure backup directory has secure permissions
+  chmod 700 "${backup_dir}" 2>/dev/null || true
+  
+  local backed_up_count=0
+  local docker_root
+  docker_root="$(arr_docker_data_root)"
+  
+  # Backup .env file
+  local env_file="${ARR_STACK_DIR}/.env"
+  if [[ -f "${env_file}" ]]; then
+    if cp -a "${env_file}" "${backup_dir}/.env" 2>/dev/null; then
+      chmod 600 "${backup_dir}/.env" 2>/dev/null || true
+      ((backed_up_count++))
+    else
+      warn "Failed to backup .env file"
+    fi
+  fi
+  
+  # Backup docker-compose.yml
+  local compose_file="${ARR_STACK_DIR}/docker-compose.yml"
+  if [[ -f "${compose_file}" ]]; then
+    if cp -a "${compose_file}" "${backup_dir}/docker-compose.yml" 2>/dev/null; then
+      chmod 600 "${backup_dir}/docker-compose.yml" 2>/dev/null || true
+      ((backed_up_count++))
+    else
+      warn "Failed to backup docker-compose.yml"
+    fi
+  fi
+  
+  # Backup qBittorrent config
+  local qbt_conf
+  qbt_conf="$(arr_qbt_conf_path "${docker_root}")"
+  if [[ -f "${qbt_conf}" ]]; then
+    local qbt_backup_dir="${backup_dir}/qbittorrent"
+    if mkdir -p "${qbt_backup_dir}" 2>/dev/null; then
+      chmod 700 "${qbt_backup_dir}" 2>/dev/null || true
+      if cp -a "${qbt_conf}" "${qbt_backup_dir}/qBittorrent.conf" 2>/dev/null; then
+        chmod 600 "${qbt_backup_dir}/qBittorrent.conf" 2>/dev/null || true
+        ((backed_up_count++))
+      else
+        warn "Failed to backup qBittorrent.conf"
+      fi
+    fi
+  fi
+  
+  # Backup Gluetun auth config
+  local gluetun_auth_config="${docker_root}/gluetun/auth/config.toml"
+  if [[ -f "${gluetun_auth_config}" ]]; then
+    local gluetun_backup_dir="${backup_dir}/gluetun"
+    if mkdir -p "${gluetun_backup_dir}" 2>/dev/null; then
+      chmod 700 "${gluetun_backup_dir}" 2>/dev/null || true
+      if cp -a "${gluetun_auth_config}" "${gluetun_backup_dir}/config.toml" 2>/dev/null; then
+        chmod 600 "${gluetun_backup_dir}/config.toml" 2>/dev/null || true
+        ((backed_up_count++))
+      else
+        warn "Failed to backup Gluetun auth config"
+      fi
+    fi
+  fi
+  
+  if ((backed_up_count > 0)); then
+    ARR_BACKUP_DIR="${backup_dir}"
+    export ARR_BACKUP_DIR
+    msg "📦 Backup created at: ${backup_dir}"
+    msg "   Backed up ${backed_up_count} file(s)"
+    return 0
+  else
+    warn "No files were backed up"
+    # Clean up empty backup directory tree (may have subdirectories)
+    rm -rf "${backup_dir}" 2>/dev/null || true
+    return 1
+  fi
+}
