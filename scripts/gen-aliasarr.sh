@@ -1135,7 +1135,12 @@ _arr_qbt_login() {
   user="${QBT_USER:-$(_arr_env_get QBT_USER 2>/dev/null || echo admin)}"
   pass="${QBT_PASS:-$(_arr_env_get QBT_PASS 2>/dev/null || echo adminadmin)}"
   
-  cookie="${TMPDIR:-/tmp}/.qbt-cookie-$$"
+  # Use mktemp to create secure cookie file with 600 permissions
+  if ! cookie="$(mktemp "${TMPDIR:-/tmp}/.qbt-cookie.XXXXXX" 2>/dev/null)"; then
+    printf 'Error: Failed to create secure cookie file\n' >&2
+    return 1
+  fi
+  chmod 600 "$cookie" 2>/dev/null || true
   
   if ! curl -fsS -c "$cookie" -b "$cookie" \
        -d "username=${user}&password=${pass}" \
@@ -1567,9 +1572,9 @@ _arr_sab_call() {
   
   local url="${base}/api?mode=${mode}&apikey=${key}&output=json"
   
-  # Add any extra parameters
+  # Add any extra parameters with proper URL encoding
   while [ $# -gt 0 ]; do
-    url="${url}&$1"
+    url="${url}&$(_arr_urlencode "$1")"
     shift
   done
   
