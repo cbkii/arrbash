@@ -724,6 +724,7 @@ Options:
   --sync-api-keys       Force Sonarr/Radarr/Prowlarr API key sync into Configarr secrets
   --no-auto-api-sync    Disable automatic Configarr API key sync for this run
   --refresh-aliases     Regenerate helper aliases and reload your shell
+  --alias               Generate standalone .aliasarr file without stack updates
   --force-unlock        Remove an existing installer lock before continuing
   --uninstall           Remove the ARR stack and revert host changes
   --help                Show this help message
@@ -781,6 +782,10 @@ main() {
         REFRESH_ALIASES=1
         shift
         ;;
+      --alias)
+        INSTALL_ALIAS_ONLY=1
+        shift
+        ;;
       --uninstall)
         RUN_UNINSTALL=1
         shift
@@ -812,6 +817,11 @@ main() {
 
   if [[ "${REFRESH_ALIASES:-0}" == "1" ]]; then
     refresh_aliases
+    return 0
+  fi
+
+  if [[ "${INSTALL_ALIAS_ONLY:-0}" == "1" ]]; then
+    install_standalone_alias
     return 0
   fi
 
