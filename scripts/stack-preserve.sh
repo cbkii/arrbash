@@ -420,8 +420,9 @@ arr_backup_critical_files() {
   docker_root="$(arr_docker_data_root)"
   
   # Backup .env file
-  if [[ -f "${ARR_ENV_FILE}" ]]; then
-    if cp -a "${ARR_ENV_FILE}" "${backup_dir}/.env" 2>/dev/null; then
+  local env_file="${ARR_STACK_DIR}/.env"
+  if [[ -f "${env_file}" ]]; then
+    if cp -a "${env_file}" "${backup_dir}/.env" 2>/dev/null; then
       chmod 600 "${backup_dir}/.env" 2>/dev/null || true
       ((backed_up_count++))
     else

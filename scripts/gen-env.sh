@@ -137,6 +137,7 @@ if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
       # Split on first = only, preserving any = in the value
       key="${line%%=*}"
       value="${line#*=}"
+      value="$(unescape_env_value_from_compose "$value")"
       _existing_env_values["$key"]="$value"
     done < "$_preserve_env_file"
   fi

@@ -346,11 +346,11 @@ This regenerates configuration files and restarts affected services.
 When re-running the installer on an existing installation, use `--preserve-config` to avoid overwriting your service configurations:
 
 ```bash
-./arr.sh --preserve-config --yes
+./arr.sh --preserve-config
 ```
 
 **What gets preserved:**
-- ✅ **qBittorrent configuration** (`qBittorrent.conf`) - completely untouched if it exists
+- ✅ **Docker service configs** (`qBittorrent.conf`, arr settings xml) - completely untouched if it exists
 - ✅ **Environment variables** (`.env`) - existing values are kept, new keys added
 - ✅ **Timestamped backup** - critical files backed up to `${ARR_STACK_DIR}/.backups/YYYYMMDD-HHMMSS/`
 
