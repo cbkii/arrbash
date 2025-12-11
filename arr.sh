@@ -726,6 +726,7 @@ Options:
   --refresh-aliases     Regenerate helper aliases and reload your shell
   --alias               Generate standalone .aliasarr file without stack updates
   --force-unlock        Remove an existing installer lock before continuing
+  --preserve-config     Preserve existing service configs during re-run (safe update mode)
   --uninstall           Remove the ARR stack and revert host changes
   --help                Show this help message
 USAGE
@@ -786,6 +787,10 @@ main() {
         INSTALL_ALIAS_ONLY=1
         shift
         ;;
+      --preserve-config)
+        ARR_PRESERVE_CONFIG=1
+        shift
+        ;;
       --uninstall)
         RUN_UNINSTALL=1
         shift
@@ -829,6 +834,19 @@ main() {
 
   ARR_ORCHESTRATED_RUN=1
   export ARR_ORCHESTRATED_RUN
+
+  # Export preserve config flag for use by child scripts
+  if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
+    export ARR_PRESERVE_CONFIG
+    
+    # Create backup of critical files before any modifications
+    if declare -f arr_backup_critical_files >/dev/null 2>&1; then
+      step "📦 Creating backup of critical files"
+      if ! arr_backup_critical_files; then
+        warn "Backup creation failed, but continuing with --preserve-config mode"
+      fi
+    fi
+  fi
 
   # Pre-hydrate preserved configuration so preflight checks reflect the
   # ports and credentials we intend to reuse during this run.

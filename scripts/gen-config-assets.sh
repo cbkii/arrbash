@@ -224,6 +224,16 @@ write_qbt_config() {
   runtime_dir="$(arr_qbt_runtime_dir "$docker_root")"
   conf_file="$(arr_qbt_conf_path "$docker_root")"
 
+  # Skip qBittorrent config modification when preserve flag is set
+  if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
+    if [[ -f "$conf_file" ]]; then
+      msg "Preserving existing qBittorrent config (--preserve-config)"
+      return 0
+    fi
+    # If config doesn't exist, proceed with creation even in preserve mode
+    msg "No existing qBittorrent config found, creating default config"
+  fi
+
   arr_qbt_migrate_legacy_conf "$docker_root"
 
   ensure_dir "$config_dir"

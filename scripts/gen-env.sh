@@ -103,11 +103,68 @@ if [[ -f "$DEFAULTS_PATH" ]]; then
   . "$DEFAULTS_PATH"
   set -u
 fi
+
+# When ARR_PRESERVE_CONFIG is set, capture existing .env values before loading userr.conf
+declare -A _existing_env_values=()
+declare -A _defaults_snapshot=()
+if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" ]]; then
+  # Snapshot current defaults before loading userr.conf
+  if declare -f arr_collect_all_expected_env_keys >/dev/null 2>&1; then
+    while IFS= read -r key; do
+      [[ -z "$key" ]] && continue
+      if [[ -v "$key" ]]; then
+        _defaults_snapshot["$key"]="${!key}"
+      fi
+    done < <(arr_collect_all_expected_env_keys)
+  fi
+  
+  # Read existing .env file
+  local _preserve_env_file="${ARR_ENV_FILE:-}"
+  if [[ -z "$_preserve_env_file" ]]; then
+    # Compute it the same way as later in the script
+    _preserve_env_file="${OUT_ARG}"
+    if [[ -z "$_preserve_env_file" ]]; then
+      _preserve_env_file="${ARR_STACK_DIR}/.env"
+    fi
+  fi
+  
+  if [[ -f "$_preserve_env_file" ]]; then
+    while IFS='=' read -r key value; do
+      # Skip comments and empty lines
+      [[ "$key" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "$key" ]] && continue
+      # Store the value (which may contain = signs)
+      _existing_env_values["$key"]="$value"
+    done < "$_preserve_env_file"
+  fi
+fi
+
 if [[ -f "$CONF_PATH" ]]; then
   set +u
   # shellcheck source=/dev/null disable=SC1090
   . "$CONF_PATH"
   set -u
+fi
+
+# After loading configs, restore preserved values (unless explicitly overridden in userr.conf)
+if [[ "${ARR_PRESERVE_CONFIG:-0}" == "1" && ${#_existing_env_values[@]} -gt 0 ]]; then
+  for key in "${!_existing_env_values[@]}"; do
+    # Check if userr.conf explicitly set a different value from defaults
+    local _is_userr_override=0
+    if [[ -v "$key" ]]; then
+      local _current_value="${!key}"
+      local _default_value="${_defaults_snapshot[$key]:-}"
+      # If the current value differs from the default, userr.conf overrode it
+      if [[ "$_current_value" != "$_default_value" ]]; then
+        _is_userr_override=1
+      fi
+    fi
+    
+    # Only restore preserved value if userr.conf didn't override it
+    if (( ! _is_userr_override )); then
+      printf -v "$key" '%s' "${_existing_env_values[$key]}"
+    fi
+  done
 fi
 
 if command -v arr_set_docker_services_list >/dev/null 2>&1; then
