@@ -193,6 +193,7 @@ Options:
   --sync-api-keys       Force Sonarr/Radarr/Prowlarr API key sync into Configarr secrets
   --no-auto-api-sync    Disable automatic Configarr API key sync for this run
   --refresh-aliases     Regenerate helper aliases and reload your shell
+  --alias               Generate standalone .aliasarr file without stack updates
   --force-unlock        Remove an existing installer lock before continuing
   --uninstall           Remove the ARR stack and revert host changes
   --help                Show this help message
@@ -269,17 +270,62 @@ source ~/srv/arr/.aliasarr
 
 Add this line to your `~/.bashrc` or `~/.zshrc` to load automatically.
 
+#### Standalone alias installation
+
+You can generate the `.aliasarr` file without running the full stack installer:
+
+```bash
+./arr.sh --alias
+```
+
+This creates a runtime-config-aware alias file that:
+- Automatically discovers configuration from your stack directory
+- Reads `.env` and service config files on each sourcing
+- Extracts API keys from `config.xml` files
+- Honors `UrlBase` settings from service configs
+- Provides clear error messages when config is missing
+
+The generated file is standalone and has no template placeholders—it can be sourced independently even after moving it to a different location (though it will use that location as the stack directory).
+
 ### Useful aliases
+
+**Service-specific helpers** (run `arr.<service>.help` for full list):
 
 | Alias | Description |
 |-------|-------------|
+| `arr.rad.help` | Radarr API helpers and commands |
+| `arr.son.help` | Sonarr API helpers and commands |
+| `arr.lid.help` | Lidarr API helpers and commands |
+| `arr.prow.help` | Prowlarr API helpers and commands |
+| `arr.baz.help` | Bazarr API helpers and commands |
+| `arr.qbt.help` | qBittorrent Web API helpers |
+| `arr.sab.help` | SABnzbd API helpers (if enabled) |
+| `arr.vpn.help` | Gluetun VPN control API helpers |
+| `arr.pf.help` | Port forwarding helpers |
+| `arr.flarr.help` | FlareSolverr helpers |
+
+**Quick access examples:**
+
+| Alias | Description |
+|-------|-------------|
+| `arr.rad.status` | Radarr system status (GET /api/v3/system/status) |
+| `arr.son.status` | Sonarr system status (GET /api/v3/system/status) |
+| `arr.qbt.version` | qBittorrent version |
+| `arr.qbt.port.get` | Current qBittorrent listen port |
 | `arr.vpn.status` | Check Gluetun VPN connection status |
-| `arr.vpn.port` | Show current forwarded port number |
-| `arr.vpn.port.state` | Show port-guard status as JSON |
-| `arr.vpn.port.watch` | Follow port-guard status changes |
-| `arr.logs` | Tail logs from all containers |
-| `arr.open` | Open service URLs (if `xdg-open` available) |
-| `arr.config.sync` | Sync API keys to Configarr |
+| `arr.vpn.ip` | Show current exit IP address |
+| `arr.pf.port` | Show current forwarded port number |
+| `arr.pf.sync` | Sync Gluetun forwarded port to qBittorrent |
+| `arr.logs <service>` | Tail logs from a specific container |
+| `arr.restart <service>` | Restart a specific container |
+| `arr.shell <service>` | Open interactive shell in container |
+
+**Configuration and diagnostics:**
+
+| Alias | Description |
+|-------|-------------|
+| `arr.config.sync` | Sync API keys to Configarr (if enabled) |
+| `arr.help` | Show all available helpers |
 
 ### Re-running the installer
 
