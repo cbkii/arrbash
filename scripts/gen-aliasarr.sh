@@ -846,7 +846,19 @@ _arr_lowercase() {
 _arr_env_get() {
   local key="$1"
   [[ -f "$ARR_ENV_FILE" ]] || return 1
-  awk -F= -v k="$key" '$1==k{print substr($0, index($0,"=")+1); exit}' "$ARR_ENV_FILE"
+  local value
+  value="$(awk -F= -v k="$key" '$0 ~ "^[[:space:]]*"k"[[:space:]]*=" {
+    val=substr($0, index($0,"=")+1);
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", val);
+    print val;
+    exit
+  }' "$ARR_ENV_FILE")"
+  # Strip surrounding quotes if present
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  printf '%s' "$value"
 }
 
 _arr_loopback() {
