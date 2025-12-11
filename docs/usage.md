@@ -363,7 +363,7 @@ When re-running the installer on an existing installation, use `--preserve-confi
 - You've made manual changes via qBittorrent WebUI (port, username, whitelist, etc.)
 - You want to update scripts without risking config overwrites
 - You're running on a production system and want minimal disruption
-- Default values have changed between versions but you want to keep your settings
+- Default values have changed between versions, but you want to retain your settings
 
 **Example workflow:**
 ```bash
