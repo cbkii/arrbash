@@ -2771,7 +2771,9 @@ _arr_validate_country() {
   shopt -s nocasematch
 
   local valid=1
-  if [[ "$country" =~ ^[A-Za-z]{2}$ || "$country" =~ ^[A-Za-z][A-Za-z .'-]{1,63}$ ]]; then
+  # Use a variable to hold the regex pattern to avoid quoting issues
+  local country_pattern="^[A-Za-z][A-Za-z .'\\-]{1,63}$"
+  if [[ "$country" =~ ^[A-Za-z]{2}$ || "$country" =~ $country_pattern ]]; then
     valid=0
   fi
 
@@ -2783,7 +2785,6 @@ _arr_validate_country() {
     printf 'Invalid country. Use a 2-letter code or country name.\n' >&2
     return 1
   fi
-
   printf '%s' "$country"
 }
 
