@@ -1171,8 +1171,11 @@ _arr_gluetun_try_endpoints() {
   for endpoint in "$@"; do
     [ -n "$endpoint" ] || continue
     local stderr_file
-    stderr_file="$(mktemp)" || return 1
-    response="$(${curl_cmd[@]} "${base}${endpoint}" 2>"${stderr_file}")"
+    stderr_file="$(mktemp)" || {
+      last_error="Unable to create temp file for stderr capture"
+      continue
+    }
+    response="$("${curl_cmd[@]}" "${base}${endpoint}" 2>"${stderr_file}")"
     local curl_status=$?
     local curl_stderr
     curl_stderr="$(cat "${stderr_file}")"
