@@ -1037,65 +1037,6 @@ _arr_service_call() {
   "${curl_cmd[@]}"
 }
 
-_arr_service_call_try_paths() {
-  local svc="$1"
-  shift
-  local method="$1"
-  shift
-
-  local base key
-  base="$(_arr_service_base "$svc")"
-  key="$(_arr_api_key "$svc")"
-
-  if [ -z "$base" ]; then
-    printf 'Error: Unable to resolve base URL for %s\n' "$svc" >&2
-    return 1
-  fi
-
-  if [ -z "$key" ]; then
-    printf 'Error: API key not found for %s\n' "$svc" >&2
-    return 1
-  fi
-
-  local -a paths=("$@")
-  local -a curl_cmd=(curl -sS -X "$method" -H "X-API-Key: ${key}" -w '\n%{http_code}')
-  if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
-    curl_cmd+=(-H 'Content-Type: application/json')
-  fi
-
-  local last_error="" path response http_code body
-  for path in "${paths[@]}"; do
-    [ -n "$path" ] || continue
-    response="$(${curl_cmd[@]} "${base}${path}" 2>/dev/null)"
-    http_code="${response##*$'\n'}"
-    body="${response%$'\n'"$http_code"}"
-
-    case "$http_code" in
-      2??)
-        printf '%s\n' "$body"
-        return 0
-        ;;
-      404)
-        continue
-        ;;
-      401|403)
-        last_error="Authentication failed (HTTP ${http_code}) for ${svc}${path}"
-        ;;
-      "")
-        last_error="No response from ${svc} at ${base}${path}"
-        ;;
-      *)
-        last_error="HTTP ${http_code} from ${svc}${path}"
-        ;;
-    esac
-  done
-
-  if [ -n "$last_error" ]; then
-    printf '%s\n' "$last_error" >&2
-  fi
-  return 1
-}
-
 # JSON pretty-printer
 _arr_pretty_json() {
   if command -v jq >/dev/null 2>&1; then
@@ -1194,31 +1135,28 @@ _arr_gluetun_api() {
 _arr_gluetun_status_endpoints() {
   local vpn_type
   vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
-  printf '/v1/vpn/status\n'
-  printf '/v1/%s/status\n' "$vpn_type"
-  printf '/v1/openvpn/status\n'
-  printf '/v1/wireguard/status\n'
+  case "$vpn_type" in
+    wireguard) printf '/v1/wireguard/status\n' ;;
+    *) printf '/v1/openvpn/status\n' ;;
+  esac
 }
 
 _arr_gluetun_port_endpoints() {
   local vpn_type
   vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
-  printf '/v1/vpn/portforwarded\n'
-  printf '/v1/vpn/portforward\n'
-  printf '/v1/portforward\n'
-  printf '/v1/portforwarded\n'
-  printf '/v1/%s/portforwarded\n' "$vpn_type"
-  printf '/v1/openvpn/portforwarded\n'
-  printf '/v1/wireguard/portforwarded\n'
+  case "$vpn_type" in
+    wireguard) printf '/v1/wireguard/portforwarded\n' ;;
+    *) printf '/v1/openvpn/portforwarded\n' ;;
+  esac
 }
 
 _arr_gluetun_restart_endpoints() {
   local vpn_type
   vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
-  printf '/v1/vpn/actions/restart\n'
-  printf '/v1/%s/actions/restart\n' "$vpn_type"
-  printf '/v1/openvpn/actions/restart\n'
-  printf '/v1/wireguard/actions/restart\n'
+  case "$vpn_type" in
+    wireguard) printf '/v1/wireguard/actions/restart\n' ;;
+    *) printf '/v1/openvpn/actions/restart\n' ;;
+  esac
 }
 
 _arr_gluetun_try_endpoints() {
@@ -1354,7 +1292,7 @@ arr.rad.disk() { _arr_service_call radarr GET /api/v3/diskspace | _arr_pretty_js
 arr.rad.movies.list() { _arr_service_call radarr GET /api/v3/movie | _arr_pretty_json; }
 arr.rad.movies.get() { _arr_service_call radarr GET "/api/v3/movie/${1:?id}" | _arr_pretty_json; }
 arr.rad.queue() { _arr_service_call radarr GET /api/v3/queue | _arr_pretty_json; }
-arr.rad.profile.list() { _arr_service_call_try_paths radarr GET /api/v3/qualityprofile /api/v3/profile | _arr_pretty_json; }
+arr.rad.profile.list() { _arr_service_call radarr GET /api/v3/qualityprofile | _arr_pretty_json; }
 
 arr.rad.help() {
   cat <<'EOF'
@@ -1385,7 +1323,7 @@ arr.son.disk() { _arr_service_call sonarr GET /api/v3/diskspace | _arr_pretty_js
 arr.son.series.list() { _arr_service_call sonarr GET /api/v3/series | _arr_pretty_json; }
 arr.son.series.get() { _arr_service_call sonarr GET "/api/v3/series/${1:?id}" | _arr_pretty_json; }
 arr.son.queue() { _arr_service_call sonarr GET /api/v3/queue | _arr_pretty_json; }
-arr.son.profile.list() { _arr_service_call_try_paths sonarr GET /api/v3/qualityprofile /api/v3/profile | _arr_pretty_json; }
+arr.son.profile.list() { _arr_service_call sonarr GET /api/v3/qualityprofile | _arr_pretty_json; }
 
 arr.son.help() {
   cat <<'EOF'
@@ -1434,6 +1372,7 @@ arr.prow.restart() { docker restart prowlarr; }
 arr.prow.status() { _arr_service_call prowlarr GET /api/v1/system/status | _arr_pretty_json; }
 arr.prow.health() { _arr_service_call prowlarr GET /api/v1/health | _arr_pretty_json; }
 arr.prow.indexers() { _arr_service_call prowlarr GET /api/v1/indexer | _arr_pretty_json; }
+arr.prow.backups() { _arr_service_call prowlarr GET /api/v1/system/backup | _arr_pretty_json; }
 
 arr.prow.help() {
   cat <<'EOF'
@@ -1441,6 +1380,7 @@ Prowlarr v1 API helpers:
   arr.prow.url               Show base URL
   arr.prow.status            GET /api/v1/system/status
   arr.prow.health            GET /api/v1/health
+  arr.prow.backups           GET /api/v1/system/backup
   arr.prow.indexers          GET /api/v1/indexer
   arr.prow.logs              Docker logs -f
   arr.prow.restart           Docker restart
@@ -1599,12 +1539,14 @@ arr.vpn.port() {
 }
 
 arr.vpn.help() {
-  cat <<'EOF'
-Gluetun VPN helpers:
-  arr.vpn.status             GET /v1/vpn/status (fallbacks included)
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  cat <<EOF
+Gluetun VPN helpers (VPN_TYPE=${vpn_type}):
+  arr.vpn.status             GET /v1/${vpn_type}/status
   arr.vpn.ip                 GET /v1/publicip/ip
-  arr.vpn.port               GET /v1/vpn/portforwarded (fallbacks included)
-  arr.vpn.restart            PUT /v1/vpn/actions/restart (fallbacks included)
+  arr.vpn.port               GET /v1/${vpn_type}/portforwarded
+  arr.vpn.restart            PUT /v1/${vpn_type}/actions/restart
 
 Smoke test: arr.vpn.status
 

@@ -81,6 +81,7 @@ _qbt_api_ensure_cookie() {
       --connect-timeout "${QBT_API_TIMEOUT}" \
       --max-time "${QBT_API_TIMEOUT}" \
       -c "${_qbt_api_cookie_file}" \
+      -H "Referer: $(_qbt_api_base_url)" \
       --data-urlencode "username=${QBT_USER}" \
       --data-urlencode "password=${QBT_PASS}" \
       "${url}" >/dev/null 2>/dev/null; then

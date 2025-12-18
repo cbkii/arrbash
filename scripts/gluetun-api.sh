@@ -174,51 +174,6 @@ _gluetun_api_request() {
   return 1
 }
 
-_gluetun_api_try_endpoints() {
-  local method="${1:-GET}"
-  local data="${2:-}"
-  shift 2 || true
-
-  local endpoint response http_code last_error=""
-  for endpoint in "$@"; do
-    [[ -n "$endpoint" ]] || continue
-    response="$(_gluetun_api_raw_request "$endpoint" "$method" "$data" 2>/dev/null)"
-    http_code="${response##*$'\n'}"
-    response="${response%$'\n'"$http_code"}"
-
-    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
-      printf '%s' "$response"
-      return 0
-    fi
-
-    case "$http_code" in
-      404)
-        _gluetun_api_debug "Endpoint ${endpoint} returned 404; trying next candidate"
-        continue
-        ;;
-      401 | 403)
-        last_error="Authentication failed (HTTP ${http_code}) for ${endpoint}. Check GLUETUN_API_KEY."
-        ;;
-      "")
-        last_error="No response from Gluetun control API for ${endpoint}"
-        ;;
-      *)
-        last_error="HTTP ${http_code} from ${endpoint}"
-        ;;
-    esac
-    if [[ -n "$last_error" ]]; then
-      _gluetun_api_debug "$last_error"
-    fi
-  done
-
-  if [[ -z "$last_error" ]]; then
-    last_error="All Gluetun endpoints failed for ${method} request"
-  fi
-
-  printf '%s' "$last_error" >&2
-  return 1
-}
-
 _gluetun_api_get_json() {
   local path="$1"
   _gluetun_api_request "$path"
@@ -248,17 +203,14 @@ gluetun_api_status() {
   local status
   local vpn_type_lower
   vpn_type_lower="$(printf '%s' "${VPN_TYPE:-openvpn}" | tr '[:upper:]' '[:lower:]')"
+  local endpoint="/v1/openvpn/status"
+  if [[ "$vpn_type_lower" == "wireguard" ]]; then
+    endpoint="/v1/wireguard/status"
+  fi
 
-  local -a endpoints=(
-    "/v1/vpn/status"
-    "/v1/${vpn_type_lower}/status"
-    "/v1/openvpn/status"
-    "/v1/wireguard/status"
-  )
+  _gluetun_api_debug "Fetching VPN status from ${endpoint} (VPN_TYPE=${vpn_type_lower})"
 
-  _gluetun_api_debug "Fetching VPN status (VPN_TYPE=${vpn_type_lower})"
-
-  if body="$(_gluetun_api_try_endpoints GET "" "${endpoints[@]}" 2>/dev/null)"; then
+  if body="$(_gluetun_api_request "$endpoint" 2>/dev/null)"; then
     status="$(printf '%s' "$body" | jq -r '.status // empty' 2>/dev/null || true)"
     if [[ -n "$status" && "$status" != "null" ]]; then
       printf '%s' "$status"
@@ -266,7 +218,7 @@ gluetun_api_status() {
     fi
   fi
 
-  _gluetun_api_debug "Failed to get VPN status from any endpoint"
+  _gluetun_api_debug "Failed to get VPN status"
   printf 'unknown'
   return 1
 }
@@ -287,20 +239,14 @@ gluetun_api_forwarded_port() {
   local port
   local vpn_type_lower
   vpn_type_lower="$(printf '%s' "${VPN_TYPE:-openvpn}" | tr '[:upper:]' '[:lower:]')"
+  local endpoint="/v1/openvpn/portforwarded"
+  if [[ "$vpn_type_lower" == "wireguard" ]]; then
+    endpoint="/v1/wireguard/portforwarded"
+  fi
 
-  local -a endpoints=(
-    "/v1/vpn/portforwarded"
-    "/v1/vpn/portforward"
-    "/v1/portforward"
-    "/v1/portforwarded"
-    "/v1/${vpn_type_lower}/portforwarded"
-    "/v1/openvpn/portforwarded"
-    "/v1/wireguard/portforwarded"
-  )
+  _gluetun_api_debug "Fetching forwarded port from ${endpoint} (VPN_TYPE=${vpn_type_lower})"
 
-  _gluetun_api_debug "Fetching forwarded port (VPN_TYPE=${vpn_type_lower})"
-
-  if body="$(_gluetun_api_try_endpoints GET "" "${endpoints[@]}" 2>/dev/null)"; then
+  if body="$(_gluetun_api_request "$endpoint" 2>/dev/null)"; then
     port="$(printf '%s' "$body" | jq -r '.port // .ports[0] // 0' 2>/dev/null || printf '0')"
     if [[ "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
       _gluetun_api_debug "Valid forwarded port: ${port}"
@@ -321,15 +267,13 @@ gluetun_api_restart() {
   local vpn_type_lower
   vpn_type_lower="$(printf '%s' "${VPN_TYPE:-openvpn}" | tr '[:upper:]' '[:lower:]')"
 
-  local -a endpoints=(
-    "/v1/vpn/actions/restart"
-    "/v1/${vpn_type_lower}/actions/restart"
-    "/v1/openvpn/actions/restart"
-    "/v1/wireguard/actions/restart"
-  )
+  local endpoint="/v1/openvpn/actions/restart"
+  if [[ "$vpn_type_lower" == "wireguard" ]]; then
+    endpoint="/v1/wireguard/actions/restart"
+  fi
 
-  _gluetun_api_debug "Restarting Gluetun (VPN_TYPE=${vpn_type_lower})"
-  if _gluetun_api_try_endpoints PUT "" "${endpoints[@]}" >/dev/null 2>&1; then
+  _gluetun_api_debug "Restarting Gluetun via ${endpoint} (VPN_TYPE=${vpn_type_lower})"
+  if _gluetun_api_request "$endpoint" PUT >/dev/null 2>&1; then
     return 0
   fi
 

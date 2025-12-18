@@ -1278,22 +1278,19 @@ _arr_gluetun_try_endpoints() {
 _arr_gluetun_status_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  printf '/v1/vpn/status\n'
-  printf '/v1/%s/status\n' "$vpn_type"
-  printf '/v1/openvpn/status\n'
-  printf '/v1/wireguard/status\n'
+  case "$vpn_type" in
+    wireguard) printf '/v1/wireguard/status\n' ;;
+    *) printf '/v1/openvpn/status\n' ;;
+  esac
 }
 
 _arr_gluetun_port_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  printf '/v1/vpn/portforwarded\n'
-  printf '/v1/vpn/portforward\n'
-  printf '/v1/portforward\n'
-  printf '/v1/portforwarded\n'
-  printf '/v1/%s/portforwarded\n' "$vpn_type"
-  printf '/v1/openvpn/portforwarded\n'
-  printf '/v1/wireguard/portforwarded\n'
+  case "$vpn_type" in
+    wireguard) printf '/v1/wireguard/portforwarded\n' ;;
+    *) printf '/v1/openvpn/portforwarded\n' ;;
+  esac
 }
 
 _arr_gluetun_is_transport_error() {
@@ -1483,73 +1480,6 @@ _arr_service_call() {
   "${curl_cmd[@]}"
 }
 
-_arr_service_call_try_paths() {
-  local svc="$1"
-  shift
-  local method="$1"
-  shift
-
-  local base key
-  base="$(_arr_service_base "$svc")"
-  key="$(_arr_api_key "$svc")"
-
-  if [ -z "$base" ]; then
-    echo "Unsupported service: $svc" >&2
-    return 1
-  fi
-  if [ -z "$key" ]; then
-    echo "Missing API key for $svc (check ${ARR_DOCKER_DIR}/$svc/config.xml)." >&2
-    return 1
-  fi
-
-  local -a paths=("$@")
-  local -a curl_cmd=(curl -sS -X "$method" -H "X-API-Key: ${key}" -w '\n%{http_code}')
-  if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
-    curl_cmd+=(-H 'Content-Type: application/json')
-  fi
-
-  local -a resolve_flags=()
-  while IFS= read -r _arr_line; do
-    resolve_flags+=("$_arr_line")
-  done < <(_arr_curl_resolve_flags "$base") || true
-  unset _arr_line
-  if [ ${#resolve_flags[@]} -gt 0 ]; then
-    curl_cmd+=("${resolve_flags[@]}")
-  fi
-
-  local last_error="" path response http_code body
-  for path in "${paths[@]}"; do
-    [ -n "$path" ] || continue
-    response="$("${curl_cmd[@]}" "${base}${path}" 2>/dev/null)"
-    http_code="${response##*$'\n'}"
-    body="${response%$'\n'"$http_code"}"
-
-    case "$http_code" in
-      2??)
-        printf '%s\n' "$body"
-        return 0
-        ;;
-      404)
-        continue
-        ;;
-      401|403)
-        last_error="Authentication failed (HTTP ${http_code}) for ${svc}${path}"
-        ;;
-      "")
-        last_error="No response from ${svc} at ${base}${path}"
-        ;;
-      *)
-        last_error="HTTP ${http_code} from ${svc}${path}"
-        ;;
-    esac
-  done
-
-  if [ -n "$last_error" ]; then
-    printf '%s\n' "$last_error" >&2
-  fi
-  return 1
-}
-
 _arr_bazarr_call() {
   local method="$1"
   shift
@@ -1601,9 +1531,9 @@ arr.gluetun.help() {
 Gluetun helpers (VPN_TYPE=${vpn_type}):
   arr.gluetun.url           Show control API base (http://<host>:<port>)
   arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
-  arr.gluetun.status         Inspect VPN status (GET /v1/vpn/status with fallbacks)
-  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/vpn/status with fallbacks)
-  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/vpn/portforwarded with fallbacks)
+  arr.gluetun.status         Inspect VPN status (GET /v1/${vpn_type}/status)
+  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/${vpn_type}/status)
+  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/${vpn_type}/portforwarded)
   arr.gluetun.health         Check Gluetun control health (GET /healthz)
   arr.gluetun.diagnose       Verify control API health, status, and recent port-forward errors
 EOF
@@ -3421,7 +3351,7 @@ arr.son.calendar() {
 arr.son.queue() { _arr_service_call sonarr GET /api/v3/queue | _arr_pretty_json; }
 arr.son.queue.details() { _arr_service_call sonarr GET /api/v3/queue/details | _arr_pretty_json; }
 arr.son.blocklist() { _arr_service_call sonarr GET /api/v3/blocklist | _arr_pretty_json; }
-arr.son.profile.list() { _arr_service_call_try_paths sonarr GET /api/v3/qualityprofile /api/v3/profile | _arr_pretty_json; }
+arr.son.profile.list() { _arr_service_call sonarr GET /api/v3/qualityprofile | _arr_pretty_json; }
 arr.son.qualitydef() { _arr_service_call sonarr GET /api/v3/qualitydefinition | _arr_pretty_json; }
 arr.son.root.list() { _arr_service_call sonarr GET /api/v3/rootfolder | _arr_pretty_json; }
 arr.son.remotepath.list() { _arr_service_call sonarr GET /api/v3/remotePathMapping | _arr_pretty_json; }
@@ -3512,7 +3442,7 @@ arr.rad.history() { _arr_service_call radarr GET /api/v3/history | _arr_pretty_j
 arr.rad.blocklist() { _arr_service_call radarr GET /api/v3/blocklist | _arr_pretty_json; }
 arr.rad.indexers() { _arr_service_call radarr GET /api/v3/indexer | _arr_pretty_json; }
 arr.rad.downloadclients() { _arr_service_call radarr GET /api/v3/downloadclient | _arr_pretty_json; }
-arr.rad.profile.list() { _arr_service_call_try_paths radarr GET /api/v3/qualityprofile /api/v3/profile | _arr_pretty_json; }
+arr.rad.profile.list() { _arr_service_call radarr GET /api/v3/qualityprofile | _arr_pretty_json; }
 arr.rad.qualitydef() { _arr_service_call radarr GET /api/v3/qualitydefinition | _arr_pretty_json; }
 arr.rad.remotepath.list() { _arr_service_call radarr GET /api/v3/remotePathMapping | _arr_pretty_json; }
 arr.rad.tag.list() { _arr_service_call radarr GET /api/v3/tag | _arr_pretty_json; }
@@ -3590,7 +3520,7 @@ arr.prowl.index.config() { _arr_service_call prowlarr GET "/api/v1/indexer/${1:?
 arr.prowl.index.test() { _arr_service_call prowlarr POST /api/v1/indexer/test --data "${1:?JSON}" | _arr_pretty_json; }
 arr.prowl.command() { _arr_service_call prowlarr POST /api/v1/command --data "${1:?JSON}" | _arr_pretty_json; }
 arr.prowl.log() { _arr_service_call prowlarr GET /api/v1/log | _arr_pretty_json; }
-arr.prowl.backups() { _arr_service_call_try_paths prowlarr GET /api/v1/system/backup /api/v1/backup | _arr_pretty_json; }
+arr.prowl.backups() { _arr_service_call prowlarr GET /api/v1/system/backup | _arr_pretty_json; }
 
 arr.baz.url() { printf '%s\n' "$(_arr_service_base bazarr)"; }
 arr.baz.logs() { docker logs -f bazarr; }
