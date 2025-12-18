@@ -658,27 +658,34 @@ _arr_service_port() {
   case "$svc" in
     qbittorrent)
       value="$(_arr_first_available_value QBT_PORT QBT_INT_PORT)"
+      [ -n "$value" ] || value=8080
       ;;
     sonarr)
       value="$(_arr_first_available_value SONARR_PORT SONARR_INT_PORT)"
+      [ -n "$value" ] || value=8989
       ;;
     radarr)
       value="$(_arr_first_available_value RADARR_PORT RADARR_INT_PORT)"
+      [ -n "$value" ] || value=7878
       ;;
     lidarr)
       value="$(_arr_first_available_value LIDARR_PORT LIDARR_INT_PORT)"
+      [ -n "$value" ] || value=8686
       ;;
     prowlarr)
       value="$(_arr_first_available_value PROWLARR_PORT PROWLARR_INT_PORT)"
+      [ -n "$value" ] || value=9696
       ;;
     bazarr)
       value="$(_arr_first_available_value BAZARR_PORT BAZARR_INT_PORT)"
+      [ -n "$value" ] || value=6767
       ;;
     flaresolverr)
       value="$(_arr_first_available_value FLARR_PORT FLARR_INT_PORT)"
       ;;
     sabnzbd)
       value="$(_arr_first_available_value SABNZBD_PORT SABNZBD_INT_PORT)"
+      [ -n "$value" ] || value=8080
       ;;
     *)
       return 1
@@ -875,7 +882,7 @@ _arr_gluetun_host() {
   local host
   host="${GLUETUN_CONTROL_HOST:-$(_arr_env_get GLUETUN_CONTROL_HOST)}"
   if [ -z "$host" ]; then
-    host="$(_arr_loopback)"
+    host="$(_arr_host)"
   fi
   printf '%s' "$host"
 }
@@ -1231,6 +1238,7 @@ _arr_gluetun_try_endpoints() {
   local data="$2"
   shift 2 || true
 
+  _arr_gluetun_last_error=""
   local payload="" endpoint="" last_error=""
   for endpoint in "$@"; do
     if [ -z "$endpoint" ]; then
@@ -1255,11 +1263,10 @@ _arr_gluetun_try_endpoints() {
 _arr_gluetun_status_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  printf '/v1/vpn/status\n'
+  printf '/v1/openvpn/status\n'
   printf '/v1/%s/status\n' "$vpn_type"
-  if [ "$vpn_type" = "wireguard" ]; then
-    printf '/v1/openvpn/status\n'
-  else
+  printf '/v1/vpn/status\n'
+  if [ "$vpn_type" != "wireguard" ]; then
     printf '/v1/wireguard/status\n'
   fi
 }
@@ -1267,13 +1274,12 @@ _arr_gluetun_status_endpoints() {
 _arr_gluetun_port_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  printf '/v1/portforward\n'
-  printf '/v1/vpn/portforward\n'
-  printf '/v1/vpn/portforwarded\n'
+  printf '/v1/openvpn/portforwarded\n'
   printf '/v1/%s/portforwarded\n' "$vpn_type"
-  if [ "$vpn_type" = "wireguard" ]; then
-    printf '/v1/openvpn/portforwarded\n'
-  else
+  printf '/v1/vpn/portforwarded\n'
+  printf '/v1/vpn/portforward\n'
+  printf '/v1/portforward\n'
+  if [ "$vpn_type" != "wireguard" ]; then
     printf '/v1/wireguard/portforwarded\n'
   fi
 }
@@ -1515,9 +1521,9 @@ arr.gluetun.help() {
   cat <<EOF
 Gluetun helpers (VPN_TYPE=${vpn_type}):
   arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
-  arr.gluetun.status         Inspect VPN status (GET /v1/vpn/status)
-  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/vpn/status)
-  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/portforward with fallbacks)
+  arr.gluetun.status         Inspect VPN status (GET /v1/openvpn/status with fallbacks)
+  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/openvpn/status with fallbacks)
+  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/openvpn/portforwarded with fallbacks)
   arr.gluetun.health         Check Gluetun control health (GET /healthz)
   arr.gluetun.diagnose       Verify control API health, status, and recent port-forward errors
 EOF
@@ -1595,7 +1601,7 @@ arr.gluetun.diagnose() {
 
   base="http://${host}:${port}"
 
-  local health status_output
+  local health status_output _arr_status_endpoint
   if ! health="$(curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${key}" "${base}/healthz" 2>&1)"; then
     printf '/healthz request failed: %s\n' "$(_arr_sanitize_error "$health")" >&2
     rc=1
@@ -1603,11 +1609,16 @@ arr.gluetun.diagnose() {
     printf '/healthz: %s\n' "$health"
   fi
 
-  if ! status_output="$(curl -fsS --connect-timeout 5 --max-time 8 -H "X-API-Key: ${key}" "${base}/v1/${vpn_type}/status" 2>&1)"; then
-    printf '/v1/%s/status request failed: %s\n' "$vpn_type" "$(_arr_sanitize_error "$status_output")" >&2
-    rc=1
+  local -a status_endpoints=()
+  while IFS= read -r _arr_status_endpoint; do
+    status_endpoints+=("$_arr_status_endpoint")
+  done < <(_arr_gluetun_status_endpoints)
+
+  if status_output="$(_arr_gluetun_try_endpoints GET "" "${status_endpoints[@]}" 2>/dev/null)"; then
+    printf 'status payload: %s\n' "$status_output"
   else
-    printf '/v1/%s/status: %s\n' "$vpn_type" "$status_output"
+    printf 'status request failed: %s\n' "$(_arr_sanitize_error "${_arr_gluetun_last_error:-unknown error}")" >&2
+    rc=1
   fi
 
   if _arr_docker_available; then
@@ -3242,7 +3253,7 @@ _arr_service_helper() {
   esac
 }
 
-arr.son.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get SONARR_PORT)"; }
+arr.son.url() { printf '%s\n' "$(_arr_service_base sonarr)"; }
 arr.son.logs() { docker logs -f sonarr; }
 arr.son.restart() { docker restart sonarr; }
 arr.son.refresh() {
@@ -3337,7 +3348,7 @@ arr.son.tag.list() { _arr_service_call sonarr GET /api/v3/tag | _arr_pretty_json
 arr.son.command() { _arr_service_call sonarr POST /api/v3/command --data "${1:?JSON}" | _arr_pretty_json; }
 arr.son.backups() { _arr_service_call sonarr GET /api/v3/system/backup | _arr_pretty_json; }
 
-arr.rad.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get RADARR_PORT)"; }
+arr.rad.url() { printf '%s\n' "$(_arr_service_base radarr)"; }
 arr.rad.logs() { docker logs -f radarr; }
 arr.rad.restart() { docker restart radarr; }
 arr.rad.refresh() {
@@ -3427,7 +3438,7 @@ arr.rad.tag.list() { _arr_service_call radarr GET /api/v3/tag | _arr_pretty_json
 arr.rad.command() { _arr_service_call radarr POST /api/v3/command --data "${1:?JSON}" | _arr_pretty_json; }
 arr.rad.backups() { _arr_service_call radarr GET /api/v3/system/backup | _arr_pretty_json; }
 
-arr.lid.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get LIDARR_PORT)"; }
+arr.lid.url() { printf '%s\n' "$(_arr_service_base lidarr)"; }
 arr.lid.logs() { docker logs -f lidarr; }
 arr.lid.restart() { docker restart lidarr; }
 arr.lid.refresh() {
@@ -3463,7 +3474,7 @@ arr.lid.album.list() { _arr_service_call lidarr GET /api/v1/album | _arr_pretty_
 arr.lid.command() { _arr_service_call lidarr POST /api/v1/command --data "${1:?JSON}" | _arr_pretty_json; }
 arr.lid.backups() { _arr_service_call lidarr GET /api/v1/system/backup | _arr_pretty_json; }
 
-arr.prowl.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get PROWLARR_PORT)"; }
+arr.prowl.url() { printf '%s\n' "$(_arr_service_base prowlarr)"; }
 arr.prowl.logs() { docker logs -f prowlarr; }
 arr.prowl.restart() { docker restart prowlarr; }
 
@@ -3500,7 +3511,7 @@ arr.prowl.command() { _arr_service_call prowlarr POST /api/v1/command --data "${
 arr.prowl.log() { _arr_service_call prowlarr GET /api/v1/log | _arr_pretty_json; }
 arr.prowl.backups() { _arr_service_call prowlarr GET /api/v1/backup | _arr_pretty_json; }
 
-arr.baz.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get BAZARR_PORT)"; }
+arr.baz.url() { printf '%s\n' "$(_arr_service_base bazarr)"; }
 arr.baz.logs() { docker logs -f bazarr; }
 arr.baz.restart() { docker restart bazarr; }
 
@@ -3521,7 +3532,7 @@ arr.baz.series.history() { _arr_bazarr_call GET /api/series/history | _arr_prett
 arr.baz.movies.wanted() { _arr_bazarr_call GET /api/movies/wanted | _arr_pretty_json; }
 arr.baz.movies.history() { _arr_bazarr_call GET /api/movies/history | _arr_pretty_json; }
 
-arr.fsolv.url() { printf 'http://%s:%s\n' "$(_arr_host)" "$(_arr_env_get FLARR_PORT)"; }
+arr.fsolv.url() { printf '%s\n' "$(_arr_service_base flaresolverr)"; }
 arr.fsolv.logs() { docker logs -f flaresolverr; }
 arr.fsolv.restart() { docker restart flaresolverr; }
 
