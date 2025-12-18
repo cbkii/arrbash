@@ -1183,7 +1183,7 @@ _arr_gluetun_try_endpoints() {
     code="${response##*$'\n'}"
     body="${response%$'\n'"$code"}"
 
-    if [ $curl_status -ne 0 ] && [ -z "$code" ] && [ -z "$last_error" ]; then
+    if [ "$curl_status" -ne 0 ] && [ -z "$code" ] && [ -z "$last_error" ]; then
       last_error="${curl_stderr//$'\n'/ }"
     fi
     case "$code" in
