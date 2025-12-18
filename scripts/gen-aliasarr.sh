@@ -1159,7 +1159,7 @@ _arr_gluetun_try_endpoints() {
   key="$(_arr_gluetun_key)" || return 1
   base="$(_arr_gluetun_base)"
 
-  local -a curl_cmd=(curl -sS -w '\n%{http_code}' -H "X-API-Key: ${key}")
+  local -a curl_cmd=(curl -sS -w '\n%{http_code}' -H "X-API-Key: ${key}" --connect-timeout 5 --max-time 8)
   if [ "$method" != "GET" ]; then
     curl_cmd+=(-X "$method")
   fi
@@ -1170,10 +1170,19 @@ _arr_gluetun_try_endpoints() {
   local endpoint response code body last_error=""
   for endpoint in "$@"; do
     [ -n "$endpoint" ] || continue
-    response="$(${curl_cmd[@]} "${base}${endpoint}" 2>/dev/null)"
+    local stderr_file
+    stderr_file="$(mktemp)" || return 1
+    response="$(${curl_cmd[@]} "${base}${endpoint}" 2>"${stderr_file}")"
+    local curl_status=$?
+    local curl_stderr
+    curl_stderr="$(cat "${stderr_file}")"
+    rm -f "${stderr_file}"
     code="${response##*$'\n'}"
     body="${response%$'\n'"$code"}"
 
+    if [ $curl_status -ne 0 ] && [ -z "$code" ] && [ -z "$last_error" ]; then
+      last_error="${curl_stderr//$'\n'/ }"
+    fi
     case "$code" in
       2??)
         printf '%s\n' "$body"

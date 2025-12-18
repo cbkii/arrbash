@@ -1195,7 +1195,7 @@ _arr_gluetun_api() {
   host="$(_arr_gluetun_host)"
   url="http://${host}:${port}${endpoint}"
 
-  local -a curl_cmd=(curl -sS -w '\n%{http_code}' -H "X-API-Key: ${key}")
+  local -a curl_cmd=(curl -sS -w '\n%{http_code}' -H "X-API-Key: ${key}" --connect-timeout 5 --max-time 8)
   if [ "$method" != "GET" ]; then
     curl_cmd+=(-X "$method")
   fi
@@ -1204,11 +1204,23 @@ _arr_gluetun_api() {
   fi
   curl_cmd+=("$url")
 
-  local response http_code body
-  response="$("${curl_cmd[@]}" 2>/dev/null)"
+  local response http_code body curl_status curl_stderr sanitized_stderr
+  local stderr_file
+  stderr_file="$(mktemp)"
+  if [ -z "$stderr_file" ]; then
+    _arr_gluetun_last_error="Unable to create temporary file for Gluetun request."
+    return 1
+  fi
+
+  response="$("${curl_cmd[@]}" 2>"${stderr_file}")"
+  curl_status=$?
+  curl_stderr="$(cat "${stderr_file}")"
+  rm -f "${stderr_file}"
   http_code="${response##*$'\n'}"
   body="${response%$'\n'"$http_code"}"
   _arr_gluetun_last_status="$http_code"
+
+  sanitized_stderr="$(_arr_sanitize_error "$curl_stderr")"
 
   case "$http_code" in
     2??)
@@ -1222,7 +1234,11 @@ _arr_gluetun_api() {
       _arr_gluetun_last_error="Authentication failed (HTTP ${http_code}) for ${endpoint}. Check GLUETUN_API_KEY."
       ;;
     "")
-      _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
+      if [ -n "$sanitized_stderr" ]; then
+        _arr_gluetun_last_error="$sanitized_stderr"
+      else
+        _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
+      fi
       ;;
     *)
       local sanitized_response
@@ -2717,11 +2733,78 @@ arr.vpn.countries() {
 #   control restart, leaving Gluetun on the old region).
 # - Both commands surface a single warn on unsupported providers, respect ARR_STACK_DIR by
 #   delegating to arr.env.set / arr.vpn.reconnect, and introduce no legacy exposure paths.
-arr.vpn.set.country() {
+_arr_validate_no_ctrl() {
+  local value="$1"
+  if [[ "$value" == *[[:cntrl:]]* ]]; then
+    printf 'Value cannot contain control characters.\n' >&2
+    return 1
+  fi
+
+  return 0
+}
+
+_arr_validate_len() {
+  local value="$1"
+  local max_len="${2:-64}"
+  if [ -z "$value" ]; then
+    printf 'Value cannot be empty.\n' >&2
+    return 1
+  fi
+  if ((${#value} > max_len)); then
+    printf 'Value must be %s characters or fewer.\n' "$max_len" >&2
+    return 1
+  fi
+
+  return 0
+}
+
+_arr_validate_country() {
   local country="$(_arr_trim "${1:-}")"
 
-  if [ -z "$country" ]; then
-    printf 'Usage: arr.vpn.set.country <CountryName>\n' >&2
+  _arr_validate_no_ctrl "$country" || return 1
+  _arr_validate_len "$country" 64 || return 1
+
+  local nocasematch_enabled=0
+  if shopt -q nocasematch; then
+    nocasematch_enabled=1
+  fi
+  shopt -s nocasematch
+
+  local valid=1
+  if [[ "$country" =~ ^[A-Za-z]{2}$ || "$country" =~ ^[A-Za-z][A-Za-z .'-]{1,63}$ ]]; then
+    valid=0
+  fi
+
+  if [ $nocasematch_enabled -eq 0 ]; then
+    shopt -u nocasematch
+  fi
+
+  if [ $valid -ne 0 ]; then
+    printf 'Invalid country. Use a 2-letter code or country name.\n' >&2
+    return 1
+  fi
+
+  printf '%s' "$country"
+}
+
+_arr_validate_server() {
+  local server="$(_arr_trim "${1:-}")"
+
+  _arr_validate_no_ctrl "$server" || return 1
+  _arr_validate_len "$server" 64 || return 1
+
+  if [[ "$server" =~ ^[A-Za-z0-9][A-Za-z0-9#\-]{0,63}$ ]]; then
+    printf '%s' "$server"
+    return 0
+  fi
+
+  printf 'Invalid server name. Use alphanumerics, dashes, or # without spaces.\n' >&2
+  return 1
+}
+
+arr.vpn.set.country() {
+  local country
+  if ! country="$(_arr_validate_country "${1:-}")"; then
     return 1
   fi
 
@@ -2744,10 +2827,8 @@ arr.vpn.set.country() {
 }
 
 arr.vpn.set.server() {
-  local server="$(_arr_trim "${1:-}")"
-
-  if [ -z "$server" ]; then
-    printf 'Usage: arr.vpn.set.server <ServerHostname>\n' >&2
+  local server
+  if ! server="$(_arr_validate_server "${1:-}")"; then
     return 1
   fi
 
@@ -3594,14 +3675,20 @@ _arr_clone_alias_group() {
   local legacy_prefix="$2"
   shift 2 || true
   local name
+  if ! _arr_alias_token_valid "$legacy_prefix" || ! _arr_alias_token_valid "$new_prefix"; then
+    printf 'Invalid function name or prefix: legacy_prefix="%s", new_prefix="%s"\n' \
+      "$legacy_prefix" "$new_prefix" >&2
+    return 1
+  fi
   for name in "$@"; do
-    if _arr_alias_token_valid "$legacy_prefix" && _arr_alias_token_valid "$new_prefix" && _arr_alias_token_valid "$name"; then
+    if _arr_alias_token_valid "$name"; then
       eval "arr.${legacy_prefix}.${name}(){ arr.${new_prefix}.${name} \"\$@\"; }"
       continue
     fi
 
     printf 'Invalid function name or prefix: legacy_prefix="%s", new_prefix="%s", name="%s"\n' \
       "$legacy_prefix" "$new_prefix" "$name" >&2
+    return 1
   done
 }
 
