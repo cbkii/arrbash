@@ -887,6 +887,8 @@ _arr_gluetun_host() {
   printf '%s' "$host"
 }
 
+_arr_gluetun_base() { printf 'http://%s:%s' "$(_arr_gluetun_host)" "$(_arr_gluetun_port)"; }
+
 _arr_gluetun_key() {
   if [ -n "${GLUETUN_API_KEY:-}" ]; then
     printf '%s' "$GLUETUN_API_KEY"
@@ -1234,11 +1236,11 @@ _arr_gluetun_api() {
 }
 
 _arr_gluetun_try_endpoints() {
+  _arr_gluetun_last_error=""
   local method="$1"
   local data="$2"
   shift 2 || true
 
-  _arr_gluetun_last_error=""
   local payload="" endpoint="" last_error=""
   for endpoint in "$@"; do
     if [ -z "$endpoint" ]; then
@@ -1506,13 +1508,13 @@ _arr_gluetun_http() {
   local endpoint="$1"
   shift
   local key="$(_arr_gluetun_key)"
-  local port="$(_arr_gluetun_port)"
-  local host="$(_arr_gluetun_host)"
+  local base
+  base="$(_arr_gluetun_base)"
   if [ -z "$key" ]; then
     echo "GLUETUN_API_KEY missing." >&2
     return 1
   fi
-  curl -fsS -X "$method" -H "X-API-Key: ${key}" "$@" "http://${host}:${port}${endpoint}"
+  curl -fsS -X "$method" -H "X-API-Key: ${key}" "$@" "${base}${endpoint}"
 }
 
 arr.gluetun.help() {
@@ -1520,6 +1522,7 @@ arr.gluetun.help() {
   vpn_type="$(_arr_vpn_type)"
   cat <<EOF
 Gluetun helpers (VPN_TYPE=${vpn_type}):
+  arr.gluetun.url           Show control API base (http://<host>:<port>)
   arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
   arr.gluetun.status         Inspect VPN status (GET /v1/openvpn/status with fallbacks)
   arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/openvpn/status with fallbacks)
@@ -1529,6 +1532,7 @@ Gluetun helpers (VPN_TYPE=${vpn_type}):
 EOF
 }
 
+arr.gluetun.url() { printf '%s\n' "$(_arr_gluetun_base)"; }
 arr.gluetun.ip() { _arr_gluetun_http GET /v1/publicip/ip | _arr_pretty_guess; }
 arr.gluetun.status() {
   local payload _arr_status_endpoint
