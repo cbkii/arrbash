@@ -1169,12 +1169,14 @@ _arr_vpn_container_health_status() {
 }
 
 _arr_gluetun_last_error=""
+_arr_gluetun_last_status=""
 
 _arr_gluetun_api() {
   local endpoint="$1"
   local method="${2:-GET}"
   local data="${3:-}"
   _arr_gluetun_last_error=""
+  _arr_gluetun_last_status=""
 
   if ! _arr_has_cmd curl; then
     _arr_gluetun_last_error="curl is not available to query the Gluetun control API."
@@ -1193,7 +1195,7 @@ _arr_gluetun_api() {
   host="$(_arr_gluetun_host)"
   url="http://${host}:${port}${endpoint}"
 
-  local -a curl_cmd=(curl -fsS -H "X-API-Key: ${key}")
+  local -a curl_cmd=(curl -sS -w '\n%{http_code}' -H "X-API-Key: ${key}")
   if [ "$method" != "GET" ]; then
     curl_cmd+=(-X "$method")
   fi
@@ -1202,29 +1204,36 @@ _arr_gluetun_api() {
   fi
   curl_cmd+=("$url")
 
-  local response result
-  response="$("${curl_cmd[@]}" 2>&1)"
-  result=$?
+  local response http_code body
+  response="$("${curl_cmd[@]}" 2>/dev/null)"
+  http_code="${response##*$'\n'}"
+  body="${response%$'\n'"$http_code"}"
+  _arr_gluetun_last_status="$http_code"
 
-  if [ $result -eq 0 ]; then
-    printf '%s\n' "$response"
-    return 0
-  fi
-
-  local sanitized_response
-  sanitized_response="$(_arr_sanitize_error "$response")"
-  if [ -n "$sanitized_response" ]; then
-    case "$sanitized_response" in
-      curl:* | *Could\ not\ resolve* | *Failed\ to\ connect* | *Connection\ refused*)
-        _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
-        ;;
-      *)
-        _arr_gluetun_last_error="$sanitized_response"
-        ;;
-    esac
-  else
-    _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
-  fi
+  case "$http_code" in
+    2??)
+      printf '%s\n' "$body"
+      return 0
+      ;;
+    404)
+      _arr_gluetun_last_error="Endpoint not found: ${endpoint}"
+      ;;
+    401|403)
+      _arr_gluetun_last_error="Authentication failed (HTTP ${http_code}) for ${endpoint}. Check GLUETUN_API_KEY."
+      ;;
+    "")
+      _arr_gluetun_last_error="Unable to reach the Gluetun control API at ${host}:${port}."
+      ;;
+    *)
+      local sanitized_response
+      sanitized_response="$(_arr_sanitize_error "$body")"
+      if [ -n "$sanitized_response" ]; then
+        _arr_gluetun_last_error="${sanitized_response}"
+      else
+        _arr_gluetun_last_error="HTTP ${http_code} from ${endpoint}"
+      fi
+      ;;
+  esac
 
   if ! _arr_vpn_container_id >/dev/null 2>&1; then
     if [ -n "${_arr_vpn_last_error:-}" ]; then
@@ -1237,6 +1246,7 @@ _arr_gluetun_api() {
 
 _arr_gluetun_try_endpoints() {
   _arr_gluetun_last_error=""
+  _arr_gluetun_last_status=""
   local method="$1"
   local data="$2"
   shift 2 || true
@@ -1249,6 +1259,9 @@ _arr_gluetun_try_endpoints() {
     if payload="$(_arr_gluetun_api "$endpoint" "$method" "$data" 2>/dev/null)"; then
       printf '%s\n' "$payload"
       return 0
+    fi
+    if [ "${_arr_gluetun_last_status:-}" = "404" ]; then
+      continue
     fi
     if [ -z "$last_error" ] && [ -n "${_arr_gluetun_last_error:-}" ]; then
       last_error="${_arr_gluetun_last_error}"
@@ -1265,25 +1278,22 @@ _arr_gluetun_try_endpoints() {
 _arr_gluetun_status_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  printf '/v1/openvpn/status\n'
-  printf '/v1/%s/status\n' "$vpn_type"
   printf '/v1/vpn/status\n'
-  if [ "$vpn_type" != "wireguard" ]; then
-    printf '/v1/wireguard/status\n'
-  fi
+  printf '/v1/%s/status\n' "$vpn_type"
+  printf '/v1/openvpn/status\n'
+  printf '/v1/wireguard/status\n'
 }
 
 _arr_gluetun_port_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  printf '/v1/openvpn/portforwarded\n'
-  printf '/v1/%s/portforwarded\n' "$vpn_type"
   printf '/v1/vpn/portforwarded\n'
   printf '/v1/vpn/portforward\n'
   printf '/v1/portforward\n'
-  if [ "$vpn_type" != "wireguard" ]; then
-    printf '/v1/wireguard/portforwarded\n'
-  fi
+  printf '/v1/portforwarded\n'
+  printf '/v1/%s/portforwarded\n' "$vpn_type"
+  printf '/v1/openvpn/portforwarded\n'
+  printf '/v1/wireguard/portforwarded\n'
 }
 
 _arr_gluetun_is_transport_error() {
@@ -1368,7 +1378,7 @@ _arr_qbt_login() {
   host="$(_arr_url_host "$base")"
   local cookie
   cookie="$(_arr_qbt_cookie_path)"
-  local -a curl_cmd=(curl -fsS -c "$cookie" -b "$cookie" -d "username=${user}&password=${pass}" "$base/api/v2/auth/login")
+  local -a curl_cmd=(curl -fsS -c "$cookie" -b "$cookie" -H "Referer: ${base}" -d "username=${user}&password=${pass}" "$base/api/v2/auth/login")
   local -a resolve_flags=()
   while IFS= read -r _arr_line; do
     resolve_flags+=("$_arr_line")
@@ -1473,6 +1483,73 @@ _arr_service_call() {
   "${curl_cmd[@]}"
 }
 
+_arr_service_call_try_paths() {
+  local svc="$1"
+  shift
+  local method="$1"
+  shift
+
+  local base key
+  base="$(_arr_service_base "$svc")"
+  key="$(_arr_api_key "$svc")"
+
+  if [ -z "$base" ]; then
+    echo "Unsupported service: $svc" >&2
+    return 1
+  fi
+  if [ -z "$key" ]; then
+    echo "Missing API key for $svc (check ${ARR_DOCKER_DIR}/$svc/config.xml)." >&2
+    return 1
+  fi
+
+  local -a paths=("$@")
+  local -a curl_cmd=(curl -sS -X "$method" -H "X-API-Key: ${key}" -w '\n%{http_code}')
+  if [ "$method" = "POST" ] || [ "$method" = "PUT" ]; then
+    curl_cmd+=(-H 'Content-Type: application/json')
+  fi
+
+  local -a resolve_flags=()
+  while IFS= read -r _arr_line; do
+    resolve_flags+=("$_arr_line")
+  done < <(_arr_curl_resolve_flags "$base") || true
+  unset _arr_line
+  if [ ${#resolve_flags[@]} -gt 0 ]; then
+    curl_cmd+=("${resolve_flags[@]}")
+  fi
+
+  local last_error="" path response http_code body
+  for path in "${paths[@]}"; do
+    [ -n "$path" ] || continue
+    response="$("${curl_cmd[@]}" "${base}${path}" 2>/dev/null)"
+    http_code="${response##*$'\n'}"
+    body="${response%$'\n'"$http_code"}"
+
+    case "$http_code" in
+      2??)
+        printf '%s\n' "$body"
+        return 0
+        ;;
+      404)
+        continue
+        ;;
+      401|403)
+        last_error="Authentication failed (HTTP ${http_code}) for ${svc}${path}"
+        ;;
+      "")
+        last_error="No response from ${svc} at ${base}${path}"
+        ;;
+      *)
+        last_error="HTTP ${http_code} from ${svc}${path}"
+        ;;
+    esac
+  done
+
+  if [ -n "$last_error" ]; then
+    printf '%s\n' "$last_error" >&2
+  fi
+  return 1
+}
+
 _arr_bazarr_call() {
   local method="$1"
   shift
@@ -1524,9 +1601,9 @@ arr.gluetun.help() {
 Gluetun helpers (VPN_TYPE=${vpn_type}):
   arr.gluetun.url           Show control API base (http://<host>:<port>)
   arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
-  arr.gluetun.status         Inspect VPN status (GET /v1/openvpn/status with fallbacks)
-  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/openvpn/status with fallbacks)
-  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/openvpn/portforwarded with fallbacks)
+  arr.gluetun.status         Inspect VPN status (GET /v1/vpn/status with fallbacks)
+  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/vpn/status with fallbacks)
+  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/vpn/portforwarded with fallbacks)
   arr.gluetun.health         Check Gluetun control health (GET /healthz)
   arr.gluetun.diagnose       Verify control API health, status, and recent port-forward errors
 EOF
@@ -3303,7 +3380,7 @@ Sonarr helpers:
   arr.son.queue              GET /api/v3/queue
   arr.son.queue.details      GET /api/v3/queue/details
   arr.son.blocklist          GET /api/v3/blocklist
-  arr.son.profile.list       GET /api/v3/profile
+  arr.son.profile.list       GET /api/v3/qualityprofile
   arr.son.qualitydef         GET /api/v3/qualitydefinition
   arr.son.root.list          GET /api/v3/rootfolder
   arr.son.remotepath.list    GET /api/v3/remotePathMapping
@@ -3344,7 +3421,7 @@ arr.son.calendar() {
 arr.son.queue() { _arr_service_call sonarr GET /api/v3/queue | _arr_pretty_json; }
 arr.son.queue.details() { _arr_service_call sonarr GET /api/v3/queue/details | _arr_pretty_json; }
 arr.son.blocklist() { _arr_service_call sonarr GET /api/v3/blocklist | _arr_pretty_json; }
-arr.son.profile.list() { _arr_service_call sonarr GET /api/v3/profile | _arr_pretty_json; }
+arr.son.profile.list() { _arr_service_call_try_paths sonarr GET /api/v3/qualityprofile /api/v3/profile | _arr_pretty_json; }
 arr.son.qualitydef() { _arr_service_call sonarr GET /api/v3/qualitydefinition | _arr_pretty_json; }
 arr.son.root.list() { _arr_service_call sonarr GET /api/v3/rootfolder | _arr_pretty_json; }
 arr.son.remotepath.list() { _arr_service_call sonarr GET /api/v3/remotePathMapping | _arr_pretty_json; }
@@ -3397,7 +3474,7 @@ Radarr helpers:
   arr.rad.blocklist          GET /api/v3/blocklist
   arr.rad.indexers           GET /api/v3/indexer
   arr.rad.downloadclients    GET /api/v3/downloadclient
-  arr.rad.profile.list       GET /api/v3/profile
+  arr.rad.profile.list       GET /api/v3/qualityprofile
   arr.rad.qualitydef         GET /api/v3/qualitydefinition
   arr.rad.remotepath.list    GET /api/v3/remotePathMapping
   arr.rad.tag.list           GET /api/v3/tag
@@ -3435,7 +3512,7 @@ arr.rad.history() { _arr_service_call radarr GET /api/v3/history | _arr_pretty_j
 arr.rad.blocklist() { _arr_service_call radarr GET /api/v3/blocklist | _arr_pretty_json; }
 arr.rad.indexers() { _arr_service_call radarr GET /api/v3/indexer | _arr_pretty_json; }
 arr.rad.downloadclients() { _arr_service_call radarr GET /api/v3/downloadclient | _arr_pretty_json; }
-arr.rad.profile.list() { _arr_service_call radarr GET /api/v3/profile | _arr_pretty_json; }
+arr.rad.profile.list() { _arr_service_call_try_paths radarr GET /api/v3/qualityprofile /api/v3/profile | _arr_pretty_json; }
 arr.rad.qualitydef() { _arr_service_call radarr GET /api/v3/qualitydefinition | _arr_pretty_json; }
 arr.rad.remotepath.list() { _arr_service_call radarr GET /api/v3/remotePathMapping | _arr_pretty_json; }
 arr.rad.tag.list() { _arr_service_call radarr GET /api/v3/tag | _arr_pretty_json; }
@@ -3497,7 +3574,7 @@ Prowlarr helpers:
   arr.prowl.index.test '{...}' POST /api/v1/indexer/test
   arr.prowl.command '{...}'    POST /api/v1/command
   arr.prowl.log                GET /api/v1/log
-  arr.prowl.backups            GET /api/v1/backup
+  arr.prowl.backups            GET /api/v1/system/backup
 EOF
 }
 
@@ -3513,7 +3590,7 @@ arr.prowl.index.config() { _arr_service_call prowlarr GET "/api/v1/indexer/${1:?
 arr.prowl.index.test() { _arr_service_call prowlarr POST /api/v1/indexer/test --data "${1:?JSON}" | _arr_pretty_json; }
 arr.prowl.command() { _arr_service_call prowlarr POST /api/v1/command --data "${1:?JSON}" | _arr_pretty_json; }
 arr.prowl.log() { _arr_service_call prowlarr GET /api/v1/log | _arr_pretty_json; }
-arr.prowl.backups() { _arr_service_call prowlarr GET /api/v1/backup | _arr_pretty_json; }
+arr.prowl.backups() { _arr_service_call_try_paths prowlarr GET /api/v1/system/backup /api/v1/backup | _arr_pretty_json; }
 
 arr.baz.url() { printf '%s\n' "$(_arr_service_base bazarr)"; }
 arr.baz.logs() { docker logs -f bazarr; }
