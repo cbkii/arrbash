@@ -1278,19 +1278,13 @@ _arr_gluetun_try_endpoints() {
 _arr_gluetun_status_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  case "$vpn_type" in
-    wireguard) printf '/v1/wireguard/status\n' ;;
-    *) printf '/v1/openvpn/status\n' ;;
-  esac
+  printf '/v1/%s/status\n' "$vpn_type"
 }
 
 _arr_gluetun_port_endpoints() {
   local vpn_type
   vpn_type="$(_arr_vpn_type)"
-  case "$vpn_type" in
-    wireguard) printf '/v1/wireguard/portforwarded\n' ;;
-    *) printf '/v1/openvpn/portforwarded\n' ;;
-  esac
+  printf '/v1/%s/portforwarded\n' "$vpn_type"
 }
 
 _arr_gluetun_is_transport_error() {
@@ -1312,11 +1306,6 @@ _arr_gluetun_set_vpn_status() {
   done < <(_arr_gluetun_status_endpoints)
 
   _arr_gluetun_try_endpoints PUT "$payload" "${endpoints[@]}" >/dev/null 2>&1
-}
-
-# Legacy alias for backwards compatibility
-_arr_gluetun_set_openvpn_status() {
-  _arr_gluetun_set_vpn_status "$@"
 }
 
 _arr_gluetun_cycle_vpn() {
@@ -1531,9 +1520,9 @@ arr.gluetun.help() {
 Gluetun helpers (VPN_TYPE=${vpn_type}):
   arr.gluetun.url           Show control API base (http://<host>:<port>)
   arr.gluetun.ip             Show VPN egress IP (GET /v1/publicip/ip)
-  arr.gluetun.status         Inspect VPN status (GET /v1/${vpn_type}/status)
-  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/${vpn_type}/status)
-  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/${vpn_type}/portforwarded)
+  arr.gluetun.status         Inspect VPN status (GET /v1/<vpn_type>/status)
+  arr.gluetun.status.set '{}'  Update VPN status payload (PUT /v1/<vpn_type>/status)
+  arr.gluetun.portfwd        Inspect forwarded port (GET /v1/<vpn_type>/portforwarded)
   arr.gluetun.health         Check Gluetun control health (GET /healthz)
   arr.gluetun.diagnose       Verify control API health, status, and recent port-forward errors
 EOF

@@ -1135,28 +1135,19 @@ _arr_gluetun_api() {
 _arr_gluetun_status_endpoints() {
   local vpn_type
   vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
-  case "$vpn_type" in
-    wireguard) printf '/v1/wireguard/status\n' ;;
-    *) printf '/v1/openvpn/status\n' ;;
-  esac
+  printf '/v1/%s/status\n' "$vpn_type"
 }
 
 _arr_gluetun_port_endpoints() {
   local vpn_type
   vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
-  case "$vpn_type" in
-    wireguard) printf '/v1/wireguard/portforwarded\n' ;;
-    *) printf '/v1/openvpn/portforwarded\n' ;;
-  esac
+  printf '/v1/%s/portforwarded\n' "$vpn_type"
 }
 
 _arr_gluetun_restart_endpoints() {
   local vpn_type
   vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
-  case "$vpn_type" in
-    wireguard) printf '/v1/wireguard/actions/restart\n' ;;
-    *) printf '/v1/openvpn/actions/restart\n' ;;
-  esac
+  printf '/v1/%s/actions/restart\n' "$vpn_type"
 }
 
 _arr_gluetun_try_endpoints() {
@@ -1382,6 +1373,7 @@ Prowlarr v1 API helpers:
   arr.prow.health            GET /api/v1/health
   arr.prow.backups           GET /api/v1/system/backup
   arr.prow.indexers          GET /api/v1/indexer
+  arr.prow.backups           GET /api/v1/system/backup
   arr.prow.logs              Docker logs -f
   arr.prow.restart           Docker restart
 

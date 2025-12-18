@@ -174,6 +174,51 @@ _gluetun_api_request() {
   return 1
 }
 
+_gluetun_api_try_endpoints() {
+  local method="${1:-GET}"
+  local data="${2:-}"
+  shift 2 || true
+
+  local endpoint response http_code last_error=""
+  for endpoint in "$@"; do
+    [[ -n "$endpoint" ]] || continue
+    response="$(_gluetun_api_raw_request "$endpoint" "$method" "$data" 2>/dev/null)"
+    http_code="${response##*$'\n'}"
+    response="${response%$'\n'"$http_code"}"
+
+    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+      printf '%s' "$response"
+      return 0
+    fi
+
+    case "$http_code" in
+      404)
+        _gluetun_api_debug "Endpoint ${endpoint} returned 404; trying next candidate"
+        continue
+        ;;
+      401 | 403)
+        last_error="Authentication failed (HTTP ${http_code}) for ${endpoint}. Check GLUETUN_API_KEY."
+        ;;
+      "")
+        last_error="No response from Gluetun control API for ${endpoint}"
+        ;;
+      *)
+        last_error="HTTP ${http_code} from ${endpoint}"
+        ;;
+    esac
+    if [[ -n "$last_error" ]]; then
+      _gluetun_api_debug "$last_error"
+    fi
+  done
+
+  if [[ -z "$last_error" ]]; then
+    last_error="All Gluetun endpoints failed for ${method} request"
+  fi
+
+  printf '%s' "$last_error" >&2
+  return 1
+}
+
 _gluetun_api_get_json() {
   local path="$1"
   _gluetun_api_request "$path"
@@ -203,14 +248,12 @@ gluetun_api_status() {
   local status
   local vpn_type_lower
   vpn_type_lower="$(printf '%s' "${VPN_TYPE:-openvpn}" | tr '[:upper:]' '[:lower:]')"
-  local endpoint="/v1/openvpn/status"
-  if [[ "$vpn_type_lower" == "wireguard" ]]; then
-    endpoint="/v1/wireguard/status"
-  fi
+
+  local -a endpoints=("/v1/${vpn_type_lower}/status")
 
   _gluetun_api_debug "Fetching VPN status from ${endpoint} (VPN_TYPE=${vpn_type_lower})"
 
-  if body="$(_gluetun_api_request "$endpoint" 2>/dev/null)"; then
+  if body="$(_gluetun_api_try_endpoints GET "" "${endpoints[@]}" 2>/dev/null)"; then
     status="$(printf '%s' "$body" | jq -r '.status // empty' 2>/dev/null || true)"
     if [[ -n "$status" && "$status" != "null" ]]; then
       printf '%s' "$status"
