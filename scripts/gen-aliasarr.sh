@@ -1371,6 +1371,7 @@ Prowlarr v1 API helpers:
   arr.prow.url               Show base URL
   arr.prow.status            GET /api/v1/system/status
   arr.prow.health            GET /api/v1/health
+  arr.prow.backups           GET /api/v1/system/backup
   arr.prow.indexers          GET /api/v1/indexer
   arr.prow.backups           GET /api/v1/system/backup
   arr.prow.logs              Docker logs -f
@@ -1530,12 +1531,14 @@ arr.vpn.port() {
 }
 
 arr.vpn.help() {
-  cat <<'EOF'
-Gluetun VPN helpers:
-  arr.vpn.status             GET /v1/<vpn_type>/status
+  local vpn_type
+  vpn_type="$(_arr_vpn_type)"
+  cat <<EOF
+Gluetun VPN helpers (VPN_TYPE=${vpn_type}):
+  arr.vpn.status             GET /v1/${vpn_type}/status
   arr.vpn.ip                 GET /v1/publicip/ip
-  arr.vpn.port               GET /v1/<vpn_type>/portforwarded
-  arr.vpn.restart            PUT /v1/<vpn_type>/actions/restart
+  arr.vpn.port               GET /v1/${vpn_type}/portforwarded
+  arr.vpn.restart            PUT /v1/${vpn_type}/actions/restart
 
 Smoke test: arr.vpn.status
 
