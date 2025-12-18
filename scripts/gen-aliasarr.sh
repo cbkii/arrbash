@@ -1033,7 +1033,7 @@ _arr_service_call() {
   fi
   curl_cmd+=("$@")
   curl_cmd+=("${base}${path}")
-  
+
   "${curl_cmd[@]}"
 }
 
@@ -1090,6 +1090,13 @@ _arr_gluetun_key() {
   fi
 }
 
+_arr_gluetun_base() {
+  local host port
+  host="$(_arr_gluetun_host)"
+  port="$(_arr_gluetun_port)"
+  printf 'http://%s:%s' "$host" "$port"
+}
+
 # Gluetun API call
 _arr_gluetun_api() {
   local endpoint="$1"
@@ -1121,8 +1128,77 @@ _arr_gluetun_api() {
     curl_cmd+=(-H "Content-Type: application/json" --data "$data")
   fi
   curl_cmd+=("$url")
-  
+
   "${curl_cmd[@]}"
+}
+
+_arr_gluetun_status_endpoints() {
+  local vpn_type
+  vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
+  printf '/v1/%s/status\n' "$vpn_type"
+}
+
+_arr_gluetun_port_endpoints() {
+  local vpn_type
+  vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
+  printf '/v1/%s/portforwarded\n' "$vpn_type"
+}
+
+_arr_gluetun_restart_endpoints() {
+  local vpn_type
+  vpn_type="$(_arr_lowercase "${VPN_TYPE:-openvpn}")"
+  printf '/v1/%s/actions/restart\n' "$vpn_type"
+}
+
+_arr_gluetun_try_endpoints() {
+  local method="$1"
+  local data="$2"
+  shift 2 || true
+
+  local base key
+  key="$(_arr_gluetun_key)" || return 1
+  base="$(_arr_gluetun_base)"
+
+  local -a curl_cmd=(curl -sS -w '\n%{http_code}' -H "X-API-Key: ${key}")
+  if [ "$method" != "GET" ]; then
+    curl_cmd+=(-X "$method")
+  fi
+  if [ -n "$data" ]; then
+    curl_cmd+=(-H 'Content-Type: application/json' --data "$data")
+  fi
+
+  local endpoint response code body last_error=""
+  for endpoint in "$@"; do
+    [ -n "$endpoint" ] || continue
+    response="$(${curl_cmd[@]} "${base}${endpoint}" 2>/dev/null)"
+    code="${response##*$'\n'}"
+    body="${response%$'\n'"$code"}"
+
+    case "$code" in
+      2??)
+        printf '%s\n' "$body"
+        return 0
+        ;;
+      404)
+        continue
+        ;;
+      401|403)
+        last_error="Authentication failed (HTTP ${code}) for ${endpoint}. Check GLUETUN_API_KEY."
+        ;;
+      "")
+        last_error="Unable to reach Gluetun control API at ${base}${endpoint}"
+        ;;
+      *)
+        last_error="HTTP ${code} from ${base}${endpoint}"
+        ;;
+    esac
+  done
+
+  if [ -n "$last_error" ]; then
+    _arr_gluetun_last_error="$last_error"
+  fi
+
+  return 1
 }
 
 # qBittorrent API helpers
@@ -1143,6 +1219,7 @@ _arr_qbt_login() {
   chmod 600 "$cookie" 2>/dev/null || true
   
   if ! curl -fsS -c "$cookie" -b "$cookie" \
+       -H "Referer: ${base}" \
        -d "username=${user}&password=${pass}" \
        "$base/api/v2/auth/login" >/dev/null 2>&1; then
     rm -f "$cookie" 2>/dev/null || true
@@ -1286,6 +1363,7 @@ arr.prow.restart() { docker restart prowlarr; }
 arr.prow.status() { _arr_service_call prowlarr GET /api/v1/system/status | _arr_pretty_json; }
 arr.prow.health() { _arr_service_call prowlarr GET /api/v1/health | _arr_pretty_json; }
 arr.prow.indexers() { _arr_service_call prowlarr GET /api/v1/indexer | _arr_pretty_json; }
+arr.prow.backups() { _arr_service_call prowlarr GET /api/v1/system/backup | _arr_pretty_json; }
 
 arr.prow.help() {
   cat <<'EOF'
@@ -1294,6 +1372,7 @@ Prowlarr v1 API helpers:
   arr.prow.status            GET /api/v1/system/status
   arr.prow.health            GET /api/v1/health
   arr.prow.indexers          GET /api/v1/indexer
+  arr.prow.backups           GET /api/v1/system/backup
   arr.prow.logs              Docker logs -f
   arr.prow.restart           Docker restart
 
@@ -1389,15 +1468,20 @@ EOF
 
 # --- Gluetun / VPN ---
 arr.vpn.status() {
-  local vpn_type="${VPN_TYPE:-openvpn}"
-  vpn_type="$(_arr_lowercase "$vpn_type")"
-  
+  local -a endpoints=()
+  while IFS= read -r ep; do
+    endpoints+=("$ep")
+  done < <(_arr_gluetun_status_endpoints)
+
   local status_payload
-  if ! status_payload="$(_arr_gluetun_api "/v1/${vpn_type}/status" 2>/dev/null)"; then
+  if ! status_payload="$(_arr_gluetun_try_endpoints GET "" "${endpoints[@]}" 2>/dev/null)"; then
     printf 'Unable to query VPN status (check GLUETUN_API_KEY and Gluetun container)\n' >&2
+    if [ -n "${_arr_gluetun_last_error:-}" ]; then
+      printf '%s\n' "${_arr_gluetun_last_error}" >&2
+    fi
     return 1
   fi
-  
+
   printf '%s\n' "$status_payload" | _arr_pretty_json
 }
 
@@ -1411,33 +1495,47 @@ arr.vpn.ip() {
 }
 
 arr.vpn.restart() {
-  if ! _arr_gluetun_api /v1/openvpn/actions/restart PUT 2>/dev/null; then
+  local -a endpoints=()
+  while IFS= read -r ep; do
+    endpoints+=("$ep")
+  done < <(_arr_gluetun_restart_endpoints)
+
+  if ! _arr_gluetun_try_endpoints PUT "" "${endpoints[@]}" >/dev/null 2>&1; then
     printf 'VPN restart failed\n' >&2
+    if [ -n "${_arr_gluetun_last_error:-}" ]; then
+      printf '%s\n' "${_arr_gluetun_last_error}" >&2
+    fi
     return 1
   fi
+
   printf 'VPN restart initiated\n'
 }
 
 arr.vpn.port() {
-  local vpn_type="${VPN_TYPE:-openvpn}"
-  vpn_type="$(_arr_lowercase "$vpn_type")"
-  
+  local -a endpoints=()
+  while IFS= read -r ep; do
+    endpoints+=("$ep")
+  done < <(_arr_gluetun_port_endpoints)
+
   local payload
-  if ! payload="$(_arr_gluetun_api "/v1/${vpn_type}/portforwarded" 2>/dev/null)"; then
+  if ! payload="$(_arr_gluetun_try_endpoints GET "" "${endpoints[@]}" 2>/dev/null)"; then
     printf 'Unable to query forwarded port\n' >&2
+    if [ -n "${_arr_gluetun_last_error:-}" ]; then
+      printf '%s\n' "${_arr_gluetun_last_error}" >&2
+    fi
     return 1
   fi
-  
+
   printf '%s\n' "$payload" | _arr_pretty_json
 }
 
 arr.vpn.help() {
   cat <<'EOF'
 Gluetun VPN helpers:
-  arr.vpn.status             GET /v1/{vpn_type}/status
+  arr.vpn.status             GET /v1/<vpn_type>/status
   arr.vpn.ip                 GET /v1/publicip/ip
-  arr.vpn.port               GET /v1/{vpn_type}/portforwarded
-  arr.vpn.restart            PUT /v1/openvpn/actions/restart
+  arr.vpn.port               GET /v1/<vpn_type>/portforwarded
+  arr.vpn.restart            PUT /v1/<vpn_type>/actions/restart
 
 Smoke test: arr.vpn.status
 
@@ -1449,12 +1547,17 @@ EOF
 
 # --- Port Forward helpers ---
 arr.pf.port() {
-  local vpn_type="${VPN_TYPE:-openvpn}"
-  vpn_type="$(_arr_lowercase "$vpn_type")"
-  
   local payload port
-  if ! payload="$(_arr_gluetun_api "/v1/${vpn_type}/portforwarded" 2>/dev/null)"; then
+  local -a endpoints=()
+  while IFS= read -r ep; do
+    endpoints+=("$ep")
+  done < <(_arr_gluetun_port_endpoints)
+
+  if ! payload="$(_arr_gluetun_try_endpoints GET "" "${endpoints[@]}" 2>/dev/null)"; then
     printf 'Unable to query forwarded port\n' >&2
+    if [ -n "${_arr_gluetun_last_error:-}" ]; then
+      printf '%s\n' "${_arr_gluetun_last_error}" >&2
+    fi
     return 1
   fi
   
