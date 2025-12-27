@@ -76,14 +76,29 @@ QBT_AUTH_WHITELIST="127.0.0.1/32,::1/128,172.16.0.0/12"      # default: 127.0.0.
 
 # --- VPN basics (connectivity) ---
 SPLIT_VPN="1"      # default: 0=VPN for full stack; 1=restrict VPN to qBittorrent only
-VPN_TYPE="openvpn"      # default: openvpn; VPN protocol type (openvpn or wireguard). Only openvpn is fully supported; wireguard is a future feature.
-SERVER_COUNTRIES="Netherlands,Singapore,Australia"      # default: Netherlands,Singapore; ProtonVPN exit countries
-# SERVER_NAMES=""      # default: empty; optionally pin Proton hosts (comma-separated)
+
+# VPN backend selection
+VPN_BACKEND="wg-quick"      # default: wg-quick; backend to use (wg-quick or gluetun)
+#   wg-quick: Host-based WireGuard using wg-quick, reads configs from WG_CONFIG_DIR
+#   gluetun: Docker-based VPN container with Gluetun's ProtonVPN integration
+
+# wg-quick backend settings (only used when VPN_BACKEND=wg-quick)
+# WG_CONFIG_DIR="/etc/wireguard/proton"      # default: /etc/wireguard/proton; directory containing ProtonVPN WireGuard configs
+# WG_INTERFACE="proton0"      # default: proton0; WireGuard interface name
+# WG_PORT_FORWARD_STATE="/run/protonvpn/forwarded_port"      # default: /run/protonvpn/forwarded_port; file storing current forwarded port
+# VPN_ROTATE_MIN_HOURS="8"      # default: 8; minimum hours between automatic server rotations
+# VPN_ROTATE_MAX_HOURS="48"      # default: 48; maximum hours between automatic server rotations
+# QBIT_CONTAINER="qbittorrent"      # default: qbittorrent; qBittorrent container name for port updates
+
+# gluetun backend settings (only used when VPN_BACKEND=gluetun)
+VPN_TYPE="openvpn"      # default: openvpn; VPN protocol type for gluetun (openvpn or wireguard)
+SERVER_COUNTRIES="Netherlands,Singapore,Australia"      # default: Netherlands,Singapore; ProtonVPN exit countries for gluetun
+# SERVER_NAMES=""      # default: empty; optionally pin Proton hosts (comma-separated) for gluetun
 # PVPN_ROTATE_COUNTRIES="Singapore,Japan,Spain,Malaysia,Portugal,Romania,Switzerland,Luxembourg,Iceland,Australia"      # default: empty; rotation order for arr.vpn switch
 # GLUETUN_API_KEY=""      # default: empty; pre-seed Gluetun API key
 
 # --- VPN port guard (controller) ---
-VPN_PORT_GUARD_POLL_SECONDS="15"      # default: 15; controller loop interval for Gluetun/qBittorrent sync
+VPN_PORT_GUARD_POLL_SECONDS="15"      # default: 15; controller loop interval for backend/qBittorrent sync
 VPN_PORT_GUARD_STATUS_TIMEOUT="90"      # default: 90; max seconds to wait for vpn-port-guard status file at startup
 CONTROLLER_REQUIRE_PF="false"      # default: false; pause torrents whenever Proton forwarding is absent
 

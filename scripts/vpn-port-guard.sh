@@ -280,48 +280,88 @@ port_guard_healthcheck() {
 }
 
 # --- Port fetching ---
-# Fetches the forwarded port from Gluetun API (primary) or status file (deprecated fallback)
+# Fetches the forwarded port from VPN backend (backend-agnostic)
 fetch_forwarded_port() {
   local port=""
+  local backend="${VPN_BACKEND:-wg-quick}"
 
-  # PRIMARY: Use Gluetun's protocol-specific API endpoints
-  if declare -f gluetun_api_forwarded_port >/dev/null 2>&1; then
-    log_debug "Querying Gluetun API for forwarded port..."
-    port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
+  # Determine port source based on backend
+  case "${backend,,}" in
+    wg-quick | wireguard)
+      # wg-quick backend: Read from state file
+      if declare -f vpn_get_forwarded_port >/dev/null 2>&1; then
+        log_debug "Querying wg-quick backend for forwarded port..."
+        port="$(vpn_get_forwarded_port 2>/dev/null || printf '0')"
+        
+        if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
+          _consecutive_api_failures=0
+          _last_successful_api_call="$(date +%s)"
+          log_debug "Got port ${port} from wg-quick backend"
+          printf '%s' "$port"
+          return 0
+        fi
+        log_debug "wg-quick backend returned no valid port"
+      fi
+      
+      # Direct file fallback for wg-quick
+      local wg_state_file="${WG_PORT_FORWARD_STATE:-/run/protonvpn/forwarded_port}"
+      if [[ -f "$wg_state_file" ]]; then
+        log_debug "Reading from wg-quick state file: ${wg_state_file}"
+        port="$(tr -cd '0-9' <"$wg_state_file" 2>/dev/null | head -c 5)"
+        port="${port#"${port%%[!0]*}"}"
+        if [[ -n "$port" && "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
+          log_debug "Got port ${port} from wg-quick state file"
+          printf '%s' "$port"
+          return 0
+        fi
+      fi
+      ;;
+      
+    gluetun | docker)
+      # gluetun backend: Use Gluetun API
+      if declare -f gluetun_api_forwarded_port >/dev/null 2>&1; then
+        log_debug "Querying Gluetun API for forwarded port..."
+        port="$(gluetun_api_forwarded_port 2>/dev/null || printf '0')"
 
-    if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
-      _consecutive_api_failures=0
-      _last_successful_api_call="$(date +%s)"
-      log_debug "Got port ${port} from Gluetun API"
-      printf '%s' "$port"
-      return 0
-    fi
+        if [[ "$port" =~ ^[1-9][0-9]*$ ]]; then
+          _consecutive_api_failures=0
+          _last_successful_api_call="$(date +%s)"
+          log_debug "Got port ${port} from Gluetun API"
+          printf '%s' "$port"
+          return 0
+        fi
 
-    # Track API failures
-    ((_consecutive_api_failures++)) || true
-    if ((_consecutive_api_failures >= CONTROLLER_MAX_API_RETRIES)); then
-      log_error "Gluetun API failed ${_consecutive_api_failures} consecutive times"
-    else
-      log_debug "Gluetun API returned no valid port (attempt ${_consecutive_api_failures})"
-    fi
-  else
-    log_debug "gluetun_api_forwarded_port function not available, using fallback"
-  fi
+        # Track API failures
+        ((_consecutive_api_failures++)) || true
+        if ((_consecutive_api_failures >= CONTROLLER_MAX_API_RETRIES)); then
+          log_error "Gluetun API failed ${_consecutive_api_failures} consecutive times"
+        else
+          log_debug "Gluetun API returned no valid port (attempt ${_consecutive_api_failures})"
+        fi
+      else
+        log_debug "gluetun_api_forwarded_port function not available, using fallback"
+      fi
 
-  # FALLBACK: Read from deprecated status file (VPN_PORT_FORWARDING_STATUS_FILE)
-  # Note: This method is deprecated in Gluetun v3.40+ and will be removed in v4.0
-  if [[ -f "$FORWARDED_PORT_FILE" ]]; then
-    log_debug "Trying deprecated file-based fallback: ${FORWARDED_PORT_FILE}"
-    port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" 2>/dev/null | head -c 5)"
-    # Strip leading zeros for proper arithmetic comparison
-    port="${port#"${port%%[!0]*}"}"
-    if [[ -n "$port" && "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
-      log_debug "Got port ${port} from status file (deprecated method)"
-      printf '%s' "$port"
-      return 0
-    fi
-    log_debug "Status file exists but contains no valid port"
-  fi
+      # FALLBACK: Read from deprecated status file (VPN_PORT_FORWARDING_STATUS_FILE)
+      # Note: This method is deprecated in Gluetun v3.40+ and will be removed in v4.0
+      if [[ -f "$FORWARDED_PORT_FILE" ]]; then
+        log_debug "Trying deprecated file-based fallback: ${FORWARDED_PORT_FILE}"
+        port="$(tr -cd '0-9' <"$FORWARDED_PORT_FILE" 2>/dev/null | head -c 5)"
+        # Strip leading zeros for proper arithmetic comparison
+        port="${port#"${port%%[!0]*}"}"
+        if [[ -n "$port" && "$port" =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
+          log_debug "Got port ${port} from status file (deprecated method)"
+          printf '%s' "$port"
+          return 0
+        fi
+        log_debug "Status file exists but contains no valid port"
+      fi
+      ;;
+      
+    *)
+      log_error "Unknown VPN_BACKEND: ${backend}"
+      ;;
+  esac
 
   log_debug "No valid forwarded port available"
   printf '0'

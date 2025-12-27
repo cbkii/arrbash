@@ -151,3 +151,47 @@ vpn_auto_retry_budget_seconds() {
   fi
   printf '%s' $((minutes * 60))
 }
+
+# Get rotation interval for wg-quick backend (random between min and max hours)
+vpn_auto_rotation_interval_seconds() {
+  local backend="${VPN_BACKEND:-wg-quick}"
+  
+  # Only applies to wg-quick backend
+  if [[ "${backend,,}" != "wg-quick" && "${backend,,}" != "wireguard" ]]; then
+    # For gluetun, use standard check interval
+    vpn_auto_reconnect_check_interval_seconds
+    return
+  fi
+
+  local min_hours="${VPN_ROTATE_MIN_HOURS:-8}"
+  local max_hours="${VPN_ROTATE_MAX_HOURS:-48}"
+  
+  # Validate inputs
+  case "$min_hours" in
+    '' | *[!0-9]*) min_hours=8 ;;
+  esac
+  case "$max_hours" in
+    '' | *[!0-9]*) max_hours=48 ;;
+  esac
+  
+  if ((min_hours <= 0)); then
+    min_hours=8
+  fi
+  if ((max_hours <= 0)); then
+    max_hours=48
+  fi
+  if ((max_hours < min_hours)); then
+    max_hours=$min_hours
+  fi
+
+  # Generate random interval between min and max hours
+  local range=$((max_hours - min_hours))
+  local random_hours
+  if ((range > 0)); then
+    random_hours=$((min_hours + (RANDOM % (range + 1))))
+  else
+    random_hours=$min_hours
+  fi
+
+  printf '%s' $((random_hours * 3600))
+}
