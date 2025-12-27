@@ -74,7 +74,15 @@ main() {
     loop_count+=1
     vpn_auto_reconnect_load_env
     local interval_raw=""
-    interval_raw="$(vpn_auto_reconnect_check_interval_seconds 2>/dev/null || printf '1200')"
+    
+    # Use rotation interval for wg-quick backend, standard interval for gluetun
+    local backend="${VPN_BACKEND:-wg-quick}"
+    if [[ "${backend,,}" == "wg-quick" || "${backend,,}" == "wireguard" ]]; then
+      interval_raw="$(vpn_auto_rotation_interval_seconds 2>/dev/null || printf '28800')"
+    else
+      interval_raw="$(vpn_auto_reconnect_check_interval_seconds 2>/dev/null || printf '1200')"
+    fi
+    
     local -i interval=1200
     if [[ "$interval_raw" =~ ^[0-9]+$ ]]; then
       interval=$interval_raw

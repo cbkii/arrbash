@@ -202,11 +202,28 @@ ENABLE_CONFIGARR="${ENABLE_CONFIGARR:-1}"
 # Host port preflight behaviour: enforce (default), warn, skip, or fix (auto-remediate then warn)
 ARR_PORT_CHECK_MODE="${ARR_PORT_CHECK_MODE:-enforce}"
 
-# VPN type: openvpn (default) or wireguard (future feature).
-# Only openvpn is fully supported at this time; wireguard support is planned but not yet reliable.
+# VPN backend selection: wg-quick (default, host-based WireGuard) or gluetun (Docker-based).
+# wg-quick runs directly on the host and requires WireGuard configs in WG_CONFIG_DIR.
+# gluetun uses Docker containers with Gluetun's ProtonVPN integration.
+VPN_BACKEND="${VPN_BACKEND:-wg-quick}"
+
+# VPN type: openvpn (default) or wireguard (used by gluetun backend).
+# Only relevant when VPN_BACKEND=gluetun; wg-quick always uses wireguard.
 VPN_TYPE="${VPN_TYPE:-openvpn}"
 
-# Gluetun control server
+# wg-quick backend configuration
+WG_CONFIG_DIR="${WG_CONFIG_DIR:-/etc/wireguard/proton}"
+WG_INTERFACE="${WG_INTERFACE:-proton0}"
+WG_PORT_FORWARD_STATE="${WG_PORT_FORWARD_STATE:-/run/protonvpn/forwarded_port}"
+
+# VPN rotation settings (for wg-quick backend)
+VPN_ROTATE_MIN_HOURS="${VPN_ROTATE_MIN_HOURS:-8}"
+VPN_ROTATE_MAX_HOURS="${VPN_ROTATE_MAX_HOURS:-48}"
+
+# qBittorrent container name (for wg-quick backend port updates)
+QBIT_CONTAINER="${QBIT_CONTAINER:-qbittorrent}"
+
+# Gluetun control server (used by gluetun backend)
 GLUETUN_API_KEY="${GLUETUN_API_KEY:-}"
 
 VPN_PORT_GUARD_POLL_SECONDS="${VPN_PORT_GUARD_POLL_SECONDS:-15}"
@@ -400,7 +417,14 @@ ARR_USERCONF_TEMPLATE_VARS=(
   SPLIT_VPN
   ENABLE_CONFIGARR
   ARR_PORT_CHECK_MODE
+  VPN_BACKEND
   VPN_TYPE
+  WG_CONFIG_DIR
+  WG_INTERFACE
+  WG_PORT_FORWARD_STATE
+  VPN_ROTATE_MIN_HOURS
+  VPN_ROTATE_MAX_HOURS
+  QBIT_CONTAINER
   EXPOSE_DIRECT_PORTS
   VPN_PORT_GUARD_POLL_SECONDS
   VPN_PORT_GUARD_STATUS_TIMEOUT

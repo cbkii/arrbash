@@ -143,8 +143,12 @@ sync_gluetun_library() {
 
   ensure_dir_mode "$ARR_STACK_DIR/scripts" 755
 
+  # Sync both VPN backends
   cp "${REPO_ROOT}/scripts/vpn-gluetun.sh" "$ARR_STACK_DIR/scripts/vpn-gluetun.sh"
   ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-gluetun.sh" 755
+  
+  cp "${REPO_ROOT}/scripts/vpn-wg-quick.sh" "$ARR_STACK_DIR/scripts/vpn-wg-quick.sh"
+  ensure_file_mode "$ARR_STACK_DIR/scripts/vpn-wg-quick.sh" 755
 }
 
 # Syncs VPN auto-reconnect scripts with executable permissions into the stack
